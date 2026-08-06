@@ -234,6 +234,55 @@
         const registryAbi = ["function account(address implementation, bytes32 salt, uint256 chainId, address tokenContract, uint256 tokenId) view returns (address)"];
         const erc721Abi = ["function ownerOf(uint256 tokenId) view returns (address)"];
 
+        // --- GLOBAL REQUEST GOVERNOR (Solves 60s IP Bans) ---
+        let lastApiCallTime = 0;
+        const MIN_DELAY_MS = 600; 
+
+        async function apiFetch(url) {
+            let retries = 0;
+            while (retries < 3) {
+                const now = Date.now();
+                const timeSinceLast = now - lastApiCallTime;
+                if (timeSinceLast < MIN_DELAY_MS) {
+                    await sleep(MIN_DELAY_MS - timeSinceLast);
+                }
+                lastApiCallTime = Date.now();
+
+                try {
+                    const res = await fetch(url, { headers: { "Accept": "application/json" } });
+                    
+                    if (res.status === 429) {
+                        await sleep(5000); // Heavy backoff if we still trip a wire
+                        retries++;
+                        continue;
+                    }
+                    if (!res.ok) {
+                        await sleep(2000);
+                        retries++;
+                        continue;
+                    }
+                    
+                    const text = await res.text();
+                    try {
+                        const data = JSON.parse(text);
+                        if (data.message && data.message.toLowerCase().includes("limit")) {
+                            await sleep(5000);
+                            retries++;
+                            continue;
+                        }
+                        return data;
+                    } catch (err) {
+                        await sleep(2000);
+                        retries++;
+                    }
+                } catch (e) {
+                    await sleep(2000);
+                    retries++;
+                }
+            }
+            return { status: "0", result: [] };
+        }
+
         function renderTierBenchmarks() {
             const tbody = document.getElementById('tier-table-body');
             tbody.innerHTML = '';
@@ -246,7 +295,7 @@
 
                 let yieldDisplay;
                 if (bm.loading) {
-                    yieldDisplay = `<div class="flex items-center text-primary"><div class="spinner mr-2"></div><span class="text-xs">Connecting...</span></div>`;
+                    yieldDisplay = `<div class="flex items-center text-primary"><div class="spinner mr-2"></div><span class="text-xs">Syncing logs...</span></div>`;
                 } else if (bm.error) {
                     yieldDisplay = `<span class="text-xs text-danger font-semibold border border-danger/20 bg-danger/10 px-2 py-1 rounded">API Error</span>`;
                 } else if (!bm.trackedAnnualYieldUsd || bm.trackedAnnualYieldUsd === 0) {
@@ -266,40 +315,7 @@
             });
         }
 
-        async function safeFetch(url) {
-            let retries = 0;
-            while (retries < 4) {
-                try {
-                    const res = await fetch(url, { headers: { "Accept": "application/json" } });
-                    const text = await res.text();
-                    
-                    if (!res.ok) {
-                        await sleep(1500 * (retries + 1));
-                        retries++;
-                        continue;
-                    }
-                    
-                    try {
-                        const data = JSON.parse(text);
-                        if (data.message && data.message.toLowerCase().includes("limit")) {
-                            await sleep(1500 * (retries + 1));
-                            retries++;
-                            continue;
-                        }
-                        return data;
-                    } catch (err) {
-                        await sleep(1500 * (retries + 1));
-                        retries++;
-                    }
-                } catch (e) {
-                    await sleep(1500 * (retries + 1));
-                    retries++;
-                }
-            }
-            return { status: "0", result: [] };
-        }
-
-        async function fetchBrokerData(tokenId) {
+        async function fetchBrokerData(tokenId, preFetchedBlock = null) {
             const provider = new ethers.JsonRpcProvider(WEB3_CONFIG.RPC_URL);
             
             let actualTier = 1;
@@ -330,29 +346,23 @@
             let aggregatedTransfers = {};
 
             if (tbaAddress !== "0x0000000000000000000000000000000000000000") {
-                let currentBlock = 28500000;
-                try {
-                    const blockRes = await fetch('https://robinhoodchain.blockscout.com/api?module=block&action=eth_block_number');
-                    const blockData = await blockRes.json();
-                    currentBlock = parseInt(blockData.result, 16);
-                } catch(e) {
-                    try { currentBlock = await provider.getBlockNumber(); } catch (err) {}
+                let currentBlock = preFetchedBlock;
+                if (!currentBlock) {
+                    try { currentBlock = await provider.getBlockNumber(); } catch (e) { currentBlock = 28500000; }
                 }
 
                 // Accurate 100ms Block Math (6,048,000 blocks in 7 days)
                 const startBlock = Math.max(0, currentBlock - 6048000); 
                 const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
-
                 const actions = ["tokentx", "txlist", "txlistinternal"];
                 
-                // Safe Sequential Fetching to protect against Cloudflare 429s
                 for (let action of actions) {
                     let page = 1;
                     let isDone = false;
                     
-                    while (!isDone && page <= 6) { 
+                    while (!isDone && page <= 8) { 
                         const url = `https://robinhoodchain.blockscout.com/api?module=account&action=${action}&address=${tbaAddress}&startblock=${startBlock}&page=${page}&offset=1000&sort=desc`;
-                        const data = await safeFetch(url);
+                        const data = await apiFetch(url);
 
                         if (data && data.status === "1" && Array.isArray(data.result) && data.result.length > 0) {
                             let validInPage = 0;
@@ -388,14 +398,11 @@
                                     }
                                 }
                             }
-                            if (validInPage === 0 || data.result.length < 1000) {
-                                isDone = true; 
-                            }
+                            if (validInPage === 0 || data.result.length < 1000) isDone = true; 
                         } else {
                             isDone = true; 
                         }
                         page++;
-                        await sleep(300); // Wait 300ms between page queries
                     }
                 }
             }
@@ -528,9 +535,14 @@
 
             renderTierBenchmarks();
 
+            // Fetch block number once to save 5 API calls
+            const provider = new ethers.JsonRpcProvider(WEB3_CONFIG.RPC_URL);
+            let currentBlock;
+            try { currentBlock = await provider.getBlockNumber(); } catch (e) {}
+
             for (let bm of tierBenchmarks) {
                 try {
-                    const brokerData = await fetchBrokerData(bm.benchmarkId);
+                    const brokerData = await fetchBrokerData(bm.benchmarkId, currentBlock);
                     let totalYieldUsd = 0;
                     brokerData.tbaBalances.forEach(b => {
                         totalYieldUsd += (b.amount * b.currentPriceUsd);
@@ -544,7 +556,6 @@
                     bm.error = true;
                 }
                 renderTierBenchmarks(); 
-                await sleep(500); 
             }
         }
 
