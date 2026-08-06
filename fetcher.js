@@ -20,11 +20,7 @@ const WEB3_CONFIG = {
     RPC_URL: "https://rpc.mainnet.chain.robinhood.com"
 };
 
-const FETCH_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Accept": "application/json"
-};
-
+const FETCH_HEADERS = { "Accept": "application/json" };
 const globalMarketParams = { ethPriceUsd: 1894.08, tokenPriceUsd: 0.0191, nftFloorEth: 6.997 };
 
 const tierBenchmarks = [
@@ -34,40 +30,6 @@ const tierBenchmarks = [
     { tier: 4, reqTokens: 766666, benchmarkId: 1491, tbaAddress: "0x9978cb6b8581d2a95e9b8d683bf2b8120dc0a0ee", trackedAnnualYieldUsd: 0 },
     { tier: 5, reqTokens: 1666666, benchmarkId: 1400, tbaAddress: "0x2052a6201600b879ad3a96e6e71148e55053c924", trackedAnnualYieldUsd: 0 }
 ];
-
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-function getTxTime(txTimeStamp) {
-    if (!txTimeStamp) return 0;
-    if (String(txTimeStamp).includes("-")) return Math.floor(new Date(txTimeStamp).getTime() / 1000);
-    return parseInt(txTimeStamp, 10);
-}
-
-// Anti-Rate Limit Fetcher with Exponential Backoff
-async function safeFetch(url) {
-    let retries = 0;
-    while (retries < 6) {
-        try {
-            const res = await fetch(url, { headers: FETCH_HEADERS });
-            if (!res.ok) {
-                if (res.status === 429) {
-                    console.warn(`[Rate Limit 429 Hit] Pausing for ${3 * (retries + 1)} seconds...`);
-                    await sleep(3000 * (retries + 1));
-                    retries++;
-                    continue;
-                }
-                throw new Error(`HTTP Error: ${res.status}`);
-            }
-            const data = await res.json();
-            return data;
-        } catch (e) {
-            console.warn(`[Fetch Error: ${e.message}] Retrying in ${3 * (retries + 1)} seconds...`);
-            await sleep(3000 * (retries + 1));
-            retries++;
-        }
-    }
-    throw new Error(`Max retries reached for Blockscout API.`);
-}
 
 async function run() {
     console.log("Fetching global prices...");
@@ -85,70 +47,70 @@ async function run() {
     WEB3_CONFIG.TOKENS[0].priceUsd = globalMarketParams.tokenPriceUsd;
     globalMarketParams.nftFloorEth = parseFloat(((666666 * globalMarketParams.tokenPriceUsd) / globalMarketParams.ethPriceUsd).toFixed(3));
 
-    const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
+    const provider = new ethers.JsonRpcProvider(WEB3_CONFIG.RPC_URL);
+    let currentBlock = 28200000;
+    try {
+        currentBlock = await provider.getBlockNumber();
+    } catch (e) {
+        console.warn("RPC failed to get block number, using fallback.");
+    }
+    
+    // 7 days * 24 hours * 60 min * 60 sec / 2 sec block time = 302,400 blocks
+    const startBlock = Math.max(0, currentBlock - 302400); 
 
     for (let bm of tierBenchmarks) {
-        console.log(`\nFetching data for Tier ${bm.tier} (Wallet: ${bm.tbaAddress})...`);
-        await sleep(3000); // 3 second baseline pause between tiers to avoid triggering limits
+        console.log(`\nFetching RPC Logs for Tier ${bm.tier} (Wallet: ${bm.tbaAddress})...`);
 
         try {
             let weeklyYieldUsd = 0;
             const tbaAddress = bm.tbaAddress;
-            const actionTypes = ["txlist", "txlistinternal", "tokentx"];
-            
-            for (let action of actionTypes) {
-                let page = 1;
-                let isDone = false;
 
-                while (!isDone && page <= 5) {
-                    try {
-                        const url = `https://robinhoodchain.blockscout.com/api?module=account&action=${action}&address=${tbaAddress}&page=${page}&offset=1000&sort=desc`;
-                        const data = await safeFetch(url);
-                        
-                        if (data.status === "1" && Array.isArray(data.result) && data.result.length > 0) {
-                            let validTxsInPage = 0;
-
-                            for (const tx of data.result) {
-                                if (getTxTime(tx.timeStamp) >= sevenDaysAgo) {
-                                    validTxsInPage++;
-                                    
-                                    if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && (!tx.isError || tx.isError === "0")) {
-                                        let valStr = tx.value || "0";
-                                        if (valStr === "") valStr = "0";
-
-                                        if (action !== "tokentx") {
-                                            weeklyYieldUsd += parseFloat(ethers.formatEther(valStr)) * globalMarketParams.ethPriceUsd;
-                                        } else {
-                                            const contractAddr = tx.contractAddress || "";
-                                            const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr.toLowerCase());
-                                            if (!matchedToken) continue; 
-
-                                            let tokenPriceUsd = matchedToken.priceUsd;
-                                            if (matchedToken.symbol === "STONKBROKER") tokenPriceUsd = globalMarketParams.tokenPriceUsd;
-
-                                            const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
-                                            const tokenAmount = parseFloat(ethers.formatUnits(valStr, decimals));
-                                            
-                                            if (!isNaN(tokenAmount)) {
-                                                weeklyYieldUsd += (tokenAmount * tokenPriceUsd);
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            // If we found zero transactions from the last 7 days on this page, stop fetching pages
-                            if (validTxsInPage === 0 || data.result.length < 1000) {
-                                isDone = true; 
-                            }
-                        } else {
-                            isDone = true; // Status "0" usually means "No transactions found"
+            // 1. Fetch native ETH transfers (Single minimal blockscout call to avoid limits)
+            try {
+                const url = `https://robinhoodchain.blockscout.com/api?module=account&action=txlist&address=${tbaAddress}&startblock=${startBlock}&page=1&offset=2000&sort=desc`;
+                const res = await fetch(url, { headers: FETCH_HEADERS });
+                const data = await res.json();
+                if (data.status === "1" && Array.isArray(data.result)) {
+                    for (const tx of data.result) {
+                        if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && (!tx.isError || tx.isError === "0")) {
+                            weeklyYieldUsd += parseFloat(ethers.formatEther(tx.value || "0")) * globalMarketParams.ethPriceUsd;
                         }
-                    } catch (e) {
-                        console.warn(`Critical skip for ${action} page ${page}:`, e.message);
-                        isDone = true;
                     }
-                    page++;
-                    await sleep(2000); // 2 second pause between individual pages
+                }
+            } catch (e) { console.warn("ETH fetch skip"); }
+
+            // 2. The Heavy Lifter: Direct RPC Log Filtering for Tokens (Immune to Cloudflare)
+            const transferTopic = ethers.id("Transfer(address,address,uint256)");
+            const paddedTo = ethers.zeroPadValue(tbaAddress, 32);
+            
+            // Chunked to prevent RPC 'range too large' errors
+            const CHUNK_SIZE = 100000; 
+            for (let b = startBlock; b <= currentBlock; b += CHUNK_SIZE) {
+                const endBlock = Math.min(b + CHUNK_SIZE - 1, currentBlock);
+                try {
+                    const logs = await provider.getLogs({
+                        fromBlock: b,
+                        toBlock: endBlock,
+                        topics: [transferTopic, null, paddedTo]
+                    });
+
+                    for (const log of logs) {
+                        const contractAddr = log.address.toLowerCase();
+                        const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr);
+                        if (!matchedToken) continue; // Instantly filter out scam/unrecognized tokens
+
+                        let tokenPriceUsd = matchedToken.symbol === "STONKBROKER" ? globalMarketParams.tokenPriceUsd : matchedToken.priceUsd;
+                        
+                        // Parse Hex Value emitted by ERC20 log
+                        const valueStr = BigInt(log.data).toString();
+                        const tokenAmount = parseFloat(ethers.formatUnits(valueStr, 18)); // Standard 18 decimals
+                        
+                        if (!isNaN(tokenAmount)) {
+                            weeklyYieldUsd += (tokenAmount * tokenPriceUsd);
+                        }
+                    }
+                } catch (e) {
+                    console.warn(`RPC chunk failed ${b}-${endBlock}:`, e.message);
                 }
             }
 
