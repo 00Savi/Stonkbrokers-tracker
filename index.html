@@ -221,7 +221,8 @@
             ]
         };
 
-        const registryAbi = ["function account(address implementation, uint256 chainId, address tokenContract, uint256 tokenId, uint256 salt) view returns (address)"];
+        // Corrected ABI Parameter Order
+        const registryAbi = ["function account(address implementation, bytes32 salt, uint256 chainId, address tokenContract, uint256 tokenId) view returns (address)"];
         const erc721Abi = ["function ownerOf(uint256 tokenId) view returns (address)"];
 
         function renderTierBenchmarks() {
@@ -263,7 +264,15 @@
             const nftContract = new ethers.Contract(WEB3_CONFIG.NFT_CONTRACT, erc721Abi, provider);
 
             const ownerAddress = await nftContract.ownerOf(tokenId);
-            const tbaAddress = await registryContract.account(WEB3_CONFIG.IMPLEMENTATION_CONTRACT, WEB3_CONFIG.CHAIN_ID, WEB3_CONFIG.NFT_CONTRACT, tokenId, 0);
+            
+            // Corrected Parameter Order
+            const tbaAddress = await registryContract.account(
+                WEB3_CONFIG.IMPLEMENTATION_CONTRACT, 
+                "0x0000000000000000000000000000000000000000000000000000000000000000", // salt
+                WEB3_CONFIG.CHAIN_ID, 
+                WEB3_CONFIG.NFT_CONTRACT, 
+                tokenId
+            );
 
             const historicalEthPriceUsd = globalMarketParams.ethPriceUsd; 
             const historicalStonkPriceUsd = globalMarketParams.tokenPriceUsd;
