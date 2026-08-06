@@ -130,6 +130,7 @@ async function run() {
 
     fs.writeFileSync("data.json", JSON.stringify(outputData, null, 2));
     console.log("Successfully generated data.json");
+    
 }
 
 run();
