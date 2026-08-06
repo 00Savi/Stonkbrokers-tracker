@@ -159,7 +159,7 @@
 
                 <div class="glass-card rounded-2xl p-6">
                     <h3 class="text-lg font-semibold mb-4 flex items-center"><i class="fa-solid fa-vault text-gray-400 mr-2"></i> Projected Yield Distribution</h3>
-                    <p class="text-xs text-gray-400 mb-4">Annualized estimate natively synced via Lightning RPC Logs.</p>
+                    <p class="text-xs text-gray-400 mb-4">Annualized estimate natively synced via Lightning Blockscout API.</p>
                     <div class="space-y-3" id="yield-list">
                         <div class="text-sm text-gray-500 italic text-center py-4">Enter an ID below to load assets.</div>
                     </div>
@@ -197,8 +197,8 @@
             if (isNaN(num)) return "0";
             return new Intl.NumberFormat('en-US').format(num);
         };
+        const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
         
-        // Accurate default fallbacks
         let globalMarketParams = { ethPriceUsd: 1900.00, tokenPriceUsd: 0.02278, nftFloorEth: 7.661 };
         let tierBenchmarks = [
             { tier: 1, reqTokens: 66666, benchmarkId: 1794, tbaAddress: "0x9c24b28c3146a1ca8095acd9611962f33faf068b", trackedAnnualYieldUsd: 0, loading: true, error: false },
@@ -216,7 +216,7 @@
             CHAIN_ID: 4663, 
             RPC_URL: "https://rpc.mainnet.chain.robinhood.com",
             TOKENS: [
-                { symbol: "STONKBROKER", address: "0xe934e36A439C94017B64a3FecE66AF12099aBF50", priceUsd: 0.02278 }, // Fallback, dynamically overwritten
+                { symbol: "STONKBROKER", address: "0xe934e36A439C94017B64a3FecE66AF12099aBF50", priceUsd: 0.02278 },
                 { symbol: "AAPL", address: "0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9", priceUsd: 225.00 },
                 { symbol: "AMZN", address: "0x12f190a9F9d7D37a250758b26824B97CE941bF54", priceUsd: 185.00 },
                 { symbol: "NVDA", address: "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC", priceUsd: 120.00 },
@@ -248,7 +248,7 @@
                 if (bm.loading) {
                     yieldDisplay = `<div class="flex items-center text-primary"><div class="spinner mr-2"></div><span class="text-xs">Connecting...</span></div>`;
                 } else if (bm.error) {
-                    yieldDisplay = `<span class="text-xs text-danger font-semibold border border-danger/20 bg-danger/10 px-2 py-1 rounded">RPC Error</span>`;
+                    yieldDisplay = `<span class="text-xs text-danger font-semibold border border-danger/20 bg-danger/10 px-2 py-1 rounded">API Error</span>`;
                 } else if (!bm.trackedAnnualYieldUsd || bm.trackedAnnualYieldUsd === 0) {
                     yieldDisplay = `<span class="text-xs text-gray-500 italic">No yield found</span>`;
                 } else {
@@ -266,34 +266,7 @@
             });
         }
 
-        // --- THE PARALLEL RPC ENGINE (BLAZING FAST, NO CLOUDFLARE BLOCKS) ---
-        async function getFastLogs(provider, startBlock, currentBlock, tbaAddressArray) {
-            const transferTopic = ethers.id("Transfer(address,address,uint256)");
-            const paddedAddresses = tbaAddressArray.map(addr => ethers.zeroPadValue(addr, 32).toLowerCase());
-            
-            const CHUNK_SIZE = 10000; // Small 10k chunks guarantee zero RPC truncation
-            const allLogs = [];
-            
-            // Runs 5 chunks concurrently at a time
-            for (let b = startBlock; b <= currentBlock; b += (CHUNK_SIZE * 5)) {
-                const promises = [];
-                for (let i = 0; i < 5; i++) {
-                    const chunkStart = b + (i * CHUNK_SIZE);
-                    if (chunkStart > currentBlock) break;
-                    const chunkEnd = Math.min(chunkStart + CHUNK_SIZE - 1, currentBlock);
-                    
-                    promises.push(provider.getLogs({
-                        fromBlock: chunkStart,
-                        toBlock: chunkEnd,
-                        topics: [transferTopic, null, paddedAddresses]
-                    }).catch(e => [])); // Silently catch single chunk failures so the rest complete
-                }
-                const results = await Promise.all(promises);
-                results.forEach(res => allLogs.push(...res));
-            }
-            return allLogs;
-        }
-
+        // --- THE "ONE-SHOT" BLAZING FAST BLOCKSCOUT ENGINE ---
         async function fetchBrokerData(tokenId) {
             const provider = new ethers.JsonRpcProvider(WEB3_CONFIG.RPC_URL);
             
@@ -326,28 +299,66 @@
 
             if (tbaAddress !== "0x0000000000000000000000000000000000000000") {
                 let currentBlock = 28500000;
-                try { currentBlock = await provider.getBlockNumber(); } catch (e) {}
-                const startBlock = Math.max(0, currentBlock - 302400); // 7 days of blocks
-
-                // Utilizing the Lightning Fast RPC Engine
-                const logs = await getFastLogs(provider, startBlock, currentBlock, [tbaAddress]);
-
-                for (const log of logs) {
-                    const contractAddr = log.address.toLowerCase();
-                    const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr);
-                    if (!matchedToken) continue; // Instantly drop non-whitelisted scam tokens
-
-                    let tokenPriceUsd = matchedToken.symbol === "STONKBROKER" ? globalMarketParams.tokenPriceUsd : matchedToken.priceUsd;
-                    const valueStr = BigInt(log.data).toString();
-                    const tokenAmount = parseFloat(ethers.formatUnits(valueStr, 18));
-
-                    if (!isNaN(tokenAmount)) {
-                        if (!aggregatedTransfers[matchedToken.symbol]) {
-                            aggregatedTransfers[matchedToken.symbol] = { ticker: matchedToken.symbol, rawAmount: 0, currentPriceUsd: tokenPriceUsd || 0 };
-                        }
-                        aggregatedTransfers[matchedToken.symbol].rawAmount += tokenAmount;
-                    }
+                try {
+                    const blockRes = await fetch('https://robinhoodchain.blockscout.com/api?module=block&action=eth_block_number');
+                    const blockData = await blockRes.json();
+                    currentBlock = parseInt(blockData.result, 16);
+                } catch(e) {
+                    try { currentBlock = await provider.getBlockNumber(); } catch (err) {}
                 }
+
+                // Accurate 100ms Block Math (7 Days)
+                const startBlock = Math.max(0, currentBlock - 6048000); 
+                const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
+
+                const actions = ["tokentx", "txlist", "txlistinternal"];
+                
+                // Fetch all 3 sources simultaneously with a massive offset so it completes in ONE page
+                const promises = actions.map(action =>
+                    fetch(`https://robinhoodchain.blockscout.com/api?module=account&action=${action}&address=${tbaAddress}&startblock=${startBlock}&page=1&offset=10000&sort=desc`, { headers: { "Accept": "application/json" } })
+                    .then(res => res.json())
+                    .catch(e => ({ status: "0", result: [] }))
+                );
+
+                const [tokenData, txData, internalData] = await Promise.all(promises);
+
+                const processTxs = (data, isToken) => {
+                    if (data.status === "1" && Array.isArray(data.result)) {
+                        for (const tx of data.result) {
+                            if (parseInt(tx.timeStamp, 10) < sevenDaysAgo) continue;
+
+                            if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && (!tx.isError || tx.isError === "0")) {
+                                let valueStr = tx.value || "0";
+                                if (valueStr === "") valueStr = "0";
+
+                                if (!isToken) {
+                                    const ethAmount = parseFloat(ethers.formatEther(valueStr));
+                                    if (ethAmount > 0) {
+                                        if (!aggregatedTransfers["ETH"]) aggregatedTransfers["ETH"] = { ticker: "ETH", rawAmount: 0, currentPriceUsd: globalMarketParams.ethPriceUsd };
+                                        aggregatedTransfers["ETH"].rawAmount += ethAmount;
+                                    }
+                                } else {
+                                    const contractAddr = (tx.contractAddress || "").toLowerCase();
+                                    const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr);
+                                    if (!matchedToken) continue;
+
+                                    let tokenPriceUsd = matchedToken.symbol === "STONKBROKER" ? globalMarketParams.tokenPriceUsd : matchedToken.priceUsd;
+                                    const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
+                                    const tokenAmount = parseFloat(ethers.formatUnits(valueStr, decimals));
+
+                                    if (tokenAmount > 0) {
+                                        if (!aggregatedTransfers[matchedToken.symbol]) aggregatedTransfers[matchedToken.symbol] = { ticker: matchedToken.symbol, rawAmount: 0, currentPriceUsd: tokenPriceUsd || 0 };
+                                        aggregatedTransfers[matchedToken.symbol].rawAmount += tokenAmount;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                };
+
+                processTxs(tokenData, true);
+                processTxs(txData, false);
+                processTxs(internalData, false);
             }
 
             return {
@@ -356,7 +367,7 @@
                 activation: { tokensBurned: tokensReq, historicalTokenPriceUsd: globalMarketParams.tokenPriceUsd },
                 tbaBalances: Object.values(aggregatedTransfers).map(asset => ({
                     ticker: asset.ticker,
-                    amount: asset.rawAmount * 52.14, // Exact 52.14 weeks in a year
+                    amount: asset.rawAmount * 52.14, 
                     currentPriceUsd: asset.currentPriceUsd || 0
                 }))
             };
@@ -480,51 +491,25 @@
 
             renderTierBenchmarks();
 
-            // 3. THE LIGHTNING FAST BULK FETCH
-            const provider = new ethers.JsonRpcProvider(WEB3_CONFIG.RPC_URL);
-            let currentBlock = 28500000;
-            try { currentBlock = await provider.getBlockNumber(); } catch (e) {}
-            const startBlock = Math.max(0, currentBlock - 302400); // 7 days
-
-            const allTbaAddresses = tierBenchmarks.map(bm => bm.tbaAddress);
-            const allLogs = await getFastLogs(provider, startBlock, currentBlock, allTbaAddresses);
-
-            // 4. Distribute Data Instantly
-            const tierData = {}; 
-            tierBenchmarks.forEach(bm => { tierData[bm.tbaAddress.toLowerCase()] = {}; });
-
-            for (const log of allLogs) {
-                const contractAddr = log.address.toLowerCase();
-                const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr);
-                if (!matchedToken) continue;
-
-                let toAddr = "0x" + log.topics[2].slice(26).toLowerCase();
-                if (tierData[toAddr]) {
-                    let tokenPriceUsd = matchedToken.symbol === "STONKBROKER" ? globalMarketParams.tokenPriceUsd : matchedToken.priceUsd;
-                    const valueStr = BigInt(log.data).toString();
-                    const tokenAmount = parseFloat(ethers.formatUnits(valueStr, 18));
-
-                    if (!isNaN(tokenAmount)) {
-                        if (!tierData[toAddr][matchedToken.symbol]) {
-                            tierData[toAddr][matchedToken.symbol] = { ticker: matchedToken.symbol, rawAmount: 0, currentPriceUsd: tokenPriceUsd || 0 };
-                        }
-                        tierData[toAddr][matchedToken.symbol].rawAmount += tokenAmount;
-                    }
-                }
-            }
-
+            // 3. Sequentially load each tier utilizing the massive offset parameter to finish instantly
             for (let bm of tierBenchmarks) {
-                const tba = bm.tbaAddress.toLowerCase();
-                let totalYieldUsd = 0;
-                Object.values(tierData[tba]).forEach(asset => {
-                    totalYieldUsd += (asset.rawAmount * 52.14) * asset.currentPriceUsd;
-                });
-
-                bm.trackedAnnualYieldUsd = totalYieldUsd;
-                bm.loading = false;
-                bm.error = false;
+                try {
+                    const brokerData = await fetchBrokerData(bm.benchmarkId);
+                    let totalYieldUsd = 0;
+                    brokerData.tbaBalances.forEach(b => {
+                        totalYieldUsd += (b.amount * b.currentPriceUsd);
+                    });
+                    bm.trackedAnnualYieldUsd = totalYieldUsd;
+                    bm.loading = false;
+                    bm.error = false;
+                } catch (e) {
+                    console.error("Failed to load tier benchmark", bm.tier, e);
+                    bm.loading = false;
+                    bm.error = true;
+                }
+                renderTierBenchmarks(); 
+                await sleep(500); // Polite 0.5s pause between tiers keeps Cloudflare perfectly happy
             }
-            renderTierBenchmarks();
         }
 
         window.addEventListener('DOMContentLoaded', initializeApp);
