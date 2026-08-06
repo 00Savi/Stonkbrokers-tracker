@@ -198,6 +198,7 @@
             return new Intl.NumberFormat('en-US').format(num);
         };
         
+        const FETCH_HEADERS = { "Accept": "application/json" };
         let globalMarketParams = { ethPriceUsd: 1874.00, tokenPriceUsd: 0.01447, nftFloorEth: 0.15 };
         let tierBenchmarks = [
             { tier: 1, reqTokens: 66666, benchmarkId: 1794, tbaAddress: "0x9c24b28c3146a1ca8095acd9611962f33faf068b", trackedAnnualYieldUsd: 0 },
@@ -262,6 +263,30 @@
             return parseInt(txTimeStamp, 10);
         }
 
+        const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+        async function safeFetch(url) {
+            let retries = 0;
+            while (retries < 6) {
+                try {
+                    const res = await fetch(url, { headers: FETCH_HEADERS });
+                    if (!res.ok) {
+                        if (res.status === 429) {
+                            await sleep(3000 * (retries + 1));
+                            retries++;
+                            continue;
+                        }
+                        throw new Error(`HTTP ${res.status}`);
+                    }
+                    return await res.json();
+                } catch (e) {
+                    await sleep(3000 * (retries + 1));
+                    retries++;
+                }
+            }
+            throw new Error(`Max retries API`);
+        }
+
         async function fetchBrokerData(tokenId) {
             const provider = new ethers.JsonRpcProvider(WEB3_CONFIG.RPC_URL);
             
@@ -318,8 +343,7 @@
                     while (!isDone && page <= 5) {
                         try {
                             const url = `https://robinhoodchain.blockscout.com/api?module=account&action=${action}&address=${tbaAddress}&page=${page}&offset=1000&sort=desc`;
-                            const res = await fetch(url);
-                            const data = await res.json();
+                            const data = await safeFetch(url);
                             
                             if (data.status === "1" && Array.isArray(data.result) && data.result.length > 0) {
                                 let validTxsInPage = 0;
@@ -373,7 +397,7 @@
                             isDone = true;
                         }
                         page++;
-                        await new Promise(resolve => setTimeout(resolve, 300));
+                        await sleep(1000);
                     }
                 }
             }
