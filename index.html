@@ -193,7 +193,13 @@
         const formatNum = (num) => new Intl.NumberFormat('en-US').format(num);
         
         let globalMarketParams = { ethPriceUsd: 1874.00, tokenPriceUsd: 0.01447, nftFloorEth: 0.15 };
-        let tierBenchmarks = [];
+        let tierBenchmarks = [
+            { tier: 1, reqTokens: 66666, benchmarkId: 1794, tbaAddress: "0x9c24b28c3146a1ca8095acd9611962f33faf068b", trackedAnnualYieldUsd: 0 },
+            { tier: 2, reqTokens: 166666, benchmarkId: 2370, tbaAddress: "0x45f290f4e196c27abf738a32f5a97d47383cf0ba", trackedAnnualYieldUsd: 0 },
+            { tier: 3, reqTokens: 366666, benchmarkId: 275, tbaAddress: "0x0c9aa82841a3a560a10e64e44f8c4687a1257e3e", trackedAnnualYieldUsd: 0 },
+            { tier: 4, reqTokens: 766666, benchmarkId: 1488, tbaAddress: "0xd5a17fac7942cbd597f3197d7d8f56ddf8d899f2", trackedAnnualYieldUsd: 0 },
+            { tier: 5, reqTokens: 1666666, benchmarkId: 47, tbaAddress: "0x0bf6bb4bf9236561884d5be086f6b540d1e77aff", trackedAnnualYieldUsd: 0 }
+        ];
 
         const WEB3_CONFIG = {
             NFT_CONTRACT: "0x539cdd042c2f3d93ebc5be7dfff0c79f3b4fabf0",
@@ -221,7 +227,6 @@
             ]
         };
 
-        // Using V0.2 ABI Standard (bytes32 salt as the 2nd parameter)
         const registryAbi = ["function account(address implementation, bytes32 salt, uint256 chainId, address tokenContract, uint256 tokenId) view returns (address)"];
         const erc721Abi = ["function ownerOf(uint256 tokenId) view returns (address)"];
 
@@ -276,17 +281,22 @@
                 console.warn("NFT owner not found (may not be minted yet). Defaulting to zero address.");
             }
             
-            let tbaAddress;
-            try {
-                tbaAddress = await registryContract.account(
-                    WEB3_CONFIG.IMPLEMENTATION_CONTRACT, 
-                    "0x0000000000000000000000000000000000000000000000000000000000000000", 
-                    WEB3_CONFIG.CHAIN_ID, 
-                    WEB3_CONFIG.NFT_CONTRACT, 
-                    tokenId
-                );
-            } catch (e) {
-                throw new Error("Registry reverted. This NFT ID likely hasn't been minted yet.");
+            let tbaAddress = "0x0000000000000000000000000000000000000000";
+            const foundBenchmark = tierBenchmarks.find(b => b.benchmarkId == tokenId);
+            if (foundBenchmark) {
+                tbaAddress = foundBenchmark.tbaAddress;
+            } else {
+                try {
+                    tbaAddress = await registryContract.account(
+                        WEB3_CONFIG.IMPLEMENTATION_CONTRACT, 
+                        "0x0000000000000000000000000000000000000000000000000000000000000000", 
+                        WEB3_CONFIG.CHAIN_ID, 
+                        WEB3_CONFIG.NFT_CONTRACT, 
+                        tokenId
+                    );
+                } catch (e) {
+                    console.warn("Registry query failed. Proceeding with blank TBA.");
+                }
             }
 
             const historicalEthPriceUsd = globalMarketParams.ethPriceUsd; 
@@ -298,30 +308,32 @@
 
             // 1. NATIVE ETH YIELD TRACKING
             let ethYieldRaw = 0n;
-            try {
-                const normalRes = await fetch(`https://robinhoodchain.blockscout.com/api?module=account&action=txlist&address=${tbaAddress}&sort=desc`);
-                const normalData = await normalRes.json();
-                if (normalData.status === "1" && Array.isArray(normalData.result)) {
-                    for (const tx of normalData.result) {
-                        if (getTxTime(tx.timeStamp) < sevenDaysAgo) continue; 
-                        if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && tx.isError === "0" && tx.value !== "0") {
-                            ethYieldRaw += BigInt(tx.value);
+            if (tbaAddress !== "0x0000000000000000000000000000000000000000") {
+                try {
+                    const normalRes = await fetch(`https://robinhoodchain.blockscout.com/api?module=account&action=txlist&address=${tbaAddress}&sort=desc`);
+                    const normalData = await normalRes.json();
+                    if (normalData.status === "1" && Array.isArray(normalData.result)) {
+                        for (const tx of normalData.result) {
+                            if (getTxTime(tx.timeStamp) < sevenDaysAgo) continue; 
+                            if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && tx.isError === "0" && tx.value !== "0") {
+                                ethYieldRaw += BigInt(tx.value);
+                            }
                         }
                     }
-                }
 
-                const internalRes = await fetch(`https://robinhoodchain.blockscout.com/api?module=account&action=txlistinternal&address=${tbaAddress}&sort=desc`);
-                const internalData = await internalRes.json();
-                if (internalData.status === "1" && Array.isArray(internalData.result)) {
-                    for (const tx of internalData.result) {
-                        if (getTxTime(tx.timeStamp) < sevenDaysAgo) continue;
-                        if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && tx.isError === "0" && tx.value !== "0") {
-                            ethYieldRaw += BigInt(tx.value);
+                    const internalRes = await fetch(`https://robinhoodchain.blockscout.com/api?module=account&action=txlistinternal&address=${tbaAddress}&sort=desc`);
+                    const internalData = await internalRes.json();
+                    if (internalData.status === "1" && Array.isArray(internalData.result)) {
+                        for (const tx of internalData.result) {
+                            if (getTxTime(tx.timeStamp) < sevenDaysAgo) continue;
+                            if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && tx.isError === "0" && tx.value !== "0") {
+                                ethYieldRaw += BigInt(tx.value);
+                            }
                         }
                     }
+                } catch (e) {
+                    console.warn("Blockscout API fetch failed for ETH", e);
                 }
-            } catch (e) {
-                console.warn("Blockscout API fetch failed for ETH", e);
             }
             
             if (ethYieldRaw > 0n) {
@@ -334,34 +346,36 @@
             }
 
             // 2. ERC20 YIELD TRACKING
-            try {
-                const tokenRes = await fetch(`https://robinhoodchain.blockscout.com/api?module=account&action=tokentx&address=${tbaAddress}&sort=desc`);
-                const tokenData = await tokenRes.json();
-                
-                if (tokenData.status === "1" && Array.isArray(tokenData.result)) {
-                    for (const tx of tokenData.result) {
-                        if (getTxTime(tx.timeStamp) < sevenDaysAgo) continue;
-                        
-                        if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase()) {
-                            const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === tx.contractAddress.toLowerCase());
-                            if (matchedToken) {
-                                const decimals = parseInt(tx.tokenDecimal) || 18;
-                                const amountFormatted = parseFloat(ethers.formatUnits(tx.value, decimals));
-                                
-                                if (!aggregatedTransfers[matchedToken.symbol]) {
-                                    aggregatedTransfers[matchedToken.symbol] = {
-                                        ticker: matchedToken.symbol,
-                                        amount: 0,
-                                        currentPriceUsd: matchedToken.priceUsd
-                                    };
+            if (tbaAddress !== "0x0000000000000000000000000000000000000000") {
+                try {
+                    const tokenRes = await fetch(`https://robinhoodchain.blockscout.com/api?module=account&action=tokentx&address=${tbaAddress}&sort=desc`);
+                    const tokenData = await tokenRes.json();
+                    
+                    if (tokenData.status === "1" && Array.isArray(tokenData.result)) {
+                        for (const tx of tokenData.result) {
+                            if (getTxTime(tx.timeStamp) < sevenDaysAgo) continue;
+                            
+                            if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase()) {
+                                const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === tx.contractAddress.toLowerCase());
+                                if (matchedToken) {
+                                    const decimals = parseInt(tx.tokenDecimal) || 18;
+                                    const amountFormatted = parseFloat(ethers.formatUnits(tx.value, decimals));
+                                    
+                                    if (!aggregatedTransfers[matchedToken.symbol]) {
+                                        aggregatedTransfers[matchedToken.symbol] = {
+                                            ticker: matchedToken.symbol,
+                                            amount: 0,
+                                            currentPriceUsd: matchedToken.priceUsd
+                                        };
+                                    }
+                                    aggregatedTransfers[matchedToken.symbol].amount += amountFormatted;
                                 }
-                                aggregatedTransfers[matchedToken.symbol].amount += amountFormatted;
                             }
                         }
                     }
+                } catch (e) {
+                    console.warn("Blockscout API fetch failed for Tokens", e);
                 }
-            } catch (e) {
-                console.warn("Blockscout API fetch failed for Tokens", e);
             }
 
             return {
