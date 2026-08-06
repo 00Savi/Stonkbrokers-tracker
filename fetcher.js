@@ -29,7 +29,9 @@ const WEB3_CONFIG = {
 };
 
 const provider = new ethers.JsonRpcProvider(WEB3_CONFIG.RPC_URL);
-const registryAbi = ["function account(address implementation, uint256 chainId, address tokenContract, uint256 tokenId, uint256 salt) view returns (address)"];
+
+// Corrected ABI Parameter Order
+const registryAbi = ["function account(address implementation, bytes32 salt, uint256 chainId, address tokenContract, uint256 tokenId) view returns (address)"];
 
 const globalMarketParams = { ethPriceUsd: 1874.00, tokenPriceUsd: 0.01447, nftFloorEth: 0.15 };
 const tierBenchmarks = [
@@ -76,12 +78,13 @@ async function run() {
         await sleep(1500); 
 
         try {
+            // Corrected Parameter Order
             const tbaAddress = await registryContract.account(
                 WEB3_CONFIG.IMPLEMENTATION_CONTRACT, 
+                "0x0000000000000000000000000000000000000000000000000000000000000000", // salt
                 WEB3_CONFIG.CHAIN_ID, 
                 WEB3_CONFIG.NFT_CONTRACT, 
-                bm.benchmarkId, 
-                0
+                bm.benchmarkId
             );
 
             let totalYieldUsd = 0;
