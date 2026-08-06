@@ -8,7 +8,6 @@ const WEB3_CONFIG = {
     IMPLEMENTATION_CONTRACT: "0x55266d75D1a14E4572138116aF39863Ed6593eCE",
     CHAIN_ID: 4663, 
     RPC_URL: "https://rpc.mainnet.chain.robinhood.com",
-    // IMPORTANT: Replace the "0x..." placeholders with the full contract addresses
     TOKENS: [
         { symbol: "STONK", address: "0xe934e36a439c94017b64a3fece66af12099abf50", priceUsd: 0.01447 },
         { symbol: "AAPL", address: "0xf9bc0777c087af0fe7214de8a5360be6a71d0d44", priceUsd: 225.00 },
@@ -16,15 +15,16 @@ const WEB3_CONFIG = {
         { symbol: "NVDA", address: "0xc5e3e9c2a835ec9319fd8c1d516fd4323c5758a0", priceUsd: 120.00 },
         { symbol: "SLV", address: "0x9d2c3355502be065975ad47ef5a902f02c772504", priceUsd: 28.00 },
         { symbol: "MSFT", address: "0xfc253e0062eef614e20e0726e5f6ff7559c35402", priceUsd: 430.00 },
-        { symbol: "COST", address: "0x...", priceUsd: 820.00 }, 
-        { symbol: "USAR", address: "0x...", priceUsd: 50.00 },  
+        { symbol: "COST", address: "0x4EA005168D7F09a7A0Ba9D1DEf21a479950E44C2", priceUsd: 820.00 }, 
+        { symbol: "USAR", address: "0xd917B029C761D264c6A312BBbcDA868658eF86a6", priceUsd: 50.00 },  
         { symbol: "SPCX", address: "0xf58979d35c3f0ff6a6f7edd909fe8a95a2894609", priceUsd: 25.00 },  
         { symbol: "GOOGL", address: "0xff20b4b8e08beaa4064e3ca4cc5a2e40acac072f", priceUsd: 175.00 }, 
-        { symbol: "USDG", address: "0x...", priceUsd: 1.00 },
-        { symbol: "PLTR", address: "0x...", priceUsd: 28.00 },
-        { symbol: "TSLA", address: "0x...", priceUsd: 215.00 },
-        { symbol: "AMD", address: "0x...", priceUsd: 145.00 },
-        { symbol: "GME", address: "0x8f1836209c42d4f6b6caa782c055ee13f8ac95b0", priceUsd: 22.00 }
+        { symbol: "USDG", address: "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168", priceUsd: 1.00 },
+        { symbol: "PLTR", address: "0x894E1EC2D74FFE5AEF8Dc8A9e84686acCB964F2A", priceUsd: 28.00 },
+        { symbol: "TSLA", address: "0x322F0929c4625eD5bAd873c95208D54E1c003b2d", priceUsd: 215.00 },
+        { symbol: "AMD", address: "0x86923f96303D656E4aa86D9d42D1e57ad2023fdC", priceUsd: 145.00 },
+        { symbol: "GME", address: "0x8f1836209c42d4f6b6caa782c055ee13f8ac95b0", priceUsd: 22.00 },
+        { symbol: "USO", address: "0x5b1282b6ad40b3dc294404a2b33ff7657b66c33c", priceUsd: 75.00 }
     ]
 };
 
@@ -108,9 +108,7 @@ async function run() {
                 
                 if (tokenData.status === "1" && Array.isArray(tokenData.result)) {
                     for (const tx of tokenData.result) {
-                        // Check if it is an inbound transfer
                         if (tx.to.toLowerCase() === tbaAddress.toLowerCase()) {
-                            // Find matching token in our config to get the pre-loaded price
                             const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === tx.contractAddress.toLowerCase());
                             if (matchedToken) {
                                 const decimals = parseInt(tx.tokenDecimal) || 18;
