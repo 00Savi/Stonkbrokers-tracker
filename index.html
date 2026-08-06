@@ -159,7 +159,7 @@
 
                 <div class="glass-card rounded-2xl p-6">
                     <h3 class="text-lg font-semibold mb-4 flex items-center"><i class="fa-solid fa-vault text-gray-400 mr-2"></i> Projected Yield Distribution</h3>
-                    <p class="text-xs text-gray-400 mb-4">Annualized estimate directly scaled from stable 7-day volume tracking.</p>
+                    <p class="text-xs text-gray-400 mb-4">Annualized estimate strictly locked to trailing 7-day stable volume tracking.</p>
                     <div class="space-y-3" id="yield-list">
                         <div class="text-sm text-gray-500 italic text-center py-4">Enter an ID below to load assets.</div>
                     </div>
@@ -313,62 +313,74 @@
                 const actionTypes = ["txlist", "txlistinternal", "tokentx"];
                 
                 for (let action of actionTypes) {
-                    try {
-                        const url = `https://robinhoodchain.blockscout.com/api?module=account&action=${action}&address=${tbaAddress}&sort=desc`;
-                        const res = await fetch(url);
-                        const data = await res.json();
-                        
-                        if (data.status === "1" && Array.isArray(data.result) && data.result.length > 0) {
-                            for (const tx of data.result) {
-                                // Break exactly at 7 days!
-                                if (getTxTime(tx.timeStamp) < sevenDaysAgo) break; 
-                                
-                                if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && (!tx.isError || tx.isError === "0")) {
-                                    let valueStr = tx.value || "0";
-                                    if (valueStr === "") valueStr = "0";
+                    let page = 1;
+                    let isDone = false;
 
-                                    if (action !== "tokentx") {
-                                        const ethAmount = parseFloat(ethers.formatEther(valueStr));
-                                        if (!aggregatedTransfers["ETH"]) {
-                                            aggregatedTransfers["ETH"] = { ticker: "ETH", rawAmount: 0, currentPriceUsd: globalMarketParams.ethPriceUsd };
-                                        }
-                                        aggregatedTransfers["ETH"].rawAmount += ethAmount;
-                                    } else {
-                                        const contractAddr = tx.contractAddress || "";
-                                        if (!contractAddr) continue;
+                    while (!isDone && page <= 5) {
+                        try {
+                            const url = `https://robinhoodchain.blockscout.com/api?module=account&action=${action}&address=${tbaAddress}&page=${page}&offset=1000&sort=desc`;
+                            const res = await fetch(url);
+                            const data = await res.json();
+                            
+                            if (data.status === "1" && Array.isArray(data.result) && data.result.length > 0) {
+                                for (const tx of data.result) {
+                                    if (getTxTime(tx.timeStamp) < sevenDaysAgo) {
+                                        isDone = true;
+                                        break; 
+                                    }
+                                    
+                                    if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && (!tx.isError || tx.isError === "0")) {
+                                        let valueStr = tx.value || "0";
+                                        if (valueStr === "") valueStr = "0";
 
-                                        let tokenPriceUsd = 0;
-                                        let tokenSymbol = tx.tokenSymbol || "TOKEN";
-
-                                        const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr.toLowerCase());
-                                        if (matchedToken && matchedToken.priceUsd) {
-                                            tokenPriceUsd = matchedToken.priceUsd;
-                                        } else if (tokenPriceCache[contractAddr] !== undefined) {
-                                            tokenPriceUsd = tokenPriceCache[contractAddr];
-                                        } else {
-                                            try {
-                                                const dsRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${contractAddr}`);
-                                                const dsData = await dsRes.json();
-                                                if (dsData?.pairs?.length > 0) tokenPriceUsd = parseFloat(dsData.pairs[0].priceUsd) || 0;
-                                            } catch (err) {}
-                                            tokenPriceCache[contractAddr] = tokenPriceUsd;
-                                        }
-
-                                        const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
-                                        const tokenAmount = parseFloat(ethers.formatUnits(valueStr, decimals));
-
-                                        if (!isNaN(tokenAmount)) {
-                                            if (!aggregatedTransfers[tokenSymbol]) {
-                                                aggregatedTransfers[tokenSymbol] = { ticker: tokenSymbol, rawAmount: 0, currentPriceUsd: tokenPriceUsd || 0 };
+                                        if (action !== "tokentx") {
+                                            const ethAmount = parseFloat(ethers.formatEther(valueStr));
+                                            if (!aggregatedTransfers["ETH"]) {
+                                                aggregatedTransfers["ETH"] = { ticker: "ETH", rawAmount: 0, currentPriceUsd: globalMarketParams.ethPriceUsd };
                                             }
-                                            aggregatedTransfers[tokenSymbol].rawAmount += tokenAmount;
+                                            aggregatedTransfers["ETH"].rawAmount += ethAmount;
+                                        } else {
+                                            const contractAddr = tx.contractAddress || "";
+                                            if (!contractAddr) continue;
+
+                                            let tokenPriceUsd = 0;
+                                            let tokenSymbol = tx.tokenSymbol || "TOKEN";
+
+                                            const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr.toLowerCase());
+                                            if (matchedToken && matchedToken.priceUsd) {
+                                                tokenPriceUsd = matchedToken.priceUsd;
+                                            } else if (tokenPriceCache[contractAddr] !== undefined) {
+                                                tokenPriceUsd = tokenPriceCache[contractAddr];
+                                            } else {
+                                                try {
+                                                    const dsRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${contractAddr}`);
+                                                    const dsData = await dsRes.json();
+                                                    if (dsData?.pairs?.length > 0) tokenPriceUsd = parseFloat(dsData.pairs[0].priceUsd) || 0;
+                                                } catch (err) {}
+                                                tokenPriceCache[contractAddr] = tokenPriceUsd;
+                                            }
+
+                                            const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
+                                            const tokenAmount = parseFloat(ethers.formatUnits(valueStr, decimals));
+
+                                            if (!isNaN(tokenAmount)) {
+                                                if (!aggregatedTransfers[tokenSymbol]) {
+                                                    aggregatedTransfers[tokenSymbol] = { ticker: tokenSymbol, rawAmount: 0, currentPriceUsd: tokenPriceUsd || 0 };
+                                                }
+                                                aggregatedTransfers[tokenSymbol].rawAmount += tokenAmount;
+                                            }
                                         }
                                     }
                                 }
+                                if (data.result.length < 1000) isDone = true; 
+                            } else {
+                                isDone = true;
                             }
+                        } catch (e) {
+                            console.warn(`Fetch failed for ${action} page ${page}:`, e.message);
+                            isDone = true;
                         }
-                    } catch (e) {
-                        console.warn(`Fetch failed for ${action}:`, e.message);
+                        page++;
                     }
                 }
             }
