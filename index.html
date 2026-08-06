@@ -221,7 +221,8 @@
             ]
         };
 
-        const registryAbi = ["function account(address implementation, bytes32 salt, uint256 chainId, address tokenContract, uint256 tokenId) view returns (address)"];
+        // Corrected ABI order back to original
+        const registryAbi = ["function account(address implementation, uint256 chainId, address tokenContract, uint256 tokenId, uint256 salt) view returns (address)"];
         const erc721Abi = ["function ownerOf(uint256 tokenId) view returns (address)"];
 
         function renderTierBenchmarks() {
@@ -248,6 +249,12 @@
             });
         }
 
+        function getTxTime(txTimeStamp) {
+            if (!txTimeStamp) return 0;
+            if (String(txTimeStamp).includes("-")) return Math.floor(new Date(txTimeStamp).getTime() / 1000);
+            return parseInt(txTimeStamp);
+        }
+
         async function fetchBrokerData(tokenId) {
             const provider = new ethers.JsonRpcProvider(WEB3_CONFIG.RPC_URL);
             
@@ -263,31 +270,31 @@
             const nftContract = new ethers.Contract(WEB3_CONFIG.NFT_CONTRACT, erc721Abi, provider);
 
             const ownerAddress = await nftContract.ownerOf(tokenId);
+            
+            // Corrected parameter order back to original
             const tbaAddress = await registryContract.account(
                 WEB3_CONFIG.IMPLEMENTATION_CONTRACT, 
-                "0x0000000000000000000000000000000000000000000000000000000000000000", 
                 WEB3_CONFIG.CHAIN_ID, 
                 WEB3_CONFIG.NFT_CONTRACT, 
-                tokenId
+                tokenId,
+                0 // salt
             );
 
             const historicalEthPriceUsd = globalMarketParams.ethPriceUsd; 
             const historicalStonkPriceUsd = globalMarketParams.tokenPriceUsd;
             const historicalEthPaid = (historicalStonkPriceUsd * 666666) / historicalEthPriceUsd; 
 
-            // Calculate timestamp for local filtering instead of block ranges
             const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
-            
             let aggregatedTransfers = {};
 
-            // 1. NATIVE ETH YIELD TRACKING (Timestamp Filtered)
+            // 1. NATIVE ETH YIELD TRACKING
             let ethYieldRaw = 0n;
             try {
                 const normalRes = await fetch(`https://robinhoodchain.blockscout.com/api?module=account&action=txlist&address=${tbaAddress}&sort=desc`);
                 const normalData = await normalRes.json();
                 if (normalData.status === "1" && Array.isArray(normalData.result)) {
                     for (const tx of normalData.result) {
-                        if (parseInt(tx.timeStamp) < sevenDaysAgo) break; 
+                        if (getTxTime(tx.timeStamp) < sevenDaysAgo) continue; 
                         if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && tx.isError === "0" && tx.value !== "0") {
                             ethYieldRaw += BigInt(tx.value);
                         }
@@ -298,7 +305,7 @@
                 const internalData = await internalRes.json();
                 if (internalData.status === "1" && Array.isArray(internalData.result)) {
                     for (const tx of internalData.result) {
-                        if (parseInt(tx.timeStamp) < sevenDaysAgo) break;
+                        if (getTxTime(tx.timeStamp) < sevenDaysAgo) continue;
                         if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && tx.isError === "0" && tx.value !== "0") {
                             ethYieldRaw += BigInt(tx.value);
                         }
@@ -317,14 +324,14 @@
                 };
             }
 
-            // 2. ERC20 YIELD TRACKING (Timestamp Filtered & Aggregated)
+            // 2. ERC20 YIELD TRACKING
             try {
                 const tokenRes = await fetch(`https://robinhoodchain.blockscout.com/api?module=account&action=tokentx&address=${tbaAddress}&sort=desc`);
                 const tokenData = await tokenRes.json();
                 
                 if (tokenData.status === "1" && Array.isArray(tokenData.result)) {
                     for (const tx of tokenData.result) {
-                        if (parseInt(tx.timeStamp) < sevenDaysAgo) break;
+                        if (getTxTime(tx.timeStamp) < sevenDaysAgo) continue;
                         
                         if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase()) {
                             const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === tx.contractAddress.toLowerCase());
@@ -352,7 +359,6 @@
                 id: tokenId, tier: actualTier, owner: `${ownerAddress.slice(0,6)}...${ownerAddress.slice(-4)}`, tbaAddress: `${tbaAddress.slice(0,6)}...${tbaAddress.slice(-4)}`,
                 acquisition: { ethPaid: historicalEthPaid, historicalEthPriceUsd: historicalEthPriceUsd },
                 activation: { tokensBurned: tokensReq, historicalTokenPriceUsd: historicalStonkPriceUsd },
-                // Multiply aggregated amounts by 52.14 for annualized projection
                 tbaBalances: Object.values(aggregatedTransfers).map(asset => ({ ticker: asset.ticker, amount: asset.amount * 52.14, currentPriceUsd: asset.currentPriceUsd }))
             };
         }
