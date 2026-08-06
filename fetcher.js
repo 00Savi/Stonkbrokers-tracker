@@ -40,6 +40,9 @@ const tierBenchmarks = [
     { tier: 5, reqTokens: 1666666, benchmarkId: 47, trackedAnnualYieldUsd: 0 }
 ];
 
+// Helper function to pause execution
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 async function run() {
     console.log("Fetching global prices...");
     try {
@@ -56,13 +59,24 @@ async function run() {
     WEB3_CONFIG.TOKENS[0].priceUsd = globalMarketParams.tokenPriceUsd;
     globalMarketParams.nftFloorEth = parseFloat(((666666 * globalMarketParams.tokenPriceUsd) / globalMarketParams.ethPriceUsd).toFixed(3));
 
-    const registryContract = new ethers.Contract(WEB3_CONFIG.REGISTRY_CONTRACT, registryAbi, provider);
-    const currentBlock = await provider.getBlockNumber();
+    let currentBlock;
+    try {
+        currentBlock = await provider.getBlockNumber();
+    } catch (e) {
+        console.error("CRITICAL ERROR: Failed to fetch current block from RPC.", e.message);
+        return; // Exit early if the RPC entirely blocks us
+    }
+    
     const blocksPerWeek = 302400; 
     const startBlock = currentBlock - blocksPerWeek;
+    const registryContract = new ethers.Contract(WEB3_CONFIG.REGISTRY_CONTRACT, registryAbi, provider);
 
     for (let bm of tierBenchmarks) {
-        console.log(`Fetching data for Tier ${bm.tier} (NFT #${bm.benchmarkId})...`);
+        console.log(`\nFetching data for Tier ${bm.tier} (NFT #${bm.benchmarkId})...`);
+        
+        // PAUSE for 2 seconds to prevent rate-limiting from the API/RPC
+        await sleep(2000); 
+
         try {
             const tbaAddress = await registryContract.account(
                 WEB3_CONFIG.IMPLEMENTATION_CONTRACT, 
@@ -85,6 +99,8 @@ async function run() {
                     }
                 }
 
+                await sleep(500); // 0.5s pause between Blockscout calls
+
                 const internalRes = await fetch(`https://robinhoodchain.blockscout.com/api?module=account&action=txlistinternal&address=${tbaAddress}&startblock=${startBlock}&endblock=${currentBlock}&sort=asc`);
                 const internalData = await internalRes.json();
                 if (internalData.status === "1" && Array.isArray(internalData.result)) {
@@ -93,13 +109,15 @@ async function run() {
                     }
                 }
             } catch (e) {
-                console.warn(`Blockscout API fetch failed for ETH on NFT #${bm.benchmarkId}`, e);
+                console.warn(`Blockscout API fetch failed for ETH on NFT #${bm.benchmarkId}`, e.message);
             }
             
             if (ethYieldRaw > 0n) {
                 const ethFormatted = parseFloat(ethers.formatEther(ethYieldRaw));
                 totalYieldUsd += (ethFormatted * 52.14) * globalMarketParams.ethPriceUsd;
             }
+
+            await sleep(500); // 0.5s pause before final token call
 
             // 2. ERC20 YIELD TRACKING (Via Blockscout API)
             try {
@@ -119,13 +137,13 @@ async function run() {
                     }
                 }
             } catch (e) {
-                console.warn(`Blockscout API fetch failed for Tokens on NFT #${bm.benchmarkId}`, e);
+                console.warn(`Blockscout API fetch failed for Tokens on NFT #${bm.benchmarkId}`, e.message);
             }
 
             bm.trackedAnnualYieldUsd = totalYieldUsd;
             bm.error = false;
         } catch (err) {
-            console.error(`Failed to fetch NFT #${bm.benchmarkId}`, err);
+            console.error(`ERROR on NFT #${bm.benchmarkId}:`, err.message);
             bm.error = true;
         }
     }
