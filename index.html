@@ -159,7 +159,7 @@
 
                 <div class="glass-card rounded-2xl p-6">
                     <h3 class="text-lg font-semibold mb-4 flex items-center"><i class="fa-solid fa-vault text-gray-400 mr-2"></i> Projected Yield Distribution</h3>
-                    <p class="text-xs text-gray-400 mb-4">Annualized estimate strictly locked to trailing 7-day stable volume tracking.</p>
+                    <p class="text-xs text-gray-400 mb-4">Annualized estimate natively indexed via direct RPC logs.</p>
                     <div class="space-y-3" id="yield-list">
                         <div class="text-sm text-gray-500 italic text-center py-4">Enter an ID below to load assets.</div>
                     </div>
@@ -198,7 +198,6 @@
             return new Intl.NumberFormat('en-US').format(num);
         };
         
-        const FETCH_HEADERS = { "Accept": "application/json" };
         let globalMarketParams = { ethPriceUsd: 1874.00, tokenPriceUsd: 0.01447, nftFloorEth: 0.15 };
         let tierBenchmarks = [
             { tier: 1, reqTokens: 66666, benchmarkId: 1794, tbaAddress: "0x9c24b28c3146a1ca8095acd9611962f33faf068b", trackedAnnualYieldUsd: 0 },
@@ -257,36 +256,6 @@
             });
         }
 
-        function getTxTime(txTimeStamp) {
-            if (!txTimeStamp) return 0;
-            if (String(txTimeStamp).includes("-")) return Math.floor(new Date(txTimeStamp).getTime() / 1000);
-            return parseInt(txTimeStamp, 10);
-        }
-
-        const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-        async function safeFetch(url) {
-            let retries = 0;
-            while (retries < 6) {
-                try {
-                    const res = await fetch(url, { headers: FETCH_HEADERS });
-                    if (!res.ok) {
-                        if (res.status === 429) {
-                            await sleep(3000 * (retries + 1));
-                            retries++;
-                            continue;
-                        }
-                        throw new Error(`HTTP ${res.status}`);
-                    }
-                    return await res.json();
-                } catch (e) {
-                    await sleep(3000 * (retries + 1));
-                    retries++;
-                }
-            }
-            throw new Error(`Max retries API`);
-        }
-
         async function fetchBrokerData(tokenId) {
             const provider = new ethers.JsonRpcProvider(WEB3_CONFIG.RPC_URL);
             
@@ -330,74 +299,69 @@
             const historicalStonkPriceUsd = globalMarketParams.tokenPriceUsd;
             const historicalEthPaid = (historicalStonkPriceUsd * 666666) / historicalEthPriceUsd; 
 
-            const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
+            let currentBlock = 28200000;
+            try {
+                currentBlock = await provider.getBlockNumber();
+            } catch (e) {
+                console.warn("RPC failed to get block number, using fallback.");
+            }
+            
+            // 302,400 blocks roughly equals 7 days at 2s block time
+            const startBlock = Math.max(0, currentBlock - 302400);
             let aggregatedTransfers = {};
 
             if (tbaAddress !== "0x0000000000000000000000000000000000000000") {
-                const actionTypes = ["txlist", "txlistinternal", "tokentx"];
-                
-                for (let action of actionTypes) {
-                    let page = 1;
-                    let isDone = false;
-
-                    while (!isDone && page <= 5) {
-                        try {
-                            const url = `https://robinhoodchain.blockscout.com/api?module=account&action=${action}&address=${tbaAddress}&page=${page}&offset=1000&sort=desc`;
-                            const data = await safeFetch(url);
-                            
-                            if (data.status === "1" && Array.isArray(data.result) && data.result.length > 0) {
-                                let validTxsInPage = 0;
-                                
-                                for (const tx of data.result) {
-                                    if (getTxTime(tx.timeStamp) >= sevenDaysAgo) {
-                                        validTxsInPage++;
-                                        
-                                        if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && (!tx.isError || tx.isError === "0")) {
-                                            let valueStr = tx.value || "0";
-                                            if (valueStr === "") valueStr = "0";
-
-                                            if (action !== "tokentx") {
-                                                const ethAmount = parseFloat(ethers.formatEther(valueStr));
-                                                if (!aggregatedTransfers["ETH"]) {
-                                                    aggregatedTransfers["ETH"] = { ticker: "ETH", rawAmount: 0, currentPriceUsd: globalMarketParams.ethPriceUsd };
-                                                }
-                                                aggregatedTransfers["ETH"].rawAmount += ethAmount;
-                                            } else {
-                                                const contractAddr = tx.contractAddress || "";
-                                                const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr.toLowerCase());
-                                                if (!matchedToken) continue;
-
-                                                let tokenPriceUsd = matchedToken.priceUsd;
-                                                if (matchedToken.symbol === "STONKBROKER") {
-                                                    tokenPriceUsd = globalMarketParams.tokenPriceUsd; 
-                                                }
-
-                                                const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
-                                                const tokenAmount = parseFloat(ethers.formatUnits(valueStr, decimals));
-
-                                                if (!isNaN(tokenAmount)) {
-                                                    if (!aggregatedTransfers[matchedToken.symbol]) {
-                                                        aggregatedTransfers[matchedToken.symbol] = { ticker: matchedToken.symbol, rawAmount: 0, currentPriceUsd: tokenPriceUsd || 0 };
-                                                    }
-                                                    aggregatedTransfers[matchedToken.symbol].rawAmount += tokenAmount;
-                                                }
-                                            }
-                                        }
-                                    }
+                // 1. Fetch ETH via 1 minimal blockscout call (safe from rate limits)
+                try {
+                    const url = `https://robinhoodchain.blockscout.com/api?module=account&action=txlist&address=${tbaAddress}&startblock=${startBlock}&page=1&offset=2000&sort=desc`;
+                    const res = await fetch(url);
+                    const data = await res.json();
+                    if (data.status === "1" && Array.isArray(data.result)) {
+                        for (const tx of data.result) {
+                            if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && (!tx.isError || tx.isError === "0")) {
+                                const ethAmount = parseFloat(ethers.formatEther(tx.value || "0"));
+                                if (!aggregatedTransfers["ETH"]) {
+                                    aggregatedTransfers["ETH"] = { ticker: "ETH", rawAmount: 0, currentPriceUsd: globalMarketParams.ethPriceUsd };
                                 }
-                                
-                                if (validTxsInPage === 0 || data.result.length < 1000) {
-                                    isDone = true; 
-                                }
-                            } else {
-                                isDone = true;
+                                aggregatedTransfers["ETH"].rawAmount += ethAmount;
                             }
-                        } catch (e) {
-                            console.warn(`Fetch failed for ${action} page ${page}:`, e.message);
-                            isDone = true;
                         }
-                        page++;
-                        await sleep(1000);
+                    }
+                } catch (e) { console.warn("ETH fetch skip"); }
+
+                // 2. Fetch ERC20 via Direct RPC Logs (Immune to Cloudflare blocks)
+                const transferTopic = ethers.id("Transfer(address,address,uint256)");
+                const paddedTo = ethers.zeroPadValue(tbaAddress, 32);
+                
+                const CHUNK_SIZE = 100000;
+                for (let b = startBlock; b <= currentBlock; b += CHUNK_SIZE) {
+                    const endBlock = Math.min(b + CHUNK_SIZE - 1, currentBlock);
+                    try {
+                        const logs = await provider.getLogs({
+                            fromBlock: b,
+                            toBlock: endBlock,
+                            topics: [transferTopic, null, paddedTo]
+                        });
+
+                        for (const log of logs) {
+                            const contractAddr = log.address.toLowerCase();
+                            const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr);
+                            if (!matchedToken) continue;
+
+                            let tokenPriceUsd = matchedToken.symbol === "STONKBROKER" ? globalMarketParams.tokenPriceUsd : matchedToken.priceUsd;
+                            
+                            const valueStr = BigInt(log.data).toString();
+                            const tokenAmount = parseFloat(ethers.formatUnits(valueStr, 18));
+                            
+                            if (!isNaN(tokenAmount)) {
+                                if (!aggregatedTransfers[matchedToken.symbol]) {
+                                    aggregatedTransfers[matchedToken.symbol] = { ticker: matchedToken.symbol, rawAmount: 0, currentPriceUsd: tokenPriceUsd || 0 };
+                                }
+                                aggregatedTransfers[matchedToken.symbol].rawAmount += tokenAmount;
+                            }
+                        }
+                    } catch (e) {
+                        console.warn(`RPC Log fetch skip ${b}-${endBlock}:`, e);
                     }
                 }
             }
