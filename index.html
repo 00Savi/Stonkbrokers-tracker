@@ -34,7 +34,7 @@
         .glow-text { text-shadow: 0 0 20px rgba(16, 185, 129, 0.4); }
         .spinner {
             border: 3px solid rgba(255,255,255,0.1);
-            width: 24px; height: 24px; border-radius: 50%;
+            width: 16px; height: 16px; border-radius: 50%;
             border-left-color: #3b82f6;
             animation: spin 1s linear infinite;
         }
@@ -48,7 +48,7 @@
                 <div class="w-10 h-10 bg-primary rounded-lg flex items-center justify-center font-bold text-xl">$</div>
                 <div>
                     <h1 class="text-2xl font-bold tracking-tight">StonkBrokers Tracker</h1>
-                    <p class="text-gray-400 text-sm">On-Chain ROI Analytics</p>
+                    <p class="text-gray-400 text-sm">On-Chain ROI Analytics (Live Node Sync)</p>
                 </div>
             </div>
             <div class="flex space-x-6 text-sm">
@@ -80,7 +80,7 @@
                         </tr>
                     </thead>
                     <tbody id="tier-table-body" class="text-sm divide-y divide-gray-800/50">
-                        <tr><td colspan="5" class="py-4 text-center text-gray-500 italic">Syncing static data payload...</td></tr>
+                        <tr><td colspan="5" class="py-4 text-center text-gray-500 italic">Initializing Web3 Provider...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -159,7 +159,7 @@
 
                 <div class="glass-card rounded-2xl p-6">
                     <h3 class="text-lg font-semibold mb-4 flex items-center"><i class="fa-solid fa-vault text-gray-400 mr-2"></i> Projected Yield Distribution</h3>
-                    <p class="text-xs text-gray-400 mb-4">Annualized estimate natively indexed via direct RPC logs.</p>
+                    <p class="text-xs text-gray-400 mb-4">Annualized estimate strictly locked to trailing 7-day stable volume tracking.</p>
                     <div class="space-y-3" id="yield-list">
                         <div class="text-sm text-gray-500 italic text-center py-4">Enter an ID below to load assets.</div>
                     </div>
@@ -180,7 +180,7 @@
                     </div>
                     <button id="search-btn" class="bg-primary hover:bg-blue-600 text-white font-semibold py-2.5 px-6 rounded-lg transition-colors flex items-center justify-center min-w-[120px]">
                         <span id="search-text">Analyze</span>
-                        <div id="search-spinner" class="spinner hidden"></div>
+                        <div id="search-spinner" class="spinner hidden text-white border-white border-l-transparent mx-auto"></div>
                     </button>
                 </div>
                 <p id="error-message" class="text-danger text-sm mt-3 hidden">Error loading data. Check console for details.</p>
@@ -200,11 +200,11 @@
         
         let globalMarketParams = { ethPriceUsd: 1874.00, tokenPriceUsd: 0.01447, nftFloorEth: 0.15 };
         let tierBenchmarks = [
-            { tier: 1, reqTokens: 66666, benchmarkId: 1794, tbaAddress: "0x9c24b28c3146a1ca8095acd9611962f33faf068b", trackedAnnualYieldUsd: 0 },
-            { tier: 2, reqTokens: 166666, benchmarkId: 2370, tbaAddress: "0x45f290f4e196c27abf738a32f5a97d47383cf0ba", trackedAnnualYieldUsd: 0 },
-            { tier: 3, reqTokens: 366666, benchmarkId: 275, tbaAddress: "0x0c9aa82841a3a560a10e64e44f8c4687a1257e3e", trackedAnnualYieldUsd: 0 },
-            { tier: 4, reqTokens: 766666, benchmarkId: 1491, tbaAddress: "0x9978cb6b8581d2a95e9b8d683bf2b8120dc0a0ee", trackedAnnualYieldUsd: 0 },
-            { tier: 5, reqTokens: 1666666, benchmarkId: 1400, tbaAddress: "0x2052a6201600b879ad3a96e6e71148e55053c924", trackedAnnualYieldUsd: 0 }
+            { tier: 1, reqTokens: 66666, benchmarkId: 1794, tbaAddress: "0x9c24b28c3146a1ca8095acd9611962f33faf068b", trackedAnnualYieldUsd: 0, loading: true, error: false },
+            { tier: 2, reqTokens: 166666, benchmarkId: 2370, tbaAddress: "0x45f290f4e196c27abf738a32f5a97d47383cf0ba", trackedAnnualYieldUsd: 0, loading: true, error: false },
+            { tier: 3, reqTokens: 366666, benchmarkId: 275, tbaAddress: "0x0c9aa82841a3a560a10e64e44f8c4687a1257e3e", trackedAnnualYieldUsd: 0, loading: true, error: false },
+            { tier: 4, reqTokens: 766666, benchmarkId: 1491, tbaAddress: "0x9978cb6b8581d2a95e9b8d683bf2b8120dc0a0ee", trackedAnnualYieldUsd: 0, loading: true, error: false },
+            { tier: 5, reqTokens: 1666666, benchmarkId: 1400, tbaAddress: "0x2052a6201600b879ad3a96e6e71148e55053c924", trackedAnnualYieldUsd: 0, loading: true, error: false }
         ];
 
         const WEB3_CONFIG = {
@@ -221,7 +221,7 @@
                 { symbol: "SLV", address: "0x411eFb0E7f985935DAec3D4C3ebaEa0d0AD7D89f", priceUsd: 28.00 },
                 { symbol: "MSFT", address: "0xe93237C50D904957Cf27E7B1133b510C669c2e74", priceUsd: 430.00 },
                 { symbol: "COST", address: "0x4EA005168D7F09a7A0Ba9D1DEf21a479950E44C2", priceUsd: 820.00 }, 
-                { symbol: "USAR", address: "0xd917B029C761D264c6A312BBbcDA868658eF86a6", priceUsd: 50.00 },  
+                { symbol: "USAR", address: "0xd917B029C761D264c6A312BBbcDA868658ef86a6", priceUsd: 50.00 },  
                 { symbol: "SPCX", address: "0x4a0E65A3EcceC6dBe60AE065F2e7bb85Fae35eEa", priceUsd: 25.00 },  
                 { symbol: "GOOGL", address: "0x2e0847E8910a9732eB3fb1bb4b70a580ADAD4FE3", priceUsd: 175.00 }, 
                 { symbol: "RDDT", address: "0x05b37Fb53A299a1b874A619e1c4C404D52C36F4C", priceUsd: 65.00 },
@@ -242,8 +242,16 @@
                 const currentTotalCostUsd = baseNftCostUsd + activationCostUsd;
                 let estCashOnCash = (currentTotalCostUsd > 0 && bm.trackedAnnualYieldUsd > 0) ? (bm.trackedAnnualYieldUsd / currentTotalCostUsd) * 100 : 0;
 
-                const yieldDisplay = bm.error ? `<span class="text-xs text-danger font-semibold border border-danger/20 bg-danger/10 px-2 py-1 rounded">RPC Log Error</span>` 
-                    : (!bm.trackedAnnualYieldUsd || bm.trackedAnnualYieldUsd === 0) ? `<span class="text-xs text-gray-500 italic">No yield found</span>` : `${formatUSD(bm.trackedAnnualYieldUsd)} <span class="text-xs text-gray-500">/yr</span>`;
+                let yieldDisplay;
+                if (bm.loading) {
+                    yieldDisplay = `<div class="flex items-center text-primary"><div class="spinner mr-2"></div><span class="text-xs">Live Syncing on-chain...</span></div>`;
+                } else if (bm.error) {
+                    yieldDisplay = `<span class="text-xs text-danger font-semibold border border-danger/20 bg-danger/10 px-2 py-1 rounded">Connection Error</span>`;
+                } else if (!bm.trackedAnnualYieldUsd || bm.trackedAnnualYieldUsd === 0) {
+                    yieldDisplay = `<span class="text-xs text-gray-500 italic">No yield found</span>`;
+                } else {
+                    yieldDisplay = `${formatUSD(bm.trackedAnnualYieldUsd)} <span class="text-xs text-gray-500">/yr</span>`;
+                }
 
                 tbody.innerHTML += `
                     <tr class="hover:bg-gray-800/30 transition-colors">
@@ -251,9 +259,15 @@
                         <td class="py-4"><span class="font-mono text-gray-300">${formatNum(bm.reqTokens)}</span><span class="text-xs text-gray-500 ml-1">STONK</span></td>
                         <td class="py-4"><span class="font-mono font-semibold">${formatUSD(currentTotalCostUsd)}</span><div class="text-[10px] text-gray-500">Floor + ${formatUSD(activationCostUsd)} Act.</div></td>
                         <td class="py-4 font-mono text-gray-300">${yieldDisplay}</td>
-                        <td class="py-4 text-right pr-2"><span class="inline-block px-2 py-1 rounded bg-success/10 text-success font-bold text-sm border border-success/20">${bm.error ? '--' : estCashOnCash.toFixed(2) + '%'}</span></td>
+                        <td class="py-4 text-right pr-2"><span class="inline-block px-2 py-1 rounded bg-success/10 text-success font-bold text-sm border border-success/20">${bm.loading || bm.error ? '--' : estCashOnCash.toFixed(2) + '%'}</span></td>
                     </tr>`;
             });
+        }
+
+        function getTxTime(txTimeStamp) {
+            if (!txTimeStamp) return 0;
+            if (String(txTimeStamp).includes("-")) return Math.floor(new Date(txTimeStamp).getTime() / 1000);
+            return parseInt(txTimeStamp, 10);
         }
 
         async function fetchBrokerData(tokenId) {
@@ -274,7 +288,7 @@
             try {
                 ownerAddress = await nftContract.ownerOf(tokenId);
             } catch (e) {
-                console.warn("NFT owner not found (may not be minted yet). Defaulting to zero address.");
+                console.warn("NFT owner not found. Defaulting to zero address.");
             }
             
             let tbaAddress = "0x0000000000000000000000000000000000000000";
@@ -291,7 +305,7 @@
                         tokenId
                     );
                 } catch (e) {
-                    console.warn("Registry query failed. Proceeding with blank TBA.");
+                    console.warn("Registry query failed.");
                 }
             }
 
@@ -299,69 +313,75 @@
             const historicalStonkPriceUsd = globalMarketParams.tokenPriceUsd;
             const historicalEthPaid = (historicalStonkPriceUsd * 666666) / historicalEthPriceUsd; 
 
-            let currentBlock = 28200000;
-            try {
-                currentBlock = await provider.getBlockNumber();
-            } catch (e) {
-                console.warn("RPC failed to get block number, using fallback.");
-            }
-            
-            // 302,400 blocks roughly equals 7 days at 2s block time
-            const startBlock = Math.max(0, currentBlock - 302400);
+            const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
             let aggregatedTransfers = {};
 
             if (tbaAddress !== "0x0000000000000000000000000000000000000000") {
-                // 1. Fetch ETH via 1 minimal blockscout call (safe from rate limits)
-                try {
-                    const url = `https://robinhoodchain.blockscout.com/api?module=account&action=txlist&address=${tbaAddress}&startblock=${startBlock}&page=1&offset=2000&sort=desc`;
-                    const res = await fetch(url);
-                    const data = await res.json();
-                    if (data.status === "1" && Array.isArray(data.result)) {
-                        for (const tx of data.result) {
-                            if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && (!tx.isError || tx.isError === "0")) {
-                                const ethAmount = parseFloat(ethers.formatEther(tx.value || "0"));
-                                if (!aggregatedTransfers["ETH"]) {
-                                    aggregatedTransfers["ETH"] = { ticker: "ETH", rawAmount: 0, currentPriceUsd: globalMarketParams.ethPriceUsd };
-                                }
-                                aggregatedTransfers["ETH"].rawAmount += ethAmount;
-                            }
-                        }
-                    }
-                } catch (e) { console.warn("ETH fetch skip"); }
-
-                // 2. Fetch ERC20 via Direct RPC Logs (Immune to Cloudflare blocks)
-                const transferTopic = ethers.id("Transfer(address,address,uint256)");
-                const paddedTo = ethers.zeroPadValue(tbaAddress, 32);
+                const actionTypes = ["txlist", "txlistinternal", "tokentx"];
                 
-                const CHUNK_SIZE = 100000;
-                for (let b = startBlock; b <= currentBlock; b += CHUNK_SIZE) {
-                    const endBlock = Math.min(b + CHUNK_SIZE - 1, currentBlock);
-                    try {
-                        const logs = await provider.getLogs({
-                            fromBlock: b,
-                            toBlock: endBlock,
-                            topics: [transferTopic, null, paddedTo]
-                        });
+                for (let action of actionTypes) {
+                    let page = 1;
+                    let isDone = false;
 
-                        for (const log of logs) {
-                            const contractAddr = log.address.toLowerCase();
-                            const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr);
-                            if (!matchedToken) continue;
+                    while (!isDone && page <= 5) {
+                        try {
+                            const url = `https://robinhoodchain.blockscout.com/api?module=account&action=${action}&address=${tbaAddress}&page=${page}&offset=1000&sort=desc`;
+                            const res = await fetch(url);
+                            const data = await res.json();
+                            
+                            if (data.status === "1" && Array.isArray(data.result) && data.result.length > 0) {
+                                let validTxsInPage = 0;
+                                
+                                for (const tx of data.result) {
+                                    if (getTxTime(tx.timeStamp) >= sevenDaysAgo) {
+                                        validTxsInPage++;
+                                        
+                                        if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && (!tx.isError || tx.isError === "0")) {
+                                            let valueStr = tx.value || "0";
+                                            if (valueStr === "") valueStr = "0";
 
-                            let tokenPriceUsd = matchedToken.symbol === "STONKBROKER" ? globalMarketParams.tokenPriceUsd : matchedToken.priceUsd;
-                            
-                            const valueStr = BigInt(log.data).toString();
-                            const tokenAmount = parseFloat(ethers.formatUnits(valueStr, 18));
-                            
-                            if (!isNaN(tokenAmount)) {
-                                if (!aggregatedTransfers[matchedToken.symbol]) {
-                                    aggregatedTransfers[matchedToken.symbol] = { ticker: matchedToken.symbol, rawAmount: 0, currentPriceUsd: tokenPriceUsd || 0 };
+                                            if (action !== "tokentx") {
+                                                const ethAmount = parseFloat(ethers.formatEther(valueStr));
+                                                if (!aggregatedTransfers["ETH"]) {
+                                                    aggregatedTransfers["ETH"] = { ticker: "ETH", rawAmount: 0, currentPriceUsd: globalMarketParams.ethPriceUsd };
+                                                }
+                                                aggregatedTransfers["ETH"].rawAmount += ethAmount;
+                                            } else {
+                                                const contractAddr = tx.contractAddress || "";
+                                                const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr.toLowerCase());
+                                                if (!matchedToken) continue;
+
+                                                let tokenPriceUsd = matchedToken.priceUsd;
+                                                if (matchedToken.symbol === "STONKBROKER") {
+                                                    tokenPriceUsd = globalMarketParams.tokenPriceUsd; 
+                                                }
+
+                                                const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
+                                                const tokenAmount = parseFloat(ethers.formatUnits(valueStr, decimals));
+
+                                                if (!isNaN(tokenAmount)) {
+                                                    if (!aggregatedTransfers[matchedToken.symbol]) {
+                                                        aggregatedTransfers[matchedToken.symbol] = { ticker: matchedToken.symbol, rawAmount: 0, currentPriceUsd: tokenPriceUsd || 0 };
+                                                    }
+                                                    aggregatedTransfers[matchedToken.symbol].rawAmount += tokenAmount;
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
-                                aggregatedTransfers[matchedToken.symbol].rawAmount += tokenAmount;
+                                
+                                if (validTxsInPage === 0 || data.result.length < 1000) {
+                                    isDone = true; 
+                                }
+                            } else {
+                                isDone = true;
                             }
+                        } catch (e) {
+                            console.warn(`Fetch failed for ${action} page ${page}:`, e.message);
+                            isDone = true;
                         }
-                    } catch (e) {
-                        console.warn(`RPC Log fetch skip ${b}-${endBlock}:`, e);
+                        page++;
+                        await new Promise(resolve => setTimeout(resolve, 300));
                     }
                 }
             }
@@ -467,28 +487,50 @@
             }
         });
 
-        window.addEventListener('DOMContentLoaded', async () => {
+        async function initializeApp() {
             try {
-                const res = await fetch('./data.json');
-                const data = await res.json();
+                const ethRes = await fetch('https://api.exchange.coinbase.com/products/ETH-USD/ticker');
+                if (ethRes.ok) globalMarketParams.ethPriceUsd = parseFloat((await ethRes.json()).price) || 1894.08;
                 
-                globalMarketParams.ethPriceUsd = data.globalMarketParams.ethPriceUsd;
-                globalMarketParams.tokenPriceUsd = data.globalMarketParams.tokenPriceUsd;
-                globalMarketParams.nftFloorEth = data.globalMarketParams.nftFloorEth;
-                
-                document.getElementById('global-eth').innerText = formatUSD(globalMarketParams.ethPriceUsd);
-                document.getElementById('global-token').innerText = `$${globalMarketParams.tokenPriceUsd.toFixed(4)}`;
-                document.getElementById('global-floor').innerText = `${globalMarketParams.nftFloorEth} ETH`;
-                document.getElementById('base-entry-cost').innerText = formatUSD(666666 * globalMarketParams.tokenPriceUsd);
-
-                tierBenchmarks.splice(0, tierBenchmarks.length, ...data.tierBenchmarks);
-                renderTierBenchmarks();
+                const dexRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${WEB3_CONFIG.STONKBROKER}`);
+                const dexData = await dexRes.json();
+                if (dexData?.pairs?.length > 0) globalMarketParams.tokenPriceUsd = parseFloat(dexData.pairs[0].priceUsd) || 0.0191;
             } catch (e) {
-                console.error("Failed to load static data.", e);
-                document.getElementById('tier-table-body').innerHTML = `<tr><td colspan="5" class="py-4 text-center text-danger italic">Sync pending. Trigger the Action in GitHub to generate data.json.</td></tr>`;
+                console.warn("Failed to fetch live prices, using defaults.", e);
             }
-        });
+
+            WEB3_CONFIG.TOKENS[0].priceUsd = globalMarketParams.tokenPriceUsd;
+            globalMarketParams.nftFloorEth = parseFloat(((666666 * globalMarketParams.tokenPriceUsd) / globalMarketParams.ethPriceUsd).toFixed(3));
+
+            document.getElementById('global-eth').innerText = formatUSD(globalMarketParams.ethPriceUsd);
+            document.getElementById('global-token').innerText = `$${globalMarketParams.tokenPriceUsd.toFixed(4)}`;
+            document.getElementById('global-floor').innerText = `${globalMarketParams.nftFloorEth} ETH`;
+            document.getElementById('base-entry-cost').innerText = formatUSD(666666 * globalMarketParams.tokenPriceUsd);
+
+            renderTierBenchmarks();
+
+            // Sequentially load each tier directly in the browser!
+            for (let bm of tierBenchmarks) {
+                try {
+                    const brokerData = await fetchBrokerData(bm.benchmarkId);
+                    let totalYieldUsd = 0;
+                    brokerData.tbaBalances.forEach(b => {
+                        totalYieldUsd += (b.amount * b.currentPriceUsd);
+                    });
+                    bm.trackedAnnualYieldUsd = totalYieldUsd;
+                    bm.loading = false;
+                    bm.error = false;
+                } catch (e) {
+                    console.error("Failed to load tier", bm.tier, e);
+                    bm.loading = false;
+                    bm.error = true;
+                }
+                renderTierBenchmarks(); 
+                await new Promise(r => setTimeout(r, 1000)); // Pause to respect Blockscout limits
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', initializeApp);
     </script>
 </body>
 </html>
-
