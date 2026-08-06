@@ -29,8 +29,6 @@ const WEB3_CONFIG = {
 };
 
 const provider = new ethers.JsonRpcProvider(WEB3_CONFIG.RPC_URL);
-
-// Corrected ABI Parameter Order
 const registryAbi = ["function account(address implementation, bytes32 salt, uint256 chainId, address tokenContract, uint256 tokenId) view returns (address)"];
 
 const globalMarketParams = { ethPriceUsd: 1874.00, tokenPriceUsd: 0.01447, nftFloorEth: 0.15 };
@@ -60,28 +58,18 @@ async function run() {
     WEB3_CONFIG.TOKENS[0].priceUsd = globalMarketParams.tokenPriceUsd;
     globalMarketParams.nftFloorEth = parseFloat(((666666 * globalMarketParams.tokenPriceUsd) / globalMarketParams.ethPriceUsd).toFixed(3));
 
-    let currentBlock;
-    try {
-        currentBlock = await provider.getBlockNumber();
-    } catch (e) {
-        console.error("CRITICAL ERROR: Failed to fetch current block from RPC.", e.message);
-        return;
-    }
-    
-    const blocksPerWeek = 302400; 
-    const startBlock = currentBlock - blocksPerWeek;
+    // Determine the exact Unix timestamp for 7 days ago
+    const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
     const registryContract = new ethers.Contract(WEB3_CONFIG.REGISTRY_CONTRACT, registryAbi, provider);
 
     for (let bm of tierBenchmarks) {
         console.log(`\nFetching data for Tier ${bm.tier} (NFT #${bm.benchmarkId})...`);
-        
         await sleep(1500); 
 
         try {
-            // Corrected Parameter Order
             const tbaAddress = await registryContract.account(
                 WEB3_CONFIG.IMPLEMENTATION_CONTRACT, 
-                "0x0000000000000000000000000000000000000000000000000000000000000000", // salt
+                "0x0000000000000000000000000000000000000000000000000000000000000000", 
                 WEB3_CONFIG.CHAIN_ID, 
                 WEB3_CONFIG.NFT_CONTRACT, 
                 bm.benchmarkId
@@ -89,13 +77,14 @@ async function run() {
 
             let totalYieldUsd = 0;
 
-            // 1. NATIVE ETH YIELD TRACKING (Via Blockscout API)
+            // 1. NATIVE ETH YIELD TRACKING (Timestamp Filtered)
             let ethYieldRaw = 0n;
             try {
-                const normalRes = await fetch(`https://robinhoodchain.blockscout.com/api?module=account&action=txlist&address=${tbaAddress}&startblock=${startBlock}&endblock=${currentBlock}&sort=asc`);
+                const normalRes = await fetch(`https://robinhoodchain.blockscout.com/api?module=account&action=txlist&address=${tbaAddress}&sort=desc`);
                 const normalData = await normalRes.json();
                 if (normalData.status === "1" && Array.isArray(normalData.result)) {
                     for (const tx of normalData.result) {
+                        if (parseInt(tx.timeStamp) < sevenDaysAgo) break; // Stop looking further back than 7 days
                         if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && tx.isError === "0" && tx.value !== "0") {
                             ethYieldRaw += BigInt(tx.value);
                         }
@@ -104,10 +93,11 @@ async function run() {
 
                 await sleep(500);
 
-                const internalRes = await fetch(`https://robinhoodchain.blockscout.com/api?module=account&action=txlistinternal&address=${tbaAddress}&startblock=${startBlock}&endblock=${currentBlock}&sort=asc`);
+                const internalRes = await fetch(`https://robinhoodchain.blockscout.com/api?module=account&action=txlistinternal&address=${tbaAddress}&sort=desc`);
                 const internalData = await internalRes.json();
                 if (internalData.status === "1" && Array.isArray(internalData.result)) {
                     for (const tx of internalData.result) {
+                        if (parseInt(tx.timeStamp) < sevenDaysAgo) break; 
                         if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && tx.isError === "0" && tx.value !== "0") {
                             ethYieldRaw += BigInt(tx.value);
                         }
@@ -124,13 +114,15 @@ async function run() {
 
             await sleep(500);
 
-            // 2. ERC20 YIELD TRACKING (Via Blockscout API)
+            // 2. ERC20 YIELD TRACKING (Timestamp Filtered)
             try {
-                const tokenRes = await fetch(`https://robinhoodchain.blockscout.com/api?module=account&action=tokentx&address=${tbaAddress}&startblock=${startBlock}&endblock=${currentBlock}&sort=asc`);
+                const tokenRes = await fetch(`https://robinhoodchain.blockscout.com/api?module=account&action=tokentx&address=${tbaAddress}&sort=desc`);
                 const tokenData = await tokenRes.json();
                 
                 if (tokenData.status === "1" && Array.isArray(tokenData.result)) {
                     for (const tx of tokenData.result) {
+                        if (parseInt(tx.timeStamp) < sevenDaysAgo) break; 
+                        
                         if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase()) {
                             const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === tx.contractAddress.toLowerCase());
                             if (matchedToken) {
