@@ -197,6 +197,7 @@
             if (isNaN(num)) return "0";
             return new Intl.NumberFormat('en-US').format(num);
         };
+        const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
         
         let globalMarketParams = { ethPriceUsd: 1897.96, tokenPriceUsd: 0.02190, nftFloorEth: 7.661 };
         let tierBenchmarks = [
@@ -244,9 +245,9 @@
 
                 let yieldDisplay;
                 if (bm.loading) {
-                    yieldDisplay = `<div class="flex items-center text-primary"><div class="spinner mr-2"></div><span class="text-xs">Syncing on-chain yield...</span></div>`;
+                    yieldDisplay = `<div class="flex items-center text-primary"><div class="spinner mr-2"></div><span class="text-xs">Live Syncing on-chain...</span></div>`;
                 } else if (bm.error) {
-                    yieldDisplay = `<span class="text-xs text-danger font-semibold border border-danger/20 bg-danger/10 px-2 py-1 rounded">Connection Error</span>`;
+                    yieldDisplay = `<span class="text-xs text-danger font-semibold border border-danger/20 bg-danger/10 px-2 py-1 rounded">API Rate Limit</span>`;
                 } else if (!bm.trackedAnnualYieldUsd || bm.trackedAnnualYieldUsd === 0) {
                     yieldDisplay = `<span class="text-xs text-gray-500 italic">No yield found</span>`;
                 } else {
@@ -268,6 +269,41 @@
             if (!txTimeStamp) return 0;
             if (String(txTimeStamp).includes("-")) return Math.floor(new Date(txTimeStamp).getTime() / 1000);
             return parseInt(txTimeStamp, 10);
+        }
+
+        // Extremely robust fetch to permanently beat Cloudflare / 429 blocks
+        async function safeFetch(url) {
+            let retries = 0;
+            while (retries < 6) {
+                try {
+                    const res = await fetch(url, { headers: { "Accept": "application/json" } });
+                    const text = await res.text();
+                    
+                    if (!res.ok) {
+                        if (res.status === 429 || text.includes("cloudflare") || text.includes("Rate limit")) {
+                            await sleep(2000 * (retries + 1));
+                            retries++;
+                            continue;
+                        }
+                        throw new Error(`HTTP ${res.status}`);
+                    }
+                    
+                    try {
+                        return JSON.parse(text);
+                    } catch (err) {
+                        if (text.includes("cloudflare") || text.toLowerCase().includes("rate limit") || text.includes("challenge")) {
+                            await sleep(2000 * (retries + 1));
+                            retries++;
+                            continue;
+                        }
+                        throw new Error("Invalid JSON response");
+                    }
+                } catch (e) {
+                    await sleep(2000 * (retries + 1));
+                    retries++;
+                }
+            }
+            throw new Error(`Max retries API`);
         }
 
         async function fetchBrokerData(tokenId) {
@@ -319,15 +355,15 @@
             if (tbaAddress !== "0x0000000000000000000000000000000000000000") {
                 const actionTypes = ["txlist", "txlistinternal", "tokentx"];
                 
+                // Using exactly the same blockscout REST logic that powers the bottom Specific Broker Analysis
                 for (let action of actionTypes) {
                     let page = 1;
                     let isDone = false;
 
-                    while (!isDone && page <= 5) {
+                    while (!isDone && page <= 10) { 
                         try {
                             const url = `https://robinhoodchain.blockscout.com/api?module=account&action=${action}&address=${tbaAddress}&page=${page}&offset=1000&sort=desc`;
-                            const res = await fetch(url);
-                            const data = await res.json();
+                            const data = await safeFetch(url);
                             
                             if (data.status === "1" && Array.isArray(data.result) && data.result.length > 0) {
                                 let validTxsInPage = 0;
@@ -352,7 +388,6 @@
                                                 if (!matchedToken) continue;
 
                                                 let tokenPriceUsd = matchedToken.symbol === "STONKBROKER" ? globalMarketParams.tokenPriceUsd : matchedToken.priceUsd;
-
                                                 const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
                                                 const tokenAmount = parseFloat(ethers.formatUnits(valueStr, decimals));
 
@@ -367,6 +402,7 @@
                                     }
                                 }
                                 
+                                // Since 'sort=desc' returns newest first, if a page has 0 recent txs, we safely break.
                                 if (validTxsInPage === 0 || data.result.length < 1000) {
                                     isDone = true; 
                                 }
@@ -378,7 +414,7 @@
                             isDone = true;
                         }
                         page++;
-                        await new Promise(resolve => setTimeout(resolve, 250));
+                        await sleep(300); // Politely pace the page turns
                     }
                 }
             }
@@ -485,6 +521,7 @@
         });
 
         async function initializeApp() {
+            // 1. Dynamic ETH Pull
             try {
                 const ethRes = await fetch('https://api.exchange.coinbase.com/products/ETH-USD/ticker');
                 if (ethRes.ok) globalMarketParams.ethPriceUsd = parseFloat((await ethRes.json()).price) || 1897.96;
@@ -492,9 +529,19 @@
                 console.warn("Failed to fetch ETH price, using defaults.", e);
             }
 
-            globalMarketParams.tokenPriceUsd = 0.02190;
-            WEB3_CONFIG.TOKENS[0].priceUsd = 0.02190;
+            // 2. Dynamic STONKBROKER Pull (Sorts to grab the active V4 liquidity pool, ignoring stales)
+            try {
+                const dexRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${WEB3_CONFIG.STONKBROKER}`);
+                const dexData = await dexRes.json();
+                if (dexData?.pairs?.length > 0) {
+                    const bestPair = dexData.pairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
+                    globalMarketParams.tokenPriceUsd = parseFloat(bestPair.priceUsd) || globalMarketParams.tokenPriceUsd;
+                }
+            } catch (e) {
+                console.warn("Failed to fetch token price, using defaults.", e);
+            }
 
+            WEB3_CONFIG.TOKENS[0].priceUsd = globalMarketParams.tokenPriceUsd;
             globalMarketParams.nftFloorEth = parseFloat(((666666 * globalMarketParams.tokenPriceUsd) / globalMarketParams.ethPriceUsd).toFixed(3));
 
             document.getElementById('global-eth').innerText = formatUSD(globalMarketParams.ethPriceUsd);
@@ -504,7 +551,7 @@
 
             renderTierBenchmarks();
 
-            // Sequentially load each tier using the proven engine directly in browser
+            // 3. Sequentially load each tier using the proven Blockscout REST engine
             for (let bm of tierBenchmarks) {
                 try {
                     const brokerData = await fetchBrokerData(bm.benchmarkId);
@@ -521,7 +568,7 @@
                     bm.error = true;
                 }
                 renderTierBenchmarks(); 
-                await new Promise(r => setTimeout(r, 400));
+                await sleep(1000); // 1 full second gap between tiers ensures Cloudflare leaves you alone
             }
         }
 
