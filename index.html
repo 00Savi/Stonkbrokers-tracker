@@ -254,12 +254,6 @@
             });
         }
 
-        function getTxTime(txTimeStamp) {
-            if (!txTimeStamp) return 0;
-            if (String(txTimeStamp).includes("-")) return Math.floor(new Date(txTimeStamp).getTime() / 1000);
-            return parseInt(txTimeStamp);
-        }
-
         async function fetchBrokerData(tokenId) {
             const provider = new ethers.JsonRpcProvider(WEB3_CONFIG.RPC_URL);
             
@@ -303,7 +297,6 @@
             const historicalStonkPriceUsd = globalMarketParams.tokenPriceUsd;
             const historicalEthPaid = (historicalStonkPriceUsd * 666666) / historicalEthPriceUsd; 
 
-            const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
             let aggregatedTransfers = {};
 
             // 1. NATIVE ETH YIELD TRACKING
@@ -314,7 +307,6 @@
                     const normalData = await normalRes.json();
                     if (normalData.status === "1" && Array.isArray(normalData.result)) {
                         for (const tx of normalData.result) {
-                            if (getTxTime(tx.timeStamp) < sevenDaysAgo) continue; 
                             if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && tx.isError === "0" && tx.value !== "0") {
                                 ethYieldRaw += BigInt(tx.value);
                             }
@@ -325,7 +317,6 @@
                     const internalData = await internalRes.json();
                     if (internalData.status === "1" && Array.isArray(internalData.result)) {
                         for (const tx of internalData.result) {
-                            if (getTxTime(tx.timeStamp) < sevenDaysAgo) continue;
                             if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && tx.isError === "0" && tx.value !== "0") {
                                 ethYieldRaw += BigInt(tx.value);
                             }
@@ -340,12 +331,12 @@
                 const ethFormatted = parseFloat(ethers.formatEther(ethYieldRaw));
                 aggregatedTransfers["ETH"] = {
                     ticker: "ETH",
-                    amount: ethFormatted,
+                    amount: ethFormatted * 365,
                     currentPriceUsd: globalMarketParams.ethPriceUsd
                 };
             }
 
-            // 2. ERC20 YIELD TRACKING
+            // 2. ERC20 YIELD TRACKING (Dynamic Fallback)
             if (tbaAddress !== "0x0000000000000000000000000000000000000000") {
                 try {
                     const tokenRes = await fetch(`https://robinhoodchain.blockscout.com/api?module=account&action=tokentx&address=${tbaAddress}&sort=desc`);
@@ -353,23 +344,34 @@
                     
                     if (tokenData.status === "1" && Array.isArray(tokenData.result)) {
                         for (const tx of tokenData.result) {
-                            if (getTxTime(tx.timeStamp) < sevenDaysAgo) continue;
-                            
                             if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase()) {
+                                let tokenPriceUsd = 0;
+                                let tokenSymbol = tx.tokenSymbol || "TOKEN";
+
                                 const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === tx.contractAddress.toLowerCase());
                                 if (matchedToken) {
-                                    const decimals = parseInt(tx.tokenDecimal) || 18;
-                                    const amountFormatted = parseFloat(ethers.formatUnits(tx.value, decimals));
-                                    
-                                    if (!aggregatedTransfers[matchedToken.symbol]) {
-                                        aggregatedTransfers[matchedToken.symbol] = {
-                                            ticker: matchedToken.symbol,
-                                            amount: 0,
-                                            currentPriceUsd: matchedToken.priceUsd
-                                        };
-                                    }
-                                    aggregatedTransfers[matchedToken.symbol].amount += amountFormatted;
+                                    tokenPriceUsd = matchedToken.priceUsd;
+                                } else {
+                                    try {
+                                        const dsRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${tx.contractAddress}`);
+                                        const dsData = await dsRes.json();
+                                        if (dsData?.pairs?.length > 0) {
+                                            tokenPriceUsd = parseFloat(dsData.pairs[0].priceUsd) || 0;
+                                        }
+                                    } catch (err) {}
                                 }
+
+                                const decimals = parseInt(tx.tokenDecimal) || 18;
+                                const amountFormatted = parseFloat(ethers.formatUnits(tx.value, decimals));
+
+                                if (!aggregatedTransfers[tokenSymbol]) {
+                                    aggregatedTransfers[tokenSymbol] = {
+                                        ticker: tokenSymbol,
+                                        amount: 0,
+                                        currentPriceUsd: tokenPriceUsd
+                                    };
+                                }
+                                aggregatedTransfers[tokenSymbol].amount += (amountFormatted * 365);
                             }
                         }
                     }
@@ -382,7 +384,7 @@
                 id: tokenId, tier: actualTier, owner: `${ownerAddress.slice(0,6)}...${ownerAddress.slice(-4)}`, tbaAddress: `${tbaAddress.slice(0,6)}...${tbaAddress.slice(-4)}`,
                 acquisition: { ethPaid: historicalEthPaid, historicalEthPriceUsd: historicalEthPriceUsd },
                 activation: { tokensBurned: tokensReq, historicalTokenPriceUsd: historicalStonkPriceUsd },
-                tbaBalances: Object.values(aggregatedTransfers).map(asset => ({ ticker: asset.ticker, amount: asset.amount * 52.14, currentPriceUsd: asset.currentPriceUsd }))
+                tbaBalances: Object.values(aggregatedTransfers)
             };
         }
 
@@ -422,7 +424,7 @@
                         <div class="flex justify-between items-center bg-gray-800/30 p-3 rounded-lg border border-gray-700/50">
                             <div class="flex items-center">
                                 <div class="w-8 h-8 rounded-full bg-blue-900/50 flex items-center justify-center text-blue-300 font-bold text-xs mr-3">${asset.ticker.charAt(0)}</div>
-                                <div><p class="font-semibold text-sm">${asset.ticker}</p><p class="text-xs text-gray-400 font-mono">${formatNum(asset.amount)} tokens</p></div>
+                                <div><p class="font-semibold text-sm">${asset.ticker}</p><p class="text-xs text-gray-400 font-mono">${formatNum(asset.amount)} tokens/yr</p></div>
                             </div>
                             <div class="text-right">
                                 <p class="font-mono font-semibold text-success">${formatUSD(asset.valueUsd)}</p>
