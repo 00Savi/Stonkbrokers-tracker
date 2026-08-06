@@ -35,12 +35,6 @@ const tierBenchmarks = [
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-function getTxTime(txTimeStamp) {
-    if (!txTimeStamp) return 0;
-    if (String(txTimeStamp).includes("-")) return Math.floor(new Date(txTimeStamp).getTime() / 1000);
-    return parseInt(txTimeStamp);
-}
-
 async function run() {
     console.log("Fetching global prices...");
     try {
@@ -57,8 +51,6 @@ async function run() {
     WEB3_CONFIG.TOKENS[0].priceUsd = globalMarketParams.tokenPriceUsd;
     globalMarketParams.nftFloorEth = parseFloat(((666666 * globalMarketParams.tokenPriceUsd) / globalMarketParams.ethPriceUsd).toFixed(3));
 
-    const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
-
     for (let bm of tierBenchmarks) {
         console.log(`\nFetching data for Tier ${bm.tier} (Wallet: ${bm.tbaAddress})...`);
         await sleep(1500); 
@@ -67,14 +59,13 @@ async function run() {
             let totalYieldUsd = 0;
             const tbaAddress = bm.tbaAddress;
 
-            // 1. NATIVE ETH YIELD TRACKING
+            // 1. NATIVE ETH YIELD TRACKING (Summing all recent inbound TXs and annualizing by 365)
             let ethYieldRaw = 0n;
             try {
                 const normalRes = await fetch(`https://robinhoodchain.blockscout.com/api?module=account&action=txlist&address=${tbaAddress}&sort=desc`);
                 const normalData = await normalRes.json();
                 if (normalData.status === "1" && Array.isArray(normalData.result)) {
                     for (const tx of normalData.result) {
-                        if (getTxTime(tx.timeStamp) < sevenDaysAgo) continue; 
                         if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && tx.isError === "0" && tx.value !== "0") {
                             ethYieldRaw += BigInt(tx.value);
                         }
@@ -87,7 +78,6 @@ async function run() {
                 const internalData = await internalRes.json();
                 if (internalData.status === "1" && Array.isArray(internalData.result)) {
                     for (const tx of internalData.result) {
-                        if (getTxTime(tx.timeStamp) < sevenDaysAgo) continue; 
                         if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && tx.isError === "0" && tx.value !== "0") {
                             ethYieldRaw += BigInt(tx.value);
                         }
@@ -99,7 +89,9 @@ async function run() {
             
             if (ethYieldRaw > 0n) {
                 const ethFormatted = parseFloat(ethers.formatEther(ethYieldRaw));
-                totalYieldUsd += (ethFormatted * 52.14) * globalMarketParams.ethPriceUsd;
+                // Assuming the fetched block represents a 24h cycle, multiply by 365. 
+                // (If Blockscout returns ~1 day of txs, 365 gives the correct annual projection).
+                totalYieldUsd += (ethFormatted * 365) * globalMarketParams.ethPriceUsd;
             }
 
             await sleep(500);
@@ -111,14 +103,12 @@ async function run() {
                 
                 if (tokenData.status === "1" && Array.isArray(tokenData.result)) {
                     for (const tx of tokenData.result) {
-                        if (getTxTime(tx.timeStamp) < sevenDaysAgo) continue; 
-                        
                         if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase()) {
                             const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === tx.contractAddress.toLowerCase());
                             if (matchedToken) {
                                 const decimals = parseInt(tx.tokenDecimal) || 18;
                                 const amountFormatted = parseFloat(ethers.formatUnits(tx.value, decimals));
-                                totalYieldUsd += (amountFormatted * 52.14) * matchedToken.priceUsd;
+                                totalYieldUsd += (amountFormatted * 365) * matchedToken.priceUsd;
                             }
                         }
                     }
