@@ -67,67 +67,56 @@ async function run() {
             const actionTypes = ["txlist", "txlistinternal", "tokentx"];
             
             for (let action of actionTypes) {
-                let page = 1;
-                let isDone = false;
+                try {
+                    // Massive, single fetch. No pagination limits.
+                    const url = `https://robinhoodchain.blockscout.com/api?module=account&action=${action}&address=${tbaAddress}&sort=desc`;
+                    const res = await fetch(url);
+                    const data = await res.json();
+                    
+                    if (data.status === "1" && Array.isArray(data.result)) {
+                        for (const tx of data.result) {
+                            // If older than 7 days, SKIP. Do not break. 
+                            if (getTxTime(tx.timeStamp) < sevenDaysAgo) continue; 
+                            
+                            if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && (!tx.isError || tx.isError === "0")) {
+                                let valStr = tx.value || "0";
+                                if (valStr === "") valStr = "0";
 
-                while (!isDone && page <= 5) { // Force newest to oldest fetching
-                    try {
-                        const url = `https://robinhoodchain.blockscout.com/api?module=account&action=${action}&address=${tbaAddress}&page=${page}&offset=1000&sort=desc`;
-                        const res = await fetch(url);
-                        const data = await res.json();
-                        
-                        if (data.status === "1" && Array.isArray(data.result) && data.result.length > 0) {
-                            for (const tx of data.result) {
-                                // Break instantly when hitting transactions older than 7 days
-                                if (getTxTime(tx.timeStamp) < sevenDaysAgo) {
-                                    isDone = true;
-                                    break; 
-                                }
-                                
-                                if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && (!tx.isError || tx.isError === "0")) {
-                                    let valStr = tx.value || "0";
-                                    if (valStr === "") valStr = "0";
+                                if (action !== "tokentx") {
+                                    weeklyYieldUsd += parseFloat(ethers.formatEther(valStr)) * globalMarketParams.ethPriceUsd;
+                                } else {
+                                    const contractAddr = tx.contractAddress || "";
+                                    if (!contractAddr) continue;
 
-                                    if (action !== "tokentx") {
-                                        weeklyYieldUsd += parseFloat(ethers.formatEther(valStr)) * globalMarketParams.ethPriceUsd;
+                                    let tokenPriceUsd = 0;
+                                    const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr.toLowerCase());
+                                    
+                                    if (matchedToken && matchedToken.priceUsd) {
+                                        tokenPriceUsd = matchedToken.priceUsd;
+                                    } else if (tokenPriceCache[contractAddr] !== undefined) {
+                                        tokenPriceUsd = tokenPriceCache[contractAddr];
                                     } else {
-                                        const contractAddr = tx.contractAddress || "";
-                                        if (!contractAddr) continue;
-
-                                        let tokenPriceUsd = 0;
-                                        const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr.toLowerCase());
-                                        if (matchedToken && matchedToken.priceUsd) {
-                                            tokenPriceUsd = matchedToken.priceUsd;
-                                        } else if (tokenPriceCache[contractAddr] !== undefined) {
-                                            tokenPriceUsd = tokenPriceCache[contractAddr];
-                                        } else {
-                                            try {
-                                                const dsRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${contractAddr}`);
-                                                const dsData = await dsRes.json();
-                                                if (dsData?.pairs?.length > 0) tokenPriceUsd = parseFloat(dsData.pairs[0].priceUsd) || 0;
-                                            } catch (err) {}
-                                            tokenPriceCache[contractAddr] = tokenPriceUsd;
-                                        }
-
-                                        const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
-                                        weeklyYieldUsd += parseFloat(ethers.formatUnits(valStr, decimals)) * tokenPriceUsd;
+                                        try {
+                                            const dsRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${contractAddr}`);
+                                            const dsData = await dsRes.json();
+                                            if (dsData?.pairs?.length > 0) tokenPriceUsd = parseFloat(dsData.pairs[0].priceUsd) || 0;
+                                        } catch (err) {}
+                                        tokenPriceCache[contractAddr] = tokenPriceUsd;
                                     }
+
+                                    const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
+                                    weeklyYieldUsd += parseFloat(ethers.formatUnits(valStr, decimals)) * tokenPriceUsd;
                                 }
                             }
-                            if (data.result.length < 1000) isDone = true; 
-                        } else {
-                            isDone = true; 
                         }
-                    } catch (e) {
-                        console.warn(`Fetch failed for ${action} page ${page}:`, e.message);
-                        isDone = true;
                     }
-                    page++;
-                    await sleep(300);
+                } catch (e) {
+                    console.warn(`Fetch failed for ${action}:`, e.message);
                 }
+                await sleep(500); // Politeness delay between API calls
             }
 
-            // Guaranteed stable 7-day conversion exactly 52.14 weeks.
+            // Guaranteed stable 7-day conversion (52.14 weeks)
             bm.trackedAnnualYieldUsd = weeklyYieldUsd * 52.14;
             bm.error = false;
         } catch (err) {
