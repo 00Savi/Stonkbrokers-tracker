@@ -3,11 +3,6 @@ const fs = require("fs");
 
 const WEB3_CONFIG = {
     STONKBROKER: "0xe934e36a439c94017b64a3fece66af12099abf50",
-    NFT_CONTRACT: "0x539cdd042c2f3d93ebc5be7dfff0c79f3b4fabf0",
-    REGISTRY_CONTRACT: "0x000000006551c19487814612e58fe06813775758",
-    IMPLEMENTATION_CONTRACT: "0x55266d75d1a14e4572138116af39863ed6593ece",
-    CHAIN_ID: 4663, 
-    RPC_URL: "https://rpc.mainnet.chain.robinhood.com",
     TOKENS: [
         { symbol: "STONK", address: "0xe934e36a439c94017b64a3fece66af12099abf50", priceUsd: 0.01447 },
         { symbol: "AAPL", address: "0xf9bc0777c087af0fe7214de8a5360be6a71d0d44", priceUsd: 225.00 },
@@ -28,18 +23,14 @@ const WEB3_CONFIG = {
     ]
 };
 
-const provider = new ethers.JsonRpcProvider(WEB3_CONFIG.RPC_URL);
-
-// Using V0.2 ABI Standard (bytes32 salt as the 2nd parameter)
-const registryAbi = ["function account(address implementation, bytes32 salt, uint256 chainId, address tokenContract, uint256 tokenId) view returns (address)"];
-
 const globalMarketParams = { ethPriceUsd: 1874.00, tokenPriceUsd: 0.01447, nftFloorEth: 0.15 };
+
 const tierBenchmarks = [
-    { tier: 1, reqTokens: 66666, benchmarkId: 1794, trackedAnnualYieldUsd: 0 },
-    { tier: 2, reqTokens: 166666, benchmarkId: 2370, trackedAnnualYieldUsd: 0 },
-    { tier: 3, reqTokens: 366666, benchmarkId: 275, trackedAnnualYieldUsd: 0 },
-    { tier: 4, reqTokens: 766666, benchmarkId: 1488, trackedAnnualYieldUsd: 0 },
-    { tier: 5, reqTokens: 1666666, benchmarkId: 47, trackedAnnualYieldUsd: 0 }
+    { tier: 1, reqTokens: 66666, benchmarkId: 1794, tbaAddress: "0x9c24b28c3146a1ca8095acd9611962f33faf068b", trackedAnnualYieldUsd: 0 },
+    { tier: 2, reqTokens: 166666, benchmarkId: 2370, tbaAddress: "0x45f290f4e196c27abf738a32f5a97d47383cf0ba", trackedAnnualYieldUsd: 0 },
+    { tier: 3, reqTokens: 366666, benchmarkId: 275, tbaAddress: "0x0c9aa82841a3a560a10e64e44f8c4687a1257e3e", trackedAnnualYieldUsd: 0 },
+    { tier: 4, reqTokens: 766666, benchmarkId: 1488, tbaAddress: "0xd5a17fac7942cbd597f3197d7d8f56ddf8d899f2", trackedAnnualYieldUsd: 0 },
+    { tier: 5, reqTokens: 1666666, benchmarkId: 47, tbaAddress: "0x0bf6bb4bf9236561884d5be086f6b540d1e77aff", trackedAnnualYieldUsd: 0 }
 ];
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -67,23 +58,14 @@ async function run() {
     globalMarketParams.nftFloorEth = parseFloat(((666666 * globalMarketParams.tokenPriceUsd) / globalMarketParams.ethPriceUsd).toFixed(3));
 
     const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
-    const registryContract = new ethers.Contract(WEB3_CONFIG.REGISTRY_CONTRACT, registryAbi, provider);
 
     for (let bm of tierBenchmarks) {
-        console.log(`\nFetching data for Tier ${bm.tier} (NFT #${bm.benchmarkId})...`);
+        console.log(`\nFetching data for Tier ${bm.tier} (Wallet: ${bm.tbaAddress})...`);
         await sleep(1500); 
 
         try {
-            // Re-enabling the strict V0.2 Contract Query
-            const tbaAddress = await registryContract.account(
-                WEB3_CONFIG.IMPLEMENTATION_CONTRACT, 
-                "0x0000000000000000000000000000000000000000000000000000000000000000", 
-                WEB3_CONFIG.CHAIN_ID, 
-                WEB3_CONFIG.NFT_CONTRACT, 
-                bm.benchmarkId
-            );
-
             let totalYieldUsd = 0;
+            const tbaAddress = bm.tbaAddress;
 
             // 1. NATIVE ETH YIELD TRACKING
             let ethYieldRaw = 0n;
