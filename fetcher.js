@@ -43,6 +43,32 @@ function getTxTime(txTimeStamp) {
     return parseInt(txTimeStamp, 10);
 }
 
+// Anti-Rate Limit Fetcher with Exponential Backoff
+async function safeFetch(url) {
+    let retries = 0;
+    while (retries < 6) {
+        try {
+            const res = await fetch(url, { headers: FETCH_HEADERS });
+            if (!res.ok) {
+                if (res.status === 429) {
+                    console.warn(`[Rate Limit 429 Hit] Pausing for ${3 * (retries + 1)} seconds...`);
+                    await sleep(3000 * (retries + 1));
+                    retries++;
+                    continue;
+                }
+                throw new Error(`HTTP Error: ${res.status}`);
+            }
+            const data = await res.json();
+            return data;
+        } catch (e) {
+            console.warn(`[Fetch Error: ${e.message}] Retrying in ${3 * (retries + 1)} seconds...`);
+            await sleep(3000 * (retries + 1));
+            retries++;
+        }
+    }
+    throw new Error(`Max retries reached for Blockscout API.`);
+}
+
 async function run() {
     console.log("Fetching global prices...");
     try {
@@ -63,7 +89,7 @@ async function run() {
 
     for (let bm of tierBenchmarks) {
         console.log(`\nFetching data for Tier ${bm.tier} (Wallet: ${bm.tbaAddress})...`);
-        await sleep(2000); // Massive IP rate-limit protection
+        await sleep(3000); // 3 second baseline pause between tiers to avoid triggering limits
 
         try {
             let weeklyYieldUsd = 0;
@@ -77,8 +103,7 @@ async function run() {
                 while (!isDone && page <= 5) {
                     try {
                         const url = `https://robinhoodchain.blockscout.com/api?module=account&action=${action}&address=${tbaAddress}&page=${page}&offset=1000&sort=desc`;
-                        const res = await fetch(url, { headers: FETCH_HEADERS });
-                        const data = await res.json();
+                        const data = await safeFetch(url);
                         
                         if (data.status === "1" && Array.isArray(data.result) && data.result.length > 0) {
                             let validTxsInPage = 0;
@@ -95,14 +120,11 @@ async function run() {
                                             weeklyYieldUsd += parseFloat(ethers.formatEther(valStr)) * globalMarketParams.ethPriceUsd;
                                         } else {
                                             const contractAddr = tx.contractAddress || "";
-                                            // Pure logic: If token isn't hardcoded, completely ignore it. Zero dex API calls.
                                             const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr.toLowerCase());
                                             if (!matchedToken) continue; 
 
                                             let tokenPriceUsd = matchedToken.priceUsd;
-                                            if (matchedToken.symbol === "STONKBROKER") {
-                                                tokenPriceUsd = globalMarketParams.tokenPriceUsd; // Always use live Stonk price
-                                            }
+                                            if (matchedToken.symbol === "STONKBROKER") tokenPriceUsd = globalMarketParams.tokenPriceUsd;
 
                                             const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
                                             const tokenAmount = parseFloat(ethers.formatUnits(valStr, decimals));
@@ -114,23 +136,22 @@ async function run() {
                                     }
                                 }
                             }
-                            // Stop turning pages the moment we hit a page with zero transactions from the last 7 days.
+                            // If we found zero transactions from the last 7 days on this page, stop fetching pages
                             if (validTxsInPage === 0 || data.result.length < 1000) {
                                 isDone = true; 
                             }
                         } else {
-                            isDone = true; 
+                            isDone = true; // Status "0" usually means "No transactions found"
                         }
                     } catch (e) {
-                        console.warn(`Fetch failed for ${action} page ${page}:`, e.message);
+                        console.warn(`Critical skip for ${action} page ${page}:`, e.message);
                         isDone = true;
                     }
                     page++;
-                    await sleep(1500); // 1.5s delay between individual pages! Very important.
+                    await sleep(2000); // 2 second pause between individual pages
                 }
             }
 
-            // Flawless, non-fluctuating annual math
             bm.trackedAnnualYieldUsd = weeklyYieldUsd * 52.14;
             bm.error = false;
         } catch (err) {
