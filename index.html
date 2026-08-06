@@ -159,7 +159,7 @@
 
                 <div class="glass-card rounded-2xl p-6">
                     <h3 class="text-lg font-semibold mb-4 flex items-center"><i class="fa-solid fa-vault text-gray-400 mr-2"></i> Projected Yield Distribution</h3>
-                    <p class="text-xs text-gray-400 mb-4">Annualized estimate strictly locked to trailing 7-day stable volume tracking.</p>
+                    <p class="text-xs text-gray-400 mb-4">Annualized estimate directly scaled from stable 7-day volume tracking.</p>
                     <div class="space-y-3" id="yield-list">
                         <div class="text-sm text-gray-500 italic text-center py-4">Enter an ID below to load assets.</div>
                     </div>
@@ -221,7 +221,7 @@
                 { symbol: "SLV", address: "0x411eFb0E7f985935DAec3D4C3ebaEa0d0AD7D89f", priceUsd: 28.00 },
                 { symbol: "MSFT", address: "0xe93237C50D904957Cf27E7B1133b510C669c2e74", priceUsd: 430.00 },
                 { symbol: "COST", address: "0x4EA005168D7F09a7A0Ba9D1DEf21a479950E44C2", priceUsd: 820.00 }, 
-                { symbol: "USAR", address: "0xd917B029C761D264c6A312BBbcDA868658eF86a6", priceUsd: 50.00 },  
+                { symbol: "USAR", address: "0xd917B029C761D264c6A312BBbcDA868658ef86a6", priceUsd: 50.00 },  
                 { symbol: "SPCX", address: "0x4a0E65A3EcceC6dBe60AE065F2e7bb85Fae35eEa", priceUsd: 25.00 },  
                 { symbol: "GOOGL", address: "0x2e0847E8910a9732eB3fb1bb4b70a580ADAD4FE3", priceUsd: 175.00 }, 
                 { symbol: "RDDT", address: "0x05b37Fb53A299a1b874A619e1c4C404D52C36F4C", priceUsd: 65.00 },
@@ -305,14 +305,6 @@
             const historicalStonkPriceUsd = globalMarketParams.tokenPriceUsd;
             const historicalEthPaid = (historicalStonkPriceUsd * 666666) / historicalEthPriceUsd; 
 
-            let currentBlock = 28200000;
-            try {
-                currentBlock = await provider.getBlockNumber();
-            } catch (e) {
-                console.warn("RPC failed to get block number");
-            }
-            
-            const startBlock = Math.max(0, currentBlock - 350000);
             const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
             let aggregatedTransfers = {};
 
@@ -322,14 +314,14 @@
                 
                 for (let action of actionTypes) {
                     try {
-                        const url = `https://robinhoodchain.blockscout.com/api?module=account&action=${action}&address=${tbaAddress}&startblock=${startBlock}&sort=desc`;
+                        const url = `https://robinhoodchain.blockscout.com/api?module=account&action=${action}&address=${tbaAddress}&sort=desc`;
                         const res = await fetch(url);
                         const data = await res.json();
                         
                         if (data.status === "1" && Array.isArray(data.result) && data.result.length > 0) {
                             for (const tx of data.result) {
-                                const txTime = getTxTime(tx.timeStamp);
-                                if (txTime < sevenDaysAgo) continue; 
+                                // Break exactly at 7 days!
+                                if (getTxTime(tx.timeStamp) < sevenDaysAgo) break; 
                                 
                                 if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && (!tx.isError || tx.isError === "0")) {
                                     let valueStr = tx.value || "0";
