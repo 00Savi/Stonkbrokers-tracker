@@ -29,7 +29,9 @@ const WEB3_CONFIG = {
 };
 
 const provider = new ethers.JsonRpcProvider(WEB3_CONFIG.RPC_URL);
-const registryAbi = ["function account(address implementation, bytes32 salt, uint256 chainId, address tokenContract, uint256 tokenId) view returns (address)"];
+
+// Corrected ABI order back to original
+const registryAbi = ["function account(address implementation, uint256 chainId, address tokenContract, uint256 tokenId, uint256 salt) view returns (address)"];
 
 const globalMarketParams = { ethPriceUsd: 1874.00, tokenPriceUsd: 0.01447, nftFloorEth: 0.15 };
 const tierBenchmarks = [
@@ -41,6 +43,12 @@ const tierBenchmarks = [
 ];
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+function getTxTime(txTimeStamp) {
+    if (!txTimeStamp) return 0;
+    if (String(txTimeStamp).includes("-")) return Math.floor(new Date(txTimeStamp).getTime() / 1000);
+    return parseInt(txTimeStamp);
+}
 
 async function run() {
     console.log("Fetching global prices...");
@@ -58,7 +66,6 @@ async function run() {
     WEB3_CONFIG.TOKENS[0].priceUsd = globalMarketParams.tokenPriceUsd;
     globalMarketParams.nftFloorEth = parseFloat(((666666 * globalMarketParams.tokenPriceUsd) / globalMarketParams.ethPriceUsd).toFixed(3));
 
-    // Determine the exact Unix timestamp for 7 days ago
     const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
     const registryContract = new ethers.Contract(WEB3_CONFIG.REGISTRY_CONTRACT, registryAbi, provider);
 
@@ -67,24 +74,25 @@ async function run() {
         await sleep(1500); 
 
         try {
+            // Corrected parameter order back to original
             const tbaAddress = await registryContract.account(
                 WEB3_CONFIG.IMPLEMENTATION_CONTRACT, 
-                "0x0000000000000000000000000000000000000000000000000000000000000000", 
                 WEB3_CONFIG.CHAIN_ID, 
                 WEB3_CONFIG.NFT_CONTRACT, 
-                bm.benchmarkId
+                bm.benchmarkId,
+                0 // salt
             );
 
             let totalYieldUsd = 0;
 
-            // 1. NATIVE ETH YIELD TRACKING (Timestamp Filtered)
+            // 1. NATIVE ETH YIELD TRACKING
             let ethYieldRaw = 0n;
             try {
                 const normalRes = await fetch(`https://robinhoodchain.blockscout.com/api?module=account&action=txlist&address=${tbaAddress}&sort=desc`);
                 const normalData = await normalRes.json();
                 if (normalData.status === "1" && Array.isArray(normalData.result)) {
                     for (const tx of normalData.result) {
-                        if (parseInt(tx.timeStamp) < sevenDaysAgo) break; // Stop looking further back than 7 days
+                        if (getTxTime(tx.timeStamp) < sevenDaysAgo) continue; 
                         if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && tx.isError === "0" && tx.value !== "0") {
                             ethYieldRaw += BigInt(tx.value);
                         }
@@ -97,7 +105,7 @@ async function run() {
                 const internalData = await internalRes.json();
                 if (internalData.status === "1" && Array.isArray(internalData.result)) {
                     for (const tx of internalData.result) {
-                        if (parseInt(tx.timeStamp) < sevenDaysAgo) break; 
+                        if (getTxTime(tx.timeStamp) < sevenDaysAgo) continue; 
                         if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && tx.isError === "0" && tx.value !== "0") {
                             ethYieldRaw += BigInt(tx.value);
                         }
@@ -114,14 +122,14 @@ async function run() {
 
             await sleep(500);
 
-            // 2. ERC20 YIELD TRACKING (Timestamp Filtered)
+            // 2. ERC20 YIELD TRACKING
             try {
                 const tokenRes = await fetch(`https://robinhoodchain.blockscout.com/api?module=account&action=tokentx&address=${tbaAddress}&sort=desc`);
                 const tokenData = await tokenRes.json();
                 
                 if (tokenData.status === "1" && Array.isArray(tokenData.result)) {
                     for (const tx of tokenData.result) {
-                        if (parseInt(tx.timeStamp) < sevenDaysAgo) break; 
+                        if (getTxTime(tx.timeStamp) < sevenDaysAgo) continue; 
                         
                         if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase()) {
                             const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === tx.contractAddress.toLowerCase());
