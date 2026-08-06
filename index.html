@@ -159,7 +159,7 @@
 
                 <div class="glass-card rounded-2xl p-6">
                     <h3 class="text-lg font-semibold mb-4 flex items-center"><i class="fa-solid fa-vault text-gray-400 mr-2"></i> Projected Yield Distribution</h3>
-                    <p class="text-xs text-gray-400 mb-4">Annualized estimate directly scaled from stable 7-day volume tracking.</p>
+                    <p class="text-xs text-gray-400 mb-4">Annualized estimate dynamically generated based on trailing data points.</p>
                     <div class="space-y-3" id="yield-list">
                         <div class="text-sm text-gray-500 italic text-center py-4">Enter an ID below to load assets.</div>
                     </div>
@@ -208,18 +208,18 @@
             CHAIN_ID: 4663, 
             RPC_URL: "https://rpc.mainnet.chain.robinhood.com",
             TOKENS: [
-                { symbol: "STONKBROKER", address: "0xe934e36A439C94017B64a3FecE66AF12099aBF50" },
-                { symbol: "AAPL", address: "0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9" }, 
-                { symbol: "AMZN", address: "0x12f190a9F9d7D37a250758b26824B97CE941bF54" }, 
-                { symbol: "NVDA", address: "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC" }, 
-                { symbol: "SLV", address: "0x411eFb0E7f985935DAec3D4C3ebaEa0d0AD7D89f" },  
-                { symbol: "MSFT", address: "0xe93237C50D904957Cf27E7B1133b510C669c2e74" }, 
-                { symbol: "COST", address: "0x4EA005168D7F09a7A0Ba9D1DEf21a479950E44C2" }, 
-                { symbol: "USAR", address: "0xd917B029C761D264c6A312BBbcDA868658ef86a6" },  
-                { symbol: "SPCX", address: "0x4a0E65A3EcceC6dBe60AE065F2e7bb85Fae35eEa" },  
-                { symbol: "GOOGL", address: "0x2e0847E8910a9732eB3fb1bb4b70a580ADAD4FE3" }, 
-                { symbol: "RDDT", address: "0x05b37Fb53A299a1b874A619e1c4C404D52C36F4C" },
-                { symbol: "GME", address: "0x1b0E319c6A659F002271B69dB8A7df2F911c153E" }
+                { symbol: "STONKBROKER", address: "0xe934e36A439C94017B64a3FecE66AF12099aBF50", priceUsd: 0.0191 },
+                { symbol: "AAPL", address: "0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9", priceUsd: 225.00 },
+                { symbol: "AMZN", address: "0x12f190a9F9d7D37a250758b26824B97CE941bF54", priceUsd: 185.00 },
+                { symbol: "NVDA", address: "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC", priceUsd: 120.00 },
+                { symbol: "SLV", address: "0x411eFb0E7f985935DAec3D4C3ebaEa0d0AD7D89f", priceUsd: 28.00 },
+                { symbol: "MSFT", address: "0xe93237C50D904957Cf27E7B1133b510C669c2e74", priceUsd: 430.00 },
+                { symbol: "COST", address: "0x4EA005168D7F09a7A0Ba9D1DEf21a479950E44C2", priceUsd: 820.00 }, 
+                { symbol: "USAR", address: "0xd917B029C761D264c6A312BBbcDA868658eF86a6", priceUsd: 50.00 },  
+                { symbol: "SPCX", address: "0x4a0E65A3EcceC6dBe60AE065F2e7bb85Fae35eEa", priceUsd: 25.00 },  
+                { symbol: "GOOGL", address: "0x2e0847E8910a9732eB3fb1bb4b70a580ADAD4FE3", priceUsd: 175.00 }, 
+                { symbol: "RDDT", address: "0x05b37Fb53A299a1b874A619e1c4C404D52C36F4C", priceUsd: 65.00 },
+                { symbol: "GME", address: "0x1b0E319c6A659F002271B69dB8A7df2F911c153E", priceUsd: 22.00 }
             ]
         };
 
@@ -254,79 +254,6 @@
             if (!txTimeStamp) return 0;
             if (String(txTimeStamp).includes("-")) return Math.floor(new Date(txTimeStamp).getTime() / 1000);
             return parseInt(txTimeStamp);
-        }
-
-        async function get7DayVolumeData(tbaAddress, actionType, aggregatedTransfers) {
-            let page = 1;
-            let hasMore = true;
-            const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
-            const tokenPriceCache = {}; 
-
-            while (hasMore && page <= 5) { 
-                try {
-                    const url = `https://robinhoodchain.blockscout.com/api?module=account&action=${actionType}&address=${tbaAddress}&page=${page}&offset=1000&sort=desc`;
-                    const res = await fetch(url);
-                    const data = await res.json();
-                    
-                    if (data.status === "1" && Array.isArray(data.result) && data.result.length > 0) {
-                        for (const tx of data.result) {
-                            const txTime = getTxTime(tx.timeStamp);
-                            if (txTime < sevenDaysAgo) {
-                                hasMore = false; 
-                                continue; 
-                            }
-
-                            if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && (!tx.isError || tx.isError === "0")) {
-                                let valueStr = tx.value || "0";
-                                if (valueStr === "") valueStr = "0";
-
-                                if (actionType !== "tokentx") {
-                                    const ethAmount = parseFloat(ethers.formatEther(valueStr));
-                                    if (!aggregatedTransfers["ETH"]) {
-                                        aggregatedTransfers["ETH"] = { ticker: "ETH", amount: 0, currentPriceUsd: globalMarketParams.ethPriceUsd };
-                                    }
-                                    aggregatedTransfers["ETH"].amount += (ethAmount * 52.14); // direct annual multiplier
-                                } else {
-                                    const contractAddr = tx.contractAddress || "";
-                                    if (!contractAddr) continue;
-
-                                    let tokenPriceUsd = 0;
-                                    let tokenSymbol = tx.tokenSymbol || "TOKEN";
-
-                                    const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr.toLowerCase());
-                                    if (matchedToken) {
-                                        tokenPriceUsd = matchedToken.priceUsd;
-                                    } else if (tokenPriceCache[contractAddr] !== undefined) {
-                                        tokenPriceUsd = tokenPriceCache[contractAddr];
-                                    } else {
-                                        try {
-                                            const dsRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${contractAddr}`);
-                                            const dsData = await dsRes.json();
-                                            if (dsData?.pairs?.length > 0) tokenPriceUsd = parseFloat(dsData.pairs[0].priceUsd) || 0;
-                                        } catch (err) {}
-                                        tokenPriceCache[contractAddr] = tokenPriceUsd;
-                                    }
-
-                                    const decimals = parseInt(tx.tokenDecimal) || 18;
-                                    const tokenAmount = parseFloat(ethers.formatUnits(valueStr, decimals));
-
-                                    if (!aggregatedTransfers[tokenSymbol]) {
-                                        aggregatedTransfers[tokenSymbol] = { ticker: tokenSymbol, amount: 0, currentPriceUsd: tokenPriceUsd };
-                                    }
-                                    aggregatedTransfers[tokenSymbol].amount += (tokenAmount * 52.14);
-                                }
-                            }
-                        }
-                        if (data.result.length < 1000) hasMore = false; 
-                    } else {
-                        hasMore = false;
-                    }
-                } catch (e) {
-                    console.warn(`Fetch failed for ${actionType} page ${page}:`, e.message);
-                    hasMore = false;
-                }
-                page++;
-            }
         }
 
         async function fetchBrokerData(tokenId) {
@@ -372,19 +299,96 @@
             const historicalStonkPriceUsd = globalMarketParams.tokenPriceUsd;
             const historicalEthPaid = (historicalStonkPriceUsd * 666666) / historicalEthPriceUsd; 
 
+            const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
+            let earliestTx = Infinity;
+            let latestTx = 0;
+            const updateTimeSpan = (ts) => {
+                let t = getTxTime(ts);
+                if (t >= sevenDaysAgo) {
+                    if (t < earliestTx) earliestTx = t;
+                    if (t > latestTx) latestTx = t;
+                }
+            };
+
             let aggregatedTransfers = {};
 
             if (tbaAddress !== "0x0000000000000000000000000000000000000000") {
-                await get7DayVolumeData(tbaAddress, "txlist", aggregatedTransfers);
-                await get7DayVolumeData(tbaAddress, "txlistinternal", aggregatedTransfers);
-                await get7DayVolumeData(tbaAddress, "tokentx", aggregatedTransfers);
+                const actionTypes = ["txlist", "txlistinternal", "tokentx"];
+                for (let action of actionTypes) {
+                    let page = 1;
+                    while (page <= 4) {
+                        try {
+                            const url = `https://robinhoodchain.blockscout.com/api?module=account&action=${action}&address=${tbaAddress}&page=${page}&offset=1000&sort=desc`;
+                            const res = await fetch(url);
+                            const data = await res.json();
+                            
+                            if (data.status === "1" && Array.isArray(data.result) && data.result.length > 0) {
+                                for (const tx of data.result) {
+                                    const txTime = getTxTime(tx.timeStamp);
+                                    if (txTime < sevenDaysAgo) continue; 
+                                    
+                                    updateTimeSpan(tx.timeStamp);
+
+                                    if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && (!tx.isError || tx.isError === "0")) {
+                                        let valueStr = tx.value || "0";
+                                        if (valueStr === "") valueStr = "0";
+
+                                        if (action !== "tokentx") {
+                                            const ethAmount = parseFloat(ethers.formatEther(valueStr));
+                                            if (!aggregatedTransfers["ETH"]) {
+                                                aggregatedTransfers["ETH"] = { ticker: "ETH", rawAmount: 0, currentPriceUsd: globalMarketParams.ethPriceUsd };
+                                            }
+                                            aggregatedTransfers["ETH"].rawAmount += ethAmount;
+                                        } else {
+                                            const contractAddr = tx.contractAddress || "";
+                                            if (!contractAddr) continue;
+
+                                            let tokenPriceUsd = 0;
+                                            let tokenSymbol = tx.tokenSymbol || "TOKEN";
+
+                                            const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr.toLowerCase());
+                                            if (matchedToken) tokenPriceUsd = matchedToken.priceUsd || 0;
+
+                                            const decimals = parseInt(tx.tokenDecimal) || 18;
+                                            const tokenAmount = parseFloat(ethers.formatUnits(valueStr, decimals));
+
+                                            if (!aggregatedTransfers[tokenSymbol]) {
+                                                aggregatedTransfers[tokenSymbol] = { ticker: tokenSymbol, rawAmount: 0, currentPriceUsd: tokenPriceUsd };
+                                            }
+                                            aggregatedTransfers[tokenSymbol].rawAmount += tokenAmount;
+                                        }
+                                    }
+                                }
+                                if (data.result.length < 1000) break; 
+                            } else {
+                                break;
+                            }
+                        } catch (e) {
+                            console.warn(`Fetch failed for ${action} page ${page}:`, e.message);
+                            break;
+                        }
+                        page++;
+                    }
+                }
             }
+
+            // Dynamic Annualization
+            let timeSpanDays = 7; 
+            if (latestTx > 0 && earliestTx < Infinity) {
+                timeSpanDays = (latestTx - earliestTx) / 86400;
+                if (timeSpanDays < 1) timeSpanDays = 1;
+            }
+            const annualMultiplier = 365 / timeSpanDays;
 
             return {
                 id: tokenId, tier: actualTier, owner: `${ownerAddress.slice(0,6)}...${ownerAddress.slice(-4)}`, tbaAddress: `${tbaAddress.slice(0,6)}...${tbaAddress.slice(-4)}`,
                 acquisition: { ethPaid: historicalEthPaid, historicalEthPriceUsd: historicalEthPriceUsd },
                 activation: { tokensBurned: tokensReq, historicalTokenPriceUsd: historicalStonkPriceUsd },
-                tbaBalances: Object.values(aggregatedTransfers)
+                tbaBalances: Object.values(aggregatedTransfers).map(asset => ({
+                    ticker: asset.ticker,
+                    amount: asset.rawAmount * annualMultiplier,
+                    currentPriceUsd: asset.currentPriceUsd
+                }))
             };
         }
 
