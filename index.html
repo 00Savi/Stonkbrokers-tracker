@@ -159,7 +159,7 @@
 
                 <div class="glass-card rounded-2xl p-6">
                     <h3 class="text-lg font-semibold mb-4 flex items-center"><i class="fa-solid fa-vault text-gray-400 mr-2"></i> Projected Yield Distribution</h3>
-                    <p class="text-xs text-gray-400 mb-4">Annualized estimate dynamically generated based on trailing data points.</p>
+                    <p class="text-xs text-gray-400 mb-4">Annualized estimate strictly locked to trailing 7-day stable volume tracking.</p>
                     <div class="space-y-3" id="yield-list">
                         <div class="text-sm text-gray-500 italic text-center py-4">Enter an ID below to load assets.</div>
                     </div>
@@ -189,8 +189,14 @@
     </div>
 
     <script>
-        const formatUSD = (num) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(num);
-        const formatNum = (num) => new Intl.NumberFormat('en-US').format(num);
+        const formatUSD = (num) => {
+            if (isNaN(num)) return "$0.00";
+            return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(num);
+        };
+        const formatNum = (num) => {
+            if (isNaN(num)) return "0";
+            return new Intl.NumberFormat('en-US').format(num);
+        };
         
         let globalMarketParams = { ethPriceUsd: 1874.00, tokenPriceUsd: 0.01447, nftFloorEth: 0.15 };
         let tierBenchmarks = [
@@ -237,7 +243,7 @@
                 let estCashOnCash = (currentTotalCostUsd > 0 && bm.trackedAnnualYieldUsd > 0) ? (bm.trackedAnnualYieldUsd / currentTotalCostUsd) * 100 : 0;
 
                 const yieldDisplay = bm.error ? `<span class="text-xs text-danger font-semibold border border-danger/20 bg-danger/10 px-2 py-1 rounded">RPC Log Error</span>` 
-                    : bm.trackedAnnualYieldUsd === 0 ? `<span class="text-xs text-gray-500 italic">No yield found</span>` : `${formatUSD(bm.trackedAnnualYieldUsd)} <span class="text-xs text-gray-500">/yr</span>`;
+                    : (!bm.trackedAnnualYieldUsd || bm.trackedAnnualYieldUsd === 0) ? `<span class="text-xs text-gray-500 italic">No yield found</span>` : `${formatUSD(bm.trackedAnnualYieldUsd)} <span class="text-xs text-gray-500">/yr</span>`;
 
                 tbody.innerHTML += `
                     <tr class="hover:bg-gray-800/30 transition-colors">
@@ -253,7 +259,7 @@
         function getTxTime(txTimeStamp) {
             if (!txTimeStamp) return 0;
             if (String(txTimeStamp).includes("-")) return Math.floor(new Date(txTimeStamp).getTime() / 1000);
-            return parseInt(txTimeStamp);
+            return parseInt(txTimeStamp, 10);
         }
 
         async function fetchBrokerData(tokenId) {
@@ -299,86 +305,81 @@
             const historicalStonkPriceUsd = globalMarketParams.tokenPriceUsd;
             const historicalEthPaid = (historicalStonkPriceUsd * 666666) / historicalEthPriceUsd; 
 
+            let currentBlock = 28200000;
+            try {
+                currentBlock = await provider.getBlockNumber();
+            } catch (e) {
+                console.warn("RPC failed to get block number");
+            }
+            
+            const startBlock = Math.max(0, currentBlock - 350000);
             const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
-            let earliestTx = Infinity;
-            let latestTx = 0;
-            const updateTimeSpan = (ts) => {
-                let t = getTxTime(ts);
-                if (t >= sevenDaysAgo) {
-                    if (t < earliestTx) earliestTx = t;
-                    if (t > latestTx) latestTx = t;
-                }
-            };
-
             let aggregatedTransfers = {};
 
             if (tbaAddress !== "0x0000000000000000000000000000000000000000") {
+                const tokenPriceCache = {};
                 const actionTypes = ["txlist", "txlistinternal", "tokentx"];
+                
                 for (let action of actionTypes) {
-                    let page = 1;
-                    while (page <= 4) {
-                        try {
-                            const url = `https://robinhoodchain.blockscout.com/api?module=account&action=${action}&address=${tbaAddress}&page=${page}&offset=1000&sort=desc`;
-                            const res = await fetch(url);
-                            const data = await res.json();
-                            
-                            if (data.status === "1" && Array.isArray(data.result) && data.result.length > 0) {
-                                for (const tx of data.result) {
-                                    const txTime = getTxTime(tx.timeStamp);
-                                    if (txTime < sevenDaysAgo) continue; 
-                                    
-                                    updateTimeSpan(tx.timeStamp);
+                    try {
+                        const url = `https://robinhoodchain.blockscout.com/api?module=account&action=${action}&address=${tbaAddress}&startblock=${startBlock}&sort=desc`;
+                        const res = await fetch(url);
+                        const data = await res.json();
+                        
+                        if (data.status === "1" && Array.isArray(data.result) && data.result.length > 0) {
+                            for (const tx of data.result) {
+                                const txTime = getTxTime(tx.timeStamp);
+                                if (txTime < sevenDaysAgo) continue; 
+                                
+                                if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && (!tx.isError || tx.isError === "0")) {
+                                    let valueStr = tx.value || "0";
+                                    if (valueStr === "") valueStr = "0";
 
-                                    if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && (!tx.isError || tx.isError === "0")) {
-                                        let valueStr = tx.value || "0";
-                                        if (valueStr === "") valueStr = "0";
+                                    if (action !== "tokentx") {
+                                        const ethAmount = parseFloat(ethers.formatEther(valueStr));
+                                        if (!aggregatedTransfers["ETH"]) {
+                                            aggregatedTransfers["ETH"] = { ticker: "ETH", rawAmount: 0, currentPriceUsd: globalMarketParams.ethPriceUsd };
+                                        }
+                                        aggregatedTransfers["ETH"].rawAmount += ethAmount;
+                                    } else {
+                                        const contractAddr = tx.contractAddress || "";
+                                        if (!contractAddr) continue;
 
-                                        if (action !== "tokentx") {
-                                            const ethAmount = parseFloat(ethers.formatEther(valueStr));
-                                            if (!aggregatedTransfers["ETH"]) {
-                                                aggregatedTransfers["ETH"] = { ticker: "ETH", rawAmount: 0, currentPriceUsd: globalMarketParams.ethPriceUsd };
-                                            }
-                                            aggregatedTransfers["ETH"].rawAmount += ethAmount;
+                                        let tokenPriceUsd = 0;
+                                        let tokenSymbol = tx.tokenSymbol || "TOKEN";
+
+                                        const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr.toLowerCase());
+                                        if (matchedToken && matchedToken.priceUsd) {
+                                            tokenPriceUsd = matchedToken.priceUsd;
+                                        } else if (tokenPriceCache[contractAddr] !== undefined) {
+                                            tokenPriceUsd = tokenPriceCache[contractAddr];
                                         } else {
-                                            const contractAddr = tx.contractAddress || "";
-                                            if (!contractAddr) continue;
+                                            try {
+                                                const dsRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${contractAddr}`);
+                                                const dsData = await dsRes.json();
+                                                if (dsData?.pairs?.length > 0) tokenPriceUsd = parseFloat(dsData.pairs[0].priceUsd) || 0;
+                                            } catch (err) {}
+                                            tokenPriceCache[contractAddr] = tokenPriceUsd;
+                                        }
 
-                                            let tokenPriceUsd = 0;
-                                            let tokenSymbol = tx.tokenSymbol || "TOKEN";
+                                        const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
+                                        const tokenAmount = parseFloat(ethers.formatUnits(valueStr, decimals));
 
-                                            const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr.toLowerCase());
-                                            if (matchedToken) tokenPriceUsd = matchedToken.priceUsd || 0;
-
-                                            const decimals = parseInt(tx.tokenDecimal) || 18;
-                                            const tokenAmount = parseFloat(ethers.formatUnits(valueStr, decimals));
-
+                                        if (!isNaN(tokenAmount)) {
                                             if (!aggregatedTransfers[tokenSymbol]) {
-                                                aggregatedTransfers[tokenSymbol] = { ticker: tokenSymbol, rawAmount: 0, currentPriceUsd: tokenPriceUsd };
+                                                aggregatedTransfers[tokenSymbol] = { ticker: tokenSymbol, rawAmount: 0, currentPriceUsd: tokenPriceUsd || 0 };
                                             }
                                             aggregatedTransfers[tokenSymbol].rawAmount += tokenAmount;
                                         }
                                     }
                                 }
-                                if (data.result.length < 1000) break; 
-                            } else {
-                                break;
                             }
-                        } catch (e) {
-                            console.warn(`Fetch failed for ${action} page ${page}:`, e.message);
-                            break;
                         }
-                        page++;
+                    } catch (e) {
+                        console.warn(`Fetch failed for ${action}:`, e.message);
                     }
                 }
             }
-
-            // Dynamic Annualization
-            let timeSpanDays = 7; 
-            if (latestTx > 0 && earliestTx < Infinity) {
-                timeSpanDays = (latestTx - earliestTx) / 86400;
-                if (timeSpanDays < 1) timeSpanDays = 1;
-            }
-            const annualMultiplier = 365 / timeSpanDays;
 
             return {
                 id: tokenId, tier: actualTier, owner: `${ownerAddress.slice(0,6)}...${ownerAddress.slice(-4)}`, tbaAddress: `${tbaAddress.slice(0,6)}...${tbaAddress.slice(-4)}`,
@@ -386,8 +387,8 @@
                 activation: { tokensBurned: tokensReq, historicalTokenPriceUsd: historicalStonkPriceUsd },
                 tbaBalances: Object.values(aggregatedTransfers).map(asset => ({
                     ticker: asset.ticker,
-                    amount: asset.rawAmount * annualMultiplier,
-                    currentPriceUsd: asset.currentPriceUsd
+                    amount: asset.rawAmount * 52.14,
+                    currentPriceUsd: asset.currentPriceUsd || 0
                 }))
             };
         }
@@ -399,9 +400,9 @@
 
             let totalYieldUsd = 0;
             const yieldBreakdown = brokerData.tbaBalances.map(asset => {
-                const value = asset.amount * asset.currentPriceUsd;
-                totalYieldUsd += value;
-                return { ...asset, valueUsd: value };
+                const value = (asset.amount || 0) * (asset.currentPriceUsd || 0);
+                totalYieldUsd += (isNaN(value) ? 0 : value);
+                return { ...asset, valueUsd: isNaN(value) ? 0 : value };
             });
 
             const cashOnCashPercentage = totalOutlayUsd > 0 ? (totalYieldUsd / totalOutlayUsd) * 100 : 0;
@@ -439,7 +440,7 @@
             }
 
             document.getElementById('yield-total').innerText = `+${formatUSD(totalYieldUsd)}`;
-            document.getElementById('calc-roi').innerText = `${cashOnCashPercentage.toFixed(2)}%`;
+            document.getElementById('calc-roi').innerText = `${isNaN(cashOnCashPercentage) ? "0.00" : cashOnCashPercentage.toFixed(2)}%`;
             document.getElementById('calc-earnings').innerText = `+${formatUSD(totalYieldUsd)}`;
             document.getElementById('calc-outlay').innerText = formatUSD(totalOutlayUsd);
             
