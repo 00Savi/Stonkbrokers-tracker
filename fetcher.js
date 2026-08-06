@@ -30,6 +30,9 @@ const WEB3_CONFIG = {
 
 const provider = new ethers.JsonRpcProvider(WEB3_CONFIG.RPC_URL);
 
+// Using V0.2 ABI Standard (bytes32 salt as the 2nd parameter)
+const registryAbi = ["function account(address implementation, bytes32 salt, uint256 chainId, address tokenContract, uint256 tokenId) view returns (address)"];
+
 const globalMarketParams = { ethPriceUsd: 1874.00, tokenPriceUsd: 0.01447, nftFloorEth: 0.15 };
 const tierBenchmarks = [
     { tier: 1, reqTokens: 66666, benchmarkId: 1794, trackedAnnualYieldUsd: 0 },
@@ -45,25 +48,6 @@ function getTxTime(txTimeStamp) {
     if (!txTimeStamp) return 0;
     if (String(txTimeStamp).includes("-")) return Math.floor(new Date(txTimeStamp).getTime() / 1000);
     return parseInt(txTimeStamp);
-}
-
-// Bypasses the Registry Contract completely and mathematically computes the TBA
-function computeTBA(tokenId) {
-    const encoded = ethers.AbiCoder.defaultAbiCoder().encode(
-        ["uint256", "address", "uint256", "uint256"],
-        [WEB3_CONFIG.CHAIN_ID, WEB3_CONFIG.NFT_CONTRACT, tokenId, 0]
-    );
-    const creationCode = ethers.concat([
-        "0x3d60ad80600a3d3981f3363d3d373d3d3d363d73",
-        WEB3_CONFIG.IMPLEMENTATION_CONTRACT,
-        "0x5af43d82803e903d91602b57fd5bf3",
-        encoded
-    ]);
-    return ethers.getCreate2Address(
-        WEB3_CONFIG.REGISTRY_CONTRACT, 
-        ethers.zeroPadValue(ethers.toBeHex(0), 32), 
-        ethers.keccak256(creationCode)
-    );
 }
 
 async function run() {
@@ -83,14 +67,22 @@ async function run() {
     globalMarketParams.nftFloorEth = parseFloat(((666666 * globalMarketParams.tokenPriceUsd) / globalMarketParams.ethPriceUsd).toFixed(3));
 
     const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
+    const registryContract = new ethers.Contract(WEB3_CONFIG.REGISTRY_CONTRACT, registryAbi, provider);
 
     for (let bm of tierBenchmarks) {
         console.log(`\nFetching data for Tier ${bm.tier} (NFT #${bm.benchmarkId})...`);
         await sleep(1500); 
 
         try {
-            // Generate address mathematically instead of querying contract
-            const tbaAddress = computeTBA(bm.benchmarkId);
+            // Re-enabling the strict V0.2 Contract Query
+            const tbaAddress = await registryContract.account(
+                WEB3_CONFIG.IMPLEMENTATION_CONTRACT, 
+                "0x0000000000000000000000000000000000000000000000000000000000000000", 
+                WEB3_CONFIG.CHAIN_ID, 
+                WEB3_CONFIG.NFT_CONTRACT, 
+                bm.benchmarkId
+            );
+
             let totalYieldUsd = 0;
 
             // 1. NATIVE ETH YIELD TRACKING
