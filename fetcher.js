@@ -8,7 +8,7 @@ const WEB3_CONFIG = {
     IMPLEMENTATION_CONTRACT: "0x55266d75D1a14E4572138116aF39863Ed6593eCE",
     CHAIN_ID: 4663, 
     RPC_URL: "https://rpc.mainnet.chain.robinhood.com",
-    // IMPORTANT: Replace the "0x..." placeholders with the full 42-character contract addresses
+    // IMPORTANT: Replace the "0x..." placeholders with the full contract addresses
     TOKENS: [
         { symbol: "STONK", address: "0xe934e36a439c94017b64a3fece66af12099abf50", priceUsd: 0.01447 },
         { symbol: "AAPL", address: "0xf9bc0777c087af0fe7214de8a5360be6a71d0d44", priceUsd: 225.00 },
@@ -30,7 +30,6 @@ const WEB3_CONFIG = {
 
 const provider = new ethers.JsonRpcProvider(WEB3_CONFIG.RPC_URL);
 const registryAbi = ["function account(address implementation, uint256 chainId, address tokenContract, uint256 tokenId, uint256 salt) view returns (address)"];
-const erc20Abi = ["event Transfer(address indexed from, address indexed to, uint256 value)", "function decimals() view returns (uint8)"];
 
 const globalMarketParams = { ethPriceUsd: 1874.00, tokenPriceUsd: 0.01447, nftFloorEth: 0.15 };
 const tierBenchmarks = [
@@ -54,16 +53,13 @@ async function run() {
         console.warn("Failed to fetch live prices, using defaults.", e);
     }
 
-    // Update dynamic prices in token config if available
     WEB3_CONFIG.TOKENS[0].priceUsd = globalMarketParams.tokenPriceUsd;
-
     globalMarketParams.nftFloorEth = parseFloat(((666666 * globalMarketParams.tokenPriceUsd) / globalMarketParams.ethPriceUsd).toFixed(3));
 
     const registryContract = new ethers.Contract(WEB3_CONFIG.REGISTRY_CONTRACT, registryAbi, provider);
     const currentBlock = await provider.getBlockNumber();
     const blocksPerWeek = 302400; 
     const startBlock = currentBlock - blocksPerWeek;
-    const maxChunk = 5000; 
 
     for (let bm of tierBenchmarks) {
         console.log(`Fetching data for Tier ${bm.tier} (NFT #${bm.benchmarkId})...`);
@@ -78,28 +74,22 @@ async function run() {
 
             let totalYieldUsd = 0;
 
-            // NATIVE ETH YIELD TRACKING (Via Blockscout API for inbound transactions)
+            // 1. NATIVE ETH YIELD TRACKING (Via Blockscout API)
             let ethYieldRaw = 0n;
             try {
-                // 1. Normal Transactions (Wallet to Wallet)
                 const normalRes = await fetch(`https://robinhoodchain.blockscout.com/api?module=account&action=txlist&address=${tbaAddress}&startblock=${startBlock}&endblock=${currentBlock}&sort=asc`);
                 const normalData = await normalRes.json();
                 if (normalData.status === "1" && Array.isArray(normalData.result)) {
                     for (const tx of normalData.result) {
-                        if (tx.to.toLowerCase() === tbaAddress.toLowerCase() && tx.isError === "0" && tx.value !== "0") {
-                            ethYieldRaw += BigInt(tx.value);
-                        }
+                        if (tx.to.toLowerCase() === tbaAddress.toLowerCase() && tx.isError === "0" && tx.value !== "0") ethYieldRaw += BigInt(tx.value);
                     }
                 }
 
-                // 2. Internal Transactions (Smart Contract Distributions)
                 const internalRes = await fetch(`https://robinhoodchain.blockscout.com/api?module=account&action=txlistinternal&address=${tbaAddress}&startblock=${startBlock}&endblock=${currentBlock}&sort=asc`);
                 const internalData = await internalRes.json();
                 if (internalData.status === "1" && Array.isArray(internalData.result)) {
                     for (const tx of internalData.result) {
-                        if (tx.to.toLowerCase() === tbaAddress.toLowerCase() && tx.isError === "0" && tx.value !== "0") {
-                            ethYieldRaw += BigInt(tx.value);
-                        }
+                        if (tx.to.toLowerCase() === tbaAddress.toLowerCase() && tx.isError === "0" && tx.value !== "0") ethYieldRaw += BigInt(tx.value);
                     }
                 }
             } catch (e) {
@@ -111,29 +101,31 @@ async function run() {
                 totalYieldUsd += (ethFormatted * 52.14) * globalMarketParams.ethPriceUsd;
             }
 
-            // ERC20 YIELD TRACKING
-            for (const token of WEB3_CONFIG.TOKENS) {
-                if(token.address.startsWith("0x...")) continue; // Skip unconfigured tokens
-
-                const tokenContract = new ethers.Contract(token.address, erc20Abi, provider);
-                const filter = tokenContract.filters.Transfer(null, tbaAddress);
+            // 2. ERC20 YIELD TRACKING (Via Blockscout API)
+            try {
+                const tokenRes = await fetch(`https://robinhoodchain.blockscout.com/api?module=account&action=tokentx&address=${tbaAddress}&startblock=${startBlock}&endblock=${currentBlock}&sort=asc`);
+                const tokenData = await tokenRes.json();
                 
-                let totalAmountRaw = 0n;
-                for (let i = startBlock; i < currentBlock; i += maxChunk) {
-                    const endBlock = Math.min(i + maxChunk - 1, currentBlock);
-                    const logs = await tokenContract.queryFilter(filter, i, endBlock);
-                    for (let log of logs) {
-                        totalAmountRaw += log.args[2];
+                if (tokenData.status === "1" && Array.isArray(tokenData.result)) {
+                    for (const tx of tokenData.result) {
+                        // Check if it is an inbound transfer
+                        if (tx.to.toLowerCase() === tbaAddress.toLowerCase()) {
+                            // Find matching token in our config to get the pre-loaded price
+                            const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === tx.contractAddress.toLowerCase());
+                            if (matchedToken) {
+                                const decimals = parseInt(tx.tokenDecimal) || 18;
+                                const amountFormatted = parseFloat(ethers.formatUnits(tx.value, decimals));
+                                totalYieldUsd += (amountFormatted * 52.14) * matchedToken.priceUsd;
+                            }
+                        }
                     }
                 }
-                
-                if (totalAmountRaw > 0n) {
-                    const decimals = await tokenContract.decimals();
-                    const amountFormatted = parseFloat(ethers.formatUnits(totalAmountRaw, decimals));
-                    totalYieldUsd += (amountFormatted * 52.14) * token.priceUsd;
-                }
+            } catch (e) {
+                console.warn(`Blockscout API fetch failed for Tokens on NFT #${bm.benchmarkId}`, e);
             }
+
             bm.trackedAnnualYieldUsd = totalYieldUsd;
+            bm.error = false;
         } catch (err) {
             console.error(`Failed to fetch NFT #${bm.benchmarkId}`, err);
             bm.error = true;
