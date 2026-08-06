@@ -313,74 +313,62 @@
                 const actionTypes = ["txlist", "txlistinternal", "tokentx"];
                 
                 for (let action of actionTypes) {
-                    let page = 1;
-                    let isDone = false;
+                    try {
+                        const url = `https://robinhoodchain.blockscout.com/api?module=account&action=${action}&address=${tbaAddress}&sort=desc`;
+                        const res = await fetch(url);
+                        const data = await res.json();
+                        
+                        if (data.status === "1" && Array.isArray(data.result) && data.result.length > 0) {
+                            for (const tx of data.result) {
+                                // Skip entirely if older than 7 days
+                                if (getTxTime(tx.timeStamp) < sevenDaysAgo) continue; 
+                                
+                                if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && (!tx.isError || tx.isError === "0")) {
+                                    let valueStr = tx.value || "0";
+                                    if (valueStr === "") valueStr = "0";
 
-                    while (!isDone && page <= 5) {
-                        try {
-                            const url = `https://robinhoodchain.blockscout.com/api?module=account&action=${action}&address=${tbaAddress}&page=${page}&offset=1000&sort=desc`;
-                            const res = await fetch(url);
-                            const data = await res.json();
-                            
-                            if (data.status === "1" && Array.isArray(data.result) && data.result.length > 0) {
-                                for (const tx of data.result) {
-                                    if (getTxTime(tx.timeStamp) < sevenDaysAgo) {
-                                        isDone = true;
-                                        break; 
-                                    }
-                                    
-                                    if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && (!tx.isError || tx.isError === "0")) {
-                                        let valueStr = tx.value || "0";
-                                        if (valueStr === "") valueStr = "0";
+                                    if (action !== "tokentx") {
+                                        const ethAmount = parseFloat(ethers.formatEther(valueStr));
+                                        if (!aggregatedTransfers["ETH"]) {
+                                            aggregatedTransfers["ETH"] = { ticker: "ETH", rawAmount: 0, currentPriceUsd: globalMarketParams.ethPriceUsd };
+                                        }
+                                        aggregatedTransfers["ETH"].rawAmount += ethAmount;
+                                    } else {
+                                        const contractAddr = tx.contractAddress || "";
+                                        if (!contractAddr) continue;
 
-                                        if (action !== "tokentx") {
-                                            const ethAmount = parseFloat(ethers.formatEther(valueStr));
-                                            if (!aggregatedTransfers["ETH"]) {
-                                                aggregatedTransfers["ETH"] = { ticker: "ETH", rawAmount: 0, currentPriceUsd: globalMarketParams.ethPriceUsd };
-                                            }
-                                            aggregatedTransfers["ETH"].rawAmount += ethAmount;
+                                        let tokenPriceUsd = 0;
+                                        let tokenSymbol = tx.tokenSymbol || "TOKEN";
+
+                                        const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr.toLowerCase());
+                                        if (matchedToken && matchedToken.priceUsd) {
+                                            tokenPriceUsd = matchedToken.priceUsd;
+                                        } else if (tokenPriceCache[contractAddr] !== undefined) {
+                                            tokenPriceUsd = tokenPriceCache[contractAddr];
                                         } else {
-                                            const contractAddr = tx.contractAddress || "";
-                                            if (!contractAddr) continue;
+                                            try {
+                                                const dsRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${contractAddr}`);
+                                                const dsData = await dsRes.json();
+                                                if (dsData?.pairs?.length > 0) tokenPriceUsd = parseFloat(dsData.pairs[0].priceUsd) || 0;
+                                            } catch (err) {}
+                                            tokenPriceCache[contractAddr] = tokenPriceUsd;
+                                        }
 
-                                            let tokenPriceUsd = 0;
-                                            let tokenSymbol = tx.tokenSymbol || "TOKEN";
+                                        const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
+                                        const tokenAmount = parseFloat(ethers.formatUnits(valueStr, decimals));
 
-                                            const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr.toLowerCase());
-                                            if (matchedToken && matchedToken.priceUsd) {
-                                                tokenPriceUsd = matchedToken.priceUsd;
-                                            } else if (tokenPriceCache[contractAddr] !== undefined) {
-                                                tokenPriceUsd = tokenPriceCache[contractAddr];
-                                            } else {
-                                                try {
-                                                    const dsRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${contractAddr}`);
-                                                    const dsData = await dsRes.json();
-                                                    if (dsData?.pairs?.length > 0) tokenPriceUsd = parseFloat(dsData.pairs[0].priceUsd) || 0;
-                                                } catch (err) {}
-                                                tokenPriceCache[contractAddr] = tokenPriceUsd;
+                                        if (!isNaN(tokenAmount)) {
+                                            if (!aggregatedTransfers[tokenSymbol]) {
+                                                aggregatedTransfers[tokenSymbol] = { ticker: tokenSymbol, rawAmount: 0, currentPriceUsd: tokenPriceUsd || 0 };
                                             }
-
-                                            const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
-                                            const tokenAmount = parseFloat(ethers.formatUnits(valueStr, decimals));
-
-                                            if (!isNaN(tokenAmount)) {
-                                                if (!aggregatedTransfers[tokenSymbol]) {
-                                                    aggregatedTransfers[tokenSymbol] = { ticker: tokenSymbol, rawAmount: 0, currentPriceUsd: tokenPriceUsd || 0 };
-                                                }
-                                                aggregatedTransfers[tokenSymbol].rawAmount += tokenAmount;
-                                            }
+                                            aggregatedTransfers[tokenSymbol].rawAmount += tokenAmount;
                                         }
                                     }
                                 }
-                                if (data.result.length < 1000) isDone = true; 
-                            } else {
-                                isDone = true;
                             }
-                        } catch (e) {
-                            console.warn(`Fetch failed for ${action} page ${page}:`, e.message);
-                            isDone = true;
                         }
-                        page++;
+                    } catch (e) {
+                        console.warn(`Fetch failed for ${action}:`, e.message);
                     }
                 }
             }
