@@ -59,7 +59,7 @@ async function run() {
             let totalYieldUsd = 0;
             const tbaAddress = bm.tbaAddress;
 
-            // 1. NATIVE ETH YIELD TRACKING (Summing all recent inbound TXs and annualizing by 365)
+            // 1. NATIVE ETH YIELD TRACKING
             let ethYieldRaw = 0n;
             try {
                 const normalRes = await fetch(`https://robinhoodchain.blockscout.com/api?module=account&action=txlist&address=${tbaAddress}&sort=desc`);
@@ -89,14 +89,12 @@ async function run() {
             
             if (ethYieldRaw > 0n) {
                 const ethFormatted = parseFloat(ethers.formatEther(ethYieldRaw));
-                // Assuming the fetched block represents a 24h cycle, multiply by 365. 
-                // (If Blockscout returns ~1 day of txs, 365 gives the correct annual projection).
                 totalYieldUsd += (ethFormatted * 365) * globalMarketParams.ethPriceUsd;
             }
 
             await sleep(500);
 
-            // 2. ERC20 YIELD TRACKING
+            // 2. ERC20 YIELD TRACKING (Dynamic Fallback for Unlisted Tokens)
             try {
                 const tokenRes = await fetch(`https://robinhoodchain.blockscout.com/api?module=account&action=tokentx&address=${tbaAddress}&sort=desc`);
                 const tokenData = await tokenRes.json();
@@ -104,12 +102,25 @@ async function run() {
                 if (tokenData.status === "1" && Array.isArray(tokenData.result)) {
                     for (const tx of tokenData.result) {
                         if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase()) {
-                            const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === tx.contractAddress.toLowerCase());
+                            let matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === tx.contractAddress.toLowerCase());
+                            
+                            let tokenPriceUsd = 0;
                             if (matchedToken) {
-                                const decimals = parseInt(tx.tokenDecimal) || 18;
-                                const amountFormatted = parseFloat(ethers.formatUnits(tx.value, decimals));
-                                totalYieldUsd += (amountFormatted * 365) * matchedToken.priceUsd;
+                                tokenPriceUsd = matchedToken.priceUsd;
+                            } else {
+                                // Dynamic fallback: query DexScreener live for any missing token contract
+                                try {
+                                    const dsRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${tx.contractAddress}`);
+                                    const dsData = await dsRes.json();
+                                    if (dsData?.pairs?.length > 0) {
+                                        tokenPriceUsd = parseFloat(dsData.pairs[0].priceUsd) || 0;
+                                    }
+                                } catch (err) {}
                             }
+
+                            const decimals = parseInt(tx.tokenDecimal) || 18;
+                            const amountFormatted = parseFloat(ethers.formatUnits(tx.value, decimals));
+                            totalYieldUsd += (amountFormatted * 365) * tokenPriceUsd;
                         }
                     }
                 }
