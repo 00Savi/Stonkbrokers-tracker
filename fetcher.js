@@ -4,8 +4,8 @@ const fs = require("fs");
 const WEB3_CONFIG = {
     STONKBROKER: "0xe934e36a439c94017b64a3fece66af12099abf50",
     NFT_CONTRACT: "0x539cdd042c2f3d93ebc5be7dfff0c79f3b4fabf0",
-    REGISTRY_CONTRACT: "0x000000006551c19487814612e58FE06813775758",
-    IMPLEMENTATION_CONTRACT: "0x55266d75D1a14E4572138116aF39863Ed6593eCE",
+    REGISTRY_CONTRACT: "0x000000006551c19487814612e58fe06813775758",
+    IMPLEMENTATION_CONTRACT: "0x55266d75d1a14e4572138116af39863ed6593ece",
     CHAIN_ID: 4663, 
     RPC_URL: "https://rpc.mainnet.chain.robinhood.com",
     TOKENS: [
@@ -15,14 +15,14 @@ const WEB3_CONFIG = {
         { symbol: "NVDA", address: "0xc5e3e9c2a835ec9319fd8c1d516fd4323c5758a0", priceUsd: 120.00 },
         { symbol: "SLV", address: "0x9d2c3355502be065975ad47ef5a902f02c772504", priceUsd: 28.00 },
         { symbol: "MSFT", address: "0xfc253e0062eef614e20e0726e5f6ff7559c35402", priceUsd: 430.00 },
-        { symbol: "COST", address: "0x4EA005168D7F09a7A0Ba9D1DEf21a479950E44C2", priceUsd: 820.00 }, 
-        { symbol: "USAR", address: "0xd917B029C761D264c6A312BBbcDA868658eF86a6", priceUsd: 50.00 },  
+        { symbol: "COST", address: "0x4ea005168d7f09a7a0ba9d1def21a479950e44c2", priceUsd: 820.00 }, 
+        { symbol: "USAR", address: "0xd917b029c761d264c6a312bbbcda868658ef86a6", priceUsd: 50.00 },  
         { symbol: "SPCX", address: "0xf58979d35c3f0ff6a6f7edd909fe8a95a2894609", priceUsd: 25.00 },  
         { symbol: "GOOGL", address: "0xff20b4b8e08beaa4064e3ca4cc5a2e40acac072f", priceUsd: 175.00 }, 
-        { symbol: "USDG", address: "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168", priceUsd: 1.00 },
-        { symbol: "PLTR", address: "0x894E1EC2D74FFE5AEF8Dc8A9e84686acCB964F2A", priceUsd: 28.00 },
-        { symbol: "TSLA", address: "0x322F0929c4625eD5bAd873c95208D54E1c003b2d", priceUsd: 215.00 },
-        { symbol: "AMD", address: "0x86923f96303D656E4aa86D9d42D1e57ad2023fdC", priceUsd: 145.00 },
+        { symbol: "USDG", address: "0x5fc5360d0400a0fd4f2af552add042d716f1d168", priceUsd: 1.00 },
+        { symbol: "PLTR", address: "0x894e1ec2d74ffe5aef8dc8a9e84686accb964f2a", priceUsd: 28.00 },
+        { symbol: "TSLA", address: "0x322f0929c4625ed5bad873c95208d54e1c003b2d", priceUsd: 215.00 },
+        { symbol: "AMD", address: "0x86923f96303d656e4aa86d9d42d1e57ad2023fdc", priceUsd: 145.00 },
         { symbol: "GME", address: "0x8f1836209c42d4f6b6caa782c055ee13f8ac95b0", priceUsd: 22.00 },
         { symbol: "USO", address: "0x5b1282b6ad40b3dc294404a2b33ff7657b66c33c", priceUsd: 75.00 }
     ]
@@ -40,7 +40,6 @@ const tierBenchmarks = [
     { tier: 5, reqTokens: 1666666, benchmarkId: 47, trackedAnnualYieldUsd: 0 }
 ];
 
-// Helper function to pause execution
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function run() {
@@ -64,7 +63,7 @@ async function run() {
         currentBlock = await provider.getBlockNumber();
     } catch (e) {
         console.error("CRITICAL ERROR: Failed to fetch current block from RPC.", e.message);
-        return; // Exit early if the RPC entirely blocks us
+        return;
     }
     
     const blocksPerWeek = 302400; 
@@ -74,8 +73,7 @@ async function run() {
     for (let bm of tierBenchmarks) {
         console.log(`\nFetching data for Tier ${bm.tier} (NFT #${bm.benchmarkId})...`);
         
-        // PAUSE for 2 seconds to prevent rate-limiting from the API/RPC
-        await sleep(2000); 
+        await sleep(1500); 
 
         try {
             const tbaAddress = await registryContract.account(
@@ -95,17 +93,21 @@ async function run() {
                 const normalData = await normalRes.json();
                 if (normalData.status === "1" && Array.isArray(normalData.result)) {
                     for (const tx of normalData.result) {
-                        if (tx.to.toLowerCase() === tbaAddress.toLowerCase() && tx.isError === "0" && tx.value !== "0") ethYieldRaw += BigInt(tx.value);
+                        if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && tx.isError === "0" && tx.value !== "0") {
+                            ethYieldRaw += BigInt(tx.value);
+                        }
                     }
                 }
 
-                await sleep(500); // 0.5s pause between Blockscout calls
+                await sleep(500);
 
                 const internalRes = await fetch(`https://robinhoodchain.blockscout.com/api?module=account&action=txlistinternal&address=${tbaAddress}&startblock=${startBlock}&endblock=${currentBlock}&sort=asc`);
                 const internalData = await internalRes.json();
                 if (internalData.status === "1" && Array.isArray(internalData.result)) {
                     for (const tx of internalData.result) {
-                        if (tx.to.toLowerCase() === tbaAddress.toLowerCase() && tx.isError === "0" && tx.value !== "0") ethYieldRaw += BigInt(tx.value);
+                        if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && tx.isError === "0" && tx.value !== "0") {
+                            ethYieldRaw += BigInt(tx.value);
+                        }
                     }
                 }
             } catch (e) {
@@ -117,7 +119,7 @@ async function run() {
                 totalYieldUsd += (ethFormatted * 52.14) * globalMarketParams.ethPriceUsd;
             }
 
-            await sleep(500); // 0.5s pause before final token call
+            await sleep(500);
 
             // 2. ERC20 YIELD TRACKING (Via Blockscout API)
             try {
@@ -126,7 +128,7 @@ async function run() {
                 
                 if (tokenData.status === "1" && Array.isArray(tokenData.result)) {
                     for (const tx of tokenData.result) {
-                        if (tx.to.toLowerCase() === tbaAddress.toLowerCase()) {
+                        if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase()) {
                             const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === tx.contractAddress.toLowerCase());
                             if (matchedToken) {
                                 const decimals = parseInt(tx.tokenDecimal) || 18;
