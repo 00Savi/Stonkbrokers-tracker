@@ -20,6 +20,11 @@ const WEB3_CONFIG = {
     RPC_URL: "https://rpc.mainnet.chain.robinhood.com"
 };
 
+const FETCH_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "application/json"
+};
+
 const globalMarketParams = { ethPriceUsd: 1894.08, tokenPriceUsd: 0.0191, nftFloorEth: 6.997 };
 
 const tierBenchmarks = [
@@ -41,10 +46,10 @@ function getTxTime(txTimeStamp) {
 async function run() {
     console.log("Fetching global prices...");
     try {
-        const ethRes = await fetch('https://api.exchange.coinbase.com/products/ETH-USD/ticker');
+        const ethRes = await fetch('https://api.exchange.coinbase.com/products/ETH-USD/ticker', { headers: FETCH_HEADERS });
         if (ethRes.ok) globalMarketParams.ethPriceUsd = parseFloat((await ethRes.json()).price) || 1894.08;
         
-        const dexRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${WEB3_CONFIG.STONKBROKER}`);
+        const dexRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${WEB3_CONFIG.STONKBROKER}`, { headers: FETCH_HEADERS });
         const dexData = await dexRes.json();
         if (dexData?.pairs?.length > 0) globalMarketParams.tokenPriceUsd = parseFloat(dexData.pairs[0].priceUsd) || 0.0191;
     } catch (e) {
@@ -54,11 +59,25 @@ async function run() {
     WEB3_CONFIG.TOKENS[0].priceUsd = globalMarketParams.tokenPriceUsd;
     globalMarketParams.nftFloorEth = parseFloat(((666666 * globalMarketParams.tokenPriceUsd) / globalMarketParams.ethPriceUsd).toFixed(3));
 
+    // Safely get block number from Blockscout to bypass RPC limiters, fallback to RPC if needed
+    let currentBlock = 28200000;
+    try {
+        const blockRes = await fetch("https://robinhoodchain.blockscout.com/api?module=block&action=eth_block_number", { headers: FETCH_HEADERS });
+        const blockData = await blockRes.json();
+        if (blockData.result) currentBlock = parseInt(blockData.result, 16);
+    } catch (e) {
+        try {
+            const provider = new ethers.JsonRpcProvider(WEB3_CONFIG.RPC_URL);
+            currentBlock = await provider.getBlockNumber();
+        } catch (err) {}
+    }
+    
+    const startBlock = Math.max(0, currentBlock - 350000); // Truncates strictly to ~8 days of history
     const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
 
     for (let bm of tierBenchmarks) {
         console.log(`\nFetching data for Tier ${bm.tier} (Wallet: ${bm.tbaAddress})...`);
-        await sleep(2500); // Strict politeness delay to prevent GitHub Action IP blocks
+        await sleep(2000); // Crucial politeness delay to avoid GitHub Action IP blocks
 
         try {
             let weeklyYieldUsd = 0;
@@ -67,73 +86,59 @@ async function run() {
             const actionTypes = ["txlist", "txlistinternal", "tokentx"];
             
             for (let action of actionTypes) {
-                let page = 1;
-                let isDone = false;
+                try {
+                    // Massive offset limits pagination needs. startblock guarantees we only get new txs.
+                    const url = `https://robinhoodchain.blockscout.com/api?module=account&action=${action}&address=${tbaAddress}&startblock=${startBlock}&page=1&offset=3000&sort=desc`;
+                    const res = await fetch(url, { headers: FETCH_HEADERS });
+                    const data = await res.json();
+                    
+                    if (data.status === "1" && Array.isArray(data.result)) {
+                        for (const tx of data.result) {
+                            if (getTxTime(tx.timeStamp) < sevenDaysAgo) continue; // Skip old txs perfectly
+                            
+                            if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && (!tx.isError || tx.isError === "0")) {
+                                let valStr = tx.value || "0";
+                                if (valStr === "") valStr = "0";
 
-                // Syncing the exact working logic from the frontend
-                while (!isDone && page <= 5) {
-                    try {
-                        const url = `https://robinhoodchain.blockscout.com/api?module=account&action=${action}&address=${tbaAddress}&page=${page}&offset=1000&sort=desc`;
-                        const res = await fetch(url);
-                        const data = await res.json();
-                        
-                        if (data.status === "1" && Array.isArray(data.result) && data.result.length > 0) {
-                            for (const tx of data.result) {
-                                // Break instantly when hitting transactions older than 7 days
-                                if (getTxTime(tx.timeStamp) < sevenDaysAgo) {
-                                    isDone = true;
-                                    break; 
-                                }
-                                
-                                if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && (!tx.isError || tx.isError === "0")) {
-                                    let valueStr = tx.value || "0";
-                                    if (valueStr === "") valueStr = "0";
+                                if (action !== "tokentx") {
+                                    weeklyYieldUsd += parseFloat(ethers.formatEther(valStr)) * globalMarketParams.ethPriceUsd;
+                                } else {
+                                    const contractAddr = tx.contractAddress || "";
+                                    if (!contractAddr) continue;
 
-                                    if (action !== "tokentx") {
-                                        weeklyYieldUsd += parseFloat(ethers.formatEther(valueStr)) * globalMarketParams.ethPriceUsd;
+                                    let tokenPriceUsd = 0;
+                                    const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr.toLowerCase());
+                                    
+                                    if (matchedToken && matchedToken.priceUsd) {
+                                        tokenPriceUsd = matchedToken.priceUsd;
+                                    } else if (tokenPriceCache[contractAddr] !== undefined) {
+                                        tokenPriceUsd = tokenPriceCache[contractAddr];
                                     } else {
-                                        const contractAddr = tx.contractAddress || "";
-                                        if (!contractAddr) continue;
+                                        try {
+                                            const dsRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${contractAddr}`, { headers: FETCH_HEADERS });
+                                            const dsData = await dsRes.json();
+                                            if (dsData?.pairs?.length > 0) tokenPriceUsd = parseFloat(dsData.pairs[0].priceUsd) || 0;
+                                        } catch (err) {}
+                                        tokenPriceCache[contractAddr] = tokenPriceUsd;
+                                    }
 
-                                        let tokenPriceUsd = 0;
-                                        const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr.toLowerCase());
-                                        
-                                        if (matchedToken && matchedToken.priceUsd) {
-                                            tokenPriceUsd = matchedToken.priceUsd;
-                                        } else if (tokenPriceCache[contractAddr] !== undefined) {
-                                            tokenPriceUsd = tokenPriceCache[contractAddr];
-                                        } else {
-                                            try {
-                                                const dsRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${contractAddr}`);
-                                                const dsData = await dsRes.json();
-                                                if (dsData?.pairs?.length > 0) tokenPriceUsd = parseFloat(dsData.pairs[0].priceUsd) || 0;
-                                            } catch (err) {}
-                                            tokenPriceCache[contractAddr] = tokenPriceUsd;
-                                        }
-
-                                        const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
-                                        const tokenAmount = parseFloat(ethers.formatUnits(valueStr, decimals));
-                                        
-                                        if (!isNaN(tokenAmount)) {
-                                            weeklyYieldUsd += (tokenAmount * tokenPriceUsd);
-                                        }
+                                    const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
+                                    const tokenAmount = parseFloat(ethers.formatUnits(valStr, decimals));
+                                    
+                                    if (!isNaN(tokenAmount)) {
+                                        weeklyYieldUsd += (tokenAmount * tokenPriceUsd);
                                     }
                                 }
                             }
-                            if (data.result.length < 1000) isDone = true; 
-                        } else {
-                            isDone = true; 
                         }
-                    } catch (e) {
-                        console.warn(`Fetch failed for ${action} page ${page}:`, e.message);
-                        isDone = true;
                     }
-                    page++;
-                    await sleep(500); // Politeness delay between pages
+                } catch (e) {
+                    console.warn(`Fetch failed for ${action}:`, e.message);
                 }
+                await sleep(1000); // Delay between actions
             }
 
-            // Guaranteed stable 7-day conversion (52.14 weeks)
+            // Guaranteed exact 52.14 week conversion.
             bm.trackedAnnualYieldUsd = weeklyYieldUsd * 52.14;
             bm.error = false;
         } catch (err) {
