@@ -234,13 +234,13 @@
         const registryAbi = ["function account(address implementation, bytes32 salt, uint256 chainId, address tokenContract, uint256 tokenId) view returns (address)"];
         const erc721Abi = ["function ownerOf(uint256 tokenId) view returns (address)"];
 
-        // --- GLOBAL REQUEST GOVERNOR (Throws visible errors on Cloudflare bans) ---
+        // --- GLOBAL REQUEST GOVERNOR (Paced at 650ms + 4.5s backoff) ---
         let lastApiCallTime = 0;
-        const MIN_DELAY_MS = 400; // Fast enough for UX, slow enough for Blockscout
+        const MIN_DELAY_MS = 650; // Keeps steady-state requests below Blockscout burst limits
 
         async function apiFetch(url) {
             let retries = 0;
-            while (retries < 3) {
+            while (retries < 4) {
                 const now = Date.now();
                 const timeSinceLast = now - lastApiCallTime;
                 if (timeSinceLast < MIN_DELAY_MS) {
@@ -252,12 +252,13 @@
                     const res = await fetch(url, { headers: { "Accept": "application/json" } });
                     
                     if (res.status === 429) {
-                        await sleep(2000); 
+                        // Extended 4.5s cooldown allows Blockscout's sliding window to clear
+                        await sleep(4500 * (retries + 1)); 
                         retries++;
                         continue;
                     }
                     if (!res.ok) {
-                        await sleep(1000);
+                        await sleep(2000);
                         retries++;
                         continue;
                     }
@@ -266,21 +267,20 @@
                     try {
                         const data = JSON.parse(text);
                         if (data.message && data.message.toLowerCase().includes("limit")) {
-                            await sleep(2000);
+                            await sleep(4500 * (retries + 1));
                             retries++;
                             continue;
                         }
                         return data;
                     } catch (err) {
-                        await sleep(1000);
+                        await sleep(2000);
                         retries++;
                     }
                 } catch (e) {
-                    await sleep(1000);
+                    await sleep(2000);
                     retries++;
                 }
             }
-            // CRITICAL FIX: If we run out of retries, we THROW so the UI shows "API Error" instead of fake $0.00
             throw new Error("Rate Limited by Blockscout");
         }
 
@@ -352,6 +352,7 @@
                     try { currentBlock = await provider.getBlockNumber(); } catch (e) { currentBlock = 28500000; }
                 }
 
+                // Accurate 100ms Block Math (6,048,000 blocks in 7 days)
                 const startBlock = Math.max(0, currentBlock - 6048000); 
                 const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
                 const actions = ["tokentx", "txlist", "txlistinternal"];
@@ -360,12 +361,8 @@
                     let page = 1;
                     let isDone = false;
                     
-                    // CRITICAL FIX: Max 2 pages. Since we pass 'startblock', Blockscout filters out old data.
-                    // This cuts API requests by 60% and prevents Cloudflare bans.
                     while (!isDone && page <= 2) { 
                         const url = `https://robinhoodchain.blockscout.com/api?module=account&action=${action}&address=${tbaAddress}&startblock=${startBlock}&page=${page}&offset=1000&sort=desc`;
-                        
-                        // If this throws, it bubbles up and correctly triggers the red "API Rate Limit" UI
                         const data = await apiFetch(url);
 
                         if (data && data.status === "1" && Array.isArray(data.result) && data.result.length > 0) {
@@ -504,7 +501,7 @@
                 renderDashboard(realData);
             } catch (err) {
                 errorMsg.classList.remove('hidden');
-                errorMsg.innerText = "API Rate Limited by Blockscout. Please wait 60 seconds.";
+                errorMsg.innerText = "API Rate Limited by Blockscout. Please wait a few seconds.";
                 console.error("Lookup failed:", err);
             } finally {
                 searchText.classList.remove('hidden'); searchSpinner.classList.add('hidden');
@@ -556,10 +553,9 @@
                 } catch (e) {
                     console.error("Failed to load tier benchmark", bm.tier, e);
                     bm.loading = false;
-                    bm.error = true; // This will trigger the red 'API Rate Limit' badge
+                    bm.error = true;
                 }
                 renderTierBenchmarks(); 
-                await sleep(200); 
             }
         }
 
