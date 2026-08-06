@@ -54,57 +54,49 @@ async function run() {
     WEB3_CONFIG.TOKENS[0].priceUsd = globalMarketParams.tokenPriceUsd;
     globalMarketParams.nftFloorEth = parseFloat(((666666 * globalMarketParams.tokenPriceUsd) / globalMarketParams.ethPriceUsd).toFixed(3));
 
-    const provider = new ethers.JsonRpcProvider(WEB3_CONFIG.RPC_URL);
-    let currentBlock = 28200000;
-    try {
-        currentBlock = await provider.getBlockNumber();
-    } catch (e) {
-        console.warn("Failed to fetch current block, using fallback.");
-    }
-    // Robinhood block time is ~2s. 350,000 blocks is ~8 days of history.
-    const startBlock = Math.max(0, currentBlock - 350000); 
     const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
 
     for (let bm of tierBenchmarks) {
         console.log(`\nFetching data for Tier ${bm.tier} (Wallet: ${bm.tbaAddress})...`);
-        await sleep(1000); 
+        await sleep(2000); // Strict politeness delay to prevent blockscout rate limits
 
         try {
             let weeklyYieldUsd = 0;
             const tbaAddress = bm.tbaAddress;
             const tokenPriceCache = {};
 
-            // 1. NATIVE ETH YIELD TRACKING (Bypasses the 10,000 limit via startblock constraint)
+            // 1. NATIVE ETH YIELD TRACKING (Clean basic fetch)
             let ethYieldRaw = 0n;
             try {
-                const normalRes = await fetch(`https://robinhoodchain.blockscout.com/api?module=account&action=txlist&address=${tbaAddress}&startblock=${startBlock}&sort=desc`);
+                const normalRes = await fetch(`https://robinhoodchain.blockscout.com/api?module=account&action=txlist&address=${tbaAddress}&sort=desc`);
                 const normalData = await normalRes.json();
                 if (normalData.status === "1" && Array.isArray(normalData.result)) {
                     for (const tx of normalData.result) {
-                        if (getTxTime(tx.timeStamp) < sevenDaysAgo) continue; 
+                        // The array is newest to oldest. Break the loop immediately when hitting old data!
+                        if (getTxTime(tx.timeStamp) < sevenDaysAgo) break; 
                         if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && (!tx.isError || tx.isError === "0")) {
                             let valStr = tx.value || "0";
                             if (valStr !== "") ethYieldRaw += BigInt(valStr);
                         }
                     }
                 }
+            } catch (e) { console.warn(`ETH fetch failed on NFT #${bm.benchmarkId}:`, e.message); }
 
-                await sleep(500);
+            await sleep(500);
 
-                const internalRes = await fetch(`https://robinhoodchain.blockscout.com/api?module=account&action=txlistinternal&address=${tbaAddress}&startblock=${startBlock}&sort=desc`);
+            try {
+                const internalRes = await fetch(`https://robinhoodchain.blockscout.com/api?module=account&action=txlistinternal&address=${tbaAddress}&sort=desc`);
                 const internalData = await internalRes.json();
                 if (internalData.status === "1" && Array.isArray(internalData.result)) {
                     for (const tx of internalData.result) {
-                        if (getTxTime(tx.timeStamp) < sevenDaysAgo) continue; 
+                        if (getTxTime(tx.timeStamp) < sevenDaysAgo) break; 
                         if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && (!tx.isError || tx.isError === "0")) {
                             let valStr = tx.value || "0";
                             if (valStr !== "") ethYieldRaw += BigInt(valStr);
                         }
                     }
                 }
-            } catch (e) {
-                console.warn(`ETH fetch failed on NFT #${bm.benchmarkId}:`, e.message);
-            }
+            } catch (e) { console.warn(`Internal ETH fetch failed on NFT #${bm.benchmarkId}:`, e.message); }
             
             if (ethYieldRaw > 0n) {
                 weeklyYieldUsd += parseFloat(ethers.formatEther(ethYieldRaw)) * globalMarketParams.ethPriceUsd;
@@ -112,14 +104,15 @@ async function run() {
 
             await sleep(500);
 
-            // 2. ERC20 YIELD TRACKING (Bypasses the 10,000 limit via startblock constraint)
+            // 2. ERC20 YIELD TRACKING (Clean basic fetch)
             try {
-                const tokenRes = await fetch(`https://robinhoodchain.blockscout.com/api?module=account&action=tokentx&address=${tbaAddress}&startblock=${startBlock}&sort=desc`);
+                const tokenRes = await fetch(`https://robinhoodchain.blockscout.com/api?module=account&action=tokentx&address=${tbaAddress}&sort=desc`);
                 const tokenData = await tokenRes.json();
                 
                 if (tokenData.status === "1" && Array.isArray(tokenData.result)) {
                     for (const tx of tokenData.result) {
-                        if (getTxTime(tx.timeStamp) < sevenDaysAgo) continue; 
+                        // Break early on old data! Prevents massive wallet processing errors.
+                        if (getTxTime(tx.timeStamp) < sevenDaysAgo) break; 
                         
                         if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase()) {
                             let tokenPriceUsd = 0;
@@ -150,7 +143,7 @@ async function run() {
                 console.warn(`Token fetch failed on NFT #${bm.benchmarkId}:`, e.message);
             }
 
-            // Guaranteed stable 7-day conversion (365 / 7 = 52.14)
+            // Guaranteed stable 7-day conversion exactly 52.14 weeks. No dynamic math bugs.
             bm.trackedAnnualYieldUsd = weeklyYieldUsd * 52.14;
             bm.error = false;
         } catch (err) {
