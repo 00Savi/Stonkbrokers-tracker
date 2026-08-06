@@ -234,54 +234,76 @@
         const registryAbi = ["function account(address implementation, bytes32 salt, uint256 chainId, address tokenContract, uint256 tokenId) view returns (address)"];
         const erc721Abi = ["function ownerOf(uint256 tokenId) view returns (address)"];
 
-        // --- GLOBAL REQUEST GOVERNOR (Paced at 650ms + 4.5s backoff) ---
-        let lastApiCallTime = 0;
-        const MIN_DELAY_MS = 650; // Keeps steady-state requests below Blockscout burst limits
+        // --- THE GLOBAL QUEUE (Absolute Protection from Cloudflare IP Bans) ---
+        const requestQueue = [];
+        let isProcessingQueue = false;
 
         async function apiFetch(url) {
-            let retries = 0;
-            while (retries < 4) {
-                const now = Date.now();
-                const timeSinceLast = now - lastApiCallTime;
-                if (timeSinceLast < MIN_DELAY_MS) {
-                    await sleep(MIN_DELAY_MS - timeSinceLast);
-                }
-                lastApiCallTime = Date.now();
+            return new Promise((resolve, reject) => {
+                requestQueue.push({ url, resolve, reject, retries: 0 });
+                if (!isProcessingQueue) processQueue();
+            });
+        }
 
+        async function processQueue() {
+            isProcessingQueue = true;
+            while (requestQueue.length > 0) {
+                const req = requestQueue[0];
                 try {
-                    const res = await fetch(url, { headers: { "Accept": "application/json" } });
+                    const response = await fetch(req.url, { headers: { "Accept": "application/json" } });
                     
-                    if (res.status === 429) {
-                        // Extended 4.5s cooldown allows Blockscout's sliding window to clear
-                        await sleep(4500 * (retries + 1)); 
-                        retries++;
-                        continue;
-                    }
-                    if (!res.ok) {
-                        await sleep(2000);
-                        retries++;
-                        continue;
-                    }
-                    
-                    const text = await res.text();
-                    try {
-                        const data = JSON.parse(text);
-                        if (data.message && data.message.toLowerCase().includes("limit")) {
-                            await sleep(4500 * (retries + 1));
-                            retries++;
-                            continue;
+                    if (response.status === 429) {
+                        console.warn("Blockscout Rate Limit Hit - Cooling down for 5 seconds...");
+                        await sleep(5000);
+                        req.retries++;
+                        if (req.retries >= 3) {
+                            requestQueue.shift();
+                            req.reject(new Error("Rate Limit Exceeded"));
                         }
-                        return data;
-                    } catch (err) {
-                        await sleep(2000);
-                        retries++;
+                        continue; 
                     }
-                } catch (e) {
-                    await sleep(2000);
-                    retries++;
+
+                    if (!response.ok) {
+                        await sleep(1500);
+                        req.retries++;
+                        continue;
+                    }
+
+                    const text = await response.text();
+                    
+                    // Detect stealthy Cloudflare HTML challenge pages
+                    if (text.toLowerCase().includes("cloudflare") || text.includes("<html")) {
+                        console.warn("Cloudflare Challenge Hit - Cooling down for 5 seconds...");
+                        await sleep(5000);
+                        req.retries++;
+                        continue;
+                    }
+
+                    const data = JSON.parse(text);
+                    if (data.message && data.message.toLowerCase().includes("limit")) {
+                        await sleep(5000);
+                        req.retries++;
+                        continue;
+                    }
+
+                    // Success! Remove from queue and resolve data
+                    requestQueue.shift();
+                    req.resolve(data);
+                    
+                    // STRICT PACING: Wait 1.2 seconds before the next request in the line
+                    await sleep(1200); 
+
+                } catch (err) {
+                    req.retries++;
+                    if (req.retries >= 3) {
+                        requestQueue.shift();
+                        req.reject(err);
+                    } else {
+                        await sleep(2000);
+                    }
                 }
             }
-            throw new Error("Rate Limited by Blockscout");
+            isProcessingQueue = false;
         }
 
         function renderTierBenchmarks() {
@@ -296,7 +318,7 @@
 
                 let yieldDisplay;
                 if (bm.loading) {
-                    yieldDisplay = `<div class="flex items-center text-primary"><div class="spinner mr-2"></div><span class="text-xs">Syncing logs...</span></div>`;
+                    yieldDisplay = `<div class="flex items-center text-primary"><div class="spinner mr-2"></div><span class="text-xs">Fetching Yield...</span></div>`;
                 } else if (bm.error) {
                     yieldDisplay = `<span class="text-xs text-danger font-semibold border border-danger/20 bg-danger/10 px-2 py-1 rounded">API Rate Limit</span>`;
                 } else if (!bm.trackedAnnualYieldUsd || bm.trackedAnnualYieldUsd === 0) {
@@ -358,52 +380,41 @@
                 const actions = ["tokentx", "txlist", "txlistinternal"];
                 
                 for (let action of actions) {
-                    let page = 1;
-                    let isDone = false;
+                    // Massive optimization: Only fetch PAGE 1. 1000 offset handles all 7 days in 1 shot.
+                    const url = `https://robinhoodchain.blockscout.com/api?module=account&action=${action}&address=${tbaAddress}&startblock=${startBlock}&page=1&offset=1000&sort=desc`;
                     
-                    while (!isDone && page <= 2) { 
-                        const url = `https://robinhoodchain.blockscout.com/api?module=account&action=${action}&address=${tbaAddress}&startblock=${startBlock}&page=${page}&offset=1000&sort=desc`;
-                        const data = await apiFetch(url);
+                    const data = await apiFetch(url);
 
-                        if (data && data.status === "1" && Array.isArray(data.result) && data.result.length > 0) {
-                            let validInPage = 0;
-                            
-                            for (const tx of data.result) {
-                                if (parseInt(tx.timeStamp, 10) >= sevenDaysAgo) {
-                                    validInPage++;
-                                    
-                                    if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && (!tx.isError || tx.isError === "0")) {
-                                        let valueStr = tx.value || "0";
-                                        if (valueStr === "") valueStr = "0";
+                    if (data && data.status === "1" && Array.isArray(data.result) && data.result.length > 0) {
+                        for (const tx of data.result) {
+                            if (parseInt(tx.timeStamp, 10) >= sevenDaysAgo) {
+                                if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && (!tx.isError || tx.isError === "0")) {
+                                    let valueStr = tx.value || "0";
+                                    if (valueStr === "") valueStr = "0";
 
-                                        if (action !== "tokentx") {
-                                            const ethAmount = parseFloat(ethers.formatEther(valueStr));
-                                            if (ethAmount > 0) {
-                                                if (!aggregatedTransfers["ETH"]) aggregatedTransfers["ETH"] = { ticker: "ETH", rawAmount: 0, currentPriceUsd: globalMarketParams.ethPriceUsd };
-                                                aggregatedTransfers["ETH"].rawAmount += ethAmount;
-                                            }
-                                        } else {
-                                            const contractAddr = (tx.contractAddress || "").toLowerCase();
-                                            const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr);
-                                            if (!matchedToken) continue;
+                                    if (action !== "tokentx") {
+                                        const ethAmount = parseFloat(ethers.formatEther(valueStr));
+                                        if (ethAmount > 0) {
+                                            if (!aggregatedTransfers["ETH"]) aggregatedTransfers["ETH"] = { ticker: "ETH", rawAmount: 0, currentPriceUsd: globalMarketParams.ethPriceUsd };
+                                            aggregatedTransfers["ETH"].rawAmount += ethAmount;
+                                        }
+                                    } else {
+                                        const contractAddr = (tx.contractAddress || "").toLowerCase();
+                                        const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr);
+                                        if (!matchedToken) continue;
 
-                                            let tokenPriceUsd = matchedToken.symbol === "STONKBROKER" ? globalMarketParams.tokenPriceUsd : matchedToken.priceUsd;
-                                            const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
-                                            const tokenAmount = parseFloat(ethers.formatUnits(valueStr, decimals));
+                                        let tokenPriceUsd = matchedToken.symbol === "STONKBROKER" ? globalMarketParams.tokenPriceUsd : matchedToken.priceUsd;
+                                        const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
+                                        const tokenAmount = parseFloat(ethers.formatUnits(valueStr, decimals));
 
-                                            if (tokenAmount > 0) {
-                                                if (!aggregatedTransfers[matchedToken.symbol]) aggregatedTransfers[matchedToken.symbol] = { ticker: matchedToken.symbol, rawAmount: 0, currentPriceUsd: tokenPriceUsd || 0 };
-                                                aggregatedTransfers[matchedToken.symbol].rawAmount += tokenAmount;
-                                            }
+                                        if (tokenAmount > 0) {
+                                            if (!aggregatedTransfers[matchedToken.symbol]) aggregatedTransfers[matchedToken.symbol] = { ticker: matchedToken.symbol, rawAmount: 0, currentPriceUsd: tokenPriceUsd || 0 };
+                                            aggregatedTransfers[matchedToken.symbol].rawAmount += tokenAmount;
                                         }
                                     }
                                 }
                             }
-                            if (validInPage === 0 || data.result.length < 1000) isDone = true; 
-                        } else {
-                            isDone = true; 
                         }
-                        page++;
                     }
                 }
             }
