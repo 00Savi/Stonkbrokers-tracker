@@ -221,6 +221,8 @@
             ]
         };
 
+        // Using V0.2 ABI Standard (bytes32 salt as the 2nd parameter)
+        const registryAbi = ["function account(address implementation, bytes32 salt, uint256 chainId, address tokenContract, uint256 tokenId) view returns (address)"];
         const erc721Abi = ["function ownerOf(uint256 tokenId) view returns (address)"];
 
         function renderTierBenchmarks() {
@@ -253,25 +255,6 @@
             return parseInt(txTimeStamp);
         }
 
-        // Bypasses the Registry Contract completely and mathematically computes the TBA
-        function computeTBA(tokenId) {
-            const encoded = ethers.AbiCoder.defaultAbiCoder().encode(
-                ["uint256", "address", "uint256", "uint256"],
-                [WEB3_CONFIG.CHAIN_ID, WEB3_CONFIG.NFT_CONTRACT, tokenId, 0]
-            );
-            const creationCode = ethers.concat([
-                "0x3d60ad80600a3d3981f3363d3d373d3d3d363d73",
-                WEB3_CONFIG.IMPLEMENTATION_CONTRACT,
-                "0x5af43d82803e903d91602b57fd5bf3",
-                encoded
-            ]);
-            return ethers.getCreate2Address(
-                WEB3_CONFIG.REGISTRY_CONTRACT, 
-                ethers.zeroPadValue(ethers.toBeHex(0), 32), 
-                ethers.keccak256(creationCode)
-            );
-        }
-
         async function fetchBrokerData(tokenId) {
             const provider = new ethers.JsonRpcProvider(WEB3_CONFIG.RPC_URL);
             
@@ -283,6 +266,7 @@
             else if (tokenId == 47) actualTier = 5;
 
             const tokensReq = actualTier === 1 ? 66666 : actualTier === 2 ? 166666 : actualTier === 3 ? 366666 : actualTier === 4 ? 766666 : 1666666;
+            const registryContract = new ethers.Contract(WEB3_CONFIG.REGISTRY_CONTRACT, registryAbi, provider);
             const nftContract = new ethers.Contract(WEB3_CONFIG.NFT_CONTRACT, erc721Abi, provider);
 
             let ownerAddress = "0x0000000000000000000000000000000000000000";
@@ -292,8 +276,18 @@
                 console.warn("NFT owner not found (may not be minted yet). Defaulting to zero address.");
             }
             
-            // Generate address mathematically instead of querying contract
-            const tbaAddress = computeTBA(tokenId);
+            let tbaAddress;
+            try {
+                tbaAddress = await registryContract.account(
+                    WEB3_CONFIG.IMPLEMENTATION_CONTRACT, 
+                    "0x0000000000000000000000000000000000000000000000000000000000000000", 
+                    WEB3_CONFIG.CHAIN_ID, 
+                    WEB3_CONFIG.NFT_CONTRACT, 
+                    tokenId
+                );
+            } catch (e) {
+                throw new Error("Registry reverted. This NFT ID likely hasn't been minted yet.");
+            }
 
             const historicalEthPriceUsd = globalMarketParams.ethPriceUsd; 
             const historicalStonkPriceUsd = globalMarketParams.tokenPriceUsd;
