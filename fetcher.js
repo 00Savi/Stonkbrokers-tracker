@@ -29,8 +29,8 @@ const tierBenchmarks = [
     { tier: 1, reqTokens: 66666, benchmarkId: 1794, tbaAddress: "0x9c24b28c3146a1ca8095acd9611962f33faf068b", trackedAnnualYieldUsd: 0 },
     { tier: 2, reqTokens: 166666, benchmarkId: 2370, tbaAddress: "0x45f290f4e196c27abf738a32f5a97d47383cf0ba", trackedAnnualYieldUsd: 0 },
     { tier: 3, reqTokens: 366666, benchmarkId: 275, tbaAddress: "0x0c9aa82841a3a560a10e64e44f8c4687a1257e3e", trackedAnnualYieldUsd: 0 },
-    { tier: 4, reqTokens: 766666, benchmarkId: 1488, tbaAddress: "0xd5a17fac7942cbd597f3197d7d8f56ddf8d899f2", trackedAnnualYieldUsd: 0 },
-    { tier: 5, reqTokens: 1666666, benchmarkId: 47, tbaAddress: "0x0bf6bb4bf9236561884d5be086f6b540d1e77aff", trackedAnnualYieldUsd: 0 }
+    { tier: 4, reqTokens: 766666, benchmarkId: 1491, tbaAddress: "0x9978cb6b8581d2a95e9b8d683bf2b8120dc0a0ee", trackedAnnualYieldUsd: 0 },
+    { tier: 5, reqTokens: 1666666, benchmarkId: 1400, tbaAddress: "0x2052a6201600b879ad3a96e6e71148e55053c924", trackedAnnualYieldUsd: 0 }
 ];
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -94,7 +94,7 @@ async function run() {
 
             await sleep(500);
 
-            // 2. ERC20 YIELD TRACKING (Dynamic Fallback for Unlisted Tokens)
+            // 2. ERC20 YIELD TRACKING (Dynamic Fallback)
             try {
                 const tokenRes = await fetch(`https://robinhoodchain.blockscout.com/api?module=account&action=tokentx&address=${tbaAddress}&sort=desc`);
                 const tokenData = await tokenRes.json();
@@ -102,13 +102,13 @@ async function run() {
                 if (tokenData.status === "1" && Array.isArray(tokenData.result)) {
                     for (const tx of tokenData.result) {
                         if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase()) {
-                            let matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === tx.contractAddress.toLowerCase());
-                            
                             let tokenPriceUsd = 0;
+                            let tokenSymbol = tx.tokenSymbol || "TOKEN";
+
+                            const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === tx.contractAddress.toLowerCase());
                             if (matchedToken) {
                                 tokenPriceUsd = matchedToken.priceUsd;
                             } else {
-                                // Dynamic fallback: query DexScreener live for any missing token contract
                                 try {
                                     const dsRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${tx.contractAddress}`);
                                     const dsData = await dsRes.json();
