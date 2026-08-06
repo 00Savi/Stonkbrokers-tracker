@@ -266,7 +266,39 @@
             });
         }
 
-        // --- THE "ONE-SHOT" BLAZING FAST BLOCKSCOUT ENGINE ---
+        async function safeFetch(url) {
+            let retries = 0;
+            while (retries < 4) {
+                try {
+                    const res = await fetch(url, { headers: { "Accept": "application/json" } });
+                    const text = await res.text();
+                    
+                    if (!res.ok) {
+                        await sleep(1500 * (retries + 1));
+                        retries++;
+                        continue;
+                    }
+                    
+                    try {
+                        const data = JSON.parse(text);
+                        if (data.message && data.message.toLowerCase().includes("limit")) {
+                            await sleep(1500 * (retries + 1));
+                            retries++;
+                            continue;
+                        }
+                        return data;
+                    } catch (err) {
+                        await sleep(1500 * (retries + 1));
+                        retries++;
+                    }
+                } catch (e) {
+                    await sleep(1500 * (retries + 1));
+                    retries++;
+                }
+            }
+            return { status: "0", result: [] };
+        }
+
         async function fetchBrokerData(tokenId) {
             const provider = new ethers.JsonRpcProvider(WEB3_CONFIG.RPC_URL);
             
@@ -307,58 +339,65 @@
                     try { currentBlock = await provider.getBlockNumber(); } catch (err) {}
                 }
 
-                // Accurate 100ms Block Math (7 Days)
+                // Accurate 100ms Block Math (6,048,000 blocks in 7 days)
                 const startBlock = Math.max(0, currentBlock - 6048000); 
                 const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
 
                 const actions = ["tokentx", "txlist", "txlistinternal"];
                 
-                // Fetch all 3 sources simultaneously with a massive offset so it completes in ONE page
-                const promises = actions.map(action =>
-                    fetch(`https://robinhoodchain.blockscout.com/api?module=account&action=${action}&address=${tbaAddress}&startblock=${startBlock}&page=1&offset=10000&sort=desc`, { headers: { "Accept": "application/json" } })
-                    .then(res => res.json())
-                    .catch(e => ({ status: "0", result: [] }))
-                );
+                // Safe Sequential Fetching to protect against Cloudflare 429s
+                for (let action of actions) {
+                    let page = 1;
+                    let isDone = false;
+                    
+                    while (!isDone && page <= 6) { 
+                        const url = `https://robinhoodchain.blockscout.com/api?module=account&action=${action}&address=${tbaAddress}&startblock=${startBlock}&page=${page}&offset=1000&sort=desc`;
+                        const data = await safeFetch(url);
 
-                const [tokenData, txData, internalData] = await Promise.all(promises);
+                        if (data && data.status === "1" && Array.isArray(data.result) && data.result.length > 0) {
+                            let validInPage = 0;
+                            
+                            for (const tx of data.result) {
+                                if (parseInt(tx.timeStamp, 10) >= sevenDaysAgo) {
+                                    validInPage++;
+                                    
+                                    if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && (!tx.isError || tx.isError === "0")) {
+                                        let valueStr = tx.value || "0";
+                                        if (valueStr === "") valueStr = "0";
 
-                const processTxs = (data, isToken) => {
-                    if (data.status === "1" && Array.isArray(data.result)) {
-                        for (const tx of data.result) {
-                            if (parseInt(tx.timeStamp, 10) < sevenDaysAgo) continue;
+                                        if (action !== "tokentx") {
+                                            const ethAmount = parseFloat(ethers.formatEther(valueStr));
+                                            if (ethAmount > 0) {
+                                                if (!aggregatedTransfers["ETH"]) aggregatedTransfers["ETH"] = { ticker: "ETH", rawAmount: 0, currentPriceUsd: globalMarketParams.ethPriceUsd };
+                                                aggregatedTransfers["ETH"].rawAmount += ethAmount;
+                                            }
+                                        } else {
+                                            const contractAddr = (tx.contractAddress || "").toLowerCase();
+                                            const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr);
+                                            if (!matchedToken) continue;
 
-                            if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && (!tx.isError || tx.isError === "0")) {
-                                let valueStr = tx.value || "0";
-                                if (valueStr === "") valueStr = "0";
+                                            let tokenPriceUsd = matchedToken.symbol === "STONKBROKER" ? globalMarketParams.tokenPriceUsd : matchedToken.priceUsd;
+                                            const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
+                                            const tokenAmount = parseFloat(ethers.formatUnits(valueStr, decimals));
 
-                                if (!isToken) {
-                                    const ethAmount = parseFloat(ethers.formatEther(valueStr));
-                                    if (ethAmount > 0) {
-                                        if (!aggregatedTransfers["ETH"]) aggregatedTransfers["ETH"] = { ticker: "ETH", rawAmount: 0, currentPriceUsd: globalMarketParams.ethPriceUsd };
-                                        aggregatedTransfers["ETH"].rawAmount += ethAmount;
-                                    }
-                                } else {
-                                    const contractAddr = (tx.contractAddress || "").toLowerCase();
-                                    const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr);
-                                    if (!matchedToken) continue;
-
-                                    let tokenPriceUsd = matchedToken.symbol === "STONKBROKER" ? globalMarketParams.tokenPriceUsd : matchedToken.priceUsd;
-                                    const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
-                                    const tokenAmount = parseFloat(ethers.formatUnits(valueStr, decimals));
-
-                                    if (tokenAmount > 0) {
-                                        if (!aggregatedTransfers[matchedToken.symbol]) aggregatedTransfers[matchedToken.symbol] = { ticker: matchedToken.symbol, rawAmount: 0, currentPriceUsd: tokenPriceUsd || 0 };
-                                        aggregatedTransfers[matchedToken.symbol].rawAmount += tokenAmount;
+                                            if (tokenAmount > 0) {
+                                                if (!aggregatedTransfers[matchedToken.symbol]) aggregatedTransfers[matchedToken.symbol] = { ticker: matchedToken.symbol, rawAmount: 0, currentPriceUsd: tokenPriceUsd || 0 };
+                                                aggregatedTransfers[matchedToken.symbol].rawAmount += tokenAmount;
+                                            }
+                                        }
                                     }
                                 }
                             }
+                            if (validInPage === 0 || data.result.length < 1000) {
+                                isDone = true; 
+                            }
+                        } else {
+                            isDone = true; 
                         }
+                        page++;
+                        await sleep(300); // Wait 300ms between page queries
                     }
-                };
-
-                processTxs(tokenData, true);
-                processTxs(txData, false);
-                processTxs(internalData, false);
+                }
             }
 
             return {
@@ -463,13 +502,11 @@
         });
 
         async function initializeApp() {
-            // 1. DYNAMIC ETH PULL
             try {
                 const ethRes = await fetch('https://api.exchange.coinbase.com/products/ETH-USD/ticker');
                 if (ethRes.ok) globalMarketParams.ethPriceUsd = parseFloat((await ethRes.json()).price) || globalMarketParams.ethPriceUsd;
             } catch (e) { console.warn("Failed ETH fetch"); }
 
-            // 2. DYNAMIC STONKBROKER PULL (Zero Hardcoding)
             try {
                 const dexRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${WEB3_CONFIG.STONKBROKER}`);
                 const dexData = await dexRes.json();
@@ -491,7 +528,6 @@
 
             renderTierBenchmarks();
 
-            // 3. Sequentially load each tier utilizing the massive offset parameter to finish instantly
             for (let bm of tierBenchmarks) {
                 try {
                     const brokerData = await fetchBrokerData(bm.benchmarkId);
@@ -508,7 +544,7 @@
                     bm.error = true;
                 }
                 renderTierBenchmarks(); 
-                await sleep(500); // Polite 0.5s pause between tiers keeps Cloudflare perfectly happy
+                await sleep(500); 
             }
         }
 
