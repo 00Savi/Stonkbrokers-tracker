@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StonkBrokers ROI Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['JetBrains Mono', 'monospace'] },
+                    colors: { dark: '#0f172a', card: '#1e293b', primary: '#3b82f6', success: '#10b981', warning: '#f59e0b', danger: '#ef4444' }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+            background-image: radial-gradient(circle at 15% 50%, rgba(59, 130, 246, 0.08), transparent 25%), radial-gradient(circle at 85% 30%, rgba(16, 185, 129, 0.08), transparent 25%);
+            background-attachment: fixed;
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .glow-text { text-shadow: 0 0 20px rgba(16, 185, 129, 0.4); }
+        .spinner {
+            border: 3px solid rgba(255,255,255,0.1);
+            width: 24px; height: 24px; border-radius: 50%;
+            border-left-color: #3b82f6;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8">
+    <div class="max-w-6xl mx-auto space-y-6">
+        <header class="flex flex-col md:flex-row justify-between items-center pb-6 border-b border-gray-800">
+            <div class="flex items-center space-x-3 mb-4 md:mb-0">
+                <div class="w-10 h-10 bg-primary rounded-lg flex items-center justify-center font-bold text-xl">$</div>
+                <div>
+                    <h1 class="text-2xl font-bold tracking-tight">StonkBrokers Tracker</h1>
+                    <p class="text-gray-400 text-sm">On-Chain ROI Analytics</p>
+                </div>
+            </div>
+            <div class="flex space-x-6 text-sm">
+                <div class="flex flex-col"><span class="text-gray-400">ETH Price</span><span class="font-mono font-semibold" id="global-eth">Loading...</span></div>
+                <div class="flex flex-col"><span class="text-gray-400">$stonkbroker Price</span><span class="font-mono font-semibold" id="global-token">Loading...</span></div>
+                <div class="flex flex-col"><span class="text-gray-400">NFT Floor</span><span class="font-mono font-semibold" id="global-floor">Loading...</span></div>
+            </div>
+        </header>
+
+        <section class="glass-card rounded-2xl p-6">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-6 gap-4">
+                <div>
+                    <h3 class="text-lg font-semibold flex items-center"><i class="fa-solid fa-layer-group text-primary mr-2"></i> Ecosystem Tier Benchmarks</h3>
+                    <p class="text-sm text-gray-400 mt-1">Estimated returns based on current entry costs vs. live yield tracking of benchmark brokers.</p>
+                </div>
+                <div class="text-xs text-gray-500 bg-gray-800/50 px-3 py-1.5 rounded-lg border border-gray-700">
+                    Base Entry: <span class="font-mono text-gray-300" id="base-entry-cost">Loading...</span> (NFT Floor)
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse min-w-[600px]">
+                    <thead>
+                        <tr class="text-xs uppercase text-gray-500 border-b border-gray-800">
+                            <th class="pb-3 font-semibold pl-2">Tier</th>
+                            <th class="pb-3 font-semibold">Activation Req.</th>
+                            <th class="pb-3 font-semibold">Current Total Cost</th>
+                            <th class="pb-3 font-semibold">Tracked Yield (Annualized)</th>
+                            <th class="pb-3 font-semibold text-right pr-2">Est. ROI (CoC)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tier-table-body" class="text-sm divide-y divide-gray-800/50">
+                        <tr><td colspan="5" class="py-4 text-center text-gray-500 italic">Syncing static data payload...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <div class="flex items-center space-x-2 mt-8 mb-[-10px]">
+            <i class="fa-solid fa-magnifying-glass-chart text-gray-500"></i>
+            <h2 class="text-lg font-semibold text-gray-300">Specific Broker Analysis (Annualized Projection)</h2>
+        </div>
+        
+        <main id="dashboard-content" class="space-y-6 transition-opacity duration-300">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="glass-card rounded-2xl p-6 flex flex-col justify-between border-t-4 border-t-primary">
+                    <div>
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h2 class="text-gray-400 text-sm uppercase tracking-wider font-semibold">Broker ID</h2>
+                                <p class="text-4xl font-bold mt-1" id="broker-id">#--</p>
+                            </div>
+                            <span class="px-3 py-1 rounded-full bg-blue-900/50 text-blue-300 text-xs font-semibold border border-blue-800" id="broker-tier">Awaiting Input</span>
+                        </div>
+                        <div class="mt-6 space-y-2">
+                            <p class="text-sm text-gray-400 flex justify-between"><span>Owner:</span><span class="font-mono text-gray-300" id="broker-owner">0x...</span></p>
+                            <p class="text-sm text-gray-400 flex justify-between"><span>TBA Wallet:</span><span class="font-mono text-gray-300" id="broker-tba">0x...</span></p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-card rounded-2xl p-6 lg:col-span-2 border-t-4 border-t-success relative overflow-hidden">
+                    <div class="absolute -right-10 -top-10 w-40 h-40 bg-success/10 rounded-full blur-3xl"></div>
+                    <h2 class="text-gray-400 text-sm uppercase tracking-wider font-semibold mb-4">Projected Annual Performance</h2>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div>
+                            <p class="text-gray-400 text-xs mb-1">Est. Cash-on-Cash</p>
+                            <p class="text-3xl font-bold text-success glow-text" id="calc-roi">0.0%</p>
+                        </div>
+                        <div>
+                            <p class="text-gray-400 text-xs mb-1">Est. Annual Yield</p>
+                            <p class="text-2xl font-bold font-mono" id="calc-earnings">+$0.00</p>
+                        </div>
+                        <div>
+                            <p class="text-gray-400 text-xs mb-1">Total Capital Outlay</p>
+                            <p class="text-xl font-semibold text-gray-300 font-mono" id="calc-outlay">$0.00</p>
+                        </div>
+                        <div>
+                            <p class="text-gray-400 text-xs mb-1">Est. Annual Net</p>
+                            <p class="text-xl font-semibold text-danger font-mono" id="calc-net">$0.00</p>
+                            <p class="text-[10px] text-gray-500 mt-1" id="calc-net-sub">Waiting for data</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="glass-card rounded-2xl p-6">
+                    <h3 class="text-lg font-semibold mb-4 flex items-center"><i class="fa-solid fa-money-bill-wave text-gray-400 mr-2"></i> Capital Outlay</h3>
+                    <div class="space-y-4">
+                        <div class="bg-gray-800/50 rounded-xl p-4">
+                            <div class="flex justify-between items-start mb-2">
+                                <div><p class="font-semibold text-sm">NFT Acquisition</p><p class="text-xs text-gray-400 mt-1">Estimated Base Cost</p></div>
+                                <div class="text-right"><p class="font-mono font-semibold" id="outlay-nft-usd">$0.00</p><p class="text-xs text-gray-400 font-mono" id="outlay-nft-eth">0.00 ETH</p></div>
+                            </div>
+                        </div>
+                        <div class="bg-gray-800/50 rounded-xl p-4">
+                            <div class="flex justify-between items-start mb-2">
+                                <div><p class="font-semibold text-sm">Tier Activation</p><p class="text-xs text-gray-400 mt-1">Tokens Burned</p></div>
+                                <div class="text-right"><p class="font-mono font-semibold" id="outlay-act-usd">$0.00</p><p class="text-xs text-gray-400 font-mono" id="outlay-act-tok">0 STONK</p></div>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center p-2 border-t border-gray-700 mt-4">
+                            <span class="text-gray-300 font-semibold">Total Base Cost</span>
+                            <span class="font-mono font-bold text-lg" id="outlay-total">$0.00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-card rounded-2xl p-6">
+                    <h3 class="text-lg font-semibold mb-4 flex items-center"><i class="fa-solid fa-vault text-gray-400 mr-2"></i> Projected Yield Distribution</h3>
+                    <p class="text-xs text-gray-400 mb-4">Annualized estimate based on trailing 7-day inbound transfers.</p>
+                    <div class="space-y-3" id="yield-list">
+                        <div class="text-sm text-gray-500 italic text-center py-4">Enter an ID below to load assets.</div>
+                    </div>
+                    <div class="flex justify-between items-center p-2 border-t border-gray-700 mt-6 pt-4">
+                        <span class="text-gray-300 font-semibold">Total Est. Annual Yield</span>
+                        <span class="font-mono font-bold text-lg text-success" id="yield-total">$0.00</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="glass-card rounded-2xl p-6 mt-8">
+                <h3 class="text-lg font-semibold mb-2">Lookup Broker Dashboard</h3>
+                <p class="text-sm text-gray-400 mb-4">Enter a StonkBroker NFT ID to fetch live on-chain data directly from your browser.</p>
+                <div class="flex flex-col sm:flex-row gap-4">
+                    <div class="relative flex-grow">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><span class="text-gray-500">#</span></div>
+                        <input type="number" id="search-input" class="bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:ring-primary focus:border-primary block w-full pl-8 p-2.5 outline-none" placeholder="Enter ID (e.g. 420)">
+                    </div>
+                    <button id="search-btn" class="bg-primary hover:bg-blue-600 text-white font-semibold py-2.5 px-6 rounded-lg transition-colors flex items-center justify-center min-w-[120px]">
+                        <span id="search-text">Analyze</span>
+                        <div id="search-spinner" class="spinner hidden"></div>
+                    </button>
+                </div>
+                <p id="error-message" class="text-danger text-sm mt-3 hidden">Error loading data. Check console for details.</p>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const formatUSD = (num) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(num);
+        const formatNum = (num) => new Intl.NumberFormat('en-US').format(num);
+        
+        let globalMarketParams = { ethPriceUsd: 1874.00, tokenPriceUsd: 0.01447, nftFloorEth: 0.15 };
+        let tierBenchmarks = [];
+
+        // For specific searches done directly in browser
+        const WEB3_CONFIG = {
+            NFT_CONTRACT: "0x539cdd042c2f3d93ebc5be7dfff0c79f3b4fabf0",
+            REGISTRY_CONTRACT: "0x000000006551c19487814612e58FE06813775758",
+            IMPLEMENTATION_CONTRACT: "0x55266d75D1a14E4572138116aF39863Ed6593eCE",
+            CHAIN_ID: 4663, 
+            RPC_URL: "https://rpc.mainnet.chain.robinhood.com",
+            TOKENS: [
+                { symbol: "GME", address: "0x8f1836209c42d4f6b6caa782c055ee13f8ac95b0" },
+                { symbol: "AAPL", address: "0xf9bc0777c087af0fe7214de8a5360be6a71d0d44" },
+                { symbol: "AMZN", address: "0x2829b754784352dd2beffa5eb26d5b499315b715" },
+                { symbol: "NVDA", address: "0xc5e3e9c2a835ec9319fd8c1d516fd4323c5758a0" },
+                { symbol: "GOOGL", address: "0xff20b4b8e08beaa4064e3ca4cc5a2e40acac072f" },
+                { symbol: "MSFT", address: "0xfc253e0062eef614e20e0726e5f6ff7559c35402" },
+                { symbol: "SLV", address: "0x9d2c3355502be065975ad47ef5a902f02c772504" },
+                { symbol: "SPCX", address: "0xf58979d35c3f0ff6a6f7edd909fe8a95a2894609" },
+                { symbol: "USO", address: "0x5b1282b6ad40b3dc294404a2b33ff7657b66c33c" }
+            ]
+        };
+
+        const registryAbi = ["function account(address implementation, uint256 chainId, address tokenContract, uint256 tokenId, uint256 salt) view returns (address)"];
+        const erc721Abi = ["function ownerOf(uint256 tokenId) view returns (address)"];
+        const erc20Abi = ["event Transfer(address indexed from, address indexed to, uint256 value)", "function decimals() view returns (uint8)"];
+
+        function renderTierBenchmarks() {
+            const tbody = document.getElementById('tier-table-body');
+            tbody.innerHTML = '';
+            const baseNftCostUsd = globalMarketParams.tokenPriceUsd * 666666;
+
+            tierBenchmarks.forEach(bm => {
+                const activationCostUsd = bm.reqTokens * globalMarketParams.tokenPriceUsd;
+                const currentTotalCostUsd = baseNftCostUsd + activationCostUsd;
+                let estCashOnCash = (currentTotalCostUsd > 0 && bm.trackedAnnualYieldUsd > 0) ? (bm.trackedAnnualYieldUsd / currentTotalCostUsd) * 100 : 0;
+
+                const yieldDisplay = bm.error ? `<span class="text-xs text-danger font-semibold border border-danger/20 bg-danger/10 px-2 py-1 rounded">RPC Log Error</span>` 
+                    : bm.trackedAnnualYieldUsd === 0 ? `<span class="text-xs text-gray-500 italic">No yield found</span>` : `${formatUSD(bm.trackedAnnualYieldUsd)} <span class="text-xs text-gray-500">/yr</span>`;
+
+                tbody.innerHTML += `
+                    <tr class="hover:bg-gray-800/30 transition-colors">
+                        <td class="py-4 pl-2"><div class="flex items-center"><span class="w-6 h-6 rounded bg-gray-800 flex items-center justify-center font-bold text-xs mr-2 text-primary border border-gray-700">${bm.tier}</span><span class="text-xs text-gray-500">Tracks #${bm.benchmarkId}</span></div></td>
+                        <td class="py-4"><span class="font-mono text-gray-300">${formatNum(bm.reqTokens)}</span><span class="text-xs text-gray-500 ml-1">STONK</span></td>
+                        <td class="py-4"><span class="font-mono font-semibold">${formatUSD(currentTotalCostUsd)}</span><div class="text-[10px] text-gray-500">Floor + ${formatUSD(activationCostUsd)} Act.</div></td>
+                        <td class="py-4 font-mono text-gray-300">${yieldDisplay}</td>
+                        <td class="py-4 text-right pr-2"><span class="inline-block px-2 py-1 rounded bg-success/10 text-success font-bold text-sm border border-success/20">${bm.error ? '--' : estCashOnCash.toFixed(2) + '%'}</span></td>
+                    </tr>`;
+            });
+        }
+
+        async function fetchBrokerData(tokenId) {
+            const provider = new ethers.JsonRpcProvider(WEB3_CONFIG.RPC_URL);
+            
+            let actualTier = 1;
+            if (tokenId == 1794) actualTier = 1;
+            else if (tokenId == 2370) actualTier = 2;
+            else if (tokenId == 275) actualTier = 3;
+            else if (tokenId == 1488) actualTier = 4;
+            else if (tokenId == 47) actualTier = 5;
+
+            const tokensReq = actualTier === 1 ? 66666 : actualTier === 2 ? 166666 : actualTier === 3 ? 366666 : actualTier === 4 ? 766666 : 1666666;
+            const registryContract = new ethers.Contract(WEB3_CONFIG.REGISTRY_CONTRACT, registryAbi, provider);
+            const nftContract = new ethers.Contract(WEB3_CONFIG.NFT_CONTRACT, erc721Abi, provider);
+
+            const ownerAddress = await nftContract.ownerOf(tokenId);
+            const tbaAddress = await registryContract.account(WEB3_CONFIG.IMPLEMENTATION_CONTRACT, WEB3_CONFIG.CHAIN_ID, WEB3_CONFIG.NFT_CONTRACT, tokenId, 0);
+
+            const historicalEthPriceUsd = globalMarketParams.ethPriceUsd; 
+            const historicalStonkPriceUsd = globalMarketParams.tokenPriceUsd;
+            const historicalEthPaid = (historicalStonkPriceUsd * 666666) / historicalEthPriceUsd; 
+
+            let trailing7DayTransfers = [];
+            const currentBlock = await provider.getBlockNumber();
+            const blocksPerWeek = 302400; 
+            const startBlock = currentBlock - blocksPerWeek;
+            const maxChunk = 5000;
+
+            for (const token of WEB3_CONFIG.TOKENS) {
+                // Determine current price based on global fetching if possible, fallback to static if not present
+                const currentLivePrice = 0; // Defaulting for simple frontend calculation, would ideally map from dex
+                
+                const tokenContract = new ethers.Contract(token.address, erc20Abi, provider);
+                const filter = tokenContract.filters.Transfer(null, tbaAddress);
+                let totalAmountRaw = 0n;
+                
+                // Chunking logic to prevent frontend rate limits
+                for (let i = startBlock; i < currentBlock; i += maxChunk) {
+                    const endBlock = Math.min(i + maxChunk - 1, currentBlock);
+                    const logs = await tokenContract.queryFilter(filter, i, endBlock);
+                    for (let log of logs) { totalAmountRaw += log.args[2]; }
+                }
+                
+                if (totalAmountRaw > 0n) {
+                    const decimals = await tokenContract.decimals();
+                    const amountFormatted = parseFloat(ethers.formatUnits(totalAmountRaw, decimals));
+                    
+                    // We grab the price from dexScreener directly for accuracy on frontend searches
+                    let livePriceUsd = 0;
+                    try {
+                        const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${token.address}`);
+                        const data = await res.json();
+                        if (data?.pairs?.length > 0) livePriceUsd = parseFloat(data.pairs[0].priceUsd);
+                    } catch(e) {}
+                    
+                    trailing7DayTransfers.push({
+                        ticker: token.symbol,
+                        amount: amountFormatted,
+                        currentPriceUsd: livePriceUsd
+                    });
+                }
+            }
+
+            return {
+                id: tokenId, tier: actualTier, owner: `${ownerAddress.slice(0,6)}...${ownerAddress.slice(-4)}`, tbaAddress: `${tbaAddress.slice(0,6)}...${tbaAddress.slice(-4)}`,
+                acquisition: { ethPaid: historicalEthPaid, historicalEthPriceUsd: historicalEthPriceUsd },
+                activation: { tokensBurned: tokensReq, historicalTokenPriceUsd: historicalStonkPriceUsd },
+                tbaBalances: trailing7DayTransfers.map(asset => ({ ticker: asset.ticker, amount: asset.amount * 52.14, currentPriceUsd: asset.currentPriceUsd }))
+            };
+        }
+
+        function renderDashboard(brokerData) {
+            const acquisitionUsd = brokerData.acquisition.ethPaid * brokerData.acquisition.historicalEthPriceUsd;
+            const activationUsd = brokerData.activation.tokensBurned * brokerData.activation.historicalTokenPriceUsd;
+            const totalOutlayUsd = acquisitionUsd + activationUsd;
+
+            let totalYieldUsd = 0;
+            const yieldBreakdown = brokerData.tbaBalances.map(asset => {
+                const value = asset.amount * asset.currentPriceUsd;
+                totalYieldUsd += value;
+                return { ...asset, valueUsd: value };
+            });
+
+            const cashOnCashPercentage = totalOutlayUsd > 0 ? (totalYieldUsd / totalOutlayUsd) * 100 : 0;
+            const netProfitUsd = totalYieldUsd - totalOutlayUsd;
+
+            document.getElementById('broker-id').innerText = `#${brokerData.id}`;
+            document.getElementById('broker-tier').innerText = `Tier ${brokerData.tier} Active`;
+            document.getElementById('broker-owner').innerText = brokerData.owner;
+            document.getElementById('broker-tba').innerText = brokerData.tbaAddress;
+            document.getElementById('outlay-nft-usd').innerText = formatUSD(acquisitionUsd);
+            document.getElementById('outlay-nft-eth').innerText = `${brokerData.acquisition.ethPaid.toFixed(3)} ETH`;
+            document.getElementById('outlay-act-usd').innerText = formatUSD(activationUsd);
+            document.getElementById('outlay-act-tok').innerText = `${formatNum(brokerData.activation.tokensBurned)} STONK`;
+            document.getElementById('outlay-total').innerText = formatUSD(totalOutlayUsd);
+
+            const yieldListEl = document.getElementById('yield-list');
+            yieldListEl.innerHTML = ''; 
+            
+            if (yieldBreakdown.length === 0) {
+                yieldListEl.innerHTML = `<div class="text-sm text-gray-500 italic text-center py-4">No recent activity detected.</div>`;
+            } else {
+                yieldBreakdown.forEach(asset => {
+                    yieldListEl.innerHTML += `
+                        <div class="flex justify-between items-center bg-gray-800/30 p-3 rounded-lg border border-gray-700/50">
+                            <div class="flex items-center">
+                                <div class="w-8 h-8 rounded-full bg-blue-900/50 flex items-center justify-center text-blue-300 font-bold text-xs mr-3">${asset.ticker.charAt(0)}</div>
+                                <div><p class="font-semibold text-sm">${asset.ticker}</p><p class="text-xs text-gray-400 font-mono">${formatNum(asset.amount)} tokens</p></div>
+                            </div>
+                            <div class="text-right">
+                                <p class="font-mono font-semibold text-success">${formatUSD(asset.valueUsd)}</p>
+                                <p class="text-xs text-gray-400">@ ${formatUSD(asset.currentPriceUsd)}</p>
+                            </div>
+                        </div>`;
+                });
+            }
+
+            document.getElementById('yield-total').innerText = `+${formatUSD(totalYieldUsd)}`;
+            document.getElementById('calc-roi').innerText = `${cashOnCashPercentage.toFixed(2)}%`;
+            document.getElementById('calc-earnings').innerText = `+${formatUSD(totalYieldUsd)}`;
+            document.getElementById('calc-outlay').innerText = formatUSD(totalOutlayUsd);
+            
+            const netEl = document.getElementById('calc-net');
+            if (netProfitUsd >= 0) {
+                netEl.innerText = `+${formatUSD(netProfitUsd)}`;
+                netEl.className = "text-xl font-semibold text-success font-mono glow-text";
+                document.getElementById('calc-net-sub').innerText = "Pure Profit Projection";
+            } else {
+                netEl.innerText = formatUSD(netProfitUsd); 
+                netEl.className = "text-xl font-semibold text-danger font-mono";
+                document.getElementById('calc-net-sub').innerText = "To reach breakeven";
+            }
+        }
+
+        document.getElementById('search-btn').addEventListener('click', async () => {
+            const input = document.getElementById('search-input').value;
+            if(!input) return;
+
+            const searchBtn = document.getElementById('search-btn');
+            const searchText = document.getElementById('search-text');
+            const searchSpinner = document.getElementById('search-spinner');
+            const dashboard = document.getElementById('dashboard-content');
+            const errorMsg = document.getElementById('error-message');
+
+            searchText.classList.add('hidden'); searchSpinner.classList.remove('hidden'); errorMsg.classList.add('hidden');
+            searchBtn.disabled = true; dashboard.style.opacity = '0.3';
+
+            try {
+                const realData = await fetchBrokerData(input);
+                renderDashboard(realData);
+            } catch (err) {
+                errorMsg.classList.remove('hidden');
+                errorMsg.innerText = err.message || "Error loading data. Check console for details.";
+                console.error("Lookup failed:", err);
+            } finally {
+                searchText.classList.remove('hidden'); searchSpinner.classList.add('hidden');
+                searchBtn.disabled = false; dashboard.style.opacity = '1';
+            }
+        });
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            try {
+                // Fetch the static payload generated by GitHub Actions
+                const res = await fetch('./data.json');
+                const data = await res.json();
+                
+                globalMarketParams.ethPriceUsd = data.globalMarketParams.ethPriceUsd;
+                globalMarketParams.tokenPriceUsd = data.globalMarketParams.tokenPriceUsd;
+                globalMarketParams.nftFloorEth = data.globalMarketParams.nftFloorEth;
+                
+                document.getElementById('global-eth').innerText = formatUSD(globalMarketParams.ethPriceUsd);
+                document.getElementById('global-token').innerText = `$${globalMarketParams.tokenPriceUsd.toFixed(4)}`;
+                document.getElementById('global-floor').innerText = `${globalMarketParams.nftFloorEth} ETH`;
+                document.getElementById('base-entry-cost').innerText = formatUSD(666666 * globalMarketParams.tokenPriceUsd);
+
+                tierBenchmarks.splice(0, tierBenchmarks.length, ...data.tierBenchmarks);
+                renderTierBenchmarks();
+            } catch (e) {
+                console.error("Failed to load static data.", e);
+                document.getElementById('tier-table-body').innerHTML = `<tr><td colspan="5" class="py-4 text-center text-danger italic">Sync pending. Trigger the Action in GitHub to generate data.json.</td></tr>`;
+            }
+        });
+    </script>
+</body>
+</html>
