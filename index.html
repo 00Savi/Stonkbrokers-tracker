@@ -195,11 +195,10 @@
         let globalMarketParams = { ethPriceUsd: 1874.00, tokenPriceUsd: 0.01447, nftFloorEth: 0.15 };
         let tierBenchmarks = [];
 
-        // For specific searches done directly in browser
         const WEB3_CONFIG = {
             NFT_CONTRACT: "0x539cdd042c2f3d93ebc5be7dfff0c79f3b4fabf0",
-            REGISTRY_CONTRACT: "0x000000006551c19487814612e58FE06813775758",
-            IMPLEMENTATION_CONTRACT: "0x55266d75D1a14E4572138116aF39863Ed6593eCE",
+            REGISTRY_CONTRACT: "0x000000006551c19487814612e58fe06813775758",
+            IMPLEMENTATION_CONTRACT: "0x55266d75d1a14e4572138116af39863ed6593ece",
             CHAIN_ID: 4663, 
             RPC_URL: "https://rpc.mainnet.chain.robinhood.com",
             TOKENS: [
@@ -209,14 +208,14 @@
                 { symbol: "NVDA", address: "0xc5e3e9c2a835ec9319fd8c1d516fd4323c5758a0" }, 
                 { symbol: "SLV", address: "0x9d2c3355502be065975ad47ef5a902f02c772504" },  
                 { symbol: "MSFT", address: "0xfc253e0062eef614e20e0726e5f6ff7559c35402" }, 
-                { symbol: "COST", address: "0x4EA005168D7F09a7A0Ba9D1DEf21a479950E44C2" }, 
-                { symbol: "USAR", address: "0xd917B029C761D264c6A312BBbcDA868658eF86a6" },  
+                { symbol: "COST", address: "0x4ea005168d7f09a7a0ba9d1def21a479950e44c2" }, 
+                { symbol: "USAR", address: "0xd917b029c761d264c6a312bbbcda868658ef86a6" },  
                 { symbol: "SPCX", address: "0xf58979d35c3f0ff6a6f7edd909fe8a95a2894609" },  
                 { symbol: "GOOGL", address: "0xff20b4b8e08beaa4064e3ca4cc5a2e40acac072f" }, 
-                { symbol: "USDG", address: "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168" },
-                { symbol: "PLTR", address: "0x894E1EC2D74FFE5AEF8Dc8A9e84686acCB964F2A" },
-                { symbol: "TSLA", address: "0x322F0929c4625eD5bAd873c95208D54E1c003b2d" },
-                { symbol: "AMD", address: "0x86923f96303D656E4aa86D9d42D1e57ad2023fdC" },
+                { symbol: "USDG", address: "0x5fc5360d0400a0fd4f2af552add042d716f1d168" },
+                { symbol: "PLTR", address: "0x894e1ec2d74ffe5aef8dc8a9e84686accb964f2a" },
+                { symbol: "TSLA", address: "0x322f0929c4625ed5bad873c95208d54e1c003b2d" },
+                { symbol: "AMD", address: "0x86923f96303d656e4aa86d9d42d1e57ad2023fdc" },
                 { symbol: "GME", address: "0x8f1836209c42d4f6b6caa782c055ee13f8ac95b0" },
                 { symbol: "USO", address: "0x5b1282b6ad40b3dc294404a2b33ff7657b66c33c" }
             ]
@@ -282,7 +281,7 @@
                 const normalData = await normalRes.json();
                 if (normalData.status === "1" && Array.isArray(normalData.result)) {
                     for (const tx of normalData.result) {
-                        if (tx.to.toLowerCase() === tbaAddress.toLowerCase() && tx.isError === "0" && tx.value !== "0") ethYieldRaw += BigInt(tx.value);
+                        if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && tx.isError === "0" && tx.value !== "0") ethYieldRaw += BigInt(tx.value);
                     }
                 }
 
@@ -290,7 +289,7 @@
                 const internalData = await internalRes.json();
                 if (internalData.status === "1" && Array.isArray(internalData.result)) {
                     for (const tx of internalData.result) {
-                        if (tx.to.toLowerCase() === tbaAddress.toLowerCase() && tx.isError === "0" && tx.value !== "0") ethYieldRaw += BigInt(tx.value);
+                        if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && tx.isError === "0" && tx.value !== "0") ethYieldRaw += BigInt(tx.value);
                     }
                 }
             } catch (e) {
@@ -313,7 +312,7 @@
                 
                 if (tokenData.status === "1" && Array.isArray(tokenData.result)) {
                     for (const tx of tokenData.result) {
-                        if (tx.to.toLowerCase() === tbaAddress.toLowerCase()) {
+                        if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase()) {
                             const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === tx.contractAddress.toLowerCase());
                             if (matchedToken) {
                                 const decimals = parseInt(tx.tokenDecimal) || 18;
