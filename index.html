@@ -191,6 +191,7 @@
     <script>
         // --- 1. AUTHENTICATED BLOCKSCOUT API KEY ---
         const BLOCKSCOUT_API_KEY = "proapi_tI5cQZoWvXXgS1WFHXEaLKhLBSl0WHvcYv3msh7Kdpioyod8Bfon9vSHif7zhcAG_dLDzYW"; 
+        const BLOCKSCOUT_BASE_URL = "https://robinhoodchain.blockscout.com/api";
 
         const formatUSD = (num) => {
             if (isNaN(num)) return "$0.00";
@@ -337,7 +338,8 @@
                 } else if (bm.error) {
                     yieldDisplay = `<span class="text-xs text-danger font-semibold border border-danger/20 bg-danger/10 px-2 py-1 rounded">${bm.error}</span>`;
                 } else if (!bm.trackedAnnualYieldUsd || bm.trackedAnnualYieldUsd === 0) {
-                    yieldDisplay = `<span class="text-xs text-gray-500 italic">No yield found</span>`;
+                    // UX UPDATE: Make it clear it's specifically a 7-day lookback, not a broken API response
+                    yieldDisplay = `<span class="text-xs text-gray-500 italic">No yield in last 7d</span>`;
                 } else {
                     yieldDisplay = `${formatUSD(bm.trackedAnnualYieldUsd)} <span class="text-xs text-gray-500">/yr</span>`;
                 }
@@ -387,12 +389,11 @@
                 let currentBlock = preFetchedBlock;
                 if (!currentBlock) {
                     try { 
-                        // THE FIX: Wrap the API request in a reliable CORS proxy
-                        const rawTarget = `https://api.blockscout.com/api?chain_id=${WEB3_CONFIG.CHAIN_ID}&module=block&action=eth_block_number&apikey=${BLOCKSCOUT_API_KEY}`;
-                        const blockRes = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(rawTarget)}`);
-                        const blockData = await blockRes.json();
+                        // DIRECT NATIVE ROUTING: We hit the chain explorer directly and queue it to prevent throttling.
+                        const blockUrl = `${BLOCKSCOUT_BASE_URL}?module=block&action=eth_block_number&apikey=${BLOCKSCOUT_API_KEY}`;
+                        const blockData = await apiFetch(blockUrl);
                         
-                        if (blockData.status === "1" && blockData.result) {
+                        if (blockData && blockData.status === "1" && blockData.result) {
                             currentBlock = parseInt(blockData.result, 16);
                         } else {
                             throw new Error("Invalid block fetch response");
@@ -407,11 +408,10 @@
                 const actions = ["tokentx", "txlist", "txlistinternal"];
                 
                 for (let action of actions) {
-                    // THE FIX: Wrap the API request in a reliable CORS proxy
-                    const rawUrl = `https://api.blockscout.com/api?chain_id=${WEB3_CONFIG.CHAIN_ID}&module=account&action=${action}&address=${tbaAddress}&startblock=${startBlock}&page=1&offset=1000&sort=desc&apikey=${BLOCKSCOUT_API_KEY}`;
-                    const proxiedUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(rawUrl)}`;
+                    // DIRECT NATIVE ROUTING: No proxies, no CORS issues, no data payload limitations.
+                    const url = `${BLOCKSCOUT_BASE_URL}?module=account&action=${action}&address=${tbaAddress}&startblock=${startBlock}&page=1&offset=1000&sort=desc&apikey=${BLOCKSCOUT_API_KEY}`;
                     
-                    const data = await apiFetch(proxiedUrl);
+                    const data = await apiFetch(url);
 
                     if (data && data.status === "1" && Array.isArray(data.result) && data.result.length > 0) {
                         for (const tx of data.result) {
