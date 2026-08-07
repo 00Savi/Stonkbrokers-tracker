@@ -237,12 +237,12 @@
         const registryAbi = ["function account(address implementation, bytes32 salt, uint256 chainId, address tokenContract, uint256 tokenId) view returns (address)"];
         const erc721Abi = ["function ownerOf(uint256 tokenId) view returns (address)"];
 
-        // --- BULLETPROOF IP-ROTATING QUEUE ---
-        // Distributes API load dynamically across multiple public IPs to permanently bypass the ~10-req/min free tier limits.
+        // --- BULLETPROOF CACHE-BUSTING IP QUEUE ---
         const CORS_PROXIES = [
             (url) => url, // Primary: User's Local IP
-            (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, // Fallback 1: AllOrigins
-            (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`  // Fallback 2: CodeTabs
+            (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`, // Fallback 1
+            (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, // Fallback 2
+            (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`  // Fallback 3
         ];
 
         const requestQueue = [];
@@ -261,7 +261,10 @@
                 const req = requestQueue[0];
                 try {
                     const proxyIndex = req.tryCount % CORS_PROXIES.length;
-                    const targetUrl = CORS_PROXIES[proxyIndex](req.url);
+                    
+                    // THE FIX: Append a unique timestamp cache-buster so proxies never serve saved 429 errors.
+                    const cacheBuster = `&_cb=${Date.now()}_${req.tryCount}`;
+                    const targetUrl = CORS_PROXIES[proxyIndex](req.url + cacheBuster);
                     
                     const response = await fetch(targetUrl, { headers: { "Accept": "application/json" } });
                     
@@ -272,7 +275,6 @@
                     const text = await response.text();
                     const data = JSON.parse(text);
                     
-                    // Blockscout returns status "0" and a message for API limits even on HTTP 200
                     if ((data.message && data.message.toLowerCase().includes("limit")) || 
                         (typeof data.result === 'string' && data.result.toLowerCase().includes("limit"))) {
                         throw new Error("API Limit");
@@ -282,18 +284,14 @@
                     requestQueue.shift();
                     req.resolve(data);
                     
-                    // Super fast 250ms spacing since we are dynamically rotating IPs
                     await sleep(250); 
                     
                 } catch (err) {
                     req.tryCount++;
                     if (req.tryCount >= CORS_PROXIES.length * 2) { 
-                        // Exhausted all proxy IPs twice
                         requestQueue.shift();
                         req.reject(new Error("Rate Limit / Network Error"));
                     } else {
-                        // If we exhausted the proxy array once, take a 2s breather before loop 2.
-                        // Otherwise, fast-fail to the next proxy IP in 150ms.
                         if (req.tryCount % CORS_PROXIES.length === 0) {
                             await sleep(2000);
                         } else {
@@ -326,7 +324,6 @@
                     yieldDisplay = `${formatUSD(bm.trackedAnnualYieldUsd)} <span class="text-xs text-gray-500">/yr</span>`;
                 }
 
-                // Updated UI block to handle active percentages cleanly
                 let roiBadge = `<span class="inline-block px-2 py-1 rounded bg-success/10 text-success font-bold text-sm border border-success/20">${estCashOnCash.toFixed(2)}%</span>`;
                 if (bm.loading || bm.error) {
                     roiBadge = `<span class="inline-block px-2 py-1 rounded bg-gray-800 text-gray-500 font-bold text-sm border border-gray-700">--</span>`;
@@ -579,7 +576,11 @@
                     bm.loading = false;
                     bm.error = e.message.includes("Rate Limit") ? "API Limit Reached" : "Data Error";
                 }
+                
                 renderTierBenchmarks(); 
+                
+                // THE MAGIC BREATH: Pauses for 1.5 seconds between tiers to prevent burst-limit exhaustion
+                if (bm.tier < 5) await sleep(1500); 
             }
         }
 
