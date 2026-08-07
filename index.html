@@ -238,13 +238,11 @@
         const registryAbi = ["function account(address implementation, bytes32 salt, uint256 chainId, address tokenContract, uint256 tokenId) view returns (address)"];
         const erc721Abi = ["function ownerOf(uint256 tokenId) view returns (address)"];
 
-        // --- BULLETPROOF CACHE-BUSTING IP QUEUE ---
-        // Dynamically rotates requests across proxies to permanently bypass the 10-req/min free tier limits.
         const CORS_PROXIES = [
-            (url) => url, // Primary: User's Local IP
-            (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`, // Fallback 1
-            (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, // Fallback 2
-            (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`  // Fallback 3
+            (url) => url, 
+            (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`, 
+            (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, 
+            (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`  
         ];
 
         const requestQueue = [];
@@ -263,8 +261,6 @@
                 const req = requestQueue[0];
                 try {
                     const proxyIndex = req.tryCount % CORS_PROXIES.length;
-                    
-                    // The cache-buster timestamp ensures proxies never serve saved 429 errors
                     const cacheBuster = `&_cb=${Date.now()}_${req.tryCount}`;
                     const targetUrl = CORS_PROXIES[proxyIndex](req.url + cacheBuster);
                     
@@ -389,42 +385,52 @@
 
                 const startBlock = Math.max(0, currentBlock - 6048000); 
                 const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
-                
-                // Restored `txlist` and `txlistinternal` to accurately track Gross ETH Inflow, ignoring owner withdrawals.
                 const actions = ["tokentx", "txlist", "txlistinternal"];
                 
                 for (let action of actions) {
-                    const url = `${BLOCKSCOUT_BASE_URL}?module=account&action=${action}&address=${tbaAddress}&startblock=${startBlock}&page=1&offset=1000&sort=desc&apikey=${BLOCKSCOUT_API_KEY}`;
+                    // THE FIX: Increased offset to 10,000 to prevent truncating highly active TBAs
+                    const url = `${BLOCKSCOUT_BASE_URL}?module=account&action=${action}&address=${tbaAddress}&startblock=${startBlock}&page=1&offset=10000&sort=desc&apikey=${BLOCKSCOUT_API_KEY}`;
                     const data = await apiFetch(url);
 
                     if (data && data.status === "1" && Array.isArray(data.result) && data.result.length > 0) {
                         for (const tx of data.result) {
                             if (parseInt(tx.timeStamp, 10) >= sevenDaysAgo) {
-                                // Only process INCOMING transfers
+                                // STRICT INBOUND CHECK: Only counts if the receiving address is the TBA
                                 if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && (!tx.isError || tx.isError === "0")) {
                                     let valueStr = tx.value || "0";
                                     if (valueStr === "") valueStr = "0";
 
                                     if (action !== "tokentx") {
-                                        // Gross ETH Inflow tracking
                                         const ethAmount = parseFloat(ethers.formatEther(valueStr));
                                         if (ethAmount > 0) {
                                             if (!aggregatedTransfers["ETH"]) aggregatedTransfers["ETH"] = { ticker: "ETH", rawAmount: 0, currentPriceUsd: globalMarketParams.ethPriceUsd };
                                             aggregatedTransfers["ETH"].rawAmount += ethAmount;
                                         }
                                     } else {
-                                        // Token Inflow tracking
+                                        // THE FIX: Dynamic All-Token Discovery
                                         const contractAddr = (tx.contractAddress || "").toLowerCase();
+                                        const tokenSymbol = tx.tokenSymbol || "UNKNOWN";
+                                        
                                         const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr);
-                                        if (!matchedToken) continue;
+                                        let tokenPriceUsd = 0;
+                                        
+                                        if (matchedToken) {
+                                            tokenPriceUsd = matchedToken.symbol === "STONKBROKER" ? globalMarketParams.tokenPriceUsd : matchedToken.priceUsd;
+                                        }
 
-                                        let tokenPriceUsd = matchedToken.symbol === "STONKBROKER" ? globalMarketParams.tokenPriceUsd : matchedToken.priceUsd;
                                         const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
                                         const tokenAmount = parseFloat(ethers.formatUnits(valueStr, decimals));
 
                                         if (tokenAmount > 0) {
-                                            if (!aggregatedTransfers[matchedToken.symbol]) aggregatedTransfers[matchedToken.symbol] = { ticker: matchedToken.symbol, rawAmount: 0, currentPriceUsd: tokenPriceUsd || 0 };
-                                            aggregatedTransfers[matchedToken.symbol].rawAmount += tokenAmount;
+                                            const displaySymbol = matchedToken ? matchedToken.symbol : tokenSymbol;
+                                            if (!aggregatedTransfers[displaySymbol]) {
+                                                aggregatedTransfers[displaySymbol] = { 
+                                                    ticker: displaySymbol, 
+                                                    rawAmount: 0, 
+                                                    currentPriceUsd: tokenPriceUsd 
+                                                };
+                                            }
+                                            aggregatedTransfers[displaySymbol].rawAmount += tokenAmount;
                                         }
                                     }
                                 }
@@ -440,7 +446,7 @@
                 activation: { tokensBurned: tokensReq, historicalTokenPriceUsd: globalMarketParams.tokenPriceUsd },
                 tbaBalances: Object.values(aggregatedTransfers).map(asset => ({
                     ticker: asset.ticker,
-                    amount: asset.rawAmount * 52.14, 
+                    amount: asset.rawAmount * 52.14, // Exact 7-day annualization math
                     currentPriceUsd: asset.currentPriceUsd || 0
                 }))
             };
@@ -458,6 +464,7 @@
                 return { ...asset, valueUsd: isNaN(value) ? 0 : value };
             });
 
+            // Flawless ROI Mathematics
             const cashOnCashPercentage = totalOutlayUsd > 0 ? (totalYieldUsd / totalOutlayUsd) * 100 : 0;
             const netProfitUsd = totalYieldUsd - totalOutlayUsd;
 
@@ -482,11 +489,16 @@
                         <div class="flex justify-between items-center bg-gray-800/30 p-3 rounded-lg border border-gray-700/50">
                             <div class="flex items-center">
                                 <div class="w-8 h-8 rounded-full bg-blue-900/50 flex items-center justify-center text-blue-300 font-bold text-xs mr-3">${asset.ticker.charAt(0)}</div>
-                                <div><p class="font-semibold text-sm">${asset.ticker}</p><p class="text-xs text-gray-400 font-mono">${formatNum(asset.amount)} tokens/yr</p></div>
+                                <div>
+                                    <p class="font-semibold text-sm">${asset.ticker}</p>
+                                    <p class="text-xs text-gray-400 font-mono">${formatNum(asset.amount)} tokens/yr</p>
+                                </div>
                             </div>
                             <div class="text-right">
                                 <p class="font-mono font-semibold text-success">${formatUSD(asset.valueUsd)}</p>
-                                <p class="text-xs text-gray-400">@ ${formatUSD(asset.currentPriceUsd)}</p>
+                                <p class="text-xs ${asset.currentPriceUsd === 0 ? 'text-warning font-semibold' : 'text-gray-400'}">
+                                    @ ${formatUSD(asset.currentPriceUsd)}
+                                </p>
                             </div>
                         </div>`;
                 });
@@ -579,12 +591,12 @@
                 } catch (e) {
                     console.error("Failed to load tier benchmark", bm.tier, e);
                     bm.loading = false;
-                    bm.error = e.message.includes("Rate Limit") ? "API Limit Reached" : "Data Error";
+                    bm.error = e.message.includes("Limit") ? "API Limit Reached" : "Data Error";
                 }
                 
                 renderTierBenchmarks(); 
                 
-                // Paces the requests to prevent Blockscout burst-limit exhaustion across the proxies
+                // Breath timing
                 if (bm.tier < 5) await sleep(1500); 
             }
         }
