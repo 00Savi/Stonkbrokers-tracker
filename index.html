@@ -284,8 +284,8 @@
                     requestQueue.shift();
                     req.resolve(data);
                     
-                    // AUTHENTICATED PACING: 250ms delay perfectly aligns with 5 req/sec allowance
-                    await sleep(250); 
+                    // AUTHENTICATED PACING: 220ms perfectly aligns with 5 req/sec allowance without dropping
+                    await sleep(220); 
 
                 } catch (err) {
                     req.retries++;
@@ -365,7 +365,14 @@
             if (tbaAddress !== "0x0000000000000000000000000000000000000000") {
                 let currentBlock = preFetchedBlock;
                 if (!currentBlock) {
-                    try { currentBlock = await provider.getBlockNumber(); } catch (e) { currentBlock = 28500000; }
+                    try { 
+                        // Updated to use the unified Pro API endpoint
+                        const blockRes = await fetch('https://api.blockscout.com/v2/api?chainid=4663&module=block&action=eth_block_number&apikey=' + BLOCKSCOUT_API_KEY);
+                        const blockData = await blockRes.json();
+                        currentBlock = parseInt(blockData.result, 16);
+                    } catch(e) {
+                        try { currentBlock = await provider.getBlockNumber(); } catch (err) { currentBlock = 28500000; }
+                    }
                 }
 
                 // Accurate 100ms Block Math (6,048,000 blocks in 7 days)
@@ -374,8 +381,8 @@
                 const actions = ["tokentx", "txlist", "txlistinternal"];
                 
                 for (let action of actions) {
-                    // Injecting API Key to unlock speed and bypass Cloudflare
-                    const url = `https://robinhoodchain.blockscout.com/api?module=account&action=${action}&address=${tbaAddress}&startblock=${startBlock}&page=1&offset=1000&sort=desc&apikey=${BLOCKSCOUT_API_KEY}`;
+                    // Injecting API Key and using the new unified PRO API gateway to bypass IP Limits
+                    const url = `https://api.blockscout.com/v2/api?chainid=4663&module=account&action=${action}&address=${tbaAddress}&startblock=${startBlock}&page=1&offset=1000&sort=desc&apikey=${BLOCKSCOUT_API_KEY}`;
                     
                     const data = await apiFetch(url);
 
