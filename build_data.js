@@ -8,12 +8,13 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 let globalMarketParams = { ethPriceUsd: 1900.00, tokenPriceUsd: 0.02278, nftFloorEth: 7.661 };
 
+// FRESH BENCHMARK ROSTER (Tiers 1-5)
 let tierBenchmarks = [
-    { tier: 1, reqTokens: 66666, benchmarkId: 1794, tbaAddress: "0x9c24b28c3146a1ca8095acd9611962f33faf068b", trackedAnnualYieldUsd: 0 },
-    { tier: 2, reqTokens: 166666, benchmarkId: 2370, tbaAddress: "0x45f290f4e196c27abf738a32f5a97d47383cf0ba", trackedAnnualYieldUsd: 0 },
-    { tier: 3, reqTokens: 366666, benchmarkId: 275, tbaAddress: "0x0c9aa82841a3a560a10e64e44f8c4687a1257e3e", trackedAnnualYieldUsd: 0 },
-    { tier: 4, reqTokens: 666666, benchmarkId: 1491, tbaAddress: "0x9978cb6b8581d2a95e9b8d683bf2b8120dc0a0ee", trackedAnnualYieldUsd: 0 },
-    { tier: 5, reqTokens: 1666666, benchmarkId: 1400, tbaAddress: "0x2052a6201600b879ad3a96e6e71148e55053c924", trackedAnnualYieldUsd: 0 }
+    { tier: 1, reqTokens: 66666, benchmarkId: 3032, tbaAddress: "0x5a35bc7e3b7f0ea5b04d6df5e15aee144c940ba9", trackedAnnualYieldUsd: 0 },
+    { tier: 2, reqTokens: 166666, benchmarkId: 1199, tbaAddress: "0xc2614c45c68f14a6c21881290c62d84b5f718831", trackedAnnualYieldUsd: 0 },
+    { tier: 3, reqTokens: 366666, benchmarkId: 2372, tbaAddress: "0xa72288ba58858c04b058ffc22ad345687924bcd0", trackedAnnualYieldUsd: 0 },
+    { tier: 4, reqTokens: 666666, benchmarkId: 1533, tbaAddress: "0x468a5a2402fa721f056b22e0c48d7010016135d8", trackedAnnualYieldUsd: 0 },
+    { tier: 5, reqTokens: 1666666, benchmarkId: 1258, tbaAddress: "0xE7207cAA913b54Aa4411e847A3a49EEE0568CcCF", trackedAnnualYieldUsd: 0 }
 ];
 
 const WEB3_CONFIG = {
@@ -62,9 +63,9 @@ async function secureFetch(url) {
 }
 
 async function run() {
-    console.log("Starting secure data sync...");
+    console.log("Starting secure data sync with fresh benchmark roster...");
     
-    // 1. Fetch current spot prices
+    // 1. Fetch spot market prices
     try {
         const ethRes = await fetch('https://api.exchange.coinbase.com/products/ETH-USD/ticker');
         const ethData = await ethRes.json();
@@ -83,21 +84,19 @@ async function run() {
 
     globalMarketParams.nftFloorEth = parseFloat(((666666 * globalMarketParams.tokenPriceUsd) / globalMarketParams.ethPriceUsd).toFixed(3));
     
-    // 2. Determine Block Range
+    // 2. Block range calculation (6,048,000 blocks ~ 7 days on 0.1s block times)
     const provider = new ethers.JsonRpcProvider(WEB3_CONFIG.RPC_URL);
     let currentBlock = 30000000;
     try { currentBlock = await provider.getBlockNumber(); } catch(e) {}
     
-    // 6,048,000 blocks covers exactly 7 days on an L2 with 0.1s block times.
     const startBlock = Math.max(0, currentBlock - 6048000);
     const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
 
-    // 3. Process Tiers
+    // 3. Process each tier
     for (let bm of tierBenchmarks) {
-        console.log(`\nProcessing Tier ${bm.tier} (TBA: ${bm.tbaAddress})...`);
+        console.log(`\nProcessing Tier ${bm.tier} (Broker #${bm.benchmarkId} - TBA: ${bm.tbaAddress})...`);
         let aggregatedTransfers = {};
         
-        // Fetching Token Transfers AND Native/Internal ETH Transfers
         const actions = ["tokentx", "txlist", "txlistinternal"];
 
         for (let action of actions) {
@@ -108,12 +107,12 @@ async function run() {
             if (data && data.status === "1" && Array.isArray(data.result)) {
                 for (const tx of data.result) {
                     
-                    // STRICT INBOUND FILTER & TIMESTAMP CHECK
+                    // GROSS INBOUND CHECK (Filters out all withdrawals and gas spends)
                     if (parseInt(tx.timeStamp, 10) >= sevenDaysAgo && tx.to && tx.to.toLowerCase() === bm.tbaAddress.toLowerCase() && (!tx.isError || tx.isError === "0")) {
                         let valueStr = tx.value || "0";
                         
                         if (action !== "tokentx") {
-                            // Gross ETH Inflow Tracking
+                            // Gross ETH Inflows
                             const ethAmount = parseFloat(ethers.formatEther(valueStr));
                             if (ethAmount > 0) {
                                 if (!aggregatedTransfers["ETH"]) {
@@ -122,11 +121,11 @@ async function run() {
                                 aggregatedTransfers["ETH"].rawAmount += ethAmount;
                             }
                         } else {
-                            // Token Tracking
+                            // ERC-20 Inflows
                             const contractAddr = (tx.contractAddress || "").toLowerCase();
                             const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr);
                             
-                            if (!matchedToken) continue; // Ignore untracked/scam tokens
+                            if (!matchedToken) continue; 
 
                             const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
                             const tokenAmount = parseFloat(ethers.formatUnits(valueStr, decimals));
@@ -141,11 +140,11 @@ async function run() {
                     }
                 }
             }
-            // IRON-CLAD PACING: 10 full seconds between requests to guarantee we never hit 10 req/min
+            // 10s delay between requests to guarantee API limit compliance
             await sleep(10000); 
         }
 
-        // Calculate final annualized USD value for the tier
+        // Calculate annualized USD yield
         let totalYieldUsd = 0;
         bm.tbaBalances = Object.values(aggregatedTransfers).map(asset => {
             const annualizedAmount = asset.rawAmount * 52.14;
@@ -163,7 +162,7 @@ async function run() {
         console.log(`✓ Tier ${bm.tier} complete. Tracked Annual Yield: $${totalYieldUsd.toFixed(2)}`);
     }
 
-    // 4. Save to disk
+    // 4. Output to data.json
     const finalData = {
         market: globalMarketParams,
         tiers: tierBenchmarks,
@@ -171,7 +170,7 @@ async function run() {
     };
 
     fs.writeFileSync('data.json', JSON.stringify(finalData, null, 2));
-    console.log("\nSuccess: Data cleanly written to data.json");
+    console.log("\nSuccess: Clean benchmark data written to data.json");
 }
 
 run();
