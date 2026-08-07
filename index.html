@@ -62,7 +62,7 @@
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-6 gap-4">
                 <div>
                     <h3 class="text-lg font-semibold flex items-center"><i class="fa-solid fa-layer-group text-primary mr-2"></i> Ecosystem Tier Benchmarks</h3>
-                    <p class="text-sm text-gray-400 mt-1">Estimated returns based on current entry costs vs. live yield tracking of benchmark brokers.</p>
+                    <p class="text-sm text-gray-400 mt-1">Estimated returns based on current entry costs vs. live RPC log tracking of benchmark brokers.</p>
                 </div>
                 <div class="text-xs text-gray-500 bg-gray-800/50 px-3 py-1.5 rounded-lg border border-gray-700">
                     Base Entry: <span class="font-mono text-gray-300" id="base-entry-cost">Loading...</span> (NFT Floor)
@@ -189,9 +189,6 @@
     </div>
 
     <script>
-        const BLOCKSCOUT_API_KEY = "proapi_tI5cQZoWvXXgS1WFHXEaLKhLBSl0WHvcYv3msh7Kdpioyod8Bfon9vSHif7zhcAG_dLDzYW"; 
-        const BLOCKSCOUT_BASE_URL = "https://robinhoodchain.blockscout.com/api";
-
         const formatUSD = (num) => {
             if (isNaN(num)) return "$0.00";
             return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(num);
@@ -204,7 +201,6 @@
         
         let globalMarketParams = { ethPriceUsd: 1900.00, tokenPriceUsd: 0.02278, nftFloorEth: 7.661 };
         
-        // THE MATH FIX: Tier 4 is now correctly set to 666,666 STONK per the official Activation Ladder.
         let tierBenchmarks = [
             { tier: 1, reqTokens: 66666, benchmarkId: 1794, tbaAddress: "0x9c24b28c3146a1ca8095acd9611962f33faf068b", trackedAnnualYieldUsd: 0, loading: true, error: false },
             { tier: 2, reqTokens: 166666, benchmarkId: 2370, tbaAddress: "0x45f290f4e196c27abf738a32f5a97d47383cf0ba", trackedAnnualYieldUsd: 0, loading: true, error: false },
@@ -243,58 +239,6 @@
 
         const registryAbi = ["function account(address implementation, bytes32 salt, uint256 chainId, address tokenContract, uint256 tokenId) view returns (address)"];
         const erc721Abi = ["function ownerOf(uint256 tokenId) view returns (address)"];
-
-        // THE API FIX: Removed all blacklisted CORS proxies. Strictly utilizes direct fetching.
-        const requestQueue = [];
-        let isProcessingQueue = false;
-
-        async function apiFetch(url) {
-            return new Promise((resolve, reject) => {
-                requestQueue.push({ url, resolve, reject, tryCount: 0 });
-                if (!isProcessingQueue) processQueue();
-            });
-        }
-
-        async function processQueue() {
-            isProcessingQueue = true;
-            while (requestQueue.length > 0) {
-                const req = requestQueue[0];
-                try {
-                    const cacheBuster = `&_cb=${Date.now()}_${req.tryCount}`;
-                    
-                    const response = await fetch(req.url + cacheBuster, { headers: { "Accept": "application/json" } });
-                    
-                    if (!response.ok || response.status === 429) {
-                        throw new Error(`HTTP ${response.status}`);
-                    }
-
-                    const text = await response.text();
-                    const data = JSON.parse(text);
-                    
-                    if ((data.message && data.message.toLowerCase().includes("limit")) || 
-                        (typeof data.result === 'string' && data.result.toLowerCase().includes("limit"))) {
-                        throw new Error("API Limit");
-                    }
-
-                    requestQueue.shift();
-                    req.resolve(data);
-                    
-                    // THE GUARANTEE: A strict 6-second wait mathematically caps queries at 10 requests per minute.
-                    await sleep(6000); 
-                    
-                } catch (err) {
-                    req.tryCount++;
-                    if (req.tryCount >= 3) { 
-                        requestQueue.shift();
-                        req.reject(new Error("Rate Limit / Network Error"));
-                    } else {
-                        // Penalty box avoidance
-                        await sleep(15000); 
-                    }
-                }
-            }
-            isProcessingQueue = false;
-        }
 
         function renderTierBenchmarks() {
             const tbody = document.getElementById('tier-table-body');
@@ -366,68 +310,67 @@
             if (tbaAddress !== "0x0000000000000000000000000000000000000000") {
                 let currentBlock = preFetchedBlock;
                 if (!currentBlock) {
-                    try { 
-                        const blockUrl = `${BLOCKSCOUT_BASE_URL}?module=block&action=eth_block_number&apikey=${BLOCKSCOUT_API_KEY}`;
-                        const blockData = await apiFetch(blockUrl);
-                        
-                        if (blockData && blockData.status === "1" && blockData.result) {
-                            currentBlock = parseInt(blockData.result, 16);
-                        } else {
-                            throw new Error("Invalid block fetch response");
-                        }
-                    } catch(e) {
-                        try { currentBlock = await provider.getBlockNumber(); } catch (err) { currentBlock = 28500000; }
-                    }
+                    try { currentBlock = await provider.getBlockNumber(); } catch (err) { currentBlock = 30000000; }
                 }
 
-                const startBlock = Math.max(0, currentBlock - 6048000); 
-                const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
+                // Assume 2s blocks for 7 days (7 * 24 * 60 * 30 = 302,400)
+                const startBlock = Math.max(0, currentBlock - 302400); 
                 
-                const actions = ["tokentx", "txlist", "txlistinternal"];
-                
-                for (let action of actions) {
-                    const url = `${BLOCKSCOUT_BASE_URL}?module=account&action=${action}&address=${tbaAddress}&startblock=${startBlock}&page=1&offset=5000&sort=desc&apikey=${BLOCKSCOUT_API_KEY}`;
-                    const data = await apiFetch(url);
+                // --- THE NATIVE RPC SOLUTION ---
+                // We use standard web3 event logs, bypassing Blockscout entirely.
+                const transferTopic = ethers.id("Transfer(address,address,uint256)");
+                const paddedTba = ethers.zeroPadValue(tbaAddress, 32);
 
-                    if (data && data.status === "1" && Array.isArray(data.result) && data.result.length > 0) {
-                        for (const tx of data.result) {
-                            if (parseInt(tx.timeStamp, 10) >= sevenDaysAgo) {
-                                
-                                if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && (!tx.isError || tx.isError === "0")) {
-                                    let valueStr = tx.value || "0";
-                                    if (valueStr === "") valueStr = "0";
+                try {
+                    // Fetch logs natively from the node
+                    const logs = await provider.getLogs({
+                        fromBlock: startBlock,
+                        toBlock: "latest",
+                        topics: [transferTopic, null, paddedTba]
+                    });
 
-                                    if (action !== "tokentx") {
-                                        const ethAmount = parseFloat(ethers.formatEther(valueStr));
-                                        if (ethAmount > 0) {
-                                            if (!aggregatedTransfers["ETH"]) aggregatedTransfers["ETH"] = { ticker: "ETH", rawAmount: 0, currentPriceUsd: globalMarketParams.ethPriceUsd };
-                                            aggregatedTransfers["ETH"].rawAmount += ethAmount;
-                                        }
-                                    } else {
-                                        const contractAddr = (tx.contractAddress || "").toLowerCase();
-                                        const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr);
-                                        
-                                        if (!matchedToken) continue; 
+                    // Parse raw node data
+                    for (let log of logs) {
+                        const contractAddr = log.address.toLowerCase();
+                        const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr);
+                        
+                        if (matchedToken) {
+                            let tokenPriceUsd = matchedToken.symbol === "STONKBROKER" ? globalMarketParams.tokenPriceUsd : matchedToken.priceUsd;
+                            
+                            // log.data contains the hex value transferred
+                            const amountStr = BigInt(log.data).toString();
+                            const tokenAmount = parseFloat(ethers.formatUnits(amountStr, 18));
 
-                                        let tokenPriceUsd = matchedToken.symbol === "STONKBROKER" ? globalMarketParams.tokenPriceUsd : matchedToken.priceUsd;
-                                        const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
-                                        const tokenAmount = parseFloat(ethers.formatUnits(valueStr, decimals));
-
-                                        if (tokenAmount > 0) {
-                                            if (!aggregatedTransfers[matchedToken.symbol]) {
-                                                aggregatedTransfers[matchedToken.symbol] = { 
-                                                    ticker: matchedToken.symbol, 
-                                                    rawAmount: 0, 
-                                                    currentPriceUsd: tokenPriceUsd 
-                                                };
-                                            }
-                                            aggregatedTransfers[matchedToken.symbol].rawAmount += tokenAmount;
-                                        }
-                                    }
+                            if (tokenAmount > 0) {
+                                if (!aggregatedTransfers[matchedToken.symbol]) {
+                                    aggregatedTransfers[matchedToken.symbol] = { 
+                                        ticker: matchedToken.symbol, 
+                                        rawAmount: 0, 
+                                        currentPriceUsd: tokenPriceUsd 
+                                    };
                                 }
+                                aggregatedTransfers[matchedToken.symbol].rawAmount += tokenAmount;
                             }
                         }
                     }
+
+                    // Handle native ETH using balance deltas
+                    try {
+                        const currentEth = await provider.getBalance(tbaAddress, "latest");
+                        const pastEth = await provider.getBalance(tbaAddress, startBlock);
+                        if (currentEth > pastEth) {
+                            const ethYield = parseFloat(ethers.formatEther(currentEth - pastEth));
+                            if (ethYield > 0) {
+                                aggregatedTransfers["ETH"] = { ticker: "ETH", rawAmount: ethYield, currentPriceUsd: globalMarketParams.ethPriceUsd };
+                            }
+                        }
+                    } catch(e) {
+                        console.warn("Archive ETH state unavailable on RPC");
+                    }
+
+                } catch (error) {
+                    console.error("RPC Log fetch failed:", error);
+                    throw new Error("RPC Data Error");
                 }
             }
 
@@ -529,7 +472,7 @@
                 renderDashboard(realData);
             } catch (err) {
                 errorMsg.classList.remove('hidden');
-                errorMsg.innerText = err.message.includes("Rate") ? "API Rate Limit. Wait a moment." : "API Error. Please try again.";
+                errorMsg.innerText = err.message.includes("RPC") ? "RPC Node timeout. Wait a moment." : "Error. Please try again.";
                 console.error("Lookup failed:", err);
             } finally {
                 searchText.classList.remove('hidden'); searchSpinner.classList.add('hidden');
@@ -581,7 +524,7 @@
                 } catch (e) {
                     console.error("Failed to load tier benchmark", bm.tier, e);
                     bm.loading = false;
-                    bm.error = e.message.includes("Limit") ? "API Limit Reached" : "Data Error";
+                    bm.error = "RPC Limit Reached";
                 }
                 
                 renderTierBenchmarks(); 
