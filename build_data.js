@@ -44,9 +44,13 @@ async function secureFetch(url) {
     let retries = 0;
     while (retries < 5) {
         try {
-            const res = await fetch(url);
+            const res = await fetch(url, { headers: { "Accept": "application/json" } });
+            
+            if (res.status === 429) throw new Error("Rate Limit HTTP");
+            
             const data = await res.json();
-            if (data.message && data.message.toLowerCase().includes("limit")) throw new Error("Limit");
+            if (data.message && data.message.toLowerCase().includes("limit")) throw new Error("API Limit Payload");
+            
             return data;
         } catch (err) {
             retries++;
@@ -58,13 +62,14 @@ async function secureFetch(url) {
 }
 
 async function run() {
-    console.log("Starting data sync...");
+    console.log("Starting secure data sync...");
     
+    // 1. Fetch current spot prices
     try {
         const ethRes = await fetch('https://api.exchange.coinbase.com/products/ETH-USD/ticker');
         const ethData = await ethRes.json();
         globalMarketParams.ethPriceUsd = parseFloat(ethData.price);
-    } catch(e) {}
+    } catch(e) { console.log("ETH Price fetch failed, using fallback."); }
 
     try {
         const dexRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${WEB3_CONFIG.TOKENS[0].address}`);
@@ -74,40 +79,54 @@ async function run() {
             globalMarketParams.tokenPriceUsd = parseFloat(bestPair.priceUsd);
             WEB3_CONFIG.TOKENS[0].priceUsd = globalMarketParams.tokenPriceUsd;
         }
-    } catch(e) {}
+    } catch(e) { console.log("STONK Price fetch failed, using fallback."); }
 
     globalMarketParams.nftFloorEth = parseFloat(((666666 * globalMarketParams.tokenPriceUsd) / globalMarketParams.ethPriceUsd).toFixed(3));
     
+    // 2. Determine Block Range
     const provider = new ethers.JsonRpcProvider(WEB3_CONFIG.RPC_URL);
     let currentBlock = 30000000;
     try { currentBlock = await provider.getBlockNumber(); } catch(e) {}
     
+    // 6,048,000 blocks covers exactly 7 days on an L2 with 0.1s block times.
     const startBlock = Math.max(0, currentBlock - 6048000);
     const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
 
+    // 3. Process Tiers
     for (let bm of tierBenchmarks) {
-        console.log(`Processing Tier ${bm.tier}...`);
+        console.log(`\nProcessing Tier ${bm.tier} (TBA: ${bm.tbaAddress})...`);
         let aggregatedTransfers = {};
+        
+        // Fetching Token Transfers AND Native/Internal ETH Transfers
         const actions = ["tokentx", "txlist", "txlistinternal"];
 
         for (let action of actions) {
-            const url = `${BLOCKSCOUT_BASE_URL}?module=account&action=${action}&address=${bm.tbaAddress}&startblock=${startBlock}&page=1&offset=5000&sort=desc&apikey=${BLOCKSCOUT_API_KEY}`;
+            console.log(`-> Fetching ${action}...`);
+            const url = `${BLOCKSCOUT_BASE_URL}?module=account&action=${action}&address=${bm.tbaAddress}&startblock=${startBlock}&page=1&offset=10000&sort=desc&apikey=${BLOCKSCOUT_API_KEY}`;
             const data = await secureFetch(url);
 
             if (data && data.status === "1" && Array.isArray(data.result)) {
                 for (const tx of data.result) {
+                    
+                    // STRICT INBOUND FILTER & TIMESTAMP CHECK
                     if (parseInt(tx.timeStamp, 10) >= sevenDaysAgo && tx.to && tx.to.toLowerCase() === bm.tbaAddress.toLowerCase() && (!tx.isError || tx.isError === "0")) {
                         let valueStr = tx.value || "0";
+                        
                         if (action !== "tokentx") {
+                            // Gross ETH Inflow Tracking
                             const ethAmount = parseFloat(ethers.formatEther(valueStr));
                             if (ethAmount > 0) {
-                                if (!aggregatedTransfers["ETH"]) aggregatedTransfers["ETH"] = { ticker: "ETH", rawAmount: 0, currentPriceUsd: globalMarketParams.ethPriceUsd };
+                                if (!aggregatedTransfers["ETH"]) {
+                                    aggregatedTransfers["ETH"] = { ticker: "ETH", rawAmount: 0, currentPriceUsd: globalMarketParams.ethPriceUsd };
+                                }
                                 aggregatedTransfers["ETH"].rawAmount += ethAmount;
                             }
                         } else {
+                            // Token Tracking
                             const contractAddr = (tx.contractAddress || "").toLowerCase();
                             const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr);
-                            if (!matchedToken) continue;
+                            
+                            if (!matchedToken) continue; // Ignore untracked/scam tokens
 
                             const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
                             const tokenAmount = parseFloat(ethers.formatUnits(valueStr, decimals));
@@ -122,17 +141,29 @@ async function run() {
                     }
                 }
             }
-            // Ultra-safe 10 second delay between requests
+            // IRON-CLAD PACING: 10 full seconds between requests to guarantee we never hit 10 req/min
             await sleep(10000); 
         }
 
+        // Calculate final annualized USD value for the tier
         let totalYieldUsd = 0;
-        Object.values(aggregatedTransfers).forEach(asset => {
-            totalYieldUsd += ((asset.rawAmount * 52.14) * asset.currentPriceUsd);
+        bm.tbaBalances = Object.values(aggregatedTransfers).map(asset => {
+            const annualizedAmount = asset.rawAmount * 52.14;
+            const assetUsdValue = annualizedAmount * asset.currentPriceUsd;
+            totalYieldUsd += assetUsdValue;
+            
+            return {
+                ticker: asset.ticker,
+                amount: annualizedAmount,
+                currentPriceUsd: asset.currentPriceUsd
+            };
         });
+        
         bm.trackedAnnualYieldUsd = totalYieldUsd;
+        console.log(`✓ Tier ${bm.tier} complete. Tracked Annual Yield: $${totalYieldUsd.toFixed(2)}`);
     }
 
+    // 4. Save to disk
     const finalData = {
         market: globalMarketParams,
         tiers: tierBenchmarks,
@@ -140,7 +171,7 @@ async function run() {
     };
 
     fs.writeFileSync('data.json', JSON.stringify(finalData, null, 2));
-    console.log("Data successfully written to data.json");
+    console.log("\nSuccess: Data cleanly written to data.json");
 }
 
 run();
