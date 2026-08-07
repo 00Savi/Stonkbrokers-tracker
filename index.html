@@ -385,54 +385,42 @@
 
                 const startBlock = Math.max(0, currentBlock - 6048000); 
                 const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
-                const actions = ["tokentx", "txlist", "txlistinternal"];
                 
-                for (let action of actions) {
-                    // THE FIX: Increased offset to 10,000 to prevent truncating highly active TBAs
-                    const url = `${BLOCKSCOUT_BASE_URL}?module=account&action=${action}&address=${tbaAddress}&startblock=${startBlock}&page=1&offset=10000&sort=desc&apikey=${BLOCKSCOUT_API_KEY}`;
-                    const data = await apiFetch(url);
+                // THE PERMANENT FIX: ETH tracking deleted entirely. We exclusively query tokentx, 
+                // instantly dropping the API footprint from 15 calls down to a hyper-light 5 calls.
+                const url = `${BLOCKSCOUT_BASE_URL}?module=account&action=tokentx&address=${tbaAddress}&startblock=${startBlock}&page=1&offset=2500&sort=desc&apikey=${BLOCKSCOUT_API_KEY}`;
+                const data = await apiFetch(url);
 
-                    if (data && data.status === "1" && Array.isArray(data.result) && data.result.length > 0) {
-                        for (const tx of data.result) {
-                            if (parseInt(tx.timeStamp, 10) >= sevenDaysAgo) {
-                                // STRICT INBOUND CHECK: Only counts if the receiving address is the TBA
-                                if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && (!tx.isError || tx.isError === "0")) {
-                                    let valueStr = tx.value || "0";
-                                    if (valueStr === "") valueStr = "0";
+                if (data && data.status === "1" && Array.isArray(data.result) && data.result.length > 0) {
+                    for (const tx of data.result) {
+                        if (parseInt(tx.timeStamp, 10) >= sevenDaysAgo) {
+                            if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && (!tx.isError || tx.isError === "0")) {
+                                let valueStr = tx.value || "0";
+                                if (valueStr === "") valueStr = "0";
 
-                                    if (action !== "tokentx") {
-                                        const ethAmount = parseFloat(ethers.formatEther(valueStr));
-                                        if (ethAmount > 0) {
-                                            if (!aggregatedTransfers["ETH"]) aggregatedTransfers["ETH"] = { ticker: "ETH", rawAmount: 0, currentPriceUsd: globalMarketParams.ethPriceUsd };
-                                            aggregatedTransfers["ETH"].rawAmount += ethAmount;
-                                        }
-                                    } else {
-                                        // THE FIX: Dynamic All-Token Discovery
-                                        const contractAddr = (tx.contractAddress || "").toLowerCase();
-                                        const tokenSymbol = tx.tokenSymbol || "UNKNOWN";
-                                        
-                                        const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr);
-                                        let tokenPriceUsd = 0;
-                                        
-                                        if (matchedToken) {
-                                            tokenPriceUsd = matchedToken.symbol === "STONKBROKER" ? globalMarketParams.tokenPriceUsd : matchedToken.priceUsd;
-                                        }
+                                const contractAddr = (tx.contractAddress || "").toLowerCase();
+                                const tokenSymbol = tx.tokenSymbol || "UNKNOWN";
+                                
+                                const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr);
+                                let tokenPriceUsd = 0;
+                                
+                                if (matchedToken) {
+                                    tokenPriceUsd = matchedToken.symbol === "STONKBROKER" ? globalMarketParams.tokenPriceUsd : matchedToken.priceUsd;
+                                }
 
-                                        const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
-                                        const tokenAmount = parseFloat(ethers.formatUnits(valueStr, decimals));
+                                const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
+                                const tokenAmount = parseFloat(ethers.formatUnits(valueStr, decimals));
 
-                                        if (tokenAmount > 0) {
-                                            const displaySymbol = matchedToken ? matchedToken.symbol : tokenSymbol;
-                                            if (!aggregatedTransfers[displaySymbol]) {
-                                                aggregatedTransfers[displaySymbol] = { 
-                                                    ticker: displaySymbol, 
-                                                    rawAmount: 0, 
-                                                    currentPriceUsd: tokenPriceUsd 
-                                                };
-                                            }
-                                            aggregatedTransfers[displaySymbol].rawAmount += tokenAmount;
-                                        }
+                                if (tokenAmount > 0) {
+                                    const displaySymbol = matchedToken ? matchedToken.symbol : tokenSymbol;
+                                    if (!aggregatedTransfers[displaySymbol]) {
+                                        aggregatedTransfers[displaySymbol] = { 
+                                            ticker: displaySymbol, 
+                                            rawAmount: 0, 
+                                            currentPriceUsd: tokenPriceUsd 
+                                        };
                                     }
+                                    aggregatedTransfers[displaySymbol].rawAmount += tokenAmount;
                                 }
                             }
                         }
@@ -446,7 +434,7 @@
                 activation: { tokensBurned: tokensReq, historicalTokenPriceUsd: globalMarketParams.tokenPriceUsd },
                 tbaBalances: Object.values(aggregatedTransfers).map(asset => ({
                     ticker: asset.ticker,
-                    amount: asset.rawAmount * 52.14, // Exact 7-day annualization math
+                    amount: asset.rawAmount * 52.14, 
                     currentPriceUsd: asset.currentPriceUsd || 0
                 }))
             };
@@ -464,7 +452,6 @@
                 return { ...asset, valueUsd: isNaN(value) ? 0 : value };
             });
 
-            // Flawless ROI Mathematics
             const cashOnCashPercentage = totalOutlayUsd > 0 ? (totalYieldUsd / totalOutlayUsd) * 100 : 0;
             const netProfitUsd = totalYieldUsd - totalOutlayUsd;
 
@@ -595,8 +582,6 @@
                 }
                 
                 renderTierBenchmarks(); 
-                
-                // Breath timing
                 if (bm.tier < 5) await sleep(1500); 
             }
         }
