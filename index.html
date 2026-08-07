@@ -203,11 +203,13 @@
         const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
         
         let globalMarketParams = { ethPriceUsd: 1900.00, tokenPriceUsd: 0.02278, nftFloorEth: 7.661 };
+        
+        // THE MATH FIX: Tier 4 is now correctly set to 666,666 STONK per the official Activation Ladder.
         let tierBenchmarks = [
             { tier: 1, reqTokens: 66666, benchmarkId: 1794, tbaAddress: "0x9c24b28c3146a1ca8095acd9611962f33faf068b", trackedAnnualYieldUsd: 0, loading: true, error: false },
             { tier: 2, reqTokens: 166666, benchmarkId: 2370, tbaAddress: "0x45f290f4e196c27abf738a32f5a97d47383cf0ba", trackedAnnualYieldUsd: 0, loading: true, error: false },
             { tier: 3, reqTokens: 366666, benchmarkId: 275, tbaAddress: "0x0c9aa82841a3a560a10e64e44f8c4687a1257e3e", trackedAnnualYieldUsd: 0, loading: true, error: false },
-            { tier: 4, reqTokens: 766666, benchmarkId: 1491, tbaAddress: "0x9978cb6b8581d2a95e9b8d683bf2b8120dc0a0ee", trackedAnnualYieldUsd: 0, loading: true, error: false },
+            { tier: 4, reqTokens: 666666, benchmarkId: 1491, tbaAddress: "0x9978cb6b8581d2a95e9b8d683bf2b8120dc0a0ee", trackedAnnualYieldUsd: 0, loading: true, error: false },
             { tier: 5, reqTokens: 1666666, benchmarkId: 1400, tbaAddress: "0x2052a6201600b879ad3a96e6e71148e55053c924", trackedAnnualYieldUsd: 0, loading: true, error: false }
         ];
 
@@ -242,13 +244,7 @@
         const registryAbi = ["function account(address implementation, bytes32 salt, uint256 chainId, address tokenContract, uint256 tokenId) view returns (address)"];
         const erc721Abi = ["function ownerOf(uint256 tokenId) view returns (address)"];
 
-        const CORS_PROXIES = [
-            (url) => url, 
-            (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`, 
-            (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, 
-            (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`  
-        ];
-
+        // THE API FIX: Removed all blacklisted CORS proxies. Strictly utilizes direct fetching.
         const requestQueue = [];
         let isProcessingQueue = false;
 
@@ -264,11 +260,9 @@
             while (requestQueue.length > 0) {
                 const req = requestQueue[0];
                 try {
-                    const proxyIndex = req.tryCount % CORS_PROXIES.length;
                     const cacheBuster = `&_cb=${Date.now()}_${req.tryCount}`;
-                    const targetUrl = CORS_PROXIES[proxyIndex](req.url + cacheBuster);
                     
-                    const response = await fetch(targetUrl, { headers: { "Accept": "application/json" } });
+                    const response = await fetch(req.url + cacheBuster, { headers: { "Accept": "application/json" } });
                     
                     if (!response.ok || response.status === 429) {
                         throw new Error(`HTTP ${response.status}`);
@@ -285,19 +279,17 @@
                     requestQueue.shift();
                     req.resolve(data);
                     
-                    await sleep(800); 
+                    // THE GUARANTEE: A strict 6-second wait mathematically caps queries at 10 requests per minute.
+                    await sleep(6000); 
                     
                 } catch (err) {
                     req.tryCount++;
-                    if (req.tryCount >= CORS_PROXIES.length * 2) { 
+                    if (req.tryCount >= 3) { 
                         requestQueue.shift();
                         req.reject(new Error("Rate Limit / Network Error"));
                     } else {
-                        if (req.tryCount % CORS_PROXIES.length === 0) {
-                            await sleep(3000);
-                        } else {
-                            await sleep(200); 
-                        }
+                        // Penalty box avoidance
+                        await sleep(15000); 
                     }
                 }
             }
@@ -351,7 +343,7 @@
             else if (tokenId == 1491) actualTier = 4;
             else if (tokenId == 1400) actualTier = 5;
 
-            const tokensReq = actualTier === 1 ? 66666 : actualTier === 2 ? 166666 : actualTier === 3 ? 366666 : actualTier === 4 ? 766666 : 1666666;
+            const tokensReq = actualTier === 1 ? 66666 : actualTier === 2 ? 166666 : actualTier === 3 ? 366666 : actualTier === 4 ? 666666 : 1666666;
             const registryContract = new ethers.Contract(WEB3_CONFIG.REGISTRY_CONTRACT, registryAbi, provider);
             const nftContract = new ethers.Contract(WEB3_CONFIG.NFT_CONTRACT, erc721Abi, provider);
 
@@ -593,7 +585,6 @@
                 }
                 
                 renderTierBenchmarks(); 
-                if (bm.tier < 5) await sleep(3000); 
             }
         }
 
