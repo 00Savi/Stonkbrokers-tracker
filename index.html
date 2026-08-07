@@ -7,7 +7,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -32,13 +31,6 @@
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         }
         .glow-text { text-shadow: 0 0 20px rgba(16, 185, 129, 0.4); }
-        .spinner {
-            border: 3px solid rgba(255,255,255,0.1);
-            width: 16px; height: 16px; border-radius: 50%;
-            border-left-color: #3b82f6;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body class="min-h-screen p-4 md:p-8">
@@ -48,7 +40,7 @@
                 <div class="w-10 h-10 bg-primary rounded-lg flex items-center justify-center font-bold text-xl">$</div>
                 <div>
                     <h1 class="text-2xl font-bold tracking-tight">StonkBrokers Tracker</h1>
-                    <p class="text-gray-400 text-sm">On-Chain ROI Analytics (Live Node Sync)</p>
+                    <p class="text-gray-400 text-sm">On-Chain ROI Analytics (Automated Sync)</p>
                 </div>
             </div>
             <div class="flex space-x-6 text-sm">
@@ -62,7 +54,7 @@
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-6 gap-4">
                 <div>
                     <h3 class="text-lg font-semibold flex items-center"><i class="fa-solid fa-layer-group text-primary mr-2"></i> Ecosystem Tier Benchmarks</h3>
-                    <p class="text-sm text-gray-400 mt-1">Estimated returns based on current entry costs vs. live tracking of benchmark brokers.</p>
+                    <p class="text-sm text-gray-400 mt-1" id="last-updated">Estimated returns based on current entry costs vs. live tracking of benchmark brokers.</p>
                 </div>
                 <div class="text-xs text-gray-500 bg-gray-800/50 px-3 py-1.5 rounded-lg border border-gray-700">
                     Base Entry: <span class="font-mono text-gray-300" id="base-entry-cost">Loading...</span> (NFT Floor)
@@ -80,519 +72,63 @@
                         </tr>
                     </thead>
                     <tbody id="tier-table-body" class="text-sm divide-y divide-gray-800/50">
-                        <tr><td colspan="5" class="py-4 text-center text-gray-500 italic">Initializing Web3 Provider...</td></tr>
+                        <tr><td colspan="5" class="py-4 text-center text-gray-500 italic">Fetching data payload...</td></tr>
                     </tbody>
                 </table>
             </div>
         </section>
-
-        <div class="flex items-center space-x-2 mt-8 mb-[-10px]">
-            <i class="fa-solid fa-magnifying-glass-chart text-gray-500"></i>
-            <h2 class="text-lg font-semibold text-gray-300">Specific Broker Analysis (Annualized Projection)</h2>
-        </div>
-        
-        <main id="dashboard-content" class="space-y-6 transition-opacity duration-300">
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div class="glass-card rounded-2xl p-6 flex flex-col justify-between border-t-4 border-t-primary">
-                    <div>
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <h2 class="text-gray-400 text-sm uppercase tracking-wider font-semibold">Broker ID</h2>
-                                <p class="text-4xl font-bold mt-1" id="broker-id">#--</p>
-                            </div>
-                            <span class="px-3 py-1 rounded-full bg-blue-900/50 text-blue-300 text-xs font-semibold border border-blue-800" id="broker-tier">Awaiting Input</span>
-                        </div>
-                        <div class="mt-6 space-y-2">
-                            <p class="text-sm text-gray-400 flex justify-between"><span>Owner:</span><span class="font-mono text-gray-300" id="broker-owner">0x...</span></p>
-                            <p class="text-sm text-gray-400 flex justify-between"><span>TBA Wallet:</span><span class="font-mono text-gray-300" id="broker-tba">0x...</span></p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="glass-card rounded-2xl p-6 lg:col-span-2 border-t-4 border-t-success relative overflow-hidden">
-                    <div class="absolute -right-10 -top-10 w-40 h-40 bg-success/10 rounded-full blur-3xl"></div>
-                    <h2 class="text-gray-400 text-sm uppercase tracking-wider font-semibold mb-4">Projected Annual Performance</h2>
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div>
-                            <p class="text-gray-400 text-xs mb-1">Est. Cash-on-Cash</p>
-                            <p class="text-3xl font-bold text-success glow-text" id="calc-roi">0.0%</p>
-                        </div>
-                        <div>
-                            <p class="text-gray-400 text-xs mb-1">Est. Annual Yield</p>
-                            <p class="text-2xl font-bold font-mono" id="calc-earnings">+$0.00</p>
-                        </div>
-                        <div>
-                            <p class="text-gray-400 text-xs mb-1">Total Capital Outlay</p>
-                            <p class="text-xl font-semibold text-gray-300 font-mono" id="calc-outlay">$0.00</p>
-                        </div>
-                        <div>
-                            <p class="text-gray-400 text-xs mb-1">Est. Annual Net</p>
-                            <p class="text-xl font-semibold text-danger font-mono" id="calc-net">$0.00</p>
-                            <p class="text-[10px] text-gray-500 mt-1" id="calc-net-sub">Waiting for data</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="glass-card rounded-2xl p-6">
-                    <h3 class="text-lg font-semibold mb-4 flex items-center"><i class="fa-solid fa-money-bill-wave text-gray-400 mr-2"></i> Capital Outlay</h3>
-                    <div class="space-y-4">
-                        <div class="bg-gray-800/50 rounded-xl p-4">
-                            <div class="flex justify-between items-start mb-2">
-                                <div><p class="font-semibold text-sm">NFT Acquisition</p><p class="text-xs text-gray-400 mt-1">Estimated Base Cost</p></div>
-                                <div class="text-right"><p class="font-mono font-semibold" id="outlay-nft-usd">$0.00</p><p class="text-xs text-gray-400 font-mono" id="outlay-nft-eth">0.00 ETH</p></div>
-                            </div>
-                        </div>
-                        <div class="bg-gray-800/50 rounded-xl p-4">
-                            <div class="flex justify-between items-start mb-2">
-                                <div><p class="font-semibold text-sm">Tier Activation</p><p class="text-xs text-gray-400 mt-1">Tokens Burned</p></div>
-                                <div class="text-right"><p class="font-mono font-semibold" id="outlay-act-usd">$0.00</p><p class="text-xs text-gray-400 font-mono" id="outlay-act-tok">0 STONK</p></div>
-                            </div>
-                        </div>
-                        <div class="flex justify-between items-center p-2 border-t border-gray-700 mt-4">
-                            <span class="text-gray-300 font-semibold">Total Base Cost</span>
-                            <span class="font-mono font-bold text-lg" id="outlay-total">$0.00</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="glass-card rounded-2xl p-6">
-                    <h3 class="text-lg font-semibold mb-4 flex items-center"><i class="fa-solid fa-vault text-gray-400 mr-2"></i> Projected Yield Distribution</h3>
-                    <p class="text-xs text-gray-400 mb-4">Annualized estimate natively synced via Lightning Blockscout API.</p>
-                    <div class="space-y-3" id="yield-list">
-                        <div class="text-sm text-gray-500 italic text-center py-4">Enter an ID below to load assets.</div>
-                    </div>
-                    <div class="flex justify-between items-center p-2 border-t border-gray-700 mt-6 pt-4">
-                        <span class="text-gray-300 font-semibold">Total Est. Annual Yield</span>
-                        <span class="font-mono font-bold text-lg text-success" id="yield-total">$0.00</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="glass-card rounded-2xl p-6 mt-8">
-                <h3 class="text-lg font-semibold mb-2">Lookup Broker Dashboard</h3>
-                <p class="text-sm text-gray-400 mb-4">Enter a StonkBroker NFT ID to fetch live on-chain data directly from your browser.</p>
-                <div class="flex flex-col sm:flex-row gap-4">
-                    <div class="relative flex-grow">
-                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><span class="text-gray-500">#</span></div>
-                        <input type="number" id="search-input" class="bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:ring-primary focus:border-primary block w-full pl-8 p-2.5 outline-none" placeholder="Enter ID (e.g. 420)">
-                    </div>
-                    <button id="search-btn" class="bg-primary hover:bg-blue-600 text-white font-semibold py-2.5 px-6 rounded-lg transition-colors flex items-center justify-center min-w-[120px]">
-                        <span id="search-text">Analyze</span>
-                        <div id="search-spinner" class="spinner hidden text-white border-white border-l-transparent mx-auto"></div>
-                    </button>
-                </div>
-                <p id="error-message" class="text-danger text-sm mt-3 hidden">Error loading data. Check console for details.</p>
-            </div>
-        </main>
     </div>
 
     <script>
-        const BLOCKSCOUT_API_KEY = "proapi_tI5cQZoWvXXgS1WFHXEaLKhLBSl0WHvcYv3msh7Kdpioyod8Bfon9vSHif7zhcAG_dLDzYW"; 
-        const BLOCKSCOUT_BASE_URL = "https://robinhoodchain.blockscout.com/api";
+        const formatUSD = (num) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(num || 0);
+        const formatNum = (num) => new Intl.NumberFormat('en-US').format(num || 0);
 
-        const formatUSD = (num) => {
-            if (isNaN(num)) return "$0.00";
-            return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(num);
-        };
-        const formatNum = (num) => {
-            if (isNaN(num)) return "0";
-            return new Intl.NumberFormat('en-US').format(num);
-        };
-        const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-        
-        let globalMarketParams = { ethPriceUsd: 1900.00, tokenPriceUsd: 0.02278, nftFloorEth: 7.661 };
-        
-        let tierBenchmarks = [
-            { tier: 1, reqTokens: 66666, benchmarkId: 1794, tbaAddress: "0x9c24b28c3146a1ca8095acd9611962f33faf068b", trackedAnnualYieldUsd: 0, loading: true, error: false },
-            { tier: 2, reqTokens: 166666, benchmarkId: 2370, tbaAddress: "0x45f290f4e196c27abf738a32f5a97d47383cf0ba", trackedAnnualYieldUsd: 0, loading: true, error: false },
-            { tier: 3, reqTokens: 366666, benchmarkId: 275, tbaAddress: "0x0c9aa82841a3a560a10e64e44f8c4687a1257e3e", trackedAnnualYieldUsd: 0, loading: true, error: false },
-            { tier: 4, reqTokens: 666666, benchmarkId: 1491, tbaAddress: "0x9978cb6b8581d2a95e9b8d683bf2b8120dc0a0ee", trackedAnnualYieldUsd: 0, loading: true, error: false },
-            { tier: 5, reqTokens: 1666666, benchmarkId: 1400, tbaAddress: "0x2052a6201600b879ad3a96e6e71148e55053c924", trackedAnnualYieldUsd: 0, loading: true, error: false }
-        ];
+        async function initializeDashboard() {
+            try {
+                // Instantly fetch the pre-calculated data JSON
+                const res = await fetch(`data.json?t=${Date.now()}`);
+                const data = await res.json();
 
-        const WEB3_CONFIG = {
-            STONKBROKER: "0xe934e36a439c94017b64a3fece66af12099abf50",
-            NFT_CONTRACT: "0x539cdd042c2f3d93ebc5be7dfff0c79f3b4fabf0",
-            REGISTRY_CONTRACT: "0x000000006551c19487814612e58fe06813775758",
-            IMPLEMENTATION_CONTRACT: "0x55266d75d1a14e4572138116af39863ed6593ece",
-            CHAIN_ID: 4663, 
-            RPC_URL: "https://rpc.mainnet.chain.robinhood.com",
-            TOKENS: [
-                { symbol: "STONKBROKER", address: "0xe934e36A439C94017B64a3FecE66AF12099aBF50", priceUsd: 0.02278 },
-                { symbol: "AAPL", address: "0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9", priceUsd: 225.00 },
-                { symbol: "AMZN", address: "0x12f190a9F9d7D37a250758b26824B97CE941bF54", priceUsd: 185.00 },
-                { symbol: "NVDA", address: "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC", priceUsd: 120.00 },
-                { symbol: "SLV", address: "0x411eFb0E7f985935DAec3D4C3ebaEa0d0AD7D89f", priceUsd: 28.00 },
-                { symbol: "MSFT", address: "0xe93237C50D904957Cf27E7B1133b510C669c2e74", priceUsd: 430.00 },
-                { symbol: "COST", address: "0x4EA005168D7F09a7A0Ba9D1DEf21a479950E44C2", priceUsd: 820.00 }, 
-                { symbol: "USAR", address: "0xd917B029C761D264c6A312BBbcDA868658eF86a6", priceUsd: 50.00 },  
-                { symbol: "SPCX", address: "0x4a0E65A3EcceC6dBe60AE065F2e7bb85Fae35eEa", priceUsd: 25.00 },  
-                { symbol: "GOOGL", address: "0x2e0847E8910a9732eB3fb1bb4b70a580ADAD4FE3", priceUsd: 175.00 }, 
-                { symbol: "RDDT", address: "0x05b37Fb53A299a1b874A619e1c4C404D52C36F4C", priceUsd: 65.00 },
-                { symbol: "GME", address: "0x1b0E319c6A659F002271B69dB8A7df2F911c153E", priceUsd: 22.00 },
-                { symbol: "USO", address: "0xa30FA36Db767ad9eD3f7a60fC79526fB4d56D344", priceUsd: 119.32 },
-                { symbol: "USDG", address: "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168", priceUsd: 1.00 },
-                { symbol: "PLTR", address: "0x894e1ec2d74ffe5aef8dc8a9e84686accb964f2a", priceUsd: 30.00 },
-                { symbol: "AMD", address: "0x86923f96303D656E4aa86D9d42D1e57ad2023fdC", priceUsd: 140.00 },
-                { symbol: "TSLA", address: "0x322F0929c4625eD5bAd873c95208D54E1c003b2d", priceUsd: 200.00 }
-            ]
-        };
-
-        const registryAbi = ["function account(address implementation, bytes32 salt, uint256 chainId, address tokenContract, uint256 tokenId) view returns (address)"];
-        const erc721Abi = ["function ownerOf(uint256 tokenId) view returns (address)"];
-
-        const requestQueue = [];
-        let isProcessingQueue = false;
-
-        async function apiFetch(url) {
-            return new Promise((resolve, reject) => {
-                requestQueue.push({ url, resolve, reject, tryCount: 0 });
-                if (!isProcessingQueue) processQueue();
-            });
-        }
-
-        async function processQueue() {
-            isProcessingQueue = true;
-            while (requestQueue.length > 0) {
-                const req = requestQueue[0];
-                try {
-                    // DIRECT TO BLOCKSCOUT API: Bypassing proxies completely.
-                    const cacheBuster = `&_cb=${Date.now()}_${req.tryCount}`;
-                    const response = await fetch(req.url + cacheBuster, { headers: { "Accept": "application/json" } });
-                    
-                    if (!response.ok) {
-                        throw new Error(`HTTP ${response.status}`);
-                    }
-
-                    const text = await response.text();
-                    const data = JSON.parse(text);
-                    
-                    if ((data.message && data.message.toLowerCase().includes("limit")) || 
-                        (typeof data.result === 'string' && data.result.toLowerCase().includes("limit"))) {
-                        throw new Error("API Limit");
-                    }
-
-                    requestQueue.shift();
-                    req.resolve(data);
-                    
-                    // THE IRON-CLAD PACING: 4000ms delay mathematically guarantees we NEVER exceed 10 requests per minute.
-                    await sleep(4000); 
-                    
-                } catch (err) {
-                    req.tryCount++;
-                    if (req.tryCount >= 3) { 
-                        requestQueue.shift();
-                        req.reject(new Error("Rate Limit"));
-                    } else {
-                        // Takes a 12-second penalty breather if it somehow trips the alarm
-                        await sleep(12000); 
-                    }
-                }
-            }
-            isProcessingQueue = false;
-        }
-
-        function renderTierBenchmarks() {
-            const tbody = document.getElementById('tier-table-body');
-            tbody.innerHTML = '';
-            const baseNftCostUsd = globalMarketParams.tokenPriceUsd * 666666;
-
-            tierBenchmarks.forEach(bm => {
-                const activationCostUsd = bm.reqTokens * globalMarketParams.tokenPriceUsd;
-                const currentTotalCostUsd = baseNftCostUsd + activationCostUsd;
-                let estCashOnCash = (currentTotalCostUsd > 0 && bm.trackedAnnualYieldUsd > 0) ? (bm.trackedAnnualYieldUsd / currentTotalCostUsd) * 100 : 0;
-
-                let yieldDisplay;
-                if (bm.loading) {
-                    yieldDisplay = `<div class="flex items-center text-primary"><div class="spinner mr-2"></div><span class="text-xs">Fetching Yield...</span></div>`;
-                } else if (bm.error) {
-                    yieldDisplay = `<span class="text-xs text-danger font-semibold border border-danger/20 bg-danger/10 px-2 py-1 rounded">${bm.error}</span>`;
-                } else if (!bm.trackedAnnualYieldUsd || bm.trackedAnnualYieldUsd === 0) {
-                    yieldDisplay = `<span class="text-xs text-gray-500 italic">No yield in last 7d</span>`;
-                } else {
-                    yieldDisplay = `${formatUSD(bm.trackedAnnualYieldUsd)} <span class="text-xs text-gray-500">/yr</span>`;
-                }
-
-                let roiBadge = `<span class="inline-block px-2 py-1 rounded bg-success/10 text-success font-bold text-sm border border-success/20">${estCashOnCash.toFixed(2)}%</span>`;
-                if (bm.loading || bm.error) {
-                    roiBadge = `<span class="inline-block px-2 py-1 rounded bg-gray-800 text-gray-500 font-bold text-sm border border-gray-700">--</span>`;
-                }
-
-                tbody.innerHTML += `
-                    <tr class="hover:bg-gray-800/30 transition-colors">
-                        <td class="py-4 pl-2"><div class="flex items-center"><span class="w-6 h-6 rounded bg-gray-800 flex items-center justify-center font-bold text-xs mr-2 text-primary border border-gray-700">${bm.tier}</span><span class="text-xs text-gray-500">Tracks #${bm.benchmarkId}</span></div></td>
-                        <td class="py-4"><span class="font-mono text-gray-300">${formatNum(bm.reqTokens)}</span><span class="text-xs text-gray-500 ml-1">STONK</span></td>
-                        <td class="py-4"><span class="font-mono font-semibold">${formatUSD(currentTotalCostUsd)}</span><div class="text-[10px] text-gray-500">Floor + ${formatUSD(activationCostUsd)} Act.</div></td>
-                        <td class="py-4 font-mono text-gray-300">${yieldDisplay}</td>
-                        <td class="py-4 text-right pr-2">${roiBadge}</td>
-                    </tr>`;
-            });
-        }
-
-        async function fetchBrokerData(tokenId, preFetchedBlock = null) {
-            const provider = new ethers.JsonRpcProvider(WEB3_CONFIG.RPC_URL);
-            
-            let actualTier = 1;
-            if (tokenId == 1794) actualTier = 1;
-            else if (tokenId == 2370) actualTier = 2;
-            else if (tokenId == 275) actualTier = 3;
-            else if (tokenId == 1491) actualTier = 4;
-            else if (tokenId == 1400) actualTier = 5;
-
-            const tokensReq = actualTier === 1 ? 66666 : actualTier === 2 ? 166666 : actualTier === 3 ? 366666 : actualTier === 4 ? 666666 : 1666666;
-            const registryContract = new ethers.Contract(WEB3_CONFIG.REGISTRY_CONTRACT, registryAbi, provider);
-            const nftContract = new ethers.Contract(WEB3_CONFIG.NFT_CONTRACT, erc721Abi, provider);
-
-            let ownerAddress = "0x0000000000000000000000000000000000000000";
-            try { ownerAddress = await nftContract.ownerOf(tokenId); } catch (e) {}
-            
-            let tbaAddress = "0x0000000000000000000000000000000000000000";
-            const foundBenchmark = tierBenchmarks.find(b => b.benchmarkId == tokenId);
-            if (foundBenchmark) {
-                tbaAddress = foundBenchmark.tbaAddress;
-            } else {
-                try {
-                    tbaAddress = await registryContract.account(WEB3_CONFIG.IMPLEMENTATION_CONTRACT, "0x0000000000000000000000000000000000000000000000000000000000000000", WEB3_CONFIG.CHAIN_ID, WEB3_CONFIG.NFT_CONTRACT, tokenId);
-                } catch (e) {}
-            }
-
-            const historicalEthPaid = (globalMarketParams.tokenPriceUsd * 666666) / globalMarketParams.ethPriceUsd; 
-            let aggregatedTransfers = {};
-
-            if (tbaAddress !== "0x0000000000000000000000000000000000000000") {
-                let currentBlock = preFetchedBlock;
-                if (!currentBlock) {
-                    try { 
-                        const blockUrl = `${BLOCKSCOUT_BASE_URL}?module=block&action=eth_block_number&apikey=${BLOCKSCOUT_API_KEY}`;
-                        const blockData = await apiFetch(blockUrl);
-                        
-                        if (blockData && blockData.status === "1" && blockData.result) {
-                            currentBlock = parseInt(blockData.result, 16);
-                        } else {
-                            throw new Error("Invalid block fetch response");
-                        }
-                    } catch(e) {
-                        try { currentBlock = await provider.getBlockNumber(); } catch (err) { currentBlock = 30000000; }
-                    }
-                }
-
-                // THE BLOCK MATH FIX: 6,048,000 blocks covers exactly 7 days on an L2 with 0.1s block times.
-                const startBlock = Math.max(0, currentBlock - 6048000); 
-                const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
+                document.getElementById('global-eth').innerText = formatUSD(data.market.ethPriceUsd);
+                document.getElementById('global-token').innerText = data.market.tokenPriceUsd < 0.01 ? `$${data.market.tokenPriceUsd.toFixed(5)}` : `$${data.market.tokenPriceUsd.toFixed(4)}`;
+                document.getElementById('global-floor').innerText = `${data.market.nftFloorEth} ETH`;
+                document.getElementById('base-entry-cost').innerText = formatUSD(666666 * data.market.tokenPriceUsd);
                 
-                // RESTORED FULL TRACKING: Catches both Token Drops and Native/Internal ETH
-                const actions = ["tokentx", "txlist", "txlistinternal"];
+                const updateDate = new Date(data.lastUpdated);
+                document.getElementById('last-updated').innerText = `Last automated sync: ${updateDate.toLocaleString()}`;
+
+                const tbody = document.getElementById('tier-table-body');
+                tbody.innerHTML = '';
                 
-                for (let action of actions) {
-                    // Safe offset of 5000 to prevent payload timeout, but massive enough to capture active TBAs
-                    const url = `${BLOCKSCOUT_BASE_URL}?module=account&action=${action}&address=${tbaAddress}&startblock=${startBlock}&page=1&offset=5000&sort=desc&apikey=${BLOCKSCOUT_API_KEY}`;
-                    const data = await apiFetch(url);
+                const baseNftCostUsd = data.market.tokenPriceUsd * 666666;
 
-                    if (data && data.status === "1" && Array.isArray(data.result) && data.result.length > 0) {
-                        for (const tx of data.result) {
-                            if (parseInt(tx.timeStamp, 10) >= sevenDaysAgo) {
-                                
-                                // STRICT INBOUND FILTER
-                                if (tx.to && tx.to.toLowerCase() === tbaAddress.toLowerCase() && (!tx.isError || tx.isError === "0")) {
-                                    let valueStr = tx.value || "0";
-                                    if (valueStr === "") valueStr = "0";
+                data.tiers.forEach(bm => {
+                    const activationCostUsd = bm.reqTokens * data.market.tokenPriceUsd;
+                    const currentTotalCostUsd = baseNftCostUsd + activationCostUsd;
+                    const estCashOnCash = (currentTotalCostUsd > 0 && bm.trackedAnnualYieldUsd > 0) ? (bm.trackedAnnualYieldUsd / currentTotalCostUsd) * 100 : 0;
 
-                                    if (action !== "tokentx") {
-                                        // Process native and internal ETH
-                                        const ethAmount = parseFloat(ethers.formatEther(valueStr));
-                                        if (ethAmount > 0) {
-                                            if (!aggregatedTransfers["ETH"]) aggregatedTransfers["ETH"] = { ticker: "ETH", rawAmount: 0, currentPriceUsd: globalMarketParams.ethPriceUsd };
-                                            aggregatedTransfers["ETH"].rawAmount += ethAmount;
-                                        }
-                                    } else {
-                                        // Process explicit tokens from config
-                                        const contractAddr = (tx.contractAddress || "").toLowerCase();
-                                        const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr);
-                                        
-                                        if (!matchedToken) continue; 
+                    let yieldDisplay = bm.trackedAnnualYieldUsd === 0 ? 
+                        `<span class="text-xs text-gray-500 italic">No yield in last 7d</span>` : 
+                        `${formatUSD(bm.trackedAnnualYieldUsd)} <span class="text-xs text-gray-500">/yr</span>`;
 
-                                        let tokenPriceUsd = matchedToken.symbol === "STONKBROKER" ? globalMarketParams.tokenPriceUsd : matchedToken.priceUsd;
-                                        const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
-                                        const tokenAmount = parseFloat(ethers.formatUnits(valueStr, decimals));
+                    let roiBadge = `<span class="inline-block px-2 py-1 rounded bg-success/10 text-success font-bold text-sm border border-success/20">${estCashOnCash.toFixed(2)}%</span>`;
 
-                                        if (tokenAmount > 0) {
-                                            if (!aggregatedTransfers[matchedToken.symbol]) {
-                                                aggregatedTransfers[matchedToken.symbol] = { 
-                                                    ticker: matchedToken.symbol, 
-                                                    rawAmount: 0, 
-                                                    currentPriceUsd: tokenPriceUsd 
-                                                };
-                                            }
-                                            aggregatedTransfers[matchedToken.symbol].rawAmount += tokenAmount;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            return {
-                id: tokenId, tier: actualTier, owner: `${ownerAddress.slice(0,6)}...${ownerAddress.slice(-4)}`, tbaAddress: `${tbaAddress.slice(0,6)}...${tbaAddress.slice(-4)}`,
-                acquisition: { ethPaid: historicalEthPaid, historicalEthPriceUsd: globalMarketParams.ethPriceUsd },
-                activation: { tokensBurned: tokensReq, historicalTokenPriceUsd: globalMarketParams.tokenPriceUsd },
-                tbaBalances: Object.values(aggregatedTransfers).map(asset => ({
-                    ticker: asset.ticker,
-                    amount: asset.rawAmount * 52.14, 
-                    currentPriceUsd: asset.currentPriceUsd || 0
-                }))
-            };
-        }
-
-        function renderDashboard(brokerData) {
-            const acquisitionUsd = brokerData.acquisition.ethPaid * brokerData.acquisition.historicalEthPriceUsd;
-            const activationUsd = brokerData.activation.tokensBurned * brokerData.activation.historicalTokenPriceUsd;
-            const totalOutlayUsd = acquisitionUsd + activationUsd;
-
-            let totalYieldUsd = 0;
-            const yieldBreakdown = brokerData.tbaBalances.map(asset => {
-                const value = (asset.amount || 0) * (asset.currentPriceUsd || 0);
-                totalYieldUsd += (isNaN(value) ? 0 : value);
-                return { ...asset, valueUsd: isNaN(value) ? 0 : value };
-            });
-
-            const cashOnCashPercentage = totalOutlayUsd > 0 ? (totalYieldUsd / totalOutlayUsd) * 100 : 0;
-            const netProfitUsd = totalYieldUsd - totalOutlayUsd;
-
-            document.getElementById('broker-id').innerText = `#${brokerData.id}`;
-            document.getElementById('broker-tier').innerText = `Tier ${brokerData.tier} Active`;
-            document.getElementById('broker-owner').innerText = brokerData.owner;
-            document.getElementById('broker-tba').innerText = brokerData.tbaAddress;
-            document.getElementById('outlay-nft-usd').innerText = formatUSD(acquisitionUsd);
-            document.getElementById('outlay-nft-eth').innerText = `${brokerData.acquisition.ethPaid.toFixed(3)} ETH`;
-            document.getElementById('outlay-act-usd').innerText = formatUSD(activationUsd);
-            document.getElementById('outlay-act-tok').innerText = `${formatNum(brokerData.activation.tokensBurned)} STONK`;
-            document.getElementById('outlay-total').innerText = formatUSD(totalOutlayUsd);
-
-            const yieldListEl = document.getElementById('yield-list');
-            yieldListEl.innerHTML = ''; 
-            
-            if (yieldBreakdown.length === 0) {
-                yieldListEl.innerHTML = `<div class="text-sm text-gray-500 italic text-center py-4">No recent activity detected.</div>`;
-            } else {
-                yieldBreakdown.forEach(asset => {
-                    yieldListEl.innerHTML += `
-                        <div class="flex justify-between items-center bg-gray-800/30 p-3 rounded-lg border border-gray-700/50">
-                            <div class="flex items-center">
-                                <div class="w-8 h-8 rounded-full bg-blue-900/50 flex items-center justify-center text-blue-300 font-bold text-xs mr-3">${asset.ticker.charAt(0)}</div>
-                                <div>
-                                    <p class="font-semibold text-sm">${asset.ticker}</p>
-                                    <p class="text-xs text-gray-400 font-mono">${formatNum(asset.amount)} tokens/yr</p>
-                                </div>
-                            </div>
-                            <div class="text-right">
-                                <p class="font-mono font-semibold text-success">${formatUSD(asset.valueUsd)}</p>
-                                <p class="text-xs ${asset.currentPriceUsd === 0 ? 'text-warning font-semibold' : 'text-gray-400'}">
-                                    @ ${formatUSD(asset.currentPriceUsd)}
-                                </p>
-                            </div>
-                        </div>`;
+                    tbody.innerHTML += `
+                        <tr class="hover:bg-gray-800/30 transition-colors">
+                            <td class="py-4 pl-2"><div class="flex items-center"><span class="w-6 h-6 rounded bg-gray-800 flex items-center justify-center font-bold text-xs mr-2 text-primary border border-gray-700">${bm.tier}</span><span class="text-xs text-gray-500">Tracks #${bm.benchmarkId}</span></div></td>
+                            <td class="py-4"><span class="font-mono text-gray-300">${formatNum(bm.reqTokens)}</span><span class="text-xs text-gray-500 ml-1">STONK</span></td>
+                            <td class="py-4"><span class="font-mono font-semibold">${formatUSD(currentTotalCostUsd)}</span><div class="text-[10px] text-gray-500">Floor + ${formatUSD(activationCostUsd)} Act.</div></td>
+                            <td class="py-4 font-mono text-gray-300">${yieldDisplay}</td>
+                            <td class="py-4 text-right pr-2">${roiBadge}</td>
+                        </tr>`;
                 });
-            }
 
-            document.getElementById('yield-total').innerText = `+${formatUSD(totalYieldUsd)}`;
-            document.getElementById('calc-roi').innerText = `${isNaN(cashOnCashPercentage) ? "0.00" : cashOnCashPercentage.toFixed(2)}%`;
-            document.getElementById('calc-earnings').innerText = `+${formatUSD(totalYieldUsd)}`;
-            document.getElementById('calc-outlay').innerText = formatUSD(totalOutlayUsd);
-            
-            const netEl = document.getElementById('calc-net');
-            if (netProfitUsd >= 0) {
-                netEl.innerText = `+${formatUSD(netProfitUsd)}`;
-                netEl.className = "text-xl font-semibold text-success font-mono glow-text";
-                document.getElementById('calc-net-sub').innerText = "Pure Profit Projection";
-            } else {
-                netEl.innerText = formatUSD(netProfitUsd); 
-                netEl.className = "text-xl font-semibold text-danger font-mono";
-                document.getElementById('calc-net-sub').innerText = "To reach breakeven";
-            }
-        }
-
-        document.getElementById('search-btn').addEventListener('click', async () => {
-            const input = document.getElementById('search-input').value;
-            if(!input) return;
-
-            const searchBtn = document.getElementById('search-btn');
-            const searchText = document.getElementById('search-text');
-            const searchSpinner = document.getElementById('search-spinner');
-            const dashboard = document.getElementById('dashboard-content');
-            const errorMsg = document.getElementById('error-message');
-
-            searchText.classList.add('hidden'); searchSpinner.classList.remove('hidden'); errorMsg.classList.add('hidden');
-            searchBtn.disabled = true; dashboard.style.opacity = '0.3';
-
-            try {
-                const realData = await fetchBrokerData(input);
-                renderDashboard(realData);
             } catch (err) {
-                errorMsg.classList.remove('hidden');
-                errorMsg.innerText = err.message.includes("Rate") ? "API Rate Limit. Wait a moment." : "API Error. Please try again.";
-                console.error("Lookup failed:", err);
-            } finally {
-                searchText.classList.remove('hidden'); searchSpinner.classList.add('hidden');
-                searchBtn.disabled = false; dashboard.style.opacity = '1';
-            }
-        });
-
-        async function initializeApp() {
-            try {
-                const ethRes = await fetch('https://api.exchange.coinbase.com/products/ETH-USD/ticker');
-                if (ethRes.ok) globalMarketParams.ethPriceUsd = parseFloat((await ethRes.json()).price) || globalMarketParams.ethPriceUsd;
-            } catch (e) { console.warn("Failed ETH fetch"); }
-
-            try {
-                const dexRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${WEB3_CONFIG.STONKBROKER}`);
-                const dexData = await dexRes.json();
-                if (dexData?.pairs?.length > 0) {
-                    const bestPair = dexData.pairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
-                    if (bestPair && bestPair.priceUsd) {
-                        globalMarketParams.tokenPriceUsd = parseFloat(bestPair.priceUsd);
-                    }
-                }
-            } catch (e) { console.warn("Failed token fetch"); }
-
-            WEB3_CONFIG.TOKENS[0].priceUsd = globalMarketParams.tokenPriceUsd;
-            globalMarketParams.nftFloorEth = parseFloat(((666666 * globalMarketParams.tokenPriceUsd) / globalMarketParams.ethPriceUsd).toFixed(3));
-
-            document.getElementById('global-eth').innerText = formatUSD(globalMarketParams.ethPriceUsd);
-            document.getElementById('global-token').innerText = globalMarketParams.tokenPriceUsd < 0.01 ? `$${globalMarketParams.tokenPriceUsd.toFixed(5)}` : `$${globalMarketParams.tokenPriceUsd.toFixed(4)}`;
-            document.getElementById('global-floor').innerText = `${globalMarketParams.nftFloorEth} ETH`;
-            document.getElementById('base-entry-cost').innerText = formatUSD(666666 * globalMarketParams.tokenPriceUsd);
-
-            renderTierBenchmarks();
-
-            const provider = new ethers.JsonRpcProvider(WEB3_CONFIG.RPC_URL);
-            let currentBlock;
-            try { currentBlock = await provider.getBlockNumber(); } catch (e) {}
-
-            for (let bm of tierBenchmarks) {
-                try {
-                    const brokerData = await fetchBrokerData(bm.benchmarkId, currentBlock);
-                    let totalYieldUsd = 0;
-                    brokerData.tbaBalances.forEach(b => {
-                        totalYieldUsd += (b.amount * b.currentPriceUsd);
-                    });
-                    bm.trackedAnnualYieldUsd = totalYieldUsd;
-                    bm.loading = false;
-                    bm.error = false;
-                } catch (e) {
-                    console.error("Failed to load tier benchmark", bm.tier, e);
-                    bm.loading = false;
-                    bm.error = e.message.includes("Limit") ? "API Limit Reached" : "Data Error";
-                }
-                
-                renderTierBenchmarks(); 
+                document.getElementById('tier-table-body').innerHTML = `<tr><td colspan="5" class="py-4 text-center text-danger font-semibold">Data sync pending or unavailable. Check GitHub Actions.</td></tr>`;
             }
         }
 
-        window.addEventListener('DOMContentLoaded', initializeApp);
+        window.addEventListener('DOMContentLoaded', initializeDashboard);
     </script>
 </body>
 </html>
