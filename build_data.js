@@ -8,19 +8,23 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 let globalMarketParams = { ethPriceUsd: 1900.00, tokenPriceUsd: 0.02278, nftFloorEth: 7.661 };
 
-// FRESH BENCHMARK ROSTER (Tiers 1-5)
+// Verified Benchmark TBAs
 let tierBenchmarks = [
-    { tier: 1, reqTokens: 66666, benchmarkId: 3032, tbaAddress: "0x5a35bc7e3b7f0ea5b04d6df5e15aee144c940ba9", trackedAnnualYieldUsd: 0 },
-    { tier: 2, reqTokens: 166666, benchmarkId: 1199, tbaAddress: "0xc2614c45c68f14a6c21881290c62d84b5f718831", trackedAnnualYieldUsd: 0 },
-    { tier: 3, reqTokens: 366666, benchmarkId: 2372, tbaAddress: "0xa72288ba58858c04b058ffc22ad345687924bcd0", trackedAnnualYieldUsd: 0 },
-    { tier: 4, reqTokens: 666666, benchmarkId: 1533, tbaAddress: "0x468a5a2402fa721f056b22e0c48d7010016135d8", trackedAnnualYieldUsd: 0 },
-    { tier: 5, reqTokens: 1666666, benchmarkId: 1258, tbaAddress: "0xE7207cAA913b54Aa4411e847A3a49EEE0568CcCF", trackedAnnualYieldUsd: 0 }
+    { tier: 1, reqTokens: 66666, benchmarkId: 3032, trackedAnnualYieldUsd: 0 },
+    { tier: 2, reqTokens: 166666, benchmarkId: 1199, trackedAnnualYieldUsd: 0 },
+    { tier: 3, reqTokens: 366666, benchmarkId: 2372, trackedAnnualYieldUsd: 0 },
+    { tier: 4, reqTokens: 666666, benchmarkId: 1533, trackedAnnualYieldUsd: 0 },
+    { tier: 5, reqTokens: 1666666, benchmarkId: 1258, trackedAnnualYieldUsd: 0 }
 ];
 
 const WEB3_CONFIG = {
+    NFT_CONTRACT: "0x539cdd042c2f3d93ebc5be7dfff0c79f3b4fabf0",
+    REGISTRY_CONTRACT: "0x000000006551c19487814612e58fe06813775758",
+    IMPLEMENTATION_CONTRACT: "0x55266d75d1a14e4572138116af39863ed6593ece",
     CHAIN_ID: 4663, 
     RPC_URL: "https://rpc.mainnet.chain.robinhood.com",
     TOKENS: [
+        { symbol: "WETH", address: "0x0bd7d308f8e1639fab988df18a8011f41eacad73", priceUsd: 1900.00 }, // THE MISSING LINK
         { symbol: "STONKBROKER", address: "0xe934e36A439C94017B64a3FecE66AF12099aBF50", priceUsd: 0.02278 },
         { symbol: "AAPL", address: "0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9", priceUsd: 225.00 },
         { symbol: "AMZN", address: "0x12f190a9F9d7D37a250758b26824B97CE941bF54", priceUsd: 185.00 },
@@ -41,17 +45,16 @@ const WEB3_CONFIG = {
     ]
 };
 
+const registryAbi = ["function account(address implementation, bytes32 salt, uint256 chainId, address tokenContract, uint256 tokenId) view returns (address)"];
+
 async function secureFetch(url) {
     let retries = 0;
     while (retries < 5) {
         try {
             const res = await fetch(url, { headers: { "Accept": "application/json" } });
-            
             if (res.status === 429) throw new Error("Rate Limit HTTP");
-            
             const data = await res.json();
             if (data.message && data.message.toLowerCase().includes("limit")) throw new Error("API Limit Payload");
-            
             return data;
         } catch (err) {
             retries++;
@@ -63,56 +66,73 @@ async function secureFetch(url) {
 }
 
 async function run() {
-    console.log("Starting secure data sync with fresh benchmark roster...");
+    console.log("Starting secure data sync tracking WETH drops...");
     
-    // 1. Fetch spot market prices
+    // 1. Fetch live market prices
     try {
         const ethRes = await fetch('https://api.exchange.coinbase.com/products/ETH-USD/ticker');
         const ethData = await ethRes.json();
         globalMarketParams.ethPriceUsd = parseFloat(ethData.price);
+        // Peg WETH exact to ETH live price
+        WEB3_CONFIG.TOKENS.find(t => t.symbol === "WETH").priceUsd = globalMarketParams.ethPriceUsd;
     } catch(e) { console.log("ETH Price fetch failed, using fallback."); }
 
     try {
-        const dexRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${WEB3_CONFIG.TOKENS[0].address}`);
+        const dexRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${WEB3_CONFIG.TOKENS.find(t => t.symbol === "STONKBROKER").address}`);
         const dexData = await dexRes.json();
         if (dexData?.pairs?.length > 0) {
             const bestPair = dexData.pairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
             globalMarketParams.tokenPriceUsd = parseFloat(bestPair.priceUsd);
-            WEB3_CONFIG.TOKENS[0].priceUsd = globalMarketParams.tokenPriceUsd;
+            WEB3_CONFIG.TOKENS.find(t => t.symbol === "STONKBROKER").priceUsd = globalMarketParams.tokenPriceUsd;
         }
     } catch(e) { console.log("STONK Price fetch failed, using fallback."); }
 
     globalMarketParams.nftFloorEth = parseFloat(((666666 * globalMarketParams.tokenPriceUsd) / globalMarketParams.ethPriceUsd).toFixed(3));
     
-    // 2. Block range calculation (6,048,000 blocks ~ 7 days on 0.1s block times)
+    // 2. Determine Block Range
     const provider = new ethers.JsonRpcProvider(WEB3_CONFIG.RPC_URL);
+    const registryContract = new ethers.Contract(WEB3_CONFIG.REGISTRY_CONTRACT, registryAbi, provider);
+
     let currentBlock = 30000000;
     try { currentBlock = await provider.getBlockNumber(); } catch(e) {}
     
     const startBlock = Math.max(0, currentBlock - 6048000);
     const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
 
-    // 3. Process each tier
+    // 3. Process Tiers
     for (let bm of tierBenchmarks) {
-        console.log(`\nProcessing Tier ${bm.tier} (Broker #${bm.benchmarkId} - TBA: ${bm.tbaAddress})...`);
-        let aggregatedTransfers = {};
+        let tbaAddress = "";
+        try {
+            tbaAddress = await registryContract.account(
+                WEB3_CONFIG.IMPLEMENTATION_CONTRACT,
+                "0x0000000000000000000000000000000000000000000000000000000000000000",
+                WEB3_CONFIG.CHAIN_ID,
+                WEB3_CONFIG.NFT_CONTRACT,
+                bm.benchmarkId
+            );
+        } catch (err) {
+            console.error(`Failed to resolve TBA for Broker #${bm.benchmarkId}`, err);
+            continue;
+        }
+
+        bm.tbaAddress = tbaAddress.toLowerCase();
+        console.log(`\nProcessing Tier ${bm.tier} (Broker #${bm.benchmarkId} -> TBA: ${bm.tbaAddress})...`);
         
+        let aggregatedTransfers = {};
         const actions = ["tokentx", "txlist", "txlistinternal"];
 
         for (let action of actions) {
-            console.log(`-> Fetching ${action}...`);
             const url = `${BLOCKSCOUT_BASE_URL}?module=account&action=${action}&address=${bm.tbaAddress}&startblock=${startBlock}&page=1&offset=10000&sort=desc&apikey=${BLOCKSCOUT_API_KEY}`;
             const data = await secureFetch(url);
 
             if (data && data.status === "1" && Array.isArray(data.result)) {
                 for (const tx of data.result) {
                     
-                    // GROSS INBOUND CHECK (Filters out all withdrawals and gas spends)
-                    if (parseInt(tx.timeStamp, 10) >= sevenDaysAgo && tx.to && tx.to.toLowerCase() === bm.tbaAddress.toLowerCase() && (!tx.isError || tx.isError === "0")) {
+                    // Count all valid inbound transfers
+                    if (parseInt(tx.timeStamp, 10) >= sevenDaysAgo && tx.to && tx.to.toLowerCase() === bm.tbaAddress && (!tx.isError || tx.isError === "0")) {
                         let valueStr = tx.value || "0";
                         
                         if (action !== "tokentx") {
-                            // Gross ETH Inflows
                             const ethAmount = parseFloat(ethers.formatEther(valueStr));
                             if (ethAmount > 0) {
                                 if (!aggregatedTransfers["ETH"]) {
@@ -121,7 +141,6 @@ async function run() {
                                 aggregatedTransfers["ETH"].rawAmount += ethAmount;
                             }
                         } else {
-                            // ERC-20 Inflows
                             const contractAddr = (tx.contractAddress || "").toLowerCase();
                             const matchedToken = WEB3_CONFIG.TOKENS.find(t => t.address.toLowerCase() === contractAddr);
                             
@@ -140,11 +159,9 @@ async function run() {
                     }
                 }
             }
-            // 10s delay between requests to guarantee API limit compliance
             await sleep(10000); 
         }
 
-        // Calculate annualized USD yield
         let totalYieldUsd = 0;
         bm.tbaBalances = Object.values(aggregatedTransfers).map(asset => {
             const annualizedAmount = asset.rawAmount * 52.14;
@@ -162,7 +179,7 @@ async function run() {
         console.log(`✓ Tier ${bm.tier} complete. Tracked Annual Yield: $${totalYieldUsd.toFixed(2)}`);
     }
 
-    // 4. Output to data.json
+    // 4. Output
     const finalData = {
         market: globalMarketParams,
         tiers: tierBenchmarks,
