@@ -238,7 +238,7 @@
         const registryAbi = ["function account(address implementation, bytes32 salt, uint256 chainId, address tokenContract, uint256 tokenId) view returns (address)"];
         const erc721Abi = ["function ownerOf(uint256 tokenId) view returns (address)"];
 
-        // --- BULLETPROOF AUTHENTICATED QUEUE WITH EXPONENTIAL BACKOFF ---
+        // --- BULLETPROOF AUTHENTICATED QUEUE WITH DEEP EXPONENTIAL BACKOFF ---
         const requestQueue = [];
         let isProcessingQueue = false;
 
@@ -258,12 +258,12 @@
                     
                     if (response.status === 429) {
                         req.retries++;
-                        if (req.retries >= 6) { 
+                        if (req.retries >= 8) { // Increased to 8 retries to outlast 1-minute bans
                             requestQueue.shift();
                             req.reject(new Error("Rate Limit"));
                         } else {
-                            // Exponential Backoff: 1s, 2s, 4s, 8s, 16s...
-                            await sleep(1000 * Math.pow(2, req.retries - 1)); 
+                            // Waits: 2s, 4s, 8s, 16s, 32s, 64s
+                            await sleep(2000 * Math.pow(2, req.retries - 1)); 
                         }
                         continue; 
                     }
@@ -286,12 +286,11 @@
                         if ((data.message && data.message.toLowerCase().includes("limit")) || 
                             (typeof data.result === 'string' && data.result.toLowerCase().includes("limit"))) {
                             req.retries++;
-                            if (req.retries >= 6) {
+                            if (req.retries >= 8) {
                                 requestQueue.shift();
                                 req.reject(new Error("Rate Limit"));
                             } else {
-                                // Exponential Backoff: 1s, 2s, 4s, 8s, 16s...
-                                await sleep(1000 * Math.pow(2, req.retries - 1));
+                                await sleep(2000 * Math.pow(2, req.retries - 1));
                             }
                             continue;
                         }
@@ -300,8 +299,9 @@
                         requestQueue.shift();
                         req.resolve(data);
                         
-                        // INCREASED: Baseline 500ms delay safely caps the script at 2 req/sec
-                        await sleep(500); 
+                        // THE FIX: Increased baseline delay to 1200ms (1.2 seconds). 
+                        // This guarantees we never exceed 1 request per second, respecting the strictest free-tier limits.
+                        await sleep(1200); 
                     } catch (err) {
                         req.retries++;
                         if (req.retries >= 4) {
