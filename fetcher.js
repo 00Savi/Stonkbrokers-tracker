@@ -34,7 +34,6 @@ const PROTOCOL_CONTRACTS = [
 
 const ACTIVATION_MANAGER = "0xacd5ae3c060c1137fe2ee86b0ab2ef697456f664".toLowerCase();
 
-// ethers.js Interface to decode the raw hex logs
 const ACTIVATION_ABI = [
   "event Activated(uint256 indexed tokenId, address indexed owner, uint256 tier, uint256 feePaid)",
   "event Activated(uint256 indexed tokenId, address indexed owner, uint8 tier, uint256 feePaid)",
@@ -48,7 +47,6 @@ const iface = new ethers.Interface(ACTIVATION_ABI);
 let prices = {};
 let market = { ethPriceUsd: 1900, tokenPriceUsd: 0.03, nftFloorEth: 10 };
 
-// Re-structured tiers based on exact global weights
 const tierStructure = [
   { id: "T0", name: "Floor Trader", reqTokens: 66666, weight: 100 },
   { id: "T1", name: "Analyst", reqTokens: 166666, weight: 125 },
@@ -61,7 +59,7 @@ async function secureFetch(url) {
   for (let i = 0; i < 4; i++) {
     try {
       const res = await fetch(url, {
-        headers: { "Accept": "application/json", "User-Agent": "StonkBrokersTracker/3.0" }
+        headers: { "Accept": "application/json", "User-Agent": "StonkBrokersTracker/3.1" }
       });
       if (res.status === 429) throw new Error("rate");
       return await res.json();
@@ -109,30 +107,30 @@ async function loadPrices() {
     await sleep(150);
   }
 
-  // Adjusted to include the +10% fee on base AMM value 
   market.nftFloorEth = +((666666 * market.tokenPriceUsd * 1.10) / market.ethPriceUsd).toFixed(3);
   console.log(`Market → ETH $${market.ethPriceUsd.toFixed(2)} | STONK $${market.tokenPriceUsd.toFixed(5)}`);
 }
 
-async function fetchActivations(latestBlock) {
-  console.log("Fetching activation logs (Chunked to bypass rate limits)...");
+async function fetchActivations() {
+  console.log("Fetching activation logs from block 0...");
   let allLogs = [];
-  
-  // Start from block 25M to speed up, chunking by 1M blocks to prevent Blockscout API timeouts
-  let currentBlock = 25000000; 
-  const CHUNK_SIZE = 1000000;
+  let currentBlock = 0;
 
-  while (currentBlock <= latestBlock) {
-    const endBlock = Math.min(currentBlock + CHUNK_SIZE - 1, latestBlock);
-    const url = `${PRO_API}?chain_id=${CHAIN_ID}&module=logs&action=getLogs&address=${ACTIVATION_MANAGER}&fromBlock=${currentBlock}&toBlock=${endBlock}&apikey=${API_KEY}`;
-    
+  while(true) {
+    const url = `${PRO_API}?chain_id=${CHAIN_ID}&module=logs&action=getLogs&address=${ACTIVATION_MANAGER}&fromBlock=${currentBlock}&toBlock=latest&apikey=${API_KEY}`;
     const data = await secureFetch(url);
-    if (Array.isArray(data.result) && data.result.length > 0) {
-      allLogs.push(...data.result);
-      console.log(`  Found ${data.result.length} logs in blocks ${currentBlock} - ${endBlock}`);
-    }
+    const logs = Array.isArray(data.result) ? data.result : [];
     
-    currentBlock = endBlock + 1;
+    if (logs.length === 0) break;
+    allLogs.push(...logs);
+    console.log(`  Found ${logs.length} logs...`);
+    
+    // Blockscout pagination trigger
+    if (logs.length < 1000) break; 
+    
+    const lastBlockStr = logs[logs.length - 1].blockNumber;
+    const lastBlock = lastBlockStr.toString().startsWith("0x") ? parseInt(lastBlockStr, 16) : parseInt(lastBlockStr, 10);
+    currentBlock = lastBlock + 1;
     await sleep(300);
   }
 
@@ -152,7 +150,14 @@ async function fetchActivations(latestBlock) {
 
   for (const log of allLogs) {
     try {
-      const parsed = iface.parseLog({ topics: log.topics, data: log.data });
+      // FIX: Map Blockscout's flattened topics into an array for ethers.js
+      const topics = [];
+      if (log.topic0) topics.push(log.topic0);
+      if (log.topic1) topics.push(log.topic1);
+      if (log.topic2) topics.push(log.topic2);
+      if (log.topic3) topics.push(log.topic3);
+
+      const parsed = iface.parseLog({ topics, data: log.data });
       if (!parsed) continue;
 
       const timeStampVal = log.timeStamp.toString().startsWith("0x") ? parseInt(log.timeStamp, 16) : parseInt(log.timeStamp, 10);
@@ -213,11 +218,11 @@ async function getGlobalYield(sevenDaysAgo) {
   for (const pAddr of PROTOCOL_CONTRACTS) {
     const pL = pAddr.toLowerCase();
     
-    // 1. Scan ETH drops from protocol
-    const urlEth = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=txlist&address=${pAddr}&startblock=0&page=1&offset=10000&sort=desc&apikey=${API_KEY}`;
+    // FIX: Scan ETH drops via internal transactions (txlistinternal)
+    const urlEth = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=txlistinternal&address=${pAddr}&startblock=0&page=1&offset=10000&sort=desc&apikey=${API_KEY}`;
     const dataEth = await secureFetch(urlEth);
     for (const tx of (dataEth.result || [])) {
-      if (parseInt(tx.timeStamp) < sevenDaysAgo) break; // Array is desc, break loop to save time
+      if (parseInt(tx.timeStamp) < sevenDaysAgo) continue; 
       if (tx.isError !== "0" && tx.isError) continue;
       
       if ((tx.from || "").toLowerCase() === pL) {
@@ -227,7 +232,7 @@ async function getGlobalYield(sevenDaysAgo) {
     }
     await sleep(400);
 
-    // 2. Scan Token drops from protocol
+    // Scan Token drops
     for (const tokenAddr of Object.keys(TOKEN_TICKERS)) {
       const price = prices[tokenAddr];
       if (!price) continue;
@@ -235,7 +240,7 @@ async function getGlobalYield(sevenDaysAgo) {
       const urlTok = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokentx&address=${pAddr}&contractaddress=${tokenAddr}&startblock=0&page=1&offset=10000&sort=desc&apikey=${API_KEY}`;
       const dataTok = await secureFetch(urlTok);
       for (const tx of (dataTok.result || [])) {
-        if (parseInt(tx.timeStamp) < sevenDaysAgo) break; 
+        if (parseInt(tx.timeStamp) < sevenDaysAgo) continue; 
         if (tx.isError !== "0" && tx.isError) continue;
 
         if ((tx.from || "").toLowerCase() === pL) {
@@ -255,35 +260,25 @@ async function run() {
   console.log("Starting Dashboard Build...");
   await loadPrices();
 
-  let latestBlock = 32000000;
-  try {
-    const br = await secureFetch(`${PRO_API}?chain_id=${CHAIN_ID}&module=block&action=eth_block_number&apikey=${API_KEY}`);
-    if (br.result) latestBlock = parseInt(br.result, 16);
-  } catch {}
-
   const sevenDaysAgo = Math.floor(Date.now() / 1000) - 7 * 24 * 3600;
 
-  // Retrieve on-chain activation stats via chunking
-  const activationStats = await fetchActivations(latestBlock);
+  console.log("\nCalculating Activations...");
+  const activationStats = await fetchActivations();
 
-  // Retrieve total network yield from Protocol Contracts
   console.log("\nCalculating Global Network Yield...");
   const global7DayYield = await getGlobalYield(sevenDaysAgo);
   const globalAnnualYield = global7DayYield * 52.14;
 
-  // Calculate Total Network Weight
   let totalNetworkWeight = 0;
   for (const t of tierStructure) {
     const activeInTier = activationStats.breakdown[t.id] || 0;
     totalNetworkWeight += (activeInTier * t.weight);
   }
 
-  // Calculate the USD value of 1x Weight Unit
   const yieldPerWeightUnit = totalNetworkWeight > 0 ? (globalAnnualYield / totalNetworkWeight) : 0;
   console.log(`Global 7d Yield: $${global7DayYield.toFixed(2)} | Annualized: $${globalAnnualYield.toFixed(2)}`);
   console.log(`Total Network Weight: ${totalNetworkWeight}x | Yield per 1x Weight: $${yieldPerWeightUnit.toFixed(2)}/yr`);
 
-  // Map exact ROI mathematical expectations for the table
   const results = [];
   for (const t of tierStructure) {
     const tierExpectedAnnualUsd = t.weight * yieldPerWeightUnit;
