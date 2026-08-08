@@ -1,4 +1,3 @@
-const { ethers } = require("ethers");
 const fs = require("fs");
 
 const BLOCKSCOUT_API_KEY = "proapi_tI5cQZoWvXXgS1WFHXEaLKhLBSl0WHvcYv3msh7Kdpioyod8Bfon9vSHif7zhcAG_dLDzYW"; 
@@ -79,7 +78,7 @@ async function fetchTokenPriceUsd(contractAddress) {
 }
 
 async function run() {
-    console.log("Starting REST-based Blockscout sync with Smart Pagination...");
+    console.log("Starting REST-based Blockscout sync with Brute Force Pagination...");
     
     // 1. Fetch Spot Prices
     try {
@@ -106,7 +105,7 @@ async function run() {
     const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
     console.log(`Filtering all drops since Unix Timestamp: ${sevenDaysAgo}`);
 
-    // 2. Scan Tiers via Blockscout REST APIs
+    // 2. Scan Tiers via Brute Force Pagination
     for (let bm of tierBenchmarks) {
         const tbaAddress = bm.tbaAddress.toLowerCase();
         console.log(`\nProcessing Tier ${bm.tier} (TBA: ${tbaAddress})...`);
@@ -117,30 +116,24 @@ async function run() {
         for (let action of actions) {
             console.log(`-> Fetching ${action}...`);
             let page = 1;
-            let keepPaginating = true;
             
-            // Smart Pagination Loop: Fetches pages until it hits transactions older than 7 days
-            while (keepPaginating && page <= 10) { 
-                const url = `${BLOCKSCOUT_BASE_URL}?module=account&action=${action}&address=${tbaAddress}&page=${page}&offset=1000&sort=desc&apikey=${BLOCKSCOUT_API_KEY}`;
+            // BRUTE FORCE LOOP: Unconditionally fetch up to 5 pages (10,000 transactions) per action
+            while (page <= 5) { 
+                const url = `${BLOCKSCOUT_BASE_URL}?module=account&action=${action}&address=${tbaAddress}&page=${page}&offset=2000&sort=desc&apikey=${BLOCKSCOUT_API_KEY}`;
                 const data = await secureFetch(url);
 
                 if (data && (data.status === "1" || Array.isArray(data.result)) && data.result.length > 0) {
-                    let foundOldTransaction = false;
                     
                     for (const tx of data.result) {
                         const txTimestamp = parseInt(tx.timeStamp, 10);
                         
-                        // If we see a transaction older than 7 days, we flag to stop paginating
-                        if (txTimestamp < sevenDaysAgo) {
-                            foundOldTransaction = true;
-                        }
-                        
-                        // Process valid transactions inside the 7-day window
+                        // Only add to total if it falls inside the 7-day window
                         if (txTimestamp >= sevenDaysAgo && tx.to && tx.to.toLowerCase() === tbaAddress && (!tx.isError || tx.isError === "0" || tx.errCode === "")) {
                             let valueStr = tx.value || "0";
                             
                             if (action === "txlistinternal" || action === "txlist") {
-                                const ethVal = parseFloat(ethers.formatEther(valueStr));
+                                // EXACT math from your good script
+                                const ethVal = Number(valueStr) / 1e18;
                                 if (ethVal > 0) {
                                     const usdVal = ethVal * globalMarketParams.ethPriceUsd;
                                     totalTierYieldUsd += usdVal;
@@ -149,7 +142,9 @@ async function run() {
                             } else if (action === "tokentx") {
                                 const contractAddr = (tx.contractAddress || "").toLowerCase();
                                 const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
-                                const tokenAmount = parseFloat(ethers.formatUnits(valueStr, decimals));
+                                
+                                // EXACT parsing logic from your good script
+                                const tokenAmount = Number(valueStr) / Math.pow(10, decimals);
 
                                 if (tokenAmount > 0) {
                                     const priceUsd = await fetchTokenPriceUsd(contractAddr);
@@ -161,15 +156,14 @@ async function run() {
                         }
                     }
                     
-                    // Stop turning pages if we've successfully reached the 7-day horizon
-                    if (foundOldTransaction) {
-                        keepPaginating = false;
-                    } else {
-                        page++; // Turn the page to dig through more spam
-                        await sleep(5000); // Respect rate limits between pages
+                    // Stop turning pages if Blockscout runs out of data
+                    if (data.result.length < 2000) {
+                        break; 
                     }
+                    page++; 
+                    await sleep(5000); // 5-second rest buffer to respect rate limits
                 } else {
-                    keepPaginating = false; // Stop if Blockscout returns empty
+                    break; // End of transactions for this action
                 }
             }
         }
@@ -188,7 +182,7 @@ async function run() {
     };
 
     fs.writeFileSync('data.json', JSON.stringify(finalData, null, 2));
-    console.log("\nSuccess: Clean Blockscout REST data written to data.json");
+    console.log("\nSuccess: Fully unblocked pagination data written to data.json");
 }
 
 run();
