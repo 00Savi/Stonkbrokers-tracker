@@ -8,7 +8,12 @@ const TOTAL_SUPPLY = 4444;
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-// ========== TOKEN PRICES ==========
+const SEL = {
+  activeCount: "0x4331ed1f",
+  activeTokenAt: "0xdaf0e9c5",
+  activationOf: "0x0d5ea213"
+};
+
 const TOKEN_TICKERS = {
   "0x0bd7d308f8e1639fab988df18a8011f41eacad73": null,
   "0xe934e36a439c94017b64a3fece66af12099abf50": null,
@@ -31,7 +36,6 @@ const TOKEN_TICKERS = {
 let prices = {};
 let market = { ethPriceUsd: 1900, tokenPriceUsd: 0.03, nftFloorEth: 10 };
 
-// Current manual benchmarks (will be replaced by auto-discovery in Phase B)
 const tierBenchmarks = [
   { tier: 1, reqTokens: 66666,   benchmarkId: 3032, tbaAddresses: ["0x5a35bc7e3b7f0ea5b04d6df5e15aee144c940ba9"] },
   { tier: 2, reqTokens: 166666,  benchmarkId: 1199, tbaAddresses: ["0xc2614c45c68f14a6c21881290c62d84b5f718831"] },
@@ -40,29 +44,38 @@ const tierBenchmarks = [
   { tier: 5, reqTokens: 1666666, benchmarkId: 1258, tbaAddresses: ["0xe7207caa913b54aa4411e847a3a49eee0568cccf"] }
 ];
 
-async function secureFetch(url, retries = 5) {
+async function secureFetch(url, retries = 4) {
   for (let i = 0; i < retries; i++) {
     try {
       const res = await fetch(url, {
-        headers: { "Accept": "application/json", "User-Agent": "StonkBrokersTracker/1.3" }
+        headers: { "Accept": "application/json", "User-Agent": "StonkBrokersTracker/1.5" }
       });
-      if (res.status === 429) throw new Error("rate limit");
+      if (res.status === 429) throw new Error("rate");
       return await res.json();
     } catch (e) {
       console.log(`  retry ${i + 1}...`);
-      await sleep(3000 + i * 2000);
+      await sleep(2000 + i * 1500);
     }
   }
-  return { result: [] };
+  return { result: null };
+}
+
+async function ethCall(data) {
+  const url = `${PRO_API}?chain_id=${CHAIN_ID}&module=proxy&action=eth_call&to=${ACTIVATION_MANAGER}&data=${data}&tag=latest&apikey=${API_KEY}`;
+  const res = await secureFetch(url);
+  return res?.result || null;
 }
 
 async function fetchYahooPrice(ticker) {
   try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1d`;
-    const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
+    const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1d`, {
+      headers: { "User-Agent": "Mozilla/5.0" }
+    });
     const d = await res.json();
     return d?.chart?.result?.[0]?.meta?.regularMarketPrice || null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 async function loadPrices() {
@@ -93,18 +106,76 @@ async function loadPrices() {
       prices[addr] = p;
       console.log(`  ${ticker}: $${p.toFixed(2)}`);
     }
-    await sleep(200);
+    await sleep(180);
   }
 
   market.nftFloorEth = +((666666 * market.tokenPriceUsd) / market.ethPriceUsd).toFixed(3);
   console.log(`Market → ETH $${market.ethPriceUsd.toFixed(2)} | STONK $${market.tokenPriceUsd.toFixed(5)} | Floor ${market.nftFloorEth} ETH`);
 }
 
-// ========== ACTIVATION STATS (Phase A) ==========
 async function getActivationStats() {
   console.log("\nFetching activation stats...");
 
-  // 1. Get total active count
-  const countUrl = `${PRO_API}?chain_id=${CHAIN_ID}&module=proxy&action=eth_call&to=${ACTIVATION_MANAGER}&data=0x0b7e566a&apikey=${API_KEY}`; // activeCount()
-  // Better: use the verified function
-  // activeCount() selector = keccak256("activeCount()")[:4
+  let activeCount = 0;
+  const countRaw = await ethCall(SEL.activeCount);
+  if (countRaw && countRaw !== "0x") {
+    activeCount = parseInt(countRaw, 16);
+  }
+  console.log(`  activeCount = ${activeCount}`);
+
+  const percent = activeCount > 0 ? +(activeCount / TOTAL_SUPPLY * 100).toFixed(1) : 0;
+
+  // Tier breakdown (limited for reliability)
+  const tierCounts = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 };
+  const maxToScan = Math.min(activeCount, 300);
+
+  console.log(`  Scanning ${maxToScan} tokens for tier breakdown...`);
+
+  for (let i = 0; i < maxToScan; i++) {
+    const indexHex = i.toString(16).padStart(64, "0");
+    const tokenIdRaw = await ethCall(SEL.activeTokenAt + indexHex);
+    if (!tokenIdRaw || tokenIdRaw === "0x") continue;
+
+    const tokenId = parseInt(tokenIdRaw, 16);
+    const tokenIdHex = tokenId.toString(16).padStart(64, "0");
+    const actRaw = await ethCall(SEL.activationOf + tokenIdHex);
+
+    if (actRaw && actRaw.length >= 130) {
+      const tier = parseInt(actRaw.slice(66, 130), 16);
+      if (tier >= 0 && tier <= 4) tierCounts[tier]++;
+    }
+
+    if (i % 40 === 0) {
+      console.log(`    scanned ${i}/${maxToScan}`);
+      await sleep(300);
+    } else {
+      await sleep(100);
+    }
+  }
+
+  console.log("  Tier breakdown:", tierCounts);
+
+  return {
+    activeCount,
+    totalSupply: TOTAL_SUPPLY,
+    percentActivated: percent,
+    tierBreakdown: {
+      base: tierCounts[0],
+      t1: tierCounts[1],
+      t2: tierCounts[2],
+      t3: tierCounts[3],
+      t4: tierCounts[4]
+    },
+    scanned: maxToScan
+  };
+}
+
+async function getAllInbound(tba, startBlock, sevenDaysAgo) {
+  let totalUsd = 0;
+  const tbaL = tba.toLowerCase();
+
+  for (const action of ["txlist", "txlistinternal"]) {
+    let page = 1;
+    while (true) {
+      const url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=${action}&address=${tba}&startblock=${startBlock}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`;
+      const data = await secureFetch
