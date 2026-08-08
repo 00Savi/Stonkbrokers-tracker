@@ -55,7 +55,7 @@ async function secureFetch(url) {
   for (let i = 0; i < 4; i++) {
     try {
       const res = await fetch(url, {
-        headers: { "Accept": "application/json", "User-Agent": "StonkBrokersTracker/4.0" }
+        headers: { "Accept": "application/json", "User-Agent": "StonkBrokersTracker/4.1" }
       });
       if (res.status === 429) throw new Error("rate");
       return await res.json();
@@ -141,10 +141,10 @@ async function fetchActivations() {
 
   for (const log of allLogs) {
     try {
-      // Rebuild flattened topics safely for ethers.js
       const topics = [];
       if (log.topics && Array.isArray(log.topics)) {
-         topics.push(...log.topics);
+         // THIS IS THE BUG FIX: Strip Blockscout's null padding before passing to ethers.js
+         topics.push(...log.topics.filter(t => t !== null));
       } else {
          if (log.topic0) topics.push(log.topic0);
          if (log.topic1) topics.push(log.topic1);
@@ -214,7 +214,6 @@ async function getSampledYieldPerWeight(sevenDaysAgo) {
     let walletYield = 0;
     const tba = bm.tbaAddress.toLowerCase();
     
-    // Scan ETH drops for this benchmark wallet
     for (const action of ["txlist", "txlistinternal"]) {
       const urlEth = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=${action}&address=${tba}&page=1&offset=10000&sort=desc&apikey=${API_KEY}`;
       const dataEth = await secureFetch(urlEth);
@@ -230,7 +229,6 @@ async function getSampledYieldPerWeight(sevenDaysAgo) {
       await sleep(400);
     }
 
-    // Scan Token drops for this benchmark wallet
     for (const tokenAddr of Object.keys(TOKEN_TICKERS)) {
       const price = prices[tokenAddr];
       if (!price) continue;
@@ -255,7 +253,6 @@ async function getSampledYieldPerWeight(sevenDaysAgo) {
     totalSampledWeight += bm.weight;
   }
 
-  // Return exactly what 1x weight is worth in USD
   return totalSampledWeight > 0 ? (totalSampledYield / totalSampledWeight) : 0;
 }
 
@@ -274,7 +271,6 @@ async function run() {
 
   console.log(`Value of 1x Weight: $${yieldPerWeightUnit7d.toFixed(2)}/7d → $${yieldPerWeightUnitAnnual.toFixed(2)}/yr`);
 
-  // Map perfectly smooth ROI curves based on tokenomic weights
   const results = [];
   for (const t of tierStructure) {
     const tierExpectedAnnualUsd = t.weight * yieldPerWeightUnitAnnual;
