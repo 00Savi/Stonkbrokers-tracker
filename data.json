@@ -1,8 +1,14 @@
 {
   "market": {
-    "ethPriceUsd": 1919.5,
-    "tokenPriceUsd": 0.03051,
-    "nftFloorEth": 10.596
+    "ethPriceUsd": 1919.74,
+    "tokenPriceUsd": 0.03063,
+    "nftFloorEth": 10.637
+  },
+  "activation": {
+    "activeCount": 0,
+    "totalSupply": 4444,
+    "percentActivated": 0,
+    "note": "Activation stats coming next"
   },
   "tiers": [
     {
@@ -10,36 +16,36 @@
       "reqTokens": 66666,
       "benchmarkId": 3032,
       "tbaAddress": "0x5a35bc7e3b7f0ea5b04d6df5e15aee144c940ba9",
-      "trackedAnnualYieldUsd": 5285.7865306693
+      "trackedAnnualYieldUsd": 5331.8678289603895
     },
     {
       "tier": 2,
       "reqTokens": 166666,
       "benchmarkId": 1199,
       "tbaAddress": "0xc2614c45c68f14a6c21881290c62d84b5f718831",
-      "trackedAnnualYieldUsd": 8671.565976441818
+      "trackedAnnualYieldUsd": 8702.911429278787
     },
     {
       "tier": 3,
       "reqTokens": 366666,
       "benchmarkId": 2372,
       "tbaAddress": "0xa72288ba58858c04b058ffc22ad345687924bcd0",
-      "trackedAnnualYieldUsd": 9368.704272938749
+      "trackedAnnualYieldUsd": 9450.908002134001
     },
     {
       "tier": 4,
       "reqTokens": 666666,
       "benchmarkId": 1533,
       "tbaAddress": "0x468a5a2402fa721f056b22e0c48d7010016135d8",
-      "trackedAnnualYieldUsd": 10615.913653687094
+      "trackedAnnualYieldUsd": 10706.818604020087
     },
     {
       "tier": 5,
       "reqTokens": 1666666,
       "benchmarkId": 1258,
       "tbaAddress": "0xe7207caa913b54aa4411e847a3a49eee0568cccf",
-      "trackedAnnualYieldUsd": 17744.055666172855
+      "trackedAnnualYieldUsd": 17759.87715840678
     }
   ],
-  "lastUpdated": "2026-08-08T19:27:26.407Z"
+  "lastUpdated": "2026-08-08T19:58:42.277Z"
 }
