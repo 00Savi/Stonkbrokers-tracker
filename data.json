@@ -1,58 +1,87 @@
 {
   "market": {
-    "ethPriceUsd": 1919.87,
-    "tokenPriceUsd": 0.02913,
-    "nftFloorEth": 10.115
+    "ethPriceUsd": 1918.82,
+    "tokenPriceUsd": 0.02908,
+    "nftFloorEth": 11.114
   },
   "activation": {
     "activeCount": 0,
     "totalSupply": 4444,
     "percentActivated": 0,
-    "tierBreakdown": {
-      "base": 0,
-      "t1": 0,
-      "t2": 0,
-      "t3": 0,
-      "t4": 0
+    "breakdown": {
+      "T0": 0,
+      "T1": 0,
+      "T2": 0,
+      "T3": 0,
+      "T4": 0
     },
-    "scanned": 0
+    "history": {
+      "labels": [
+        "8/2",
+        "8/3",
+        "8/4",
+        "8/5",
+        "8/6",
+        "8/7",
+        "8/8"
+      ],
+      "cumulative": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    }
   },
   "tiers": [
     {
-      "tier": 1,
+      "tier": "T0",
+      "name": "Floor Trader",
       "reqTokens": 66666,
+      "multiplier": "1.00x",
       "benchmarkId": 3032,
       "tbaAddress": "0x5a35bc7e3b7f0ea5b04d6df5e15aee144c940ba9",
-      "trackedAnnualYieldUsd": 5589.576766772684
+      "trackedAnnualYieldUsd": 4112.7295847678215
     },
     {
-      "tier": 2,
+      "tier": "T1",
+      "name": "Analyst",
       "reqTokens": 166666,
+      "multiplier": "1.25x",
       "benchmarkId": 1199,
       "tbaAddress": "0xc2614c45c68f14a6c21881290c62d84b5f718831",
-      "trackedAnnualYieldUsd": 8684.200253119894
+      "trackedAnnualYieldUsd": 6829.213181466294
     },
     {
-      "tier": 3,
+      "tier": "T2",
+      "name": "Portfolio Manager",
       "reqTokens": 366666,
+      "multiplier": "1.60x",
       "benchmarkId": 2372,
       "tbaAddress": "0xa72288ba58858c04b058ffc22ad345687924bcd0",
-      "trackedAnnualYieldUsd": 9718.289944539541
+      "trackedAnnualYieldUsd": 7354.059239435719
     },
     {
-      "tier": 4,
+      "tier": "T3",
+      "name": "Managing Director",
       "reqTokens": 666666,
+      "multiplier": "2.00x",
       "benchmarkId": 1533,
       "tbaAddress": "0x468a5a2402fa721f056b22e0c48d7010016135d8",
-      "trackedAnnualYieldUsd": 11219.97938032192
+      "trackedAnnualYieldUsd": 8270.593915562991
     },
     {
-      "tier": 5,
+      "tier": "T4",
+      "name": "Partner",
       "reqTokens": 1666666,
+      "multiplier": "3.33x",
       "benchmarkId": 1258,
       "tbaAddress": "0xe7207caa913b54aa4411e847a3a49eee0568cccf",
-      "trackedAnnualYieldUsd": 18617.833937492942
+      "trackedAnnualYieldUsd": 13699.92568862247
     }
   ],
-  "lastUpdated": "2026-08-08T21:52:13.799Z"
+  "lastUpdated": "2026-08-08T22:03:09.101Z"
 }
