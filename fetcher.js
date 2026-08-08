@@ -8,8 +8,8 @@ const CHAIN_ID = 4663;
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 const TOKEN_TICKERS = {
-  "0x0bd7d308f8e1639fab988df18a8011f41eacad73": null, 
-  "0xe934e36a439c94017b64a3fece66af12099abf50": null, 
+  "0x0bd7d308f8e1639fab988df18a8011f41eacad73": null, // WETH
+  "0xe934e36a439c94017b64a3fece66af12099abf50": null, // STONK
   "0xaf3d76f1834a1d425780943c99ea8a608f8a93f9": "AAPL",
   "0x12f190a9f9d7d37a250758b26824b97ce941bf54": "AMZN",
   "0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec": "NVDA",
@@ -22,7 +22,7 @@ const TOKEN_TICKERS = {
   "0x05b37fb53a299a1b874a619e1c4c404d52c36f4c": "RDDT",
   "0x1b0e319c6a659f002271b69db8a7df2f911c153e": "GME",
   "0xa30fa36db767ad9ed3f7a60fc79526fb4d56d344": "USO",
-  "0x5fc5360d0400a0fd4f2af552add042d716f1d168": null, 
+  "0x5fc5360d0400a0fd4f2af552add042d716f1d168": null, // USDG
   "0x1383b43aed527485f191b60060f5b5471f71b1ca": null
 };
 
@@ -34,8 +34,7 @@ const PROTOCOL_CONTRACTS = [
 
 const ACTIVATION_MANAGER = "0xacd5ae3c060c1137fe2ee86b0ab2ef697456f664".toLowerCase();
 
-// We cast a wide net with standard permutations of the event signatures.
-// ethers.js will automatically match the correct one based on the Topic0 hash on-chain.
+// ethers.js Interface to decode the raw hex logs
 const ACTIVATION_ABI = [
   "event Activated(uint256 indexed tokenId, address indexed owner, uint256 tier, uint256 feePaid)",
   "event Activated(uint256 indexed tokenId, address indexed owner, uint8 tier, uint256 feePaid)",
@@ -49,19 +48,20 @@ const iface = new ethers.Interface(ACTIVATION_ABI);
 let prices = {};
 let market = { ethPriceUsd: 1900, tokenPriceUsd: 0.03, nftFloorEth: 10 };
 
-const tierBenchmarks = [
-  { tier: "T0", name: "Floor Trader", reqTokens: 66666, benchmarkId: 3032, tbaAddress: "0x5a35bc7e3b7f0ea5b04d6df5e15aee144c940ba9", multiplier: "1.00x" },
-  { tier: "T1", name: "Analyst", reqTokens: 166666, benchmarkId: 1199, tbaAddress: "0xc2614c45c68f14a6c21881290c62d84b5f718831", multiplier: "1.25x" },
-  { tier: "T2", name: "Portfolio Manager", reqTokens: 366666, benchmarkId: 2372, tbaAddress: "0xa72288ba58858c04b058ffc22ad345687924bcd0", multiplier: "1.60x" },
-  { tier: "T3", name: "Managing Director", reqTokens: 666666, benchmarkId: 1533, tbaAddress: "0x468a5a2402fa721f056b22e0c48d7010016135d8", multiplier: "2.00x" },
-  { tier: "T4", name: "Partner", reqTokens: 1666666, benchmarkId: 1258, tbaAddress: "0xe7207caa913b54aa4411e847a3a49eee0568cccf", multiplier: "3.33x" }
+// Re-structured tiers based on exact global weights
+const tierStructure = [
+  { id: "T0", name: "Floor Trader", reqTokens: 66666, weight: 100 },
+  { id: "T1", name: "Analyst", reqTokens: 166666, weight: 125 },
+  { id: "T2", name: "Portfolio Manager", reqTokens: 366666, weight: 160 },
+  { id: "T3", name: "Managing Director", reqTokens: 666666, weight: 200 },
+  { id: "T4", name: "Partner", reqTokens: 1666666, weight: 333 }
 ];
 
 async function secureFetch(url) {
   for (let i = 0; i < 4; i++) {
     try {
       const res = await fetch(url, {
-        headers: { "Accept": "application/json", "User-Agent": "StonkBrokersTracker/2.0" }
+        headers: { "Accept": "application/json", "User-Agent": "StonkBrokersTracker/3.0" }
       });
       if (res.status === 429) throw new Error("rate");
       return await res.json();
@@ -104,42 +104,39 @@ async function loadPrices() {
       const p = d?.chart?.result?.[0]?.meta?.regularMarketPrice;
       if (p) {
         prices[addr] = p;
-        console.log(`  ${ticker}: $${p.toFixed(2)}`);
       }
     } catch {}
     await sleep(150);
   }
 
-  // 10% fee mapping applied
+  // Adjusted to include the +10% fee on base AMM value 
   market.nftFloorEth = +((666666 * market.tokenPriceUsd * 1.10) / market.ethPriceUsd).toFixed(3);
   console.log(`Market → ETH $${market.ethPriceUsd.toFixed(2)} | STONK $${market.tokenPriceUsd.toFixed(5)}`);
 }
 
-async function fetchActivations() {
-  console.log("Fetching activation logs from chain...");
+async function fetchActivations(latestBlock) {
+  console.log("Fetching activation logs (Chunked to bypass rate limits)...");
   let allLogs = [];
-  let currentBlock = 0;
   
-  while (true) {
-    const url = `${PRO_API}?chain_id=${CHAIN_ID}&module=logs&action=getLogs&address=${ACTIVATION_MANAGER}&fromBlock=${currentBlock}&toBlock=latest&apikey=${API_KEY}`;
+  // Start from block 25M to speed up, chunking by 1M blocks to prevent Blockscout API timeouts
+  let currentBlock = 25000000; 
+  const CHUNK_SIZE = 1000000;
+
+  while (currentBlock <= latestBlock) {
+    const endBlock = Math.min(currentBlock + CHUNK_SIZE - 1, latestBlock);
+    const url = `${PRO_API}?chain_id=${CHAIN_ID}&module=logs&action=getLogs&address=${ACTIVATION_MANAGER}&fromBlock=${currentBlock}&toBlock=${endBlock}&apikey=${API_KEY}`;
+    
     const data = await secureFetch(url);
-    const logs = Array.isArray(data.result) ? data.result : [];
+    if (Array.isArray(data.result) && data.result.length > 0) {
+      allLogs.push(...data.result);
+      console.log(`  Found ${data.result.length} logs in blocks ${currentBlock} - ${endBlock}`);
+    }
     
-    if (logs.length === 0) break;
-    
-    allLogs.push(...logs);
-    console.log(`  Found ${logs.length} logs...`);
-    
-    // Blockscout max limit per request is 1000. If less, we've hit the end.
-    if (logs.length < 1000) break;
-    
-    // Advance block pointer to paginate safely. Handle hex or decimal returns seamlessly.
-    const lastBlock = logs[logs.length - 1].blockNumber.toString();
-    currentBlock = (lastBlock.startsWith("0x") ? parseInt(lastBlock, 16) : parseInt(lastBlock, 10)) + 1;
-    await sleep(400);
+    currentBlock = endBlock + 1;
+    await sleep(300);
   }
 
-  // Sort chronologically by block number and log index to replay history perfectly
+  // Sort chronologically
   allLogs.sort((a, b) => {
     const blockA = a.blockNumber.toString().startsWith("0x") ? parseInt(a.blockNumber, 16) : parseInt(a.blockNumber, 10);
     const blockB = b.blockNumber.toString().startsWith("0x") ? parseInt(b.blockNumber, 16) : parseInt(b.blockNumber, 10);
@@ -150,8 +147,8 @@ async function fetchActivations() {
     return logIdxA - logIdxB;
   });
 
-  const activeBrokers = new Map(); // tokenId -> tier Label
-  const historyMap = new Map(); // end-of-day timestamp -> total active count
+  const activeBrokers = new Map(); 
+  const historyMap = new Map(); 
 
   for (const log of allLogs) {
     try {
@@ -159,9 +156,7 @@ async function fetchActivations() {
       if (!parsed) continue;
 
       const timeStampVal = log.timeStamp.toString().startsWith("0x") ? parseInt(log.timeStamp, 16) : parseInt(log.timeStamp, 10);
-      const logTimeMs = timeStampVal * 1000;
-      const dayKey = new Date(logTimeMs).setUTCHours(0,0,0,0);
-      
+      const dayKey = new Date(timeStampVal * 1000).setUTCHours(0,0,0,0);
       const tokenId = parsed.args.tokenId.toString();
 
       if (parsed.name === "Activated") {
@@ -173,21 +168,16 @@ async function fetchActivations() {
 
       historyMap.set(dayKey, activeBrokers.size);
     } catch (e) {
-      // Ignore random contract events that don't match our specific ABI
+      // Ignore unparseable events
     }
   }
 
-  // Build the live tier breakdown
   const breakdown = { T0: 0, T1: 0, T2: 0, T3: 0, T4: 0 };
   for (const tier of activeBrokers.values()) {
-    if (breakdown[tier] !== undefined) {
-      breakdown[tier]++;
-    } else {
-      breakdown[tier] = 1; 
-    }
+    if (breakdown[tier] !== undefined) breakdown[tier]++;
   }
 
-  // Generate a rolling 7-day cumulative lookback for the Line Chart
+  // Generate 7-day cumulative lookback
   const today = new Date().setUTCHours(0,0,0,0);
   const labels = [];
   const cumulative = [];
@@ -199,8 +189,6 @@ async function fetchActivations() {
     
     let historicalCount = 0;
     let closestTime = 0;
-    
-    // Find the latest active count recorded prior to or on this target day
     for (const [time, count] of historyMap.entries()) {
       if (time <= targetDay && time > closestTime) {
          closestTime = time;
@@ -210,108 +198,109 @@ async function fetchActivations() {
     cumulative.push(historicalCount);
   }
 
-  // Ensure the final data point represents the exact live state right now
   cumulative[6] = activeBrokers.size;
-  
   const activeCount = activeBrokers.size;
   const totalSupply = 4444;
 
   console.log(`Live Activations: ${activeCount}/${totalSupply} (${((activeCount/totalSupply)*100).toFixed(2)}%)`);
 
-  return {
-    activeCount,
-    totalSupply,
-    percentActivated: +((activeCount / totalSupply) * 100).toFixed(2),
-    breakdown,
-    history: { labels, cumulative }
-  };
+  return { activeCount, totalSupply, percentActivated: +((activeCount / totalSupply) * 100).toFixed(2), breakdown, history: { labels, cumulative } };
 }
 
-async function getYield(tba, startBlock, sevenDaysAgo) {
-  let total = 0;
-  const tbaL = tba.toLowerCase();
+async function getGlobalYield(sevenDaysAgo) {
+  let totalUsd = 0;
 
-  for (const action of ["txlist", "txlistinternal"]) {
-    const url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=${action}&address=${tba}&startblock=${startBlock}&page=1&offset=1000&sort=desc&apikey=${API_KEY}`;
-    const data = await secureFetch(url);
-    const list = Array.isArray(data.result) ? data.result : [];
-    for (const tx of list) {
-      const ts = parseInt(tx.timeStamp || 0, 10);
-      if (ts < sevenDaysAgo) continue;
-      if ((tx.to || "").toLowerCase() !== tbaL) continue;
-      if (tx.isError && tx.isError !== "0") continue;
+  for (const pAddr of PROTOCOL_CONTRACTS) {
+    const pL = pAddr.toLowerCase();
+    
+    // 1. Scan ETH drops from protocol
+    const urlEth = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=txlist&address=${pAddr}&startblock=0&page=1&offset=10000&sort=desc&apikey=${API_KEY}`;
+    const dataEth = await secureFetch(urlEth);
+    for (const tx of (dataEth.result || [])) {
+      if (parseInt(tx.timeStamp) < sevenDaysAgo) break; // Array is desc, break loop to save time
+      if (tx.isError !== "0" && tx.isError) continue;
       
-      const fromAddr = (tx.from || "").toLowerCase();
-      if (!PROTOCOL_CONTRACTS.includes(fromAddr)) continue;
-
-      const eth = Number(tx.value || 0) / 1e18;
-      if (eth > 0) total += eth * market.ethPriceUsd;
+      if ((tx.from || "").toLowerCase() === pL) {
+        const eth = Number(tx.value || 0) / 1e18;
+        if (eth > 0) totalUsd += eth * market.ethPriceUsd;
+      }
     }
     await sleep(400);
-  }
 
-  for (const tokenAddr of Object.keys(TOKEN_TICKERS)) {
-    const price = prices[tokenAddr];
-    if (!price) continue;
-    const url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokentx&address=${tba}&contractaddress=${tokenAddr}&startblock=${startBlock}&page=1&offset=1000&sort=desc&apikey=${API_KEY}`;
-    const data = await secureFetch(url);
-    const list = Array.isArray(data.result) ? data.result : [];
-    for (const tx of list) {
-      const ts = parseInt(tx.timeStamp || 0, 10);
-      if (ts < sevenDaysAgo) continue;
-      if ((tx.to || "").toLowerCase() !== tbaL) continue;
-      if (tx.isError && tx.isError !== "0") continue;
+    // 2. Scan Token drops from protocol
+    for (const tokenAddr of Object.keys(TOKEN_TICKERS)) {
+      const price = prices[tokenAddr];
+      if (!price) continue;
       
-      const fromAddr = (tx.from || "").toLowerCase();
-      if (!PROTOCOL_CONTRACTS.includes(fromAddr)) continue;
+      const urlTok = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokentx&address=${pAddr}&contractaddress=${tokenAddr}&startblock=0&page=1&offset=10000&sort=desc&apikey=${API_KEY}`;
+      const dataTok = await secureFetch(urlTok);
+      for (const tx of (dataTok.result || [])) {
+        if (parseInt(tx.timeStamp) < sevenDaysAgo) break; 
+        if (tx.isError !== "0" && tx.isError) continue;
 
-      const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
-      const amount = Number(tx.value || 0) / Math.pow(10, decimals);
-      if (amount > 0) total += amount * price;
+        if ((tx.from || "").toLowerCase() === pL) {
+          const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
+          const amount = Number(tx.value || 0) / Math.pow(10, decimals);
+          if (amount > 0) totalUsd += amount * price;
+        }
+      }
+      await sleep(300);
     }
-    await sleep(300);
   }
 
-  return total;
+  return totalUsd;
 }
 
 async function run() {
   console.log("Starting Dashboard Build...");
   await loadPrices();
 
-  let currentBlock = 31300000;
+  let latestBlock = 32000000;
   try {
     const br = await secureFetch(`${PRO_API}?chain_id=${CHAIN_ID}&module=block&action=eth_block_number&apikey=${API_KEY}`);
-    if (br.result) currentBlock = parseInt(br.result, 16);
+    if (br.result) latestBlock = parseInt(br.result, 16);
   } catch {}
 
-  const startBlock = Math.max(0, currentBlock - 6100000); 
   const sevenDaysAgo = Math.floor(Date.now() / 1000) - 7 * 24 * 3600;
 
-  // Retrieve on-chain activation stats
-  const activationStats = await fetchActivations();
+  // Retrieve on-chain activation stats via chunking
+  const activationStats = await fetchActivations(latestBlock);
 
-  console.log("\nScanning Yield for Benchmark Wallets from block", startBlock);
+  // Retrieve total network yield from Protocol Contracts
+  console.log("\nCalculating Global Network Yield...");
+  const global7DayYield = await getGlobalYield(sevenDaysAgo);
+  const globalAnnualYield = global7DayYield * 52.14;
+
+  // Calculate Total Network Weight
+  let totalNetworkWeight = 0;
+  for (const t of tierStructure) {
+    const activeInTier = activationStats.breakdown[t.id] || 0;
+    totalNetworkWeight += (activeInTier * t.weight);
+  }
+
+  // Calculate the USD value of 1x Weight Unit
+  const yieldPerWeightUnit = totalNetworkWeight > 0 ? (globalAnnualYield / totalNetworkWeight) : 0;
+  console.log(`Global 7d Yield: $${global7DayYield.toFixed(2)} | Annualized: $${globalAnnualYield.toFixed(2)}`);
+  console.log(`Total Network Weight: ${totalNetworkWeight}x | Yield per 1x Weight: $${yieldPerWeightUnit.toFixed(2)}/yr`);
+
+  // Map exact ROI mathematical expectations for the table
   const results = [];
-  for (const bm of tierBenchmarks) {
-    console.log(`Tier ${bm.tier} - ${bm.tbaAddress}`);
-    const sevenDay = await getYield(bm.tbaAddress, startBlock, sevenDaysAgo);
-    const annual = sevenDay * 52.14;
-    console.log(`  7d: $${sevenDay.toFixed(2)} → annual $${annual.toFixed(2)}`);
+  for (const t of tierStructure) {
+    const tierExpectedAnnualUsd = t.weight * yieldPerWeightUnit;
     results.push({
-      tier: bm.tier,
-      name: bm.name,
-      reqTokens: bm.reqTokens,
-      multiplier: bm.multiplier,
-      benchmarkId: bm.benchmarkId,
-      tbaAddress: bm.tbaAddress,
-      trackedAnnualYieldUsd: annual
+      tier: t.id,
+      name: t.name,
+      reqTokens: t.reqTokens,
+      multiplier: `${(t.weight/100).toFixed(2)}x`, 
+      weight: t.weight,
+      trackedAnnualYieldUsd: tierExpectedAnnualUsd
     });
   }
 
   const out = {
     market,
     activation: activationStats,
+    networkMetrics: { globalAnnualYield, totalNetworkWeight, yieldPerWeightUnit },
     tiers: results,
     lastUpdated: new Date().toISOString()
   };
