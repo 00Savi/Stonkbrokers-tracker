@@ -17,15 +17,7 @@ let tierBenchmarks = [
     { tier: 5, reqTokens: 1666666, benchmarkId: 1258, tbaAddress: "0xe7207caa913b54aa4411e847a3a49eee0568cccf", trackedAnnualYieldUsd: 0 }
 ];
 
-// OFFICIAL PROTOCOL SENDER WHITELIST (Live + Legacy Boosters)
-const PROTOCOL_SOURCES = [
-    "0x1f12fe622c11947f93f53d63f68f7f46b6d081c9", // Clock In V2 (Directed Booster) - LIVE
-    "0x55642a3f10f1af5145d3d59021b1d6b03bb8692c", // Safety Deposit Clock In (Fee Router) - LIVE
-    "0x038a7f4e4e89448ad74e044337c9ac25c11e726b", // Stock Booster V1 - RETIRED
-    "0xf9ca5f6d8622c82758914681a12674e2d489259a"  // Overtime Booster - RETIRED
-].map(a => a.toLowerCase());
-
-// STANDARD TOKEN PRICE MAP (With fallback auto-fetch for unmapped tokens)
+// STRICT TOKEN WHITELIST (Blocks MANCER, POD, and Fake USDG naturally)
 const KNOWN_PRICES = {
     "0x0bd7d308f8e1639fab988df18a8011f41eacad73": 1900.00, // WETH
     "0xe934e36a439c94017b64a3fece66af12099abf50": 0.02278,  // STONKBROKER
@@ -73,18 +65,18 @@ async function fetchTokenPriceUsd(contractAddress) {
     } catch (e) {
         console.log(`DexScreener lookup failed for ${contractAddress}`);
     }
-    return 0; // Default to 0 if price cannot be determined
+    return 0;
 }
 
 async function run() {
-    console.log("Starting protocol-source filtered sync (Clock In V2 + Safety Deposit Router)...");
+    console.log("Starting uncaged sync (Tracking Native ETH & Verified Tokens)...");
     
     // 1. Fetch Spot Prices
     try {
         const ethRes = await fetch('https://api.exchange.coinbase.com/products/ETH-USD/ticker');
         const ethData = await ethRes.json();
         globalMarketParams.ethPriceUsd = parseFloat(ethData.price);
-        KNOWN_PRICES["0x0bd7d308f8e1639fab988df18a8011f41eacad73"] = globalMarketParams.ethPriceUsd;
+        KNOWN_PRICES["0x0bd7d308f8e1639fab988df18a8011f41eacad73"] = globalMarketParams.ethPriceUsd; // Sync WETH
     } catch(e) { console.log("ETH Price fetch failed, using fallback."); }
 
     try {
@@ -121,20 +113,13 @@ async function run() {
                 for (const tx of txList) {
                     const txTimestamp = parseInt(tx.timeStamp, 10);
                     
-                    // Basic transfer validation
+                    // Basic transfer validation: within 7 days, inbound, and successful
                     if (txTimestamp >= sevenDaysAgo && tx.to && tx.to.toLowerCase() === tbaAddress && (!tx.isError || tx.isError === "0" || tx.errCode === "")) {
                         
-                        const sender = (tx.from || "").toLowerCase();
-                        
-                        // STRICT SOURCE CHECK: Must originate from an official protocol contract
-                        if (!PROTOCOL_SOURCES.includes(sender)) {
-                            continue; // Skip personal owner deposits and external transfers
-                        }
-
                         let valueStr = tx.value || "0";
                         
                         if (action === "txlistinternal" || action === "txlist") {
-                            // Native ETH Drops from Protocol
+                            // Catch ALL Native ETH Drops
                             const ethAmount = parseFloat(ethers.formatEther(valueStr));
                             if (ethAmount > 0) {
                                 const usdVal = ethAmount * globalMarketParams.ethPriceUsd;
@@ -142,8 +127,13 @@ async function run() {
                                 console.log(`   + Native ETH Drop: ${ethAmount.toFixed(6)} ETH ($${usdVal.toFixed(2)})`);
                             }
                         } else if (action === "tokentx") {
-                            // Token Drops from Protocol Router
+                            // Catch ONLY Verified Token Drops (Auto-blocks spam)
                             const contractAddr = (tx.contractAddress || "").toLowerCase();
+                            const matchedTokenSymbol = Object.keys(KNOWN_PRICES).find(addr => addr === contractAddr);
+                            
+                            // If the token isn't on our official verified list, trash it.
+                            if (!matchedTokenSymbol) continue; 
+
                             const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
                             const tokenAmount = parseFloat(ethers.formatUnits(valueStr, decimals));
 
@@ -151,7 +141,7 @@ async function run() {
                                 const priceUsd = await fetchTokenPriceUsd(contractAddr);
                                 const usdVal = tokenAmount * priceUsd;
                                 totalTierYieldUsd += usdVal;
-                                console.log(`   + Token Drop (${tx.tokenSymbol || 'ERC20'}): ${tokenAmount.toFixed(4)} ($${usdVal.toFixed(2)})`);
+                                console.log(`   + Verified Token Drop: ${tokenAmount.toFixed(4)} ($${usdVal.toFixed(2)})`);
                             }
                         }
                     }
@@ -174,7 +164,7 @@ async function run() {
     };
 
     fs.writeFileSync('data.json', JSON.stringify(finalData, null, 2));
-    console.log("\nSuccess: Protocol drop data cleanly written to data.json");
+    console.log("\nSuccess: Fully unblocked protocol data written to data.json");
 }
 
 run();
