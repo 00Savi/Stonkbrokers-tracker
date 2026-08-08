@@ -4,5 +4,7 @@
   "scripts": {
     "update": "node fetcher.js"
   },
-  "dependencies": {}
+  "dependencies": {
+    "ethers": "^6.13.0"
+  }
 }
