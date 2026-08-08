@@ -1,8 +1,8 @@
 {
   "market": {
-    "ethPriceUsd": 1918.82,
-    "tokenPriceUsd": 0.02908,
-    "nftFloorEth": 11.114
+    "ethPriceUsd": 1915.55,
+    "tokenPriceUsd": 0.02882,
+    "nftFloorEth": 11.033
   },
   "activation": {
     "activeCount": 0,
@@ -36,52 +36,52 @@
       ]
     }
   },
+  "networkMetrics": {
+    "globalAnnualYield": 1840877.2538321218,
+    "totalNetworkWeight": 0,
+    "yieldPerWeightUnit": 0
+  },
   "tiers": [
     {
       "tier": "T0",
       "name": "Floor Trader",
       "reqTokens": 66666,
       "multiplier": "1.00x",
-      "benchmarkId": 3032,
-      "tbaAddress": "0x5a35bc7e3b7f0ea5b04d6df5e15aee144c940ba9",
-      "trackedAnnualYieldUsd": 4112.7295847678215
+      "weight": 100,
+      "trackedAnnualYieldUsd": 0
     },
     {
       "tier": "T1",
       "name": "Analyst",
       "reqTokens": 166666,
       "multiplier": "1.25x",
-      "benchmarkId": 1199,
-      "tbaAddress": "0xc2614c45c68f14a6c21881290c62d84b5f718831",
-      "trackedAnnualYieldUsd": 6829.213181466294
+      "weight": 125,
+      "trackedAnnualYieldUsd": 0
     },
     {
       "tier": "T2",
       "name": "Portfolio Manager",
       "reqTokens": 366666,
       "multiplier": "1.60x",
-      "benchmarkId": 2372,
-      "tbaAddress": "0xa72288ba58858c04b058ffc22ad345687924bcd0",
-      "trackedAnnualYieldUsd": 7354.059239435719
+      "weight": 160,
+      "trackedAnnualYieldUsd": 0
     },
     {
       "tier": "T3",
       "name": "Managing Director",
       "reqTokens": 666666,
       "multiplier": "2.00x",
-      "benchmarkId": 1533,
-      "tbaAddress": "0x468a5a2402fa721f056b22e0c48d7010016135d8",
-      "trackedAnnualYieldUsd": 8270.593915562991
+      "weight": 200,
+      "trackedAnnualYieldUsd": 0
     },
     {
       "tier": "T4",
       "name": "Partner",
       "reqTokens": 1666666,
       "multiplier": "3.33x",
-      "benchmarkId": 1258,
-      "tbaAddress": "0xe7207caa913b54aa4411e847a3a49eee0568cccf",
-      "trackedAnnualYieldUsd": 13699.92568862247
+      "weight": 333,
+      "trackedAnnualYieldUsd": 0
     }
   ],
-  "lastUpdated": "2026-08-08T22:03:09.101Z"
+  "lastUpdated": "2026-08-08T23:07:39.390Z"
 }
