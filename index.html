@@ -90,9 +90,9 @@
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-6 gap-4">
                 <div>
                     <h3 class="text-lg font-semibold flex items-center">
-                        <i class="fa-solid fa-layer-group text-primary mr-2"></i> Ecosystem Tier Benchmarks
+                        <i class="fa-solid fa-layer-group text-primary mr-2"></i> Global Yield ROI Benchmarks
                     </h3>
-                    <p class="text-sm text-gray-400 mt-1" id="last-updated">Estimated returns based on current entry costs vs. live tracking of benchmark brokers.</p>
+                    <p class="text-sm text-gray-400 mt-1" id="last-updated">Mathematically expected returns calculated by dividing total network drops by tokenomic weight.</p>
                 </div>
                 <div class="text-xs text-gray-500 bg-gray-800/50 px-3 py-1.5 rounded-lg border border-gray-700">
                     Floor Entry Cost: <span class="font-mono text-gray-300" id="base-entry-cost">Loading...</span>
@@ -105,7 +105,7 @@
                             <th class="pb-3 font-semibold pl-2">Tier</th>
                             <th class="pb-3 font-semibold">Activation Req.</th>
                             <th class="pb-3 font-semibold">Current Total Cost</th>
-                            <th class="pb-3 font-semibold">Tracked Yield (Annualized)</th>
+                            <th class="pb-3 font-semibold">Expected Yield (Annualized)</th>
                             <th class="pb-3 font-semibold text-right pr-2">Est. ROI (CoC)</th>
                         </tr>
                     </thead>
@@ -129,25 +129,25 @@
                 const res = await fetch(`data.json?t=${Date.now()}`);
                 const data = await res.json();
 
-                // 1. Populate Global Headers
+                // Populate Global Headers
                 document.getElementById('global-eth').innerText = formatUSD(data.market.ethPriceUsd);
                 document.getElementById('global-token').innerText = data.market.tokenPriceUsd < 0.01 ? `$${data.market.tokenPriceUsd.toFixed(5)}` : `$${data.market.tokenPriceUsd.toFixed(4)}`;
                 document.getElementById('global-floor').innerText = `${data.market.nftFloorEth} ETH`;
                 
-                // Base entry cost calculation (666,666 tokens + 10% fee)
+                // Base entry cost calculation
                 const baseNftCostUsd = data.market.tokenPriceUsd * 666666 * 1.10;
                 document.getElementById('base-entry-cost').innerText = formatUSD(baseNftCostUsd);
                 
                 const updateDate = new Date(data.lastUpdated);
                 document.getElementById('last-updated').innerText = `Last automated sync: ${updateDate.toLocaleString()}`;
 
-                // 2. Populate Activation Stats & Charts
+                // Populate Activation Stats & Charts
                 if (data.activation) {
                     document.getElementById('stat-active').innerText = formatNum(data.activation.activeCount);
                     document.getElementById('stat-total').innerText = formatNum(data.activation.totalSupply);
                     document.getElementById('stat-percent').innerText = `${data.activation.percentActivated}%`;
 
-                    // Line Chart Initialization (Cumulative Activations)
+                    // Line Chart Initialization
                     if (data.activation.history && data.activation.history.labels) {
                         new Chart(document.getElementById('activationLineChart'), {
                             type: 'line',
@@ -177,7 +177,7 @@
                         });
                     }
 
-                    // Pie Chart Initialization (Tier Breakdown)
+                    // Pie Chart Initialization
                     if (data.activation.breakdown) {
                         new Chart(document.getElementById('tierPieChart'), {
                             type: 'doughnut',
@@ -207,13 +207,15 @@
                     }
                 }
 
-                // 3. Populate Tier Table
+                // Populate Global Yield Table
                 const tbody = document.getElementById('tier-table-body');
                 tbody.innerHTML = '';
 
                 data.tiers.forEach(bm => {
                     const activationCostUsd = bm.reqTokens * data.market.tokenPriceUsd;
                     const currentTotalCostUsd = baseNftCostUsd + activationCostUsd;
+                    
+                    // Cash on Cash Return
                     const estCashOnCash = (currentTotalCostUsd > 0 && bm.trackedAnnualYieldUsd > 0) ? (bm.trackedAnnualYieldUsd / currentTotalCostUsd) * 100 : 0;
 
                     let yieldDisplay = bm.trackedAnnualYieldUsd === 0 ? 
@@ -229,7 +231,7 @@
                                     <span class="w-8 h-8 rounded bg-gray-800 flex items-center justify-center font-bold text-xs mr-3 text-primary border border-gray-700">${bm.tier}</span>
                                     <div>
                                         <div class="font-semibold text-gray-200">${bm.name || ''}</div>
-                                        <div class="text-[10px] text-gray-500 font-mono">Weight: <span class="text-warning">${bm.multiplier || ''}</span> | Tracks #${bm.benchmarkId}</div>
+                                        <div class="text-[10px] text-gray-500 font-mono">Weight: <span class="text-warning">${bm.weight}x</span></div>
                                     </div>
                                 </div>
                             </td>
