@@ -17,14 +17,22 @@ let tierBenchmarks = [
     { tier: 5, reqTokens: 1666666, benchmarkId: 1258, tbaAddress: "0xe7207caa913b54aa4411e847a3a49eee0568cccf", trackedAnnualYieldUsd: 0 }
 ];
 
-// STRICT TOKEN WHITELIST (Blocks MANCER, POD, and Fake USDG naturally)
+// OFFICIAL PROTOCOL ROUTERS (Senders of Protocol Drops)
+const PROTOCOL_SOURCES = [
+    "0x1f12fe622c11947f93f53d63f68f7f46b6d081c9", // Clock In V2
+    "0x55642a3f10f1af5145d3d59021b1d6b03bb8692c", // Safety Deposit Clock In
+    "0x038a7f4e4e89448ad74e044337c9ac25c11e726b", // Stock Booster V1
+    "0xf9ca5f6d8622c82758914681a12674e2d489259a"  // Overtime Booster
+].map(a => a.toLowerCase());
+
+// KNOWN VERIFIED TOKEN PRICES
 const KNOWN_PRICES = {
     "0x0bd7d308f8e1639fab988df18a8011f41eacad73": 1900.00, // WETH
     "0xe934e36a439c94017b64a3fece66af12099abf50": 0.02278,  // STONKBROKER
     "0xaf3d76f1834a1d425780943c99ea8a608f8a93f9": 225.00,   // AAPL
     "0x12f190a9f9d7d37a250758b26824b97ce941bf54": 185.00,   // AMZN
     "0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec": 120.00,   // NVDA
-    "0x411efb0e7f985935daec3d4c3ebaea0d0ad7d89f": 28.00,    // SLV
+    "0x411efb0e7f985935daec3D4C3ebaEa0d0AD7D89f": 28.00,    // SLV
     "0x5fc5360d0400a0fd4f2af552add042d716f1d168": 1.00,     // USDG
     "0x1383b43aed527485f191b60060f5b5471f71b1ca": 1.00      // USDG V2
 };
@@ -69,14 +77,14 @@ async function fetchTokenPriceUsd(contractAddress) {
 }
 
 async function run() {
-    console.log("Starting uncaged sync (Tracking Native ETH & Verified Tokens)...");
+    console.log("Starting protocol-filtered sync...");
     
     // 1. Fetch Spot Prices
     try {
         const ethRes = await fetch('https://api.exchange.coinbase.com/products/ETH-USD/ticker');
         const ethData = await ethRes.json();
         globalMarketParams.ethPriceUsd = parseFloat(ethData.price);
-        KNOWN_PRICES["0x0bd7d308f8e1639fab988df18a8011f41eacad73"] = globalMarketParams.ethPriceUsd; // Sync WETH
+        KNOWN_PRICES["0x0bd7d308f8e1639fab988df18a8011f41eacad73"] = globalMarketParams.ethPriceUsd;
     } catch(e) { console.log("ETH Price fetch failed, using fallback."); }
 
     try {
@@ -103,7 +111,6 @@ async function run() {
         const actions = ["txlistinternal", "txlist", "tokentx"];
 
         for (let action of actions) {
-            console.log(`-> Fetching ${action}...`);
             const url = `${BLOCKSCOUT_BASE_URL}?module=account&action=${action}&address=${tbaAddress}&page=1&offset=2000&sort=desc&apikey=${BLOCKSCOUT_API_KEY}`;
             const data = await secureFetch(url);
 
@@ -113,27 +120,23 @@ async function run() {
                 for (const tx of txList) {
                     const txTimestamp = parseInt(tx.timeStamp, 10);
                     
-                    // Basic transfer validation: within 7 days, inbound, and successful
+                    // Filter for inbound transfers within 7 days
                     if (txTimestamp >= sevenDaysAgo && tx.to && tx.to.toLowerCase() === tbaAddress && (!tx.isError || tx.isError === "0" || tx.errCode === "")) {
+                        
+                        const sender = (tx.from || "").toLowerCase();
+                        const isProtocolSender = PROTOCOL_SOURCES.includes(sender);
                         
                         let valueStr = tx.value || "0";
                         
-                        if (action === "txlistinternal" || action === "txlist") {
-                            // Catch ALL Native ETH Drops
+                        if ((action === "txlistinternal" || action === "txlist") && isProtocolSender) {
                             const ethAmount = parseFloat(ethers.formatEther(valueStr));
                             if (ethAmount > 0) {
                                 const usdVal = ethAmount * globalMarketParams.ethPriceUsd;
                                 totalTierYieldUsd += usdVal;
                                 console.log(`   + Native ETH Drop: ${ethAmount.toFixed(6)} ETH ($${usdVal.toFixed(2)})`);
                             }
-                        } else if (action === "tokentx") {
-                            // Catch ONLY Verified Token Drops (Auto-blocks spam)
+                        } else if (action === "tokentx" && isProtocolSender) {
                             const contractAddr = (tx.contractAddress || "").toLowerCase();
-                            const matchedTokenSymbol = Object.keys(KNOWN_PRICES).find(addr => addr === contractAddr);
-                            
-                            // If the token isn't on our official verified list, trash it.
-                            if (!matchedTokenSymbol) continue; 
-
                             const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
                             const tokenAmount = parseFloat(ethers.formatUnits(valueStr, decimals));
 
@@ -141,7 +144,7 @@ async function run() {
                                 const priceUsd = await fetchTokenPriceUsd(contractAddr);
                                 const usdVal = tokenAmount * priceUsd;
                                 totalTierYieldUsd += usdVal;
-                                console.log(`   + Verified Token Drop: ${tokenAmount.toFixed(4)} ($${usdVal.toFixed(2)})`);
+                                console.log(`   + Protocol Token Drop (${tx.tokenSymbol || 'ERC20'}): ${tokenAmount.toFixed(6)} ($${usdVal.toFixed(4)})`);
                             }
                         }
                     }
@@ -153,7 +156,7 @@ async function run() {
         // Annualize 7-day yield
         const annualizedYield = totalTierYieldUsd * 52.14;
         bm.trackedAnnualYieldUsd = annualizedYield;
-        console.log(`✓ Tier ${bm.tier} Complete. 7-Day Total: $${totalTierYieldUsd.toFixed(2)} | Annualized: $${annualizedYield.toFixed(2)}`);
+        console.log(`✓ Tier ${bm.tier} Complete. 7-Day Total: $${totalTierYieldUsd.toFixed(4)} | Annualized: $${annualizedYield.toFixed(2)}`);
     }
 
     // 3. Write Output
@@ -164,7 +167,7 @@ async function run() {
     };
 
     fs.writeFileSync('data.json', JSON.stringify(finalData, null, 2));
-    console.log("\nSuccess: Fully unblocked protocol data written to data.json");
+    console.log("\nSuccess: Protocol drop data cleanly written to data.json");
 }
 
 run();
