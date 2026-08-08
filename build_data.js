@@ -79,7 +79,7 @@ async function fetchTokenPriceUsd(contractAddress) {
 }
 
 async function run() {
-    console.log("Starting REST-based Blockscout sync with dynamic Start Block...");
+    console.log("Starting REST-based Blockscout sync with Smart Pagination...");
     
     // 1. Fetch Spot Prices
     try {
@@ -102,21 +102,11 @@ async function run() {
 
     globalMarketParams.nftFloorEth = parseFloat(((666666 * globalMarketParams.tokenPriceUsd) / globalMarketParams.ethPriceUsd).toFixed(3));
     
-    // 2. Determine Exact Start Block (Bypasses Pagination Limits)
+    // Define exact 7 days ago timestamp
     const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
-    let currentBlock = 30000000;
-    try {
-        const blockRes = await secureFetch(`${BLOCKSCOUT_BASE_URL}?module=block&action=eth_block_number&apikey=${BLOCKSCOUT_API_KEY}`);
-        if (blockRes && blockRes.result) {
-            currentBlock = parseInt(blockRes.result, 16);
-        }
-    } catch(e) {}
-    
-    // Approximate blocks for 7 days (Robinhood Chain ~2s block time)
-    const startBlock = Math.max(0, currentBlock - 302400); 
-    console.log(`Filtering drops since Block: ${startBlock} (Unix: ${sevenDaysAgo})`);
+    console.log(`Filtering all drops since Unix Timestamp: ${sevenDaysAgo}`);
 
-    // 3. Scan Tiers via Blockscout REST APIs
+    // 2. Scan Tiers via Blockscout REST APIs
     for (let bm of tierBenchmarks) {
         const tbaAddress = bm.tbaAddress.toLowerCase();
         console.log(`\nProcessing Tier ${bm.tier} (TBA: ${tbaAddress})...`);
@@ -126,45 +116,62 @@ async function run() {
 
         for (let action of actions) {
             console.log(`-> Fetching ${action}...`);
-            // Added startblock to force API to search the exact 7-day window
-            const url = `${BLOCKSCOUT_BASE_URL}?module=account&action=${action}&address=${tbaAddress}&startblock=${startBlock}&page=1&offset=10000&sort=desc&apikey=${BLOCKSCOUT_API_KEY}`;
-            const data = await secureFetch(url);
+            let page = 1;
+            let keepPaginating = true;
+            
+            // Smart Pagination Loop: Fetches pages until it hits transactions older than 7 days
+            while (keepPaginating && page <= 10) { 
+                const url = `${BLOCKSCOUT_BASE_URL}?module=account&action=${action}&address=${tbaAddress}&page=${page}&offset=1000&sort=desc&apikey=${BLOCKSCOUT_API_KEY}`;
+                const data = await secureFetch(url);
 
-            if (data && (data.status === "1" || Array.isArray(data.result))) {
-                const txList = Array.isArray(data.result) ? data.result : [];
-                
-                for (const tx of txList) {
-                    const txTimestamp = parseInt(tx.timeStamp, 10);
+                if (data && (data.status === "1" || Array.isArray(data.result)) && data.result.length > 0) {
+                    let foundOldTransaction = false;
                     
-                    // Filter strictly by trailing 7-day Unix timestamp & inbound status
-                    if (txTimestamp >= sevenDaysAgo && tx.to && tx.to.toLowerCase() === tbaAddress && (!tx.isError || tx.isError === "0" || tx.errCode === "")) {
-                        let valueStr = tx.value || "0";
+                    for (const tx of data.result) {
+                        const txTimestamp = parseInt(tx.timeStamp, 10);
                         
-                        if (action === "txlistinternal" || action === "txlist") {
-                            // Safely parse Native ETH Drops
-                            const ethVal = parseFloat(ethers.formatEther(valueStr));
-                            if (ethVal > 0) {
-                                const usdVal = ethVal * globalMarketParams.ethPriceUsd;
-                                totalTierYieldUsd += usdVal;
-                                console.log(`   + Native ETH Drop: ${ethVal.toFixed(6)} ETH ($${usdVal.toFixed(2)})`);
-                            }
-                        } else if (action === "tokentx") {
-                            // Safely parse Token Drops
-                            const contractAddr = (tx.contractAddress || "").toLowerCase();
-                            const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
-                            const tokenAmount = parseFloat(ethers.formatUnits(valueStr, decimals));
+                        // If we see a transaction older than 7 days, we flag to stop paginating
+                        if (txTimestamp < sevenDaysAgo) {
+                            foundOldTransaction = true;
+                        }
+                        
+                        // Process valid transactions inside the 7-day window
+                        if (txTimestamp >= sevenDaysAgo && tx.to && tx.to.toLowerCase() === tbaAddress && (!tx.isError || tx.isError === "0" || tx.errCode === "")) {
+                            let valueStr = tx.value || "0";
+                            
+                            if (action === "txlistinternal" || action === "txlist") {
+                                const ethVal = parseFloat(ethers.formatEther(valueStr));
+                                if (ethVal > 0) {
+                                    const usdVal = ethVal * globalMarketParams.ethPriceUsd;
+                                    totalTierYieldUsd += usdVal;
+                                    console.log(`   + Native ETH Drop: ${ethVal.toFixed(6)} ETH ($${usdVal.toFixed(2)})`);
+                                }
+                            } else if (action === "tokentx") {
+                                const contractAddr = (tx.contractAddress || "").toLowerCase();
+                                const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
+                                const tokenAmount = parseFloat(ethers.formatUnits(valueStr, decimals));
 
-                            if (tokenAmount > 0) {
-                                const priceUsd = await fetchTokenPriceUsd(contractAddr);
-                                const usdVal = tokenAmount * priceUsd;
-                                totalTierYieldUsd += usdVal;
-                                console.log(`   + Token Drop (${tx.tokenSymbol || 'ERC20'}): ${tokenAmount.toFixed(4)} ($${usdVal.toFixed(2)})`);
+                                if (tokenAmount > 0) {
+                                    const priceUsd = await fetchTokenPriceUsd(contractAddr);
+                                    const usdVal = tokenAmount * priceUsd;
+                                    totalTierYieldUsd += usdVal;
+                                    console.log(`   + Token Drop (${tx.tokenSymbol || 'ERC20'}): ${tokenAmount.toFixed(4)} ($${usdVal.toFixed(2)})`);
+                                }
                             }
                         }
                     }
+                    
+                    // Stop turning pages if we've successfully reached the 7-day horizon
+                    if (foundOldTransaction) {
+                        keepPaginating = false;
+                    } else {
+                        page++; // Turn the page to dig through more spam
+                        await sleep(5000); // Respect rate limits between pages
+                    }
+                } else {
+                    keepPaginating = false; // Stop if Blockscout returns empty
                 }
             }
-            await sleep(10000); 
         }
 
         // Annualize 7-day yield
@@ -173,7 +180,7 @@ async function run() {
         console.log(`✓ Tier ${bm.tier} Complete. 7-Day Total: $${totalTierYieldUsd.toFixed(2)} | Annualized: $${annualizedYield.toFixed(2)}`);
     }
 
-    // 4. Write Output
+    // 3. Write Output
     const finalData = {
         market: globalMarketParams,
         tiers: tierBenchmarks,
