@@ -12,7 +12,7 @@
             theme: {
                 extend: {
                     fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['JetBrains Mono', 'monospace'] },
-                    colors: { dark: '#0f172a', card: '#1e293b', primary: '#3b82f6', success: '#10b981', warning: '#f59e0b', danger: '#ef4444' }
+                    colors: { dark: '#0f172a', card: '#1e293b', primary: '#3b82f6', success: '#10b981' }
                 }
             }
         }
@@ -28,12 +28,13 @@
             background: rgba(30, 41, 59, 0.7);
             backdrop-filter: blur(12px);
             border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         }
     </style>
 </head>
 <body class="min-h-screen p-4 md:p-8">
     <div class="max-w-6xl mx-auto space-y-6">
+
+        <!-- Header -->
         <header class="flex flex-col md:flex-row justify-between items-center pb-6 border-b border-gray-800">
             <div class="flex items-center space-x-3 mb-4 md:mb-0">
                 <div class="w-10 h-10 bg-primary rounded-lg flex items-center justify-center font-bold text-xl">$</div>
@@ -49,16 +50,40 @@
             </div>
         </header>
 
+        <!-- Activation Stats (placeholder for now) -->
+        <section class="glass-card rounded-2xl p-6">
+            <h3 class="text-lg font-semibold flex items-center mb-4">
+                <i class="fa-solid fa-chart-pie text-primary mr-2"></i> Activation Overview
+            </h3>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                <div class="bg-gray-800/50 rounded-xl p-4">
+                    <div class="text-2xl font-bold text-success" id="active-count">—</div>
+                    <div class="text-xs text-gray-400 mt-1">Activated Brokers</div>
+                </div>
+                <div class="bg-gray-800/50 rounded-xl p-4">
+                    <div class="text-2xl font-bold" id="active-percent">—</div>
+                    <div class="text-xs text-gray-400 mt-1">% of Supply</div>
+                </div>
+                <div class="bg-gray-800/50 rounded-xl p-4 col-span-2 flex items-center justify-center">
+                    <div class="text-sm text-gray-400">Full on-chain activation stats coming next (API limitation being fixed)</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tier Benchmarks -->
         <section class="glass-card rounded-2xl p-6">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-6 gap-4">
                 <div>
-                    <h3 class="text-lg font-semibold flex items-center"><i class="fa-solid fa-layer-group text-primary mr-2"></i> Ecosystem Tier Benchmarks</h3>
-                    <p class="text-sm text-gray-400 mt-1" id="last-updated">Estimated returns based on current entry costs vs. live tracking of benchmark brokers.</p>
+                    <h3 class="text-lg font-semibold flex items-center">
+                        <i class="fa-solid fa-layer-group text-primary mr-2"></i> Ecosystem Tier Benchmarks
+                    </h3>
+                    <p class="text-sm text-gray-400 mt-1" id="last-updated">Loading...</p>
                 </div>
                 <div class="text-xs text-gray-500 bg-gray-800/50 px-3 py-1.5 rounded-lg border border-gray-700">
                     Base Entry: <span class="font-mono text-gray-300" id="base-entry-cost">Loading...</span> (NFT Floor)
                 </div>
             </div>
+
             <div class="overflow-x-auto">
                 <table class="w-full text-left border-collapse min-w-[600px]">
                     <thead>
@@ -71,7 +96,7 @@
                         </tr>
                     </thead>
                     <tbody id="tier-table-body" class="text-sm divide-y divide-gray-800/50">
-                        <tr><td colspan="5" class="py-4 text-center text-gray-500 italic">Fetching data payload...</td></tr>
+                        <tr><td colspan="5" class="py-4 text-center text-gray-500 italic">Loading data...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -87,46 +112,58 @@
                 const res = await fetch(`data.json?t=${Date.now()}`);
                 const data = await res.json();
 
+                // Header
                 document.getElementById('global-eth').innerText = formatUSD(data.market.ethPriceUsd);
-                document.getElementById('global-token').innerText = data.market.tokenPriceUsd < 0.01 ? `$${data.market.tokenPriceUsd.toFixed(5)}` : `$${data.market.tokenPriceUsd.toFixed(4)}`;
+                document.getElementById('global-token').innerText = data.market.tokenPriceUsd < 0.01 
+                    ? `$${data.market.tokenPriceUsd.toFixed(5)}` 
+                    : `$${data.market.tokenPriceUsd.toFixed(4)}`;
                 document.getElementById('global-floor').innerText = `${data.market.nftFloorEth} ETH`;
                 document.getElementById('base-entry-cost').innerText = formatUSD(666666 * data.market.tokenPriceUsd);
-                
+
                 const updateDate = new Date(data.lastUpdated);
                 document.getElementById('last-updated').innerText = `Last automated sync: ${updateDate.toLocaleString()}`;
 
+                // Activation (placeholder until we fix the call)
+                if (data.activation) {
+                    document.getElementById('active-count').innerText = data.activation.activeCount || '—';
+                    document.getElementById('active-percent').innerText = data.activation.percentActivated 
+                        ? data.activation.percentActivated + '%' 
+                        : '—';
+                }
+
+                // Tiers
                 const tbody = document.getElementById('tier-table-body');
                 tbody.innerHTML = '';
-                
                 const baseNftCostUsd = data.market.tokenPriceUsd * 666666;
 
                 data.tiers.forEach(bm => {
                     const activationCostUsd = bm.reqTokens * data.market.tokenPriceUsd;
                     const currentTotalCostUsd = baseNftCostUsd + activationCostUsd;
-                    const estCashOnCash = (currentTotalCostUsd > 0 && bm.trackedAnnualYieldUsd > 0) ? (bm.trackedAnnualYieldUsd / currentTotalCostUsd) * 100 : 0;
+                    const estCashOnCash = (currentTotalCostUsd > 0 && bm.trackedAnnualYieldUsd > 0)
+                        ? (bm.trackedAnnualYieldUsd / currentTotalCostUsd) * 100
+                        : 0;
 
-                    let yieldDisplay = bm.trackedAnnualYieldUsd === 0 ? 
-                        `<span class="text-xs text-gray-500 italic">No yield in last 7d</span>` : 
-                        `${formatUSD(bm.trackedAnnualYieldUsd)} <span class="text-xs text-gray-500">/yr</span>`;
+                    const yieldDisplay = bm.trackedAnnualYieldUsd === 0
+                        ? `<span class="text-xs text-gray-500 italic">No yield in last 7d</span>`
+                        : `${formatUSD(bm.trackedAnnualYieldUsd)} <span class="text-xs text-gray-500">/yr</span>`;
 
-                    let roiBadge = `<span class="inline-block px-2 py-1 rounded bg-success/10 text-success font-bold text-sm border border-success/20">${estCashOnCash.toFixed(2)}%</span>`;
+                    const roiBadge = `<span class="inline-block px-2 py-1 rounded bg-success/10 text-success font-bold text-sm border border-success/20">${estCashOnCash.toFixed(2)}%</span>`;
 
                     tbody.innerHTML += `
                         <tr class="hover:bg-gray-800/30 transition-colors">
-                            <td class="py-4 pl-2"><div class="flex items-center"><span class="w-6 h-6 rounded bg-gray-800 flex items-center justify-center font-bold text-xs mr-2 text-primary border border-gray-700">${bm.tier}</span><span class="text-xs text-gray-500">Tracks #${bm.benchmarkId}</span></div></td>
-                            <td class="py-4"><span class="font-mono text-gray-300">${formatNum(bm.reqTokens)}</span><span class="text-xs text-gray-500 ml-1">STONK</span></td>
-                            <td class="py-4"><span class="font-mono font-semibold">${formatUSD(currentTotalCostUsd)}</span><div class="text-[10px] text-gray-500">Floor + ${formatUSD(activationCostUsd)} Act.</div></td>
+                            <td class="py-4 pl-2">
+                                <div class="flex items-center">
+                                    <span class="w-6 h-6 rounded bg-gray-800 flex items-center justify-center font-bold text-xs mr-2 text-primary border border-gray-700">${bm.tier}</span>
+                                    <span class="text-xs text-gray-500">Tracks #${bm.benchmarkId}</span>
+                                </div>
+                            </td>
+                            <td class="py-4">
+                                <span class="font-mono text-gray-300">${formatNum(bm.reqTokens)}</span>
+                                <span class="text-xs text-gray-500 ml-1">STONK</span>
+                            </td>
+                            <td class="py-4">
+                                <span class="font-mono font-semibold">${formatUSD(currentTotalCostUsd)}</span>
+                                <div class="text-[10px] text-gray-500">Floor + ${formatUSD(activationCostUsd)} Act.</div>
+                            </td>
                             <td class="py-4 font-mono text-gray-300">${yieldDisplay}</td>
-                            <td class="py-4 text-right pr-2">${roiBadge}</td>
-                        </tr>`;
-                });
-
-            } catch (err) {
-                document.getElementById('tier-table-body').innerHTML = `<tr><td colspan="5" class="py-4 text-center text-danger font-semibold">Data sync pending or unavailable. Check GitHub Actions.</td></tr>`;
-            }
-        }
-
-        window.addEventListener('DOMContentLoaded', initializeDashboard);
-    </script>
-</body>
-</html>
+                           
