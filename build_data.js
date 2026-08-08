@@ -1,3 +1,4 @@
+const { ethers } = require("ethers");
 const fs = require("fs");
 
 const BLOCKSCOUT_API_KEY = "proapi_tI5cQZoWvXXgS1WFHXEaLKhLBSl0WHvcYv3msh7Kdpioyod8Bfon9vSHif7zhcAG_dLDzYW"; 
@@ -78,7 +79,7 @@ async function fetchTokenPriceUsd(contractAddress) {
 }
 
 async function run() {
-    console.log("Starting REST-based Blockscout sync...");
+    console.log("Starting REST-based Blockscout sync with dynamic Start Block...");
     
     // 1. Fetch Spot Prices
     try {
@@ -101,10 +102,21 @@ async function run() {
 
     globalMarketParams.nftFloorEth = parseFloat(((666666 * globalMarketParams.tokenPriceUsd) / globalMarketParams.ethPriceUsd).toFixed(3));
     
+    // 2. Determine Exact Start Block (Bypasses Pagination Limits)
     const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
-    console.log(`Filtering drops since Unix Timestamp: ${sevenDaysAgo}`);
+    let currentBlock = 30000000;
+    try {
+        const blockRes = await secureFetch(`${BLOCKSCOUT_BASE_URL}?module=block&action=eth_block_number&apikey=${BLOCKSCOUT_API_KEY}`);
+        if (blockRes && blockRes.result) {
+            currentBlock = parseInt(blockRes.result, 16);
+        }
+    } catch(e) {}
+    
+    // Approximate blocks for 7 days (Robinhood Chain ~2s block time)
+    const startBlock = Math.max(0, currentBlock - 302400); 
+    console.log(`Filtering drops since Block: ${startBlock} (Unix: ${sevenDaysAgo})`);
 
-    // 2. Scan Tiers via Blockscout REST APIs
+    // 3. Scan Tiers via Blockscout REST APIs
     for (let bm of tierBenchmarks) {
         const tbaAddress = bm.tbaAddress.toLowerCase();
         console.log(`\nProcessing Tier ${bm.tier} (TBA: ${tbaAddress})...`);
@@ -114,7 +126,8 @@ async function run() {
 
         for (let action of actions) {
             console.log(`-> Fetching ${action}...`);
-            const url = `${BLOCKSCOUT_BASE_URL}?module=account&action=${action}&address=${tbaAddress}&page=1&offset=2000&sort=desc&apikey=${BLOCKSCOUT_API_KEY}`;
+            // Added startblock to force API to search the exact 7-day window
+            const url = `${BLOCKSCOUT_BASE_URL}?module=account&action=${action}&address=${tbaAddress}&startblock=${startBlock}&page=1&offset=10000&sort=desc&apikey=${BLOCKSCOUT_API_KEY}`;
             const data = await secureFetch(url);
 
             if (data && (data.status === "1" || Array.isArray(data.result))) {
@@ -128,18 +141,18 @@ async function run() {
                         let valueStr = tx.value || "0";
                         
                         if (action === "txlistinternal" || action === "txlist") {
-                            const ethAmount = parseFloat(Buffer.from ? Number(valueStr) / 1e18 : Number(valueStr) / 1e18); // safe parse
-                            // Use BigInt or division for large numbers safely
-                            const ethVal = Number(valueStr) / 1e18;
+                            // Safely parse Native ETH Drops
+                            const ethVal = parseFloat(ethers.formatEther(valueStr));
                             if (ethVal > 0) {
                                 const usdVal = ethVal * globalMarketParams.ethPriceUsd;
                                 totalTierYieldUsd += usdVal;
                                 console.log(`   + Native ETH Drop: ${ethVal.toFixed(6)} ETH ($${usdVal.toFixed(2)})`);
                             }
                         } else if (action === "tokentx") {
+                            // Safely parse Token Drops
                             const contractAddr = (tx.contractAddress || "").toLowerCase();
                             const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
-                            const tokenAmount = Number(valueStr) / Math.pow(10, decimals);
+                            const tokenAmount = parseFloat(ethers.formatUnits(valueStr, decimals));
 
                             if (tokenAmount > 0) {
                                 const priceUsd = await fetchTokenPriceUsd(contractAddr);
@@ -160,7 +173,7 @@ async function run() {
         console.log(`✓ Tier ${bm.tier} Complete. 7-Day Total: $${totalTierYieldUsd.toFixed(2)} | Annualized: $${annualizedYield.toFixed(2)}`);
     }
 
-    // 3. Write Output
+    // 4. Write Output
     const finalData = {
         market: globalMarketParams,
         tiers: tierBenchmarks,
