@@ -3,8 +3,16 @@ const fs = require("fs");
 const API_KEY = "proapi_tI5cQZoWvXXgS1WFHXEaLKhLBSl0WHvcYv3msh7Kdpioyod8Bfon9vSHif7zhcAG_dLDzYW";
 const PRO_API = "https://api.blockscout.com/v2/api";
 const CHAIN_ID = 4663;
+const ACTIVATION_MANAGER = "0xacd5ae3c060c1137fe2ee86b0ab2ef697456f664";
+const TOTAL_SUPPLY = 4444;
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+const SEL = {
+  activeCount: "0x4331ed1f",
+  activeTokenAt: "0xdaf0e9c5",
+  activationOf: "0x0d5ea213"
+};
 
 const TOKEN_TICKERS = {
   "0x0bd7d308f8e1639fab988df18a8011f41eacad73": null,
@@ -40,7 +48,7 @@ async function secureFetch(url) {
   for (let i = 0; i < 4; i++) {
     try {
       const res = await fetch(url, {
-        headers: { "Accept": "application/json", "User-Agent": "StonkBrokersTracker/1.6" }
+        headers: { "Accept": "application/json", "User-Agent": "StonkBrokersTracker/1.7" }
       });
       if (res.status === 429) throw new Error("rate");
       return await res.json();
@@ -49,7 +57,13 @@ async function secureFetch(url) {
       await sleep(2000 + i * 1500);
     }
   }
-  return { result: [] };
+  return { result: null };
+}
+
+async function ethCall(data) {
+  const url = `${PRO_API}?chain_id=${CHAIN_ID}&module=proxy&action=eth_call&to=${ACTIVATION_MANAGER}&data=${data}&tag=latest&apikey=${API_KEY}`;
+  const res = await secureFetch(url);
+  return res?.result || null;
 }
 
 async function loadPrices() {
@@ -91,6 +105,63 @@ async function loadPrices() {
 
   market.nftFloorEth = +((666666 * market.tokenPriceUsd) / market.ethPriceUsd).toFixed(3);
   console.log(`Market → ETH $${market.ethPriceUsd.toFixed(2)} | STONK $${market.tokenPriceUsd.toFixed(5)}`);
+}
+
+async function getActivationStats() {
+  console.log("\nFetching activation stats...");
+
+  let activeCount = 0;
+  const countRaw = await ethCall(SEL.activeCount);
+  if (countRaw && countRaw !== "0x") {
+    activeCount = parseInt(countRaw, 16);
+  }
+  console.log(`  activeCount = ${activeCount}`);
+
+  const percent = activeCount > 0 ? +(activeCount / TOTAL_SUPPLY * 100).toFixed(1) : 0;
+
+  // Limited tier sample for reliability
+  const tierCounts = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 };
+  const maxToScan = Math.min(activeCount, 200);
+
+  console.log(`  Scanning ${maxToScan} tokens for tier breakdown...`);
+
+  for (let i = 0; i < maxToScan; i++) {
+    const indexHex = i.toString(16).padStart(64, "0");
+    const tokenIdRaw = await ethCall(SEL.activeTokenAt + indexHex);
+    if (!tokenIdRaw || tokenIdRaw === "0x") continue;
+
+    const tokenId = parseInt(tokenIdRaw, 16);
+    const tokenIdHex = tokenId.toString(16).padStart(64, "0");
+    const actRaw = await ethCall(SEL.activationOf + tokenIdHex);
+
+    if (actRaw && actRaw.length >= 130) {
+      const tier = parseInt(actRaw.slice(66, 130), 16);
+      if (tier >= 0 && tier <= 4) tierCounts[tier]++;
+    }
+
+    if (i % 30 === 0) {
+      console.log(`    scanned ${i}/${maxToScan}`);
+      await sleep(250);
+    } else {
+      await sleep(80);
+    }
+  }
+
+  console.log("  Tier sample:", tierCounts);
+
+  return {
+    activeCount,
+    totalSupply: TOTAL_SUPPLY,
+    percentActivated: percent,
+    tierBreakdown: {
+      base: tierCounts[0],
+      t1: tierCounts[1],
+      t2: tierCounts[2],
+      t3: tierCounts[3],
+      t4: tierCounts[4]
+    },
+    scanned: maxToScan
+  };
 }
 
 async function getYield(tba, startBlock, sevenDaysAgo) {
@@ -137,6 +208,8 @@ async function run() {
   console.log("Starting...");
   await loadPrices();
 
+  const activation = await getActivationStats();
+
   let currentBlock = 31300000;
   try {
     const br = await secureFetch(`${PRO_API}?chain_id=${CHAIN_ID}&module=block&action=eth_block_number&apikey=${API_KEY}`);
@@ -145,7 +218,7 @@ async function run() {
 
   const startBlock = Math.max(0, currentBlock - 6100000);
   const sevenDaysAgo = Math.floor(Date.now() / 1000) - 7 * 24 * 3600;
-  console.log("Scanning from block", startBlock);
+  console.log("Scanning yields from block", startBlock);
 
   const results = [];
   for (const bm of tierBenchmarks) {
@@ -164,12 +237,7 @@ async function run() {
 
   const out = {
     market,
-    activation: {
-      activeCount: 0,
-      totalSupply: 4444,
-      percentActivated: 0,
-      note: "Activation stats coming next"
-    },
+    activation,
     tiers: results,
     lastUpdated: new Date().toISOString()
   };
