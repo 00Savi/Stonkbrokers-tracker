@@ -22,7 +22,7 @@ const KNOWN_PRICES = {
     "0xaf3d76f1834a1d425780943c99ea8a608f8a93f9": 225.00,   // AAPL
     "0x12f190a9f9d7d37a250758b26824b97ce941bf54": 185.00,   // AMZN
     "0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec": 120.00,   // NVDA
-    "0x411efb0e7f985935daec3D4C3ebaEa0d0AD7D89f": 28.00,    // SLV
+    "0x411efb0e7f985935daec3d4c3ebaea0d0ad7d89f": 28.00,    // SLV
     "0xe93237c50d904957cf27e7b1133b510c669c2e74": 430.00,   // MSFT
     "0x4ea005168d7f09a7a0ba9d1def21a479950e44c2": 820.00,   // COST
     "0xd917b029c761d264c6a312bbbcda868658ef86a6": 50.00,    // USAR
@@ -51,34 +51,15 @@ async function secureFetch(url) {
             return data;
         } catch (err) {
             retries++;
-            console.log(`Rate limit hit, resting for 20 seconds... (Attempt ${retries})`);
-            await sleep(20000);
+            console.log(`Rate limit hit, resting for 5 seconds... (Attempt ${retries})`);
+            await sleep(5000);
         }
     }
     return { result: [] };
 }
 
-async function fetchTokenPriceUsd(contractAddress) {
-    const addrLower = contractAddress.toLowerCase();
-    if (KNOWN_PRICES[addrLower]) return KNOWN_PRICES[addrLower];
-
-    try {
-        const dexRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${contractAddress}`);
-        const dexData = await dexRes.json();
-        if (dexData?.pairs?.length > 0) {
-            const bestPair = dexData.pairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
-            const price = parseFloat(bestPair.priceUsd);
-            if (!isNaN(price) && price > 0) {
-                KNOWN_PRICES[addrLower] = price;
-                return price;
-            }
-        }
-    } catch (e) {}
-    return 1.00; // Default fallback for unmapped protocol reward tokens
-}
-
 async function run() {
-    console.log("Starting REST-based Blockscout sync with Brute Force Pagination...");
+    console.log("Starting Isolated Token Engine (Bypassing spam limits)...");
     
     // 1. Fetch Spot Prices
     try {
@@ -101,71 +82,73 @@ async function run() {
 
     globalMarketParams.nftFloorEth = parseFloat(((666666 * globalMarketParams.tokenPriceUsd) / globalMarketParams.ethPriceUsd).toFixed(3));
     
-    // Define exact 7 days ago timestamp
+    // 2. Compute the precise 7-Day Start Block (Robinhood Chain generates ~10 blocks per sec)
     const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
-    console.log(`Filtering all drops since Unix Timestamp: ${sevenDaysAgo}`);
+    let currentBlock = 30000000;
+    try {
+        const blockRes = await secureFetch(`${BLOCKSCOUT_BASE_URL}?module=block&action=eth_block_number&apikey=${BLOCKSCOUT_API_KEY}`);
+        if (blockRes && blockRes.result) {
+            currentBlock = parseInt(blockRes.result, 16);
+        }
+    } catch(e) {}
+    
+    const startBlock = Math.max(0, currentBlock - 6048000); 
+    console.log(`Scanning exactly 7 days from Block ${startBlock} (Unix: ${sevenDaysAgo})`);
 
-    // 2. Scan Tiers via Brute Force Pagination
+    // 3. Scan Tiers using ISOLATED API CALLS
     for (let bm of tierBenchmarks) {
         const tbaAddress = bm.tbaAddress.toLowerCase();
         console.log(`\nProcessing Tier ${bm.tier} (TBA: ${tbaAddress})...`);
         
         let totalTierYieldUsd = 0;
-        const actions = ["txlistinternal", "txlist", "tokentx"];
 
-        for (let action of actions) {
-            console.log(`-> Fetching ${action}...`);
-            let page = 1;
-            
-            // BRUTE FORCE LOOP: Unconditionally fetch up to 5 pages (10,000 transactions) per action
-            while (page <= 5) { 
-                const url = `${BLOCKSCOUT_BASE_URL}?module=account&action=${action}&address=${tbaAddress}&page=${page}&offset=2000&sort=desc&apikey=${BLOCKSCOUT_API_KEY}`;
-                const data = await secureFetch(url);
+        // A. Fetch Native ETH Drops 
+        const ethActions = ["txlistinternal", "txlist"];
+        for (let action of ethActions) {
+            const url = `${BLOCKSCOUT_BASE_URL}?module=account&action=${action}&address=${tbaAddress}&startblock=${startBlock}&page=1&offset=10000&sort=desc&apikey=${BLOCKSCOUT_API_KEY}`;
+            const data = await secureFetch(url);
 
-                if (data && (data.status === "1" || Array.isArray(data.result)) && data.result.length > 0) {
-                    
-                    for (const tx of data.result) {
-                        const txTimestamp = parseInt(tx.timeStamp, 10);
-                        
-                        // Only add to total if it falls inside the 7-day window
-                        if (txTimestamp >= sevenDaysAgo && tx.to && tx.to.toLowerCase() === tbaAddress && (!tx.isError || tx.isError === "0" || tx.errCode === "")) {
-                            let valueStr = tx.value || "0";
-                            
-                            if (action === "txlistinternal" || action === "txlist") {
-                                // EXACT math from your good script
-                                const ethVal = Number(valueStr) / 1e18;
-                                if (ethVal > 0) {
-                                    const usdVal = ethVal * globalMarketParams.ethPriceUsd;
-                                    totalTierYieldUsd += usdVal;
-                                    console.log(`   + Native ETH Drop: ${ethVal.toFixed(6)} ETH ($${usdVal.toFixed(2)})`);
-                                }
-                            } else if (action === "tokentx") {
-                                const contractAddr = (tx.contractAddress || "").toLowerCase();
-                                const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
-                                
-                                // EXACT parsing logic from your good script
-                                const tokenAmount = Number(valueStr) / Math.pow(10, decimals);
-
-                                if (tokenAmount > 0) {
-                                    const priceUsd = await fetchTokenPriceUsd(contractAddr);
-                                    const usdVal = tokenAmount * priceUsd;
-                                    totalTierYieldUsd += usdVal;
-                                    console.log(`   + Token Drop (${tx.tokenSymbol || 'ERC20'}): ${tokenAmount.toFixed(4)} ($${usdVal.toFixed(2)})`);
-                                }
-                            }
+            if (data && (data.status === "1" || Array.isArray(data.result))) {
+                const txList = Array.isArray(data.result) ? data.result : [];
+                for (const tx of txList) {
+                    const txTimestamp = parseInt(tx.timeStamp, 10);
+                    if (txTimestamp >= sevenDaysAgo && tx.to && tx.to.toLowerCase() === tbaAddress && (!tx.isError || tx.isError === "0" || tx.errCode === "")) {
+                        const ethVal = Number(tx.value || "0") / 1e18;
+                        if (ethVal > 0) {
+                            const usdVal = ethVal * globalMarketParams.ethPriceUsd;
+                            totalTierYieldUsd += usdVal;
+                            console.log(`   + Native ETH Drop: ${ethVal.toFixed(6)} ETH ($${usdVal.toFixed(2)})`);
                         }
                     }
-                    
-                    // Stop turning pages if Blockscout runs out of data
-                    if (data.result.length < 2000) {
-                        break; 
-                    }
-                    page++; 
-                    await sleep(5000); // 5-second rest buffer to respect rate limits
-                } else {
-                    break; // End of transactions for this action
                 }
             }
+            await sleep(1500); 
+        }
+
+        // B. Fetch Verified Tokens (ONE BY ONE to guarantee they are never hidden)
+        for (let tokenAddr of Object.keys(KNOWN_PRICES)) {
+            // Appending contractaddress forces Blockscout to search for ONLY this specific token
+            const url = `${BLOCKSCOUT_BASE_URL}?module=account&action=tokentx&address=${tbaAddress}&contractaddress=${tokenAddr}&startblock=${startBlock}&page=1&offset=10000&sort=desc&apikey=${BLOCKSCOUT_API_KEY}`;
+            const data = await secureFetch(url);
+
+            if (data && (data.status === "1" || Array.isArray(data.result))) {
+                const txList = Array.isArray(data.result) ? data.result : [];
+                for (const tx of txList) {
+                    const txTimestamp = parseInt(tx.timeStamp, 10);
+                    if (txTimestamp >= sevenDaysAgo && tx.to && tx.to.toLowerCase() === tbaAddress && (!tx.isError || tx.isError === "0" || tx.errCode === "")) {
+                        const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
+                        const tokenAmount = Number(tx.value || "0") / Math.pow(10, decimals);
+
+                        if (tokenAmount > 0) {
+                            const priceUsd = KNOWN_PRICES[tokenAddr] || 1.00;
+                            const usdVal = tokenAmount * priceUsd;
+                            totalTierYieldUsd += usdVal;
+                            console.log(`   + Isolated Token Drop (${tx.tokenSymbol || 'ERC20'}): ${tokenAmount.toFixed(4)} ($${usdVal.toFixed(2)})`);
+                        }
+                    }
+                }
+            }
+            await sleep(1500); // Strict pause to respect rate limits
         }
 
         // Annualize 7-day yield
@@ -174,7 +157,7 @@ async function run() {
         console.log(`✓ Tier ${bm.tier} Complete. 7-Day Total: $${totalTierYieldUsd.toFixed(2)} | Annualized: $${annualizedYield.toFixed(2)}`);
     }
 
-    // 3. Write Output
+    // 4. Write Output
     const finalData = {
         market: globalMarketParams,
         tiers: tierBenchmarks,
@@ -182,7 +165,7 @@ async function run() {
     };
 
     fs.writeFileSync('data.json', JSON.stringify(finalData, null, 2));
-    console.log("\nSuccess: Fully unblocked pagination data written to data.json");
+    console.log("\nSuccess: Fully isolated Blockscout data written to data.json");
 }
 
 run();
