@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>StonkBrokers ROI Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script>
@@ -12,7 +13,7 @@
             theme: {
                 extend: {
                     fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['JetBrains Mono', 'monospace'] },
-                    colors: { dark: '#0f172a', card: '#1e293b', primary: '#3b82f6', success: '#10b981' }
+                    colors: { dark: '#0f172a', card: '#1e293b', primary: '#3b82f6', success: '#10b981', warning: '#f59e0b', danger: '#ef4444' }
                 }
             }
         }
@@ -28,61 +29,77 @@
             background: rgba(30, 41, 59, 0.7);
             backdrop-filter: blur(12px);
             border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         }
     </style>
 </head>
 <body class="min-h-screen p-4 md:p-8">
     <div class="max-w-6xl mx-auto space-y-6">
-
+        <!-- Header -->
         <header class="flex flex-col md:flex-row justify-between items-center pb-6 border-b border-gray-800">
             <div class="flex items-center space-x-3 mb-4 md:mb-0">
-                <div class="w-10 h-10 bg-primary rounded-lg flex items-center justify-center font-bold text-xl">$</div>
+                <div class="w-10 h-10 bg-primary rounded-lg flex items-center justify-center font-bold text-xl text-white">$</div>
                 <div>
                     <h1 class="text-2xl font-bold tracking-tight">StonkBrokers Tracker</h1>
-                    <p class="text-gray-400 text-sm">On-Chain ROI Analytics (Automated Sync)</p>
+                    <p class="text-gray-400 text-sm">On-Chain ROI Analytics & Activation Dashboard</p>
                 </div>
             </div>
             <div class="flex space-x-6 text-sm">
-                <div class="flex flex-col"><span class="text-gray-400">ETH Price</span><span class="font-mono font-semibold" id="global-eth">—</span></div>
-                <div class="flex flex-col"><span class="text-gray-400">$stonkbroker Price</span><span class="font-mono font-semibold" id="global-token">—</span></div>
-                <div class="flex flex-col"><span class="text-gray-400">NFT Floor</span><span class="font-mono font-semibold" id="global-floor">—</span></div>
+                <div class="flex flex-col"><span class="text-gray-400">ETH Price</span><span class="font-mono font-semibold" id="global-eth">Loading...</span></div>
+                <div class="flex flex-col"><span class="text-gray-400">$STONK Price</span><span class="font-mono font-semibold" id="global-token">Loading...</span></div>
+                <div class="flex flex-col"><span class="text-gray-400">NFT Floor (Base + 10%)</span><span class="font-mono font-semibold" id="global-floor">Loading...</span></div>
             </div>
         </header>
 
-        <section class="glass-card rounded-2xl p-6">
-            <h3 class="text-lg font-semibold flex items-center mb-4">
-                <i class="fa-solid fa-chart-pie text-primary mr-2"></i> Activation Overview
-            </h3>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                <div class="bg-gray-800/50 rounded-xl p-4">
-                    <div class="text-2xl font-bold text-success" id="active-count">—</div>
-                    <div class="text-xs text-gray-400 mt-1">Activated Brokers</div>
-                </div>
-                <div class="bg-gray-800/50 rounded-xl p-4">
-                    <div class="text-2xl font-bold" id="active-percent">—</div>
-                    <div class="text-xs text-gray-400 mt-1">% of Supply</div>
-                </div>
-                <div class="bg-gray-800/50 rounded-xl p-4 col-span-2 flex items-center justify-center">
-                    <div class="text-sm text-gray-400">On-chain activation stats temporarily limited by API</div>
+        <!-- Stats and Charts Section -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Quick Stats -->
+            <div class="glass-card rounded-2xl p-6 flex flex-col justify-center items-center text-center">
+                <h3 class="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">Total Activated Brokers</h3>
+                <div class="text-4xl font-bold text-primary mb-1" id="stat-active">--</div>
+                <div class="text-xs text-gray-500 mb-6">out of <span id="stat-total">4444</span> Collection Total</div>
+                
+                <h3 class="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">Collection Activation Rate</h3>
+                <div class="text-3xl font-bold text-success" id="stat-percent">--%</div>
+            </div>
+
+            <!-- Line Chart: Activations Over Time -->
+            <div class="glass-card rounded-2xl p-6 lg:col-span-1">
+                <h3 class="text-sm font-semibold text-gray-300 mb-4 flex items-center">
+                    <i class="fa-solid fa-chart-line text-primary mr-2"></i> Activations (7d Cumulative)
+                </h3>
+                <div class="relative h-48 w-full">
+                    <canvas id="activationLineChart"></canvas>
                 </div>
             </div>
-        </section>
 
+            <!-- Pie Chart: Tier Breakdown -->
+            <div class="glass-card rounded-2xl p-6 lg:col-span-1">
+                <h3 class="text-sm font-semibold text-gray-300 mb-4 flex items-center">
+                    <i class="fa-solid fa-chart-pie text-success mr-2"></i> Tier Distribution
+                </h3>
+                <div class="relative h-48 w-full flex justify-center">
+                    <canvas id="tierPieChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ecosystem Tier Benchmarks Table -->
         <section class="glass-card rounded-2xl p-6">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-6 gap-4">
                 <div>
                     <h3 class="text-lg font-semibold flex items-center">
                         <i class="fa-solid fa-layer-group text-primary mr-2"></i> Ecosystem Tier Benchmarks
                     </h3>
-                    <p class="text-sm text-gray-400 mt-1" id="last-updated">Loading...</p>
+                    <p class="text-sm text-gray-400 mt-1" id="last-updated">Estimated returns based on current entry costs vs. live tracking of benchmark brokers.</p>
                 </div>
                 <div class="text-xs text-gray-500 bg-gray-800/50 px-3 py-1.5 rounded-lg border border-gray-700">
-                    Base Entry: <span class="font-mono text-gray-300" id="base-entry-cost">—</span> (NFT Floor)
+                    Floor Entry Cost: <span class="font-mono text-gray-300" id="base-entry-cost">Loading...</span>
                 </div>
             </div>
-
             <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse min-w-[600px]">
+                <table class="w-full text-left border-collapse min-w-[700px]">
                     <thead>
                         <tr class="text-xs uppercase text-gray-500 border-b border-gray-800">
                             <th class="pb-3 font-semibold pl-2">Tier</th>
@@ -93,7 +110,7 @@
                         </tr>
                     </thead>
                     <tbody id="tier-table-body" class="text-sm divide-y divide-gray-800/50">
-                        <tr><td colspan="5" class="py-4 text-center text-gray-500">Loading data...</td></tr>
+                        <tr><td colspan="5" class="py-4 text-center text-gray-500 italic">Fetching on-chain data payload...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -101,67 +118,135 @@
     </div>
 
     <script>
-        const formatUSD = (n) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n || 0);
-        const formatNum = (n) => new Intl.NumberFormat('en-US').format(n || 0);
+        const formatUSD = (num) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(num || 0);
+        const formatNum = (num) => new Intl.NumberFormat('en-US').format(num || 0);
 
-        async function load() {
-            const tbody = document.getElementById('tier-table-body');
+        Chart.defaults.color = '#94a3b8';
+        Chart.defaults.font.family = "'Inter', sans-serif";
+
+        async function initializeDashboard() {
             try {
-                const res = await fetch('./data.json?t=' + Date.now());
-                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const res = await fetch(`data.json?t=${Date.now()}`);
                 const data = await res.json();
 
-                document.getElementById('global-eth').textContent = formatUSD(data.market.ethPriceUsd);
-                document.getElementById('global-token').textContent = '$' + data.market.tokenPriceUsd.toFixed(5);
-                document.getElementById('global-floor').textContent = data.market.nftFloorEth + ' ETH';
-                document.getElementById('base-entry-cost').textContent = formatUSD(666666 * data.market.tokenPriceUsd);
-                document.getElementById('last-updated').textContent = 'Last sync: ' + new Date(data.lastUpdated).toLocaleString();
+                // 1. Populate Global Headers
+                document.getElementById('global-eth').innerText = formatUSD(data.market.ethPriceUsd);
+                document.getElementById('global-token').innerText = data.market.tokenPriceUsd < 0.01 ? `$${data.market.tokenPriceUsd.toFixed(5)}` : `$${data.market.tokenPriceUsd.toFixed(4)}`;
+                document.getElementById('global-floor').innerText = `${data.market.nftFloorEth} ETH`;
+                
+                // Base entry cost calculation (666,666 tokens + 10% fee)
+                const baseNftCostUsd = data.market.tokenPriceUsd * 666666 * 1.10;
+                document.getElementById('base-entry-cost').innerText = formatUSD(baseNftCostUsd);
+                
+                const updateDate = new Date(data.lastUpdated);
+                document.getElementById('last-updated').innerText = `Last automated sync: ${updateDate.toLocaleString()}`;
 
+                // 2. Populate Activation Stats & Charts
                 if (data.activation) {
-                    document.getElementById('active-count').textContent = data.activation.activeCount || '—';
-                    document.getElementById('active-percent').textContent = (data.activation.percentActivated || 0) + '%';
+                    document.getElementById('stat-active').innerText = formatNum(data.activation.activeCount);
+                    document.getElementById('stat-total').innerText = formatNum(data.activation.totalSupply);
+                    document.getElementById('stat-percent').innerText = `${data.activation.percentActivated}%`;
+
+                    // Line Chart Initialization (Cumulative Activations)
+                    if (data.activation.history && data.activation.history.labels) {
+                        new Chart(document.getElementById('activationLineChart'), {
+                            type: 'line',
+                            data: {
+                                labels: data.activation.history.labels,
+                                datasets: [{
+                                    label: 'Active Brokers',
+                                    data: data.activation.history.cumulative,
+                                    borderColor: '#3b82f6',
+                                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                    borderWidth: 2,
+                                    fill: true,
+                                    tension: 0.3,
+                                    pointRadius: 3,
+                                    pointBackgroundColor: '#3b82f6'
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: { legend: { display: false } },
+                                scales: {
+                                    x: { grid: { display: false } },
+                                    y: { grid: { color: 'rgba(51, 65, 85, 0.5)' }, ticks: { precision: 0 } }
+                                }
+                            }
+                        });
+                    }
+
+                    // Pie Chart Initialization (Tier Breakdown)
+                    if (data.activation.breakdown) {
+                        new Chart(document.getElementById('tierPieChart'), {
+                            type: 'doughnut',
+                            data: {
+                                labels: ['T0 (Floor)', 'T1 (Analyst)', 'T2 (Manager)', 'T3 (Director)', 'T4 (Partner)'],
+                                datasets: [{
+                                    data: [
+                                        data.activation.breakdown.T0 || 0,
+                                        data.activation.breakdown.T1 || 0,
+                                        data.activation.breakdown.T2 || 0,
+                                        data.activation.breakdown.T3 || 0,
+                                        data.activation.breakdown.T4 || 0
+                                    ],
+                                    backgroundColor: ['#64748b', '#3b82f6', '#10b981', '#f59e0b', '#ef4444'],
+                                    borderWidth: 0
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                cutout: '65%',
+                                plugins: {
+                                    legend: { position: 'right', labels: { boxWidth: 10, font: { size: 11 } } }
+                                }
+                            }
+                        });
+                    }
                 }
 
+                // 3. Populate Tier Table
+                const tbody = document.getElementById('tier-table-body');
                 tbody.innerHTML = '';
-                const base = data.market.tokenPriceUsd * 666666;
 
                 data.tiers.forEach(bm => {
-                    const actCost = bm.reqTokens * data.market.tokenPriceUsd;
-                    const total = base + actCost;
-                    const roi = total > 0 && bm.trackedAnnualYieldUsd > 0
-                        ? (bm.trackedAnnualYieldUsd / total * 100).toFixed(2)
-                        : '0.00';
+                    const activationCostUsd = bm.reqTokens * data.market.tokenPriceUsd;
+                    const currentTotalCostUsd = baseNftCostUsd + activationCostUsd;
+                    const estCashOnCash = (currentTotalCostUsd > 0 && bm.trackedAnnualYieldUsd > 0) ? (bm.trackedAnnualYieldUsd / currentTotalCostUsd) * 100 : 0;
 
-                    const yieldText = bm.trackedAnnualYieldUsd > 0
-                        ? formatUSD(bm.trackedAnnualYieldUsd) + ' <span class="text-xs text-gray-500">/yr</span>'
-                        : '<span class="text-xs text-gray-500 italic">No yield in last 7d</span>';
+                    let yieldDisplay = bm.trackedAnnualYieldUsd === 0 ? 
+                        `<span class="text-xs text-gray-500 italic">No yield tracked</span>` : 
+                        `${formatUSD(bm.trackedAnnualYieldUsd)} <span class="text-xs text-gray-500">/yr</span>`;
+
+                    let roiBadge = `<span class="inline-block px-2.5 py-1 rounded bg-success/10 text-success font-bold text-sm border border-success/20">${estCashOnCash.toFixed(2)}%</span>`;
 
                     tbody.innerHTML += `
-                        <tr class="hover:bg-gray-800/30">
+                        <tr class="hover:bg-gray-800/30 transition-colors">
                             <td class="py-4 pl-2">
                                 <div class="flex items-center">
-                                    <span class="w-6 h-6 rounded bg-gray-800 flex items-center justify-center font-bold text-xs mr-2 text-primary border border-gray-700">${bm.tier}</span>
-                                    <span class="text-xs text-gray-500">#${bm.benchmarkId}</span>
+                                    <span class="w-8 h-8 rounded bg-gray-800 flex items-center justify-center font-bold text-xs mr-3 text-primary border border-gray-700">${bm.tier}</span>
+                                    <div>
+                                        <div class="font-semibold text-gray-200">${bm.name || ''}</div>
+                                        <div class="text-[10px] text-gray-500 font-mono">Weight: <span class="text-warning">${bm.multiplier || ''}</span> | Tracks #${bm.benchmarkId}</div>
+                                    </div>
                                 </div>
                             </td>
-                            <td class="py-4 font-mono">${formatNum(bm.reqTokens)} <span class="text-xs text-gray-500">STONK</span></td>
-                            <td class="py-4">
-                                <div class="font-mono font-semibold">${formatUSD(total)}</div>
-                                <div class="text-[10px] text-gray-500">Floor + ${formatUSD(actCost)}</div>
-                            </td>
-                            <td class="py-4 font-mono">${yieldText}</td>
-                            <td class="py-4 text-right pr-2">
-                                <span class="px-2 py-1 rounded bg-success/10 text-success font-bold text-sm border border-success/20">${roi}%</span>
-                            </td>
+                            <td class="py-4"><span class="font-mono text-gray-300">${formatNum(bm.reqTokens)}</span><span class="text-xs text-gray-500 ml-1">STONK</span></td>
+                            <td class="py-4"><span class="font-mono font-semibold">${formatUSD(currentTotalCostUsd)}</span><div class="text-[10px] text-gray-500">Floor + ${formatUSD(activationCostUsd)} Act.</div></td>
+                            <td class="py-4 font-mono text-gray-300">${yieldDisplay}</td>
+                            <td class="py-4 text-right pr-2">${roiBadge}</td>
                         </tr>`;
                 });
+
             } catch (err) {
                 console.error(err);
-                tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-red-400">Failed to load data.json<br><span class="text-sm">${err.message}</span></td></tr>`;
+                document.getElementById('tier-table-body').innerHTML = `<tr><td colspan="5" class="py-4 text-center text-danger font-semibold">Data sync pending or unavailable. Check GitHub Actions logs.</td></tr>`;
             }
         }
 
-        load();
+        window.addEventListener('DOMContentLoaded', initializeDashboard);
     </script>
 </body>
 </html>
