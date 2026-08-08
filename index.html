@@ -34,7 +34,6 @@
 <body class="min-h-screen p-4 md:p-8">
     <div class="max-w-6xl mx-auto space-y-6">
 
-        <!-- Header -->
         <header class="flex flex-col md:flex-row justify-between items-center pb-6 border-b border-gray-800">
             <div class="flex items-center space-x-3 mb-4 md:mb-0">
                 <div class="w-10 h-10 bg-primary rounded-lg flex items-center justify-center font-bold text-xl">$</div>
@@ -44,13 +43,12 @@
                 </div>
             </div>
             <div class="flex space-x-6 text-sm">
-                <div class="flex flex-col"><span class="text-gray-400">ETH Price</span><span class="font-mono font-semibold" id="global-eth">Loading...</span></div>
-                <div class="flex flex-col"><span class="text-gray-400">$stonkbroker Price</span><span class="font-mono font-semibold" id="global-token">Loading...</span></div>
-                <div class="flex flex-col"><span class="text-gray-400">NFT Floor</span><span class="font-mono font-semibold" id="global-floor">Loading...</span></div>
+                <div class="flex flex-col"><span class="text-gray-400">ETH Price</span><span class="font-mono font-semibold" id="global-eth">—</span></div>
+                <div class="flex flex-col"><span class="text-gray-400">$stonkbroker Price</span><span class="font-mono font-semibold" id="global-token">—</span></div>
+                <div class="flex flex-col"><span class="text-gray-400">NFT Floor</span><span class="font-mono font-semibold" id="global-floor">—</span></div>
             </div>
         </header>
 
-        <!-- Activation Stats (placeholder for now) -->
         <section class="glass-card rounded-2xl p-6">
             <h3 class="text-lg font-semibold flex items-center mb-4">
                 <i class="fa-solid fa-chart-pie text-primary mr-2"></i> Activation Overview
@@ -65,12 +63,11 @@
                     <div class="text-xs text-gray-400 mt-1">% of Supply</div>
                 </div>
                 <div class="bg-gray-800/50 rounded-xl p-4 col-span-2 flex items-center justify-center">
-                    <div class="text-sm text-gray-400">Full on-chain activation stats coming next (API limitation being fixed)</div>
+                    <div class="text-sm text-gray-400">On-chain activation stats temporarily limited by API</div>
                 </div>
             </div>
         </section>
 
-        <!-- Tier Benchmarks -->
         <section class="glass-card rounded-2xl p-6">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-6 gap-4">
                 <div>
@@ -80,7 +77,7 @@
                     <p class="text-sm text-gray-400 mt-1" id="last-updated">Loading...</p>
                 </div>
                 <div class="text-xs text-gray-500 bg-gray-800/50 px-3 py-1.5 rounded-lg border border-gray-700">
-                    Base Entry: <span class="font-mono text-gray-300" id="base-entry-cost">Loading...</span> (NFT Floor)
+                    Base Entry: <span class="font-mono text-gray-300" id="base-entry-cost">—</span> (NFT Floor)
                 </div>
             </div>
 
@@ -96,7 +93,7 @@
                         </tr>
                     </thead>
                     <tbody id="tier-table-body" class="text-sm divide-y divide-gray-800/50">
-                        <tr><td colspan="5" class="py-4 text-center text-gray-500 italic">Loading data...</td></tr>
+                        <tr><td colspan="5" class="py-4 text-center text-gray-500">Loading data...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -104,66 +101,67 @@
     </div>
 
     <script>
-        const formatUSD = (num) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(num || 0);
-        const formatNum = (num) => new Intl.NumberFormat('en-US').format(num || 0);
+        const formatUSD = (n) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n || 0);
+        const formatNum = (n) => new Intl.NumberFormat('en-US').format(n || 0);
 
-        async function initializeDashboard() {
+        async function load() {
+            const tbody = document.getElementById('tier-table-body');
             try {
-                const res = await fetch(`data.json?t=${Date.now()}`);
+                const res = await fetch('./data.json?t=' + Date.now());
+                if (!res.ok) throw new Error('HTTP ' + res.status);
                 const data = await res.json();
 
-                // Header
-                document.getElementById('global-eth').innerText = formatUSD(data.market.ethPriceUsd);
-                document.getElementById('global-token').innerText = data.market.tokenPriceUsd < 0.01 
-                    ? `$${data.market.tokenPriceUsd.toFixed(5)}` 
-                    : `$${data.market.tokenPriceUsd.toFixed(4)}`;
-                document.getElementById('global-floor').innerText = `${data.market.nftFloorEth} ETH`;
-                document.getElementById('base-entry-cost').innerText = formatUSD(666666 * data.market.tokenPriceUsd);
+                document.getElementById('global-eth').textContent = formatUSD(data.market.ethPriceUsd);
+                document.getElementById('global-token').textContent = '$' + data.market.tokenPriceUsd.toFixed(5);
+                document.getElementById('global-floor').textContent = data.market.nftFloorEth + ' ETH';
+                document.getElementById('base-entry-cost').textContent = formatUSD(666666 * data.market.tokenPriceUsd);
+                document.getElementById('last-updated').textContent = 'Last sync: ' + new Date(data.lastUpdated).toLocaleString();
 
-                const updateDate = new Date(data.lastUpdated);
-                document.getElementById('last-updated').innerText = `Last automated sync: ${updateDate.toLocaleString()}`;
-
-                // Activation (placeholder until we fix the call)
                 if (data.activation) {
-                    document.getElementById('active-count').innerText = data.activation.activeCount || '—';
-                    document.getElementById('active-percent').innerText = data.activation.percentActivated 
-                        ? data.activation.percentActivated + '%' 
-                        : '—';
+                    document.getElementById('active-count').textContent = data.activation.activeCount || '—';
+                    document.getElementById('active-percent').textContent = (data.activation.percentActivated || 0) + '%';
                 }
 
-                // Tiers
-                const tbody = document.getElementById('tier-table-body');
                 tbody.innerHTML = '';
-                const baseNftCostUsd = data.market.tokenPriceUsd * 666666;
+                const base = data.market.tokenPriceUsd * 666666;
 
                 data.tiers.forEach(bm => {
-                    const activationCostUsd = bm.reqTokens * data.market.tokenPriceUsd;
-                    const currentTotalCostUsd = baseNftCostUsd + activationCostUsd;
-                    const estCashOnCash = (currentTotalCostUsd > 0 && bm.trackedAnnualYieldUsd > 0)
-                        ? (bm.trackedAnnualYieldUsd / currentTotalCostUsd) * 100
-                        : 0;
+                    const actCost = bm.reqTokens * data.market.tokenPriceUsd;
+                    const total = base + actCost;
+                    const roi = total > 0 && bm.trackedAnnualYieldUsd > 0
+                        ? (bm.trackedAnnualYieldUsd / total * 100).toFixed(2)
+                        : '0.00';
 
-                    const yieldDisplay = bm.trackedAnnualYieldUsd === 0
-                        ? `<span class="text-xs text-gray-500 italic">No yield in last 7d</span>`
-                        : `${formatUSD(bm.trackedAnnualYieldUsd)} <span class="text-xs text-gray-500">/yr</span>`;
-
-                    const roiBadge = `<span class="inline-block px-2 py-1 rounded bg-success/10 text-success font-bold text-sm border border-success/20">${estCashOnCash.toFixed(2)}%</span>`;
+                    const yieldText = bm.trackedAnnualYieldUsd > 0
+                        ? formatUSD(bm.trackedAnnualYieldUsd) + ' <span class="text-xs text-gray-500">/yr</span>'
+                        : '<span class="text-xs text-gray-500 italic">No yield in last 7d</span>';
 
                     tbody.innerHTML += `
-                        <tr class="hover:bg-gray-800/30 transition-colors">
+                        <tr class="hover:bg-gray-800/30">
                             <td class="py-4 pl-2">
                                 <div class="flex items-center">
                                     <span class="w-6 h-6 rounded bg-gray-800 flex items-center justify-center font-bold text-xs mr-2 text-primary border border-gray-700">${bm.tier}</span>
-                                    <span class="text-xs text-gray-500">Tracks #${bm.benchmarkId}</span>
+                                    <span class="text-xs text-gray-500">#${bm.benchmarkId}</span>
                                 </div>
                             </td>
+                            <td class="py-4 font-mono">${formatNum(bm.reqTokens)} <span class="text-xs text-gray-500">STONK</span></td>
                             <td class="py-4">
-                                <span class="font-mono text-gray-300">${formatNum(bm.reqTokens)}</span>
-                                <span class="text-xs text-gray-500 ml-1">STONK</span>
+                                <div class="font-mono font-semibold">${formatUSD(total)}</div>
+                                <div class="text-[10px] text-gray-500">Floor + ${formatUSD(actCost)}</div>
                             </td>
-                            <td class="py-4">
-                                <span class="font-mono font-semibold">${formatUSD(currentTotalCostUsd)}</span>
-                                <div class="text-[10px] text-gray-500">Floor + ${formatUSD(activationCostUsd)} Act.</div>
+                            <td class="py-4 font-mono">${yieldText}</td>
+                            <td class="py-4 text-right pr-2">
+                                <span class="px-2 py-1 rounded bg-success/10 text-success font-bold text-sm border border-success/20">${roi}%</span>
                             </td>
-                            <td class="py-4 font-mono text-gray-300">${yieldDisplay}</td>
-                           
+                        </tr>`;
+                });
+            } catch (err) {
+                console.error(err);
+                tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-red-400">Failed to load data.json<br><span class="text-sm">${err.message}</span></td></tr>`;
+            }
+        }
+
+        load();
+    </script>
+</body>
+</html>
