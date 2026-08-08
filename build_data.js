@@ -15,7 +15,7 @@ let tierBenchmarks = [
     { tier: 5, reqTokens: 1666666, benchmarkId: 1258, tbaAddress: "0xe7207caa913b54aa4411e847a3a49eee0568cccf", trackedAnnualYieldUsd: 0 }
 ];
 
-// Verified Token & Safety Deposit Box Pricing Map
+// Verified Token Map
 const KNOWN_PRICES = {
     "0x0bd7d308f8e1639fab988df18a8011f41eacad73": 1900.00, // WETH
     "0xe934e36a439c94017b64a3fece66af12099abf50": 0.02278,  // STONKBROKER
@@ -33,7 +33,7 @@ const KNOWN_PRICES = {
     "0xa30fa36db767ad9ed3f7a60fc79526fb4d56d344": 119.32,   // USO
     "0x5fc5360d0400a0fd4f2af552add042d716f1d168": 1.00,     // USDG
     "0x1383b43aed527485f191b60060f5b5471f71b1ca": 1.00,     // USDG V2
-    // Safety Deposit Box Tokens (from CSV)
+    // Safety Deposit Box Tokens
     "0x12df3d482c50bb0ca2d25763063af4892b6e42f4": 1.00,     // MANCER
     "0x7b513232d2aee37f8a60f22377bf9b7632ce67ff": 1.00,     // MANCER
     "0xebd86eb62b51119862651c847e9835f4811090e9": 1.00,     // MANCER
@@ -43,7 +43,7 @@ const KNOWN_PRICES = {
 
 async function secureFetch(url) {
     let retries = 0;
-    while (retries < 5) {
+    while (retries < 3) {
         try {
             const res = await fetch(url, { headers: { "Accept": "application/json" } });
             if (res.status === 429) throw new Error("Rate Limit HTTP");
@@ -51,15 +51,14 @@ async function secureFetch(url) {
             return data;
         } catch (err) {
             retries++;
-            console.log(`Rate limit hit, resting for 5 seconds... (Attempt ${retries})`);
-            await sleep(5000);
+            await sleep(2000); // Fast 2-second retry instead of 20 seconds
         }
     }
     return { result: [] };
 }
 
 async function run() {
-    console.log("Starting Isolated Token Engine (Bypassing spam limits)...");
+    console.log("Starting Targeted Strike Blockscout Sync...");
     
     // 1. Fetch Spot Prices
     try {
@@ -82,82 +81,77 @@ async function run() {
 
     globalMarketParams.nftFloorEth = parseFloat(((666666 * globalMarketParams.tokenPriceUsd) / globalMarketParams.ethPriceUsd).toFixed(3));
     
-    // 2. Compute the precise 7-Day Start Block (Robinhood Chain generates ~10 blocks per sec)
     const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
-    let currentBlock = 30000000;
-    try {
-        const blockRes = await secureFetch(`${BLOCKSCOUT_BASE_URL}?module=block&action=eth_block_number&apikey=${BLOCKSCOUT_API_KEY}`);
-        if (blockRes && blockRes.result) {
-            currentBlock = parseInt(blockRes.result, 16);
-        }
-    } catch(e) {}
-    
-    const startBlock = Math.max(0, currentBlock - 6048000); 
-    console.log(`Scanning exactly 7 days from Block ${startBlock} (Unix: ${sevenDaysAgo})`);
 
-    // 3. Scan Tiers using ISOLATED API CALLS
+    // 2. Scan Tiers with 5 targeted API calls each
     for (let bm of tierBenchmarks) {
         const tbaAddress = bm.tbaAddress.toLowerCase();
         console.log(`\nProcessing Tier ${bm.tier} (TBA: ${tbaAddress})...`);
         
         let totalTierYieldUsd = 0;
+        const processedUniqueIds = new Set(); // Prevent double counting WETH/STONK
 
-        // A. Fetch Native ETH Drops 
-        const ethActions = ["txlistinternal", "txlist"];
-        for (let action of ethActions) {
-            const url = `${BLOCKSCOUT_BASE_URL}?module=account&action=${action}&address=${tbaAddress}&startblock=${startBlock}&page=1&offset=10000&sort=desc&apikey=${BLOCKSCOUT_API_KEY}`;
+        // The 5 Targeted Queries
+        const queries = [
+            { action: "txlistinternal", extUrl: "" },
+            { action: "txlist", extUrl: "" },
+            { action: "tokentx", extUrl: "" }, // Grabs general tokens (AAPL, NVDA, MANCER)
+            { action: "tokentx", extUrl: "&contractaddress=0x0bd7d308f8e1639fab988df18a8011f41eacad73" }, // Targeted WETH
+            { action: "tokentx", extUrl: "&contractaddress=0xe934e36a439c94017b64a3fece66af12099abf50" }  // Targeted STONK
+        ];
+
+        for (let q of queries) {
+            const url = `${BLOCKSCOUT_BASE_URL}?module=account&action=${q.action}&address=${tbaAddress}${q.extUrl}&page=1&offset=5000&sort=desc&apikey=${BLOCKSCOUT_API_KEY}`;
             const data = await secureFetch(url);
 
             if (data && (data.status === "1" || Array.isArray(data.result))) {
                 const txList = Array.isArray(data.result) ? data.result : [];
+                
                 for (const tx of txList) {
                     const txTimestamp = parseInt(tx.timeStamp, 10);
+                    
                     if (txTimestamp >= sevenDaysAgo && tx.to && tx.to.toLowerCase() === tbaAddress && (!tx.isError || tx.isError === "0" || tx.errCode === "")) {
-                        const ethVal = Number(tx.value || "0") / 1e18;
-                        if (ethVal > 0) {
-                            const usdVal = ethVal * globalMarketParams.ethPriceUsd;
-                            totalTierYieldUsd += usdVal;
-                            console.log(`   + Native ETH Drop: ${ethVal.toFixed(6)} ETH ($${usdVal.toFixed(2)})`);
+                        let valueStr = tx.value || "0";
+                        const contractAddr = (tx.contractAddress || "eth").toLowerCase();
+                        
+                        // Deduplication: Ensures WETH found in both general and targeted isn't counted twice
+                        const uniqueId = tx.hash + "_" + (tx.logIndex || "0") + "_" + q.action;
+                        if (processedUniqueIds.has(uniqueId)) continue;
+                        processedUniqueIds.add(uniqueId);
+                        
+                        if (q.action === "txlistinternal" || q.action === "txlist") {
+                            // Safe math from your original code
+                            const ethVal = Number(valueStr) / 1e18;
+                            if (ethVal > 0) {
+                                const usdVal = ethVal * globalMarketParams.ethPriceUsd;
+                                totalTierYieldUsd += usdVal;
+                                console.log(`   + Native ETH Drop: ${ethVal.toFixed(6)} ETH ($${usdVal.toFixed(2)})`);
+                            }
+                        } else if (q.action === "tokentx") {
+                            // Filter spam strictly to KNOWN_PRICES
+                            if (!KNOWN_PRICES[contractAddr]) continue; 
+
+                            const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
+                            const tokenAmount = Number(valueStr) / Math.pow(10, decimals);
+
+                            if (tokenAmount > 0) {
+                                const priceUsd = KNOWN_PRICES[contractAddr] || 1.00;
+                                const usdVal = tokenAmount * priceUsd;
+                                totalTierYieldUsd += usdVal;
+                                console.log(`   + Token Drop (${tx.tokenSymbol || 'ERC20'}): ${tokenAmount.toFixed(4)} ($${usdVal.toFixed(2)})`);
+                            }
                         }
                     }
                 }
             }
-            await sleep(1500); 
+            await sleep(1000); // Brief 1-second pause limits rate-hitting
         }
 
-        // B. Fetch Verified Tokens (ONE BY ONE to guarantee they are never hidden)
-        for (let tokenAddr of Object.keys(KNOWN_PRICES)) {
-            // Appending contractaddress forces Blockscout to search for ONLY this specific token
-            const url = `${BLOCKSCOUT_BASE_URL}?module=account&action=tokentx&address=${tbaAddress}&contractaddress=${tokenAddr}&startblock=${startBlock}&page=1&offset=10000&sort=desc&apikey=${BLOCKSCOUT_API_KEY}`;
-            const data = await secureFetch(url);
-
-            if (data && (data.status === "1" || Array.isArray(data.result))) {
-                const txList = Array.isArray(data.result) ? data.result : [];
-                for (const tx of txList) {
-                    const txTimestamp = parseInt(tx.timeStamp, 10);
-                    if (txTimestamp >= sevenDaysAgo && tx.to && tx.to.toLowerCase() === tbaAddress && (!tx.isError || tx.isError === "0" || tx.errCode === "")) {
-                        const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
-                        const tokenAmount = Number(tx.value || "0") / Math.pow(10, decimals);
-
-                        if (tokenAmount > 0) {
-                            const priceUsd = KNOWN_PRICES[tokenAddr] || 1.00;
-                            const usdVal = tokenAmount * priceUsd;
-                            totalTierYieldUsd += usdVal;
-                            console.log(`   + Isolated Token Drop (${tx.tokenSymbol || 'ERC20'}): ${tokenAmount.toFixed(4)} ($${usdVal.toFixed(2)})`);
-                        }
-                    }
-                }
-            }
-            await sleep(1500); // Strict pause to respect rate limits
-        }
-
-        // Annualize 7-day yield
         const annualizedYield = totalTierYieldUsd * 52.14;
         bm.trackedAnnualYieldUsd = annualizedYield;
         console.log(`✓ Tier ${bm.tier} Complete. 7-Day Total: $${totalTierYieldUsd.toFixed(2)} | Annualized: $${annualizedYield.toFixed(2)}`);
     }
 
-    // 4. Write Output
     const finalData = {
         market: globalMarketParams,
         tiers: tierBenchmarks,
@@ -165,7 +159,7 @@ async function run() {
     };
 
     fs.writeFileSync('data.json', JSON.stringify(finalData, null, 2));
-    console.log("\nSuccess: Fully isolated Blockscout data written to data.json");
+    console.log("\nSuccess: Clean Targeted Blockscout data written to data.json");
 }
 
 run();
