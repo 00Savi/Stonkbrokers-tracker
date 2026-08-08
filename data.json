@@ -1,8 +1,8 @@
 {
   "market": {
-    "ethPriceUsd": 1913.44,
-    "tokenPriceUsd": 0.02271,
-    "nftFloorEth": 7.912
+    "ethPriceUsd": 1913.4,
+    "tokenPriceUsd": 0.02329,
+    "nftFloorEth": 8.115
   },
   "tiers": [
     {
@@ -10,204 +10,36 @@
       "reqTokens": 66666,
       "benchmarkId": 3032,
       "tbaAddress": "0x5a35bc7e3b7f0ea5b04d6df5e15aee144c940ba9",
-      "trackedAnnualYieldUsd": 3756.8523981870094,
-      "tbaBalances": [
-        {
-          "ticker": "ETH",
-          "amount": 1.2234921288877683,
-          "currentPriceUsd": 1913.44
-        },
-        {
-          "ticker": "USAR",
-          "amount": 3.7613248986864143,
-          "currentPriceUsd": 50
-        },
-        {
-          "ticker": "COST",
-          "amount": 0.19262912571860194,
-          "currentPriceUsd": 820
-        },
-        {
-          "ticker": "SLV",
-          "amount": 3.4840874482063464,
-          "currentPriceUsd": 28
-        },
-        {
-          "ticker": "NVDA",
-          "amount": 2.2725282166579017,
-          "currentPriceUsd": 120
-        },
-        {
-          "ticker": "AMZN",
-          "amount": 1.6692165748223962,
-          "currentPriceUsd": 185
-        },
-        {
-          "ticker": "AAPL",
-          "amount": 1.4722799698682103,
-          "currentPriceUsd": 225
-        },
-        {
-          "ticker": "RDDT",
-          "amount": 0.42712799496257986,
-          "currentPriceUsd": 65
-        },
-        {
-          "ticker": "GOOGL",
-          "amount": 0.12365195776578405,
-          "currentPriceUsd": 175
-        },
-        {
-          "ticker": "SPCX",
-          "amount": 0.4009273868651028,
-          "currentPriceUsd": 25
-        }
-      ]
+      "trackedAnnualYieldUsd": 3915.88648034023
     },
     {
       "tier": 2,
       "reqTokens": 166666,
       "benchmarkId": 1199,
       "tbaAddress": "0xc2614c45c68f14a6c21881290c62d84b5f718831",
-      "trackedAnnualYieldUsd": 5352.993479225281,
-      "tbaBalances": [
-        {
-          "ticker": "ETH",
-          "amount": 0.024053503516969596,
-          "currentPriceUsd": 1913.44
-        },
-        {
-          "ticker": "STONKBROKER",
-          "amount": 155757.44251852803,
-          "currentPriceUsd": 0.02271
-        },
-        {
-          "ticker": "USAR",
-          "amount": 4.701656123358017,
-          "currentPriceUsd": 50
-        },
-        {
-          "ticker": "COST",
-          "amount": 0.24078640714825278,
-          "currentPriceUsd": 820
-        },
-        {
-          "ticker": "SLV",
-          "amount": 4.355109310257932,
-          "currentPriceUsd": 28
-        },
-        {
-          "ticker": "NVDA",
-          "amount": 2.8406602708223776,
-          "currentPriceUsd": 120
-        },
-        {
-          "ticker": "AMZN",
-          "amount": 2.0865207185279955,
-          "currentPriceUsd": 185
-        },
-        {
-          "ticker": "AAPL",
-          "amount": 1.8403499623352628,
-          "currentPriceUsd": 225
-        },
-        {
-          "ticker": "RDDT",
-          "amount": 0.5339099937032248,
-          "currentPriceUsd": 65
-        },
-        {
-          "ticker": "GOOGL",
-          "amount": 0.15456494720723035,
-          "currentPriceUsd": 175
-        },
-        {
-          "ticker": "SPCX",
-          "amount": 0.5011592335813787,
-          "currentPriceUsd": 25
-        }
-      ]
+      "trackedAnnualYieldUsd": 5642.185611043846
     },
     {
       "tier": 3,
       "reqTokens": 366666,
       "benchmarkId": 2372,
       "tbaAddress": "0xa72288ba58858c04b058ffc22ad345687924bcd0",
-      "trackedAnnualYieldUsd": 7933.3675673519165,
-      "tbaBalances": [
-        {
-          "ticker": "ETH",
-          "amount": 0.11038610220933615,
-          "currentPriceUsd": 1913.44
-        },
-        {
-          "ticker": "STONKBROKER",
-          "amount": 62444.70206218238,
-          "currentPriceUsd": 0.02271
-        },
-        {
-          "ticker": "USAR",
-          "amount": 74.10371752191672,
-          "currentPriceUsd": 50
-        },
-        {
-          "ticker": "NVDA",
-          "amount": 8.92365785804098,
-          "currentPriceUsd": 120
-        },
-        {
-          "ticker": "COST",
-          "amount": 0.30820660114976406,
-          "currentPriceUsd": 820
-        },
-        {
-          "ticker": "SLV",
-          "amount": 5.574539917130153,
-          "currentPriceUsd": 28
-        },
-        {
-          "ticker": "AMZN",
-          "amount": 2.6707465197158355,
-          "currentPriceUsd": 185
-        },
-        {
-          "ticker": "AAPL",
-          "amount": 2.355647951789137,
-          "currentPriceUsd": 225
-        },
-        {
-          "ticker": "RDDT",
-          "amount": 0.6834047919401279,
-          "currentPriceUsd": 65
-        },
-        {
-          "ticker": "GOOGL",
-          "amount": 0.1978431324252548,
-          "currentPriceUsd": 175
-        },
-        {
-          "ticker": "SPCX",
-          "amount": 0.6414838189841647,
-          "currentPriceUsd": 25
-        }
-      ]
+      "trackedAnnualYieldUsd": 6133.205209169074
     },
     {
       "tier": 4,
       "reqTokens": 666666,
       "benchmarkId": 1533,
       "tbaAddress": "0x468a5a2402fa721f056b22e0c48d7010016135d8",
-      "trackedAnnualYieldUsd": 0,
-      "tbaBalances": []
+      "trackedAnnualYieldUsd": 350.1795554655577
     },
     {
       "tier": 5,
       "reqTokens": 1666666,
       "benchmarkId": 1258,
       "tbaAddress": "0xe7207caa913b54aa4411e847a3a49eee0568cccf",
-      "trackedAnnualYieldUsd": 0,
-      "tbaBalances": []
+      "trackedAnnualYieldUsd": 0
     }
   ],
-  "lastUpdated": "2026-08-08T00:47:14.436Z"
+  "lastUpdated": "2026-08-08T01:22:15.845Z"
 }
