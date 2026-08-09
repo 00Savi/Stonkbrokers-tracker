@@ -1,21 +1,21 @@
 {
   "market": {
-    "ethPriceUsd": 1914.08,
-    "tokenPriceUsd": 0.03286,
-    "nftFloorEth": 12.589
+    "ethPriceUsd": 1914.3,
+    "tokenPriceUsd": 0.0333,
+    "nftFloorEth": 12.757
   },
   "activation": {
-    "activeCount": 1666,
+    "activeCount": 950,
     "totalSupply": 4444,
-    "percentActivated": 37.49,
-    "totalEverActivated": 2321,
-    "totalBroken": 666,
+    "percentActivated": 21.38,
+    "totalEverActivated": 122624,
+    "totalBroken": 1024,
     "breakdown": {
-      "T0": 1476,
-      "T1": 79,
-      "T2": 44,
-      "T3": 37,
-      "T4": 30
+      "T0": 866,
+      "T1": 36,
+      "T2": 22,
+      "T3": 17,
+      "T4": 9
     },
     "history": {
       "labels": [
@@ -44,29 +44,29 @@
         "8/9/26"
       ],
       "cumulative": [
-        1304,
-        1405,
-        1519,
-        1575,
-        1606,
-        1650,
-        1662,
-        1669,
-        1666,
-        1668,
-        1676,
-        1660,
-        1658,
-        1658,
-        1657,
-        1658,
-        1659,
-        1663,
-        1684,
-        1693,
-        1691,
-        1675,
-        1666
+        950,
+        950,
+        950,
+        950,
+        950,
+        950,
+        950,
+        950,
+        950,
+        950,
+        950,
+        950,
+        950,
+        950,
+        950,
+        950,
+        950,
+        950,
+        950,
+        950,
+        950,
+        950,
+        950
       ]
     }
   },
@@ -77,8 +77,7 @@
       "reqTokens": 66666,
       "multiplier": "1.00x",
       "weight": 100,
-      "benchmarkId": 3032,
-      "trackedAnnualYieldUsd": 5986.102664424988
+      "trackedAnnualYieldUsd": 5334.281764350113
     },
     {
       "tier": "T1",
@@ -86,8 +85,7 @@
       "reqTokens": 166666,
       "multiplier": "1.25x",
       "weight": 125,
-      "benchmarkId": 1199,
-      "trackedAnnualYieldUsd": 7482.6283305312345
+      "trackedAnnualYieldUsd": 6667.852205437641
     },
     {
       "tier": "T2",
@@ -95,8 +93,7 @@
       "reqTokens": 366666,
       "multiplier": "1.60x",
       "weight": 160,
-      "benchmarkId": 2372,
-      "trackedAnnualYieldUsd": 9577.76426307998
+      "trackedAnnualYieldUsd": 8534.850822960181
     },
     {
       "tier": "T3",
@@ -104,8 +101,7 @@
       "reqTokens": 666666,
       "multiplier": "2.00x",
       "weight": 200,
-      "benchmarkId": 1533,
-      "trackedAnnualYieldUsd": 11972.205328849976
+      "trackedAnnualYieldUsd": 10668.563528700226
     },
     {
       "tier": "T4",
@@ -113,9 +109,8 @@
       "reqTokens": 1666666,
       "multiplier": "3.33x",
       "weight": 333,
-      "benchmarkId": 1258,
-      "trackedAnnualYieldUsd": 19933.721872535207
+      "trackedAnnualYieldUsd": 17763.158275285874
     }
   ],
-  "lastUpdated": "2026-08-09T01:45:15.575Z"
+  "lastUpdated": "2026-08-09T02:04:08.503Z"
 }
