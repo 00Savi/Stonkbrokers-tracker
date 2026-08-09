@@ -51,19 +51,19 @@
     </header>
 
     <!-- Navigation Tabs -->
-    <div class="max-w-6xl mx-auto flex flex-col sm:flex-row gap-3 md:gap-4 mb-6">
-        <button id="tab-roi" onclick="switchTab('roi')" class="w-full sm:w-auto justify-center bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition shadow-lg shadow-blue-500/20">
+    <div class="max-w-6xl mx-auto flex flex-wrap gap-3 md:gap-4 mb-6">
+        <button id="tab-roi" onclick="switchTab('roi')" class="flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition shadow-lg shadow-blue-500/25">
             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 0h8v12H6V4zm2 2v2h4V6H8zm0 4v2h4v-2H8zm0 4v2h4v-2H8z"></path></svg>
             Tier ROI Benchmarks
         </button>
-        <button id="tab-burn" onclick="switchTab('burn')" class="w-full sm:w-auto justify-center bg-transparent border border-[#334155] hover:bg-[#1e293b] text-slate-300 px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition">
+        <button id="tab-burn" onclick="switchTab('burn')" class="flex-1 sm:flex-none justify-center bg-transparent border border-[#334155] hover:bg-[#1e293b] text-slate-300 px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition">
             <svg class="w-4 h-4 text-orange-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.214.33-.403.713-.57 1.116-.334.804-.603 1.768-.84 2.734a31.365 31.365 0 00-.613 3.58 2.64 2.64 0 01-.945-1.067c-.328-.68-.398-1.534-.398-2.654a1 1 0 00-1.788-.606 6.989 6.989 0 00-1.892 4.885 7 7 0 0012.38 4.352 1 1 0 00-1.03-1.594 5 5 0 01-8.35-3.08c0-1.127.243-2.046.688-2.73a5.617 5.617 0 011.082-1.226c.46-.388.94-.74 1.425-1.054.48-.31.964-.595 1.442-.861a1 1 0 00.385-1.45z" clip-rule="evenodd"></path></svg>
             Burn Tracker
         </button>
-        <a href="#" target="_blank" id="ecosystem-link" class="w-full sm:w-auto justify-center bg-transparent border border-[#334155] hover:bg-[#1e293b] text-slate-300 px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition">
-            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg>
+        <button id="tab-activation" onclick="switchTab('activation')" class="flex-1 sm:flex-none justify-center bg-transparent border border-[#334155] hover:bg-[#1e293b] text-slate-300 px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition">
+            <svg class="w-4 h-4 text-blue-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg>
             Ecosystem Activation
-        </a>
+        </button>
     </div>
 
     <!-- View 1: Tier ROI Benchmarks -->
@@ -113,7 +113,6 @@
             </div>
         </div>
 
-        <!-- Metric Cards Grid -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
                 <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Total $STONK Burnt</p>
@@ -127,11 +126,53 @@
             </div>
         </div>
 
-        <!-- Chart Container -->
         <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6">
             <h3 class="text-sm font-bold text-white mb-4">Cumulative Token Burn Over Time</h3>
             <div class="relative h-72 md:h-80 w-full">
                 <canvas id="burnChart"></canvas>
+            </div>
+        </div>
+    </main>
+
+    <!-- View 3: Ecosystem Activation -->
+    <main id="view-activation" class="max-w-6xl mx-auto card rounded-2xl border p-4 md:p-6 mb-8 shadow-xl hidden">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+            <div>
+                <h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2">
+                    <svg class="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg>
+                    Ecosystem Activation Metrics
+                </h2>
+                <p class="text-xs md:text-sm text-slate-400 mt-1">Network-wide active broker adoption and tier composition</p>
+            </div>
+        </div>
+
+        <!-- Metric Cards Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
+                <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Activated Supply Ratio</p>
+                <p class="text-2xl md:text-3xl font-extrabold text-emerald-400" id="stat-pct-activated">Loading...</p>
+                <p class="text-xs text-slate-500 mt-1">Percentage of circulating NFT supply currently clocked in</p>
+            </div>
+            <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
+                <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Total Active Brokers</p>
+                <p class="text-2xl md:text-3xl font-extrabold text-blue-400" id="stat-active-count">Loading...</p>
+                <p class="text-xs text-slate-500 mt-1">Total operational units across all 5 tiers</p>
+            </div>
+        </div>
+
+        <!-- Charts Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6">
+                <h3 class="text-sm font-bold text-white mb-4">Activations Over Time</h3>
+                <div class="relative h-64 md:h-72 w-full">
+                    <canvas id="activationChart"></canvas>
+                </div>
+            </div>
+            <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6 flex flex-col items-center justify-center">
+                <h3 class="text-sm font-bold text-white mb-4 w-full text-left">Tier Distribution Breakdown</h3>
+                <div class="relative h-64 md:h-72 w-full flex items-center justify-center">
+                    <canvas id="tierPieChart"></canvas>
+                </div>
             </div>
         </div>
     </main>
@@ -160,28 +201,37 @@
         const formatNumber = (val, decimals = 0) => new Intl.NumberFormat('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val);
         
         let burnChartInstance = null;
+        let activationChartInstance = null;
+        let tierPieChartInstance = null;
 
         function switchTab(tab) {
             const btnRoi = document.getElementById('tab-roi');
             const btnBurn = document.getElementById('tab-burn');
+            const btnActivation = document.getElementById('tab-activation');
+            
             const viewRoi = document.getElementById('view-roi');
             const viewBurn = document.getElementById('view-burn');
+            const viewActivation = document.getElementById('view-activation');
+
+            // Reset all buttons
+            [btnRoi, btnBurn, btnActivation].forEach(b => {
+                b.className = "flex-1 sm:flex-none justify-center bg-transparent border border-[#334155] hover:bg-[#1e293b] text-slate-300 px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition";
+            });
+
+            // Hide all views
+            [viewRoi, viewBurn, viewActivation].forEach(v => v.classList.add('hidden'));
 
             if (tab === 'roi') {
-                btnRoi.className = "w-full sm:w-auto justify-center bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition shadow-lg shadow-blue-500/20";
-                btnBurn.className = "w-full sm:w-auto justify-center bg-transparent border border-[#334155] hover:bg-[#1e293b] text-slate-300 px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition";
+                btnRoi.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition shadow-lg shadow-blue-500/25";
                 viewRoi.classList.remove('hidden');
-                viewBurn.classList.add('hidden');
-            } else {
-                btnBurn.className = "w-full sm:w-auto justify-center bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition shadow-lg shadow-blue-500/20";
-                btnRoi.className = "w-full sm:w-auto justify-center bg-transparent border border-[#334155] hover:bg-[#1e293b] text-slate-300 px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition";
+            } else if (tab === 'burn') {
+                btnBurn.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition shadow-lg shadow-blue-500/25";
                 viewBurn.classList.remove('hidden');
-                viewRoi.classList.add('hidden');
-                
-                // Trigger chart render when tab becomes visible
-                if (window.burnChartData) {
-                    renderBurnChart(window.burnChartData);
-                }
+                if (window.burnChartData) renderBurnChart(window.burnChartData);
+            } else if (tab === 'activation') {
+                btnActivation.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition shadow-lg shadow-blue-500/25";
+                viewActivation.classList.remove('hidden');
+                if (window.activationChartData) renderActivationCharts(window.activationChartData);
             }
         }
 
@@ -248,9 +298,8 @@
                     tbody.appendChild(tr);
                 });
 
-                // Populate Burn Tracker Data (Simulated/Calculated from activation stats history if present, or fallback estimates)
-                // If your fetcher passes burn history, we map it. Here we construct a robust fallback/live parser:
-                processBurnData(data);
+                // Populate Burn & Activation Metric Data from data.json payload
+                processMetricsData(data);
                 
             } catch (e) {
                 console.error("Dashboard Sync Failed: ", e);
@@ -258,31 +307,39 @@
             }
         }
 
-        function processBurnData(data) {
-            // Estimate or pull cumulative burn metrics
-            // Standard activation burn math: 50% of activation fees are burned. 
-            // Alternatively, calculate based on active broker counts and historical activations.
-            let totalActiveBrokers = data.activation ? data.activation.activeCount : 1200;
-            // Approximate historical burn based on active weight & activation requirements
-            let estimatedBurn = totalActiveBrokers * 180000; // Average burn per activation weight baseline
-            let equivNfts = estimatedBurn / 666666;
+        function processMetricsData(data) {
+            const act = data.activation || {};
+            const activeCount = act.activeCount || 0;
+            const pctActivated = act.percentActivated || 0;
+            const breakdown = act.breakdown || { T0: 0, T1: 0, T2: 0, T3: 0, T4: 0 };
+            const history = act.history || { labels: [], cumulative: [] };
 
+            // Burn Tracker Stats
+            let estimatedBurn = activeCount * 180000;
+            let equivNfts = estimatedBurn / 666666;
             document.getElementById('stat-total-burn').innerText = formatNumber(estimatedBurn) + " STONK";
             document.getElementById('stat-equiv-nfts').innerText = formatNumber(equivNfts, 2) + " Brokers";
 
-            // Mock/Dynamic chart history generation based on activation history labels if available
-            let labels = data.activation?.history?.labels || ["7/15", "7/22", "7/29", "8/5", "8/9"];
-            let rawCumul = data.activation?.history?.cumulative || [100, 350, 700, 1050, totalActiveBrokers];
-            let burnHistory = rawCumul.map(val => val * 150000); // Scale to token burn volume
+            // Activation Tracker Stats
+            document.getElementById('stat-pct-activated').innerText = pctActivated.toFixed(2) + "%";
+            document.getElementById('stat-active-count').innerText = formatNumber(activeCount) + " Units";
 
-            window.burnChartData = { labels, burnHistory };
+            // Store Chart Datasets globally for tab rendering
+            window.burnChartData = {
+                labels: history.labels.length ? history.labels : ["Start", "Current"],
+                burnHistory: history.cumulative.length ? history.cumulative.map(v => v * 150000) : [0, estimatedBurn]
+            };
+
+            window.activationChartData = {
+                historyLabels: history.labels.length ? history.labels : ["Start", "Current"],
+                historyValues: history.cumulative.length ? history.cumulative : [0, activeCount],
+                breakdown: [breakdown.T0 || 0, breakdown.T1 || 0, breakdown.T2 || 0, breakdown.T3 || 0, breakdown.T4 || 0]
+            };
         }
 
         function renderBurnChart({ labels, burnHistory }) {
             const ctx = document.getElementById('burnChart').getContext('2d');
-            if (burnChartInstance) {
-                burnChartInstance.destroy();
-            }
+            if (burnChartInstance) burnChartInstance.destroy();
 
             burnChartInstance = new Chart(ctx, {
                 type: 'line',
@@ -296,7 +353,7 @@
                         borderWidth: 3,
                         fill: true,
                         tension: 0.3,
-                        pointRadius: 3,
+                        pointRadius: 2,
                         pointBackgroundColor: '#fb923c'
                     }]
                 },
@@ -307,25 +364,77 @@
                         legend: { display: false },
                         tooltip: {
                             callbacks: {
-                                label: function(context) {
-                                    return formatNumber(context.raw) + ' STONK';
-                                }
+                                label: (context) => formatNumber(context.raw) + ' STONK'
                             }
                         }
                     },
                     scales: {
-                        x: {
-                            grid: { color: '#334155', borderDash: [4, 4] },
-                            ticks: { color: '#94a3b8' }
-                        },
-                        y: {
-                            grid: { color: '#334155', borderDash: [4, 4] },
+                        x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
+                        y: { 
+                            grid: { color: '#334155', borderDash: [4, 4] }, 
                             ticks: { 
                                 color: '#94a3b8',
-                                callback: function(value) {
-                                    return (value >= 1000 ? (value / 1000).toFixed(0) + 'k' : value);
-                                }
-                            }
+                                callback: (value) => (value >= 1000 ? (value / 1000).toFixed(0) + 'k' : value)
+                            } 
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderActivationCharts({ historyLabels, historyValues, breakdown }) {
+            // 1. Line Chart: Activations Over Time
+            const ctxLine = document.getElementById('activationChart').getContext('2d');
+            if (activationChartInstance) activationChartInstance.destroy();
+
+            activationChartInstance = new Chart(ctxLine, {
+                type: 'line',
+                data: {
+                    labels: historyLabels,
+                    datasets: [{
+                        label: 'Active Brokers',
+                        data: historyValues,
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 2,
+                        pointBackgroundColor: '#3b82f6'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
+                        y: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }
+                    }
+                }
+            });
+
+            // 2. Doughnut Chart: Tier Breakdown
+            const ctxPie = document.getElementById('tierPieChart').getContext('2d');
+            if (tierPieChartInstance) tierPieChartInstance.destroy();
+
+            tierPieChartInstance = new Chart(ctxPie, {
+                type: 'doughnut',
+                data: {
+                    labels: ['T0: Floor Trader', 'T1: Analyst', 'T2: Portfolio Mgr', 'T3: Managing Dir', 'T4: Partner'],
+                    datasets: [{
+                        data: breakdown,
+                        backgroundColor: ['#60a5fa', '#34d399', '#f472b6', '#fbbf24', '#a78bfa'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { color: '#cbd5e1', boxWidth: 12, font: { size: 11 } }
                         }
                     }
                 }
