@@ -46,23 +46,20 @@ let prices = {};
 let market = { ethPriceUsd: 1900, tokenPriceUsd: 0.03, nftFloorEth: 10 };
 
 const tierStructure = [
-  { id: "T0", name: "Floor Trader", reqTokens: 66666, weight: 100 },
-  { id: "T1", name: "Analyst", reqTokens: 166666, weight: 125 },
-  { id: "T2", name: "Portfolio Manager", reqTokens: 366666, weight: 160 },
-  { id: "T3", name: "Managing Director", reqTokens: 666666, weight: 200 },
-  { id: "T4", name: "Partner", reqTokens: 1666666, weight: 333 }
+  { id: "T0", name: "Floor Trader", reqTokens: 66666, weight: 100, tbaAddress: "0x5a35bc7e3b7f0ea5b04d6df5e15aee144c940ba9" },
+  { id: "T1", name: "Analyst", reqTokens: 166666, weight: 125, tbaAddress: "0xc2614c45c68f14a6c21881290c62d84b5f718831" },
+  { id: "T2", name: "Portfolio Manager", reqTokens: 366666, weight: 160, tbaAddress: "0xa72288ba58858c04b058ffc22ad345687924bcd0" },
+  { id: "T3", name: "Managing Director", reqTokens: 666666, weight: 200, tbaAddress: "0x468a5a2402fa721f056b22e0c48d7010016135d8" },
+  { id: "T4", name: "Partner", reqTokens: 1666666, weight: 333, tbaAddress: "0xe7207caa913b54aa4411e847a3a49eee0568cccf" }
 ];
 
 async function secureFetch(url) {
   for (let i = 0; i < 4; i++) {
     try {
-      const res = await fetch(url, {
-        headers: { "Accept": "application/json", "User-Agent": "StonkBrokersTracker/4.4" }
-      });
+      const res = await fetch(url, { headers: { "Accept": "application/json", "User-Agent": "StonkBrokersTracker/4.5" } });
       if (res.status === 429) throw new Error("rate");
       return await res.json();
     } catch (e) {
-      console.log("  retry...");
       await sleep(2000 + i * 1500);
     }
   }
@@ -102,25 +99,51 @@ async function loadPrices() {
   }
 
   market.nftFloorEth = +((666666 * market.tokenPriceUsd * 1.10) / market.ethPriceUsd).toFixed(3);
-  console.log(`Market → ETH $${market.ethPriceUsd.toFixed(2)} | STONK $${market.tokenPriceUsd.toFixed(5)}`);
 }
 
 async function fetchActivations() {
-  console.log("Fetching activation logs safely from block 0...");
+  console.log("Fetching activation logs safely via Dynamic Block Pointer...");
   let allLogs = [];
-  let page = 1;
   
-  while (true) {
-    const url = `${PRO_API}?chain_id=${CHAIN_ID}&module=logs&action=getLogs&address=${ACTIVATION_MANAGER}&fromBlock=0&toBlock=latest&page=${page}&offset=1000&apikey=${API_KEY}`;
+  let latestBlock = 35000000;
+  try {
+    const br = await secureFetch(`${PRO_API}?chain_id=${CHAIN_ID}&module=block&action=eth_block_number&apikey=${API_KEY}`);
+    if (br.result) {
+      latestBlock = br.result.toString().startsWith("0x") ? parseInt(br.result, 16) : parseInt(br.result, 10);
+    }
+  } catch {}
+
+  let currentBlock = 0;
+  let seenLogs = new Set(); // Prevent duplicates
+
+  // Dynamic Pagination Loop
+  while (currentBlock <= latestBlock) {
+    const url = `${PRO_API}?chain_id=${CHAIN_ID}&module=logs&action=getLogs&address=${ACTIVATION_MANAGER}&fromBlock=${currentBlock}&toBlock=latest&apikey=${API_KEY}`;
     const data = await secureFetch(url);
     const logs = Array.isArray(data.result) ? data.result : [];
     
     if (logs.length === 0) break;
-    allLogs.push(...logs);
-    console.log(`  Page ${page} - Found ${logs.length} logs...`);
     
-    if (logs.length < 1000) break;
-    page++;
+    let lastBlockInChunk = currentBlock;
+
+    for (const log of logs) {
+      const logId = log.transactionHash + "-" + log.logIndex;
+      if (!seenLogs.has(logId)) {
+        seenLogs.add(logId);
+        allLogs.push(log);
+      }
+      const bNum = log.blockNumber.toString().startsWith("0x") ? parseInt(log.blockNumber, 16) : parseInt(log.blockNumber, 10);
+      if (bNum > lastBlockInChunk) lastBlockInChunk = bNum;
+    }
+
+    console.log(`  Scanned from block ${currentBlock}, found ${logs.length} logs...`);
+
+    if (logs.length < 1000) {
+      break; // Reached the end of the history
+    } else {
+      // Advance block pointer safely
+      currentBlock = lastBlockInChunk === currentBlock ? currentBlock + 1 : lastBlockInChunk;
+    }
     await sleep(300);
   }
 
@@ -136,8 +159,6 @@ async function fetchActivations() {
 
   const activeBrokers = new Map(); 
   const historyMap = new Map(); 
-  let totalEverActivated = 0;
-  let totalBroken = 0;
 
   for (const log of allLogs) {
     try {
@@ -159,18 +180,14 @@ async function fetchActivations() {
       const tokenId = parsed.args.tokenId.toString();
 
       if (parsed.name === "Activated") {
-        totalEverActivated++;
         const rawTier = parsed.args.tier.toString();
         activeBrokers.set(tokenId, `T${rawTier}`);
       } else if (parsed.name === "ActivationCleared") {
-        totalBroken++;
         activeBrokers.delete(tokenId);
       }
 
       historyMap.set(dayKey, activeBrokers.size);
-    } catch (e) {
-      // Ignore unparseable events
-    }
+    } catch (e) {}
   }
 
   const breakdown = { T0: 0, T1: 0, T2: 0, T3: 0, T4: 0 };
@@ -178,7 +195,6 @@ async function fetchActivations() {
     if (breakdown[tier] !== undefined) breakdown[tier]++;
   }
 
-  // Generate All-Time Cumulative History
   const sortedDays = Array.from(historyMap.keys()).sort((a, b) => a - b);
   const labels = [];
   const cumulative = [];
@@ -207,20 +223,18 @@ async function fetchActivations() {
   const activeCount = activeBrokers.size;
   const totalSupply = 4444;
 
-  console.log(`Live Activations: ${activeCount}/${totalSupply} | Lifetime: ${totalEverActivated} | Broken/Cleared: ${totalBroken}`);
+  console.log(`Live Activations: ${activeCount}/${totalSupply}`);
+  console.log(`Tier Breakdown:`, breakdown);
 
   return { 
     activeCount, 
     totalSupply, 
     percentActivated: +((activeCount / totalSupply) * 100).toFixed(2), 
-    totalEverActivated,
-    totalBroken,
     breakdown, 
     history: { labels, cumulative } 
   };
 }
 
-// Global Yield captures ALL drops leaving the protocol contracts, bypassing router blindness
 async function getGlobalYield(sevenDaysAgo) {
   let totalUsd = 0;
 
@@ -250,7 +264,6 @@ async function getGlobalYield(sevenDaysAgo) {
         if (parseInt(tx.timeStamp) < sevenDaysAgo) continue; 
         if (tx.isError === "1") continue;
 
-        // If it's a token moving out of the protocol OR routed through it to a user
         if ((tx.to || "").toLowerCase() !== pL) {
           const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal, 10) : 18;
           const amount = Number(tx.value || 0) / Math.pow(10, decimals);
@@ -269,10 +282,7 @@ async function run() {
 
   const sevenDaysAgo = Math.floor(Date.now() / 1000) - 7 * 24 * 3600;
 
-  console.log("\nCalculating Exact Live Activations...");
   const activationStats = await fetchActivations();
-
-  console.log("\nCalculating Global Network Yield...");
   const global7DayYield = await getGlobalYield(sevenDaysAgo);
   const globalAnnualYield = global7DayYield * 52.14;
 
@@ -282,12 +292,8 @@ async function run() {
     totalNetworkWeight += (activeInTier * t.weight);
   }
 
-  // Divide the Global Yield by the EXACT current network weight to get perfect expectations
   const yieldPerWeightUnitAnnual = totalNetworkWeight > 0 ? (globalAnnualYield / totalNetworkWeight) : 0;
   
-  console.log(`Global 7d Yield: $${global7DayYield.toFixed(2)} | Annualized: $${globalAnnualYield.toFixed(2)}`);
-  console.log(`Live Network Weight: ${totalNetworkWeight}x | Yield per 1x Weight: $${yieldPerWeightUnitAnnual.toFixed(2)}/yr`);
-
   const results = [];
   for (const t of tierStructure) {
     const tierExpectedAnnualUsd = t.weight * yieldPerWeightUnitAnnual;
