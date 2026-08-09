@@ -109,26 +109,16 @@
         <!-- TAB 2: ACTIVATION STATS -->
         <div id="tab-activation" class="space-y-6 hidden">
             <!-- Top Stats Row -->
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div class="glass-card rounded-2xl p-5 text-center flex flex-col justify-center">
-                    <h3 class="text-gray-400 text-[11px] font-semibold uppercase tracking-wider mb-1">Currently Active</h3>
-                    <div class="text-3xl font-bold text-primary" id="stat-active">--</div>
-                    <div class="text-xs text-gray-500 mt-1">out of <span id="stat-total">4444</span> total</div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="glass-card rounded-2xl p-8 text-center flex flex-col justify-center">
+                    <h3 class="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">Currently Active</h3>
+                    <div class="text-5xl font-bold text-primary mb-2" id="stat-active">--</div>
+                    <div class="text-sm text-gray-500">out of <span id="stat-total">4444</span> total supply</div>
                 </div>
-                <div class="glass-card rounded-2xl p-5 text-center flex flex-col justify-center">
-                    <h3 class="text-gray-400 text-[11px] font-semibold uppercase tracking-wider mb-1">Activation Rate</h3>
-                    <div class="text-3xl font-bold text-success" id="stat-percent">--%</div>
-                    <div class="text-xs text-gray-500 mt-1">Circulating supply</div>
-                </div>
-                <div class="glass-card rounded-2xl p-5 text-center flex flex-col justify-center">
-                    <h3 class="text-gray-400 text-[11px] font-semibold uppercase tracking-wider mb-1">Lifetime Activations</h3>
-                    <div class="text-3xl font-bold text-warning" id="stat-lifetime">--</div>
-                    <div class="text-xs text-gray-500 mt-1">Total ever activated</div>
-                </div>
-                <div class="glass-card rounded-2xl p-5 text-center flex flex-col justify-center">
-                    <h3 class="text-gray-400 text-[11px] font-semibold uppercase tracking-wider mb-1">Broken / Cleared</h3>
-                    <div class="text-3xl font-bold text-danger" id="stat-broken">--</div>
-                    <div class="text-xs text-gray-500 mt-1">Transferred / reset</div>
+                <div class="glass-card rounded-2xl p-8 text-center flex flex-col justify-center">
+                    <h3 class="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">Activation Rate</h3>
+                    <div class="text-5xl font-bold text-success mb-2" id="stat-percent">--%</div>
+                    <div class="text-sm text-gray-500">Circulating active ratio</div>
                 </div>
             </div>
 
@@ -138,14 +128,14 @@
                     <h3 class="text-sm font-semibold text-gray-300 mb-4 flex items-center">
                         <i class="fa-solid fa-chart-pie text-success mr-2"></i> Current Tier Distribution
                     </h3>
-                    <div class="relative flex-grow w-full min-h-[220px] flex justify-center items-center">
+                    <div class="relative flex-grow w-full min-h-[240px] flex justify-center items-center">
                         <canvas id="tierPieChart"></canvas>
                     </div>
                 </div>
-                <div class="glass-card rounded-2xl p-6 w-full lg:w-2/3 flex flex-col justify-center text-gray-400 text-sm">
-                    <h3 class="text-gray-200 font-semibold mb-3 flex items-center"><i class="fa-solid fa-server text-primary mr-2"></i> Network Analytics</h3>
-                    <p class="mb-3 leading-relaxed">This dashboard maintains an active ledger of the ecosystem by directly indexing and replaying all historical logs from the StonkBrokers Activation Manager smart contract.</p>
-                    <p class="leading-relaxed">When a broker activates, they lock tokens from the circulating supply to secure their weighted multiplier. Upon the execution of a true ownership transfer (NFT sale or wallet move), the smart contract automatically triggers an <code class="text-danger bg-gray-800 px-1 py-0.5 rounded">ActivationCleared</code> event. This strips the tier, resets the multiplier back to base weight, and mathematically increases the yield share for all remaining active holders.</p>
+                <div class="glass-card rounded-2xl p-8 w-full lg:w-2/3 flex flex-col justify-center text-gray-400 text-sm">
+                    <h3 class="text-gray-200 font-semibold mb-4 flex items-center text-base"><i class="fa-solid fa-server text-primary mr-2"></i> Network Analytics</h3>
+                    <p class="mb-4 leading-relaxed">This dashboard maintains an active ledger of the ecosystem by directly indexing and replaying all historical logs from the StonkBrokers Activation Manager smart contract.</p>
+                    <p class="leading-relaxed">When a broker activates, they lock tokens from the circulating supply to secure their weighted multiplier. Upon the execution of a true ownership transfer (NFT sale or wallet move), the smart contract automatically triggers an <code class="text-danger bg-gray-800 px-1.5 py-0.5 rounded">ActivationCleared</code> event. This strips the tier, resets the multiplier back to base weight, and mathematically increases the yield share for all remaining active holders.</p>
                 </div>
             </div>
 
@@ -154,7 +144,7 @@
                 <h3 class="text-sm font-semibold text-gray-300 mb-4 flex items-center">
                     <i class="fa-solid fa-chart-line text-primary mr-2"></i> Project Lifetime Activations (All-Time Cumulative)
                 </h3>
-                <div class="relative w-full h-80">
+                <div class="relative w-full h-96">
                     <canvas id="activationLineChart"></canvas>
                 </div>
             </div>
@@ -204,8 +194,6 @@
                     document.getElementById('stat-active').innerText = formatNum(data.activation.activeCount);
                     document.getElementById('stat-total').innerText = formatNum(data.activation.totalSupply);
                     document.getElementById('stat-percent').innerText = `${data.activation.percentActivated}%`;
-                    document.getElementById('stat-lifetime').innerText = formatNum(data.activation.totalEverActivated);
-                    document.getElementById('stat-broken').innerText = formatNum(data.activation.totalBroken);
 
                     if (data.activation.history && data.activation.history.labels) {
                         if (lineChartInstance) lineChartInstance.destroy();
@@ -230,7 +218,7 @@
                                 maintainAspectRatio: false,
                                 plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
                                 scales: {
-                                    x: { grid: { display: false }, ticks: { maxTicksLimit: 12 } },
+                                    x: { grid: { display: false }, ticks: { maxTicksLimit: 15 } },
                                     y: { grid: { color: 'rgba(51, 65, 85, 0.4)' }, ticks: { precision: 0 } }
                                 }
                             }
