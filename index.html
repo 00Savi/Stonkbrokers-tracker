@@ -31,6 +31,11 @@
             border: 1px solid rgba(255, 255, 255, 0.1);
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         }
+        .tab-btn.active {
+            background-color: #3b82f6;
+            color: #ffffff;
+            border-color: #3b82f6;
+        }
     </style>
 </head>
 <body class="min-h-screen p-4 md:p-8">
@@ -41,7 +46,7 @@
                 <div class="w-10 h-10 bg-primary rounded-lg flex items-center justify-center font-bold text-xl text-white">$</div>
                 <div>
                     <h1 class="text-2xl font-bold tracking-tight">StonkBrokers Tracker</h1>
-                    <p class="text-gray-400 text-sm">On-Chain ROI Analytics & Activation Dashboard</p>
+                    <p class="text-gray-400 text-sm">On-Chain ROI Analytics & Ecosystem Intelligence</p>
                 </div>
             </div>
             <div class="flex space-x-6 text-sm">
@@ -51,70 +56,105 @@
             </div>
         </header>
 
-        <!-- Stats and Charts Section -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
-            <!-- Quick Stats -->
-            <div class="glass-card rounded-2xl p-6 flex flex-col justify-center items-center text-center">
-                <h3 class="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">Total Activated Brokers</h3>
-                <div class="text-4xl font-bold text-primary mb-1" id="stat-active">--</div>
-                <div class="text-xs text-gray-500 mb-6">out of <span id="stat-total">4444</span> Collection Total</div>
-                
-                <h3 class="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">Collection Activation Rate</h3>
-                <div class="text-3xl font-bold text-success" id="stat-percent">--%</div>
-            </div>
+        <!-- Navigation Tabs -->
+        <div class="flex space-x-4 border-b border-gray-800 pb-4">
+            <button onclick="switchTab('roi')" id="btn-roi" class="tab-btn active px-5 py-2.5 rounded-xl font-semibold text-sm transition-all border border-gray-700 bg-gray-800/50 text-gray-300">
+                <i class="fa-solid fa-calculator mr-2"></i> Tier ROI Benchmarks
+            </button>
+            <button onclick="switchTab('activation')" id="btn-activation" class="tab-btn px-5 py-2.5 rounded-xl font-semibold text-sm transition-all border border-gray-700 bg-gray-800/50 text-gray-300">
+                <i class="fa-solid fa-chart-pie mr-2"></i> Ecosystem Activation
+            </button>
+        </div>
 
-            <!-- Line Chart: Activations Over Time -->
-            <div class="glass-card rounded-2xl p-6 lg:col-span-1">
-                <h3 class="text-sm font-semibold text-gray-300 mb-4 flex items-center">
-                    <i class="fa-solid fa-chart-line text-primary mr-2"></i> Activations (7d Cumulative)
-                </h3>
-                <div class="relative h-48 w-full">
-                    <canvas id="activationLineChart"></canvas>
+        <!-- TAB 1: ROI BENCHMARKS -->
+        <div id="tab-roi" class="space-y-6">
+            <section class="glass-card rounded-2xl p-6">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-6 gap-4">
+                    <div>
+                        <h3 class="text-lg font-semibold flex items-center">
+                            <i class="fa-solid fa-layer-group text-primary mr-2"></i> Global Yield ROI Benchmarks
+                        </h3>
+                        <p class="text-sm text-gray-400 mt-1" id="last-updated">Estimated returns based on on-chain hybrid sampling vs. live floor entry costs.</p>
+                    </div>
+                    <div class="text-xs text-gray-500 bg-gray-800/50 px-3 py-1.5 rounded-lg border border-gray-700">
+                        Floor Entry Cost: <span class="font-mono text-gray-300" id="base-entry-cost">Loading...</span>
+                    </div>
                 </div>
-            </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse min-w-[700px]">
+                        <thead>
+                            <tr class="text-xs uppercase text-gray-500 border-b border-gray-800">
+                                <th class="pb-3 font-semibold pl-2">Tier</th>
+                                <th class="pb-3 font-semibold">Activation Req.</th>
+                                <th class="pb-3 font-semibold">Current Total Cost</th>
+                                <th class="pb-3 font-semibold">Expected Yield (Annualized)</th>
+                                <th class="pb-3 font-semibold text-right pr-2">Est. ROI (CoC)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tier-table-body" class="text-sm divide-y divide-gray-800/50">
+                            <tr><td colspan="5" class="py-4 text-center text-gray-500 italic">Fetching on-chain data payload...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
 
-            <!-- Pie Chart: Tier Breakdown -->
-            <div class="glass-card rounded-2xl p-6 lg:col-span-1">
-                <h3 class="text-sm font-semibold text-gray-300 mb-4 flex items-center">
-                    <i class="fa-solid fa-chart-pie text-success mr-2"></i> Tier Distribution
-                </h3>
-                <div class="relative h-48 w-full flex justify-center">
-                    <canvas id="tierPieChart"></canvas>
-                </div>
+            <!-- Methodology & Disclaimers Box -->
+            <div class="glass-card rounded-2xl p-6 border border-gray-800 text-gray-400 text-xs space-y-3">
+                <h4 class="text-gray-200 font-semibold text-sm flex items-center"><i class="fa-solid fa-circle-info text-primary mr-2"></i> Methodology & Disclaimer</h4>
+                <p><strong>Methodology:</strong> Cash-on-Cash (CoC) return metrics are calculated by taking a 7-day trailing sample of realized payouts across ecosystem benchmark wallets, annualizing the receipts, and evaluating them against current AMM floor purchase costs plus tier activation requirements.</p>
+                <p><strong>Disclaimer:</strong> This dashboard provides automated on-chain analytics for informational and community use only. <strong>This is not financial advice.</strong> Cryptocurrency and NFT tokenomics carry inherent volatility and smart contract risks. Past yields do not guarantee future performance. Always perform your own research before deploying capital.</p>
             </div>
         </div>
 
-        <!-- Ecosystem Tier Benchmarks Table -->
-        <section class="glass-card rounded-2xl p-6">
-            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-6 gap-4">
-                <div>
-                    <h3 class="text-lg font-semibold flex items-center">
-                        <i class="fa-solid fa-layer-group text-primary mr-2"></i> Global Yield ROI Benchmarks
+        <!-- TAB 2: ACTIVATION STATS -->
+        <div id="tab-activation" class="space-y-6 hidden">
+            <!-- Top Stats Row -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="glass-card rounded-2xl p-5 text-center flex flex-col justify-center">
+                    <h3 class="text-gray-400 text-[11px] font-semibold uppercase tracking-wider mb-1">Currently Active</h3>
+                    <div class="text-3xl font-bold text-primary" id="stat-active">--</div>
+                    <div class="text-xs text-gray-500 mt-1">out of <span id="stat-total">4444</span> total</div>
+                </div>
+                <div class="glass-card rounded-2xl p-5 text-center flex flex-col justify-center">
+                    <h3 class="text-gray-400 text-[11px] font-semibold uppercase tracking-wider mb-1">Activation Rate</h3>
+                    <div class="text-3xl font-bold text-success" id="stat-percent">--%</div>
+                    <div class="text-xs text-gray-500 mt-1">Circulating supply</div>
+                </div>
+                <div class="glass-card rounded-2xl p-5 text-center flex flex-col justify-center">
+                    <h3 class="text-gray-400 text-[11px] font-semibold uppercase tracking-wider mb-1">Lifetime Activations</h3>
+                    <div class="text-3xl font-bold text-warning" id="stat-lifetime">--</div>
+                    <div class="text-xs text-gray-500 mt-1">Total ever activated</div>
+                </div>
+                <div class="glass-card rounded-2xl p-5 text-center flex flex-col justify-center">
+                    <h3 class="text-gray-400 text-[11px] font-semibold uppercase tracking-wider mb-1">Broken / Cleared</h3>
+                    <div class="text-3xl font-bold text-danger" id="stat-broken">--</div>
+                    <div class="text-xs text-gray-500 mt-1">Transferred / reset</div>
+                </div>
+            </div>
+
+            <!-- Charts Grid: Doughnut & Massive Full-Width Line Graph -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Tier Distribution Pie Chart -->
+                <div class="glass-card rounded-2xl p-6 lg:col-span-1 flex flex-col">
+                    <h3 class="text-sm font-semibold text-gray-300 mb-4 flex items-center">
+                        <i class="fa-solid fa-chart-pie text-success mr-2"></i> Current Tier Distribution
                     </h3>
-                    <p class="text-sm text-gray-400 mt-1" id="last-updated">Mathematically expected returns calculated by dividing total network drops by tokenomic weight.</p>
+                    <div class="relative flex-grow w-full min-h-[220px] flex justify-center items-center">
+                        <canvas id="tierPieChart"></canvas>
+                    </div>
                 </div>
-                <div class="text-xs text-gray-500 bg-gray-800/50 px-3 py-1.5 rounded-lg border border-gray-700">
-                    Floor Entry Cost: <span class="font-mono text-gray-300" id="base-entry-cost">Loading...</span>
+
+                <!-- Massive All-Time Lifecycle Line Chart -->
+                <div class="glass-card rounded-2xl p-6 lg:col-span-2 flex flex-col">
+                    <h3 class="text-sm font-semibold text-gray-300 mb-4 flex items-center">
+                        <i class="fa-solid fa-chart-line text-primary mr-2"></i> Project Lifetime Activations (All-Time Cumulative)
+                    </h3>
+                    <div class="relative flex-grow w-full min-h-[220px]">
+                        <canvas id="activationLineChart"></canvas>
+                    </div>
                 </div>
             </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse min-w-[700px]">
-                    <thead>
-                        <tr class="text-xs uppercase text-gray-500 border-b border-gray-800">
-                            <th class="pb-3 font-semibold pl-2">Tier</th>
-                            <th class="pb-3 font-semibold">Activation Req.</th>
-                            <th class="pb-3 font-semibold">Current Total Cost</th>
-                            <th class="pb-3 font-semibold">Expected Yield (Annualized)</th>
-                            <th class="pb-3 font-semibold text-right pr-2">Est. ROI (CoC)</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tier-table-body" class="text-sm divide-y divide-gray-800/50">
-                        <tr><td colspan="5" class="py-4 text-center text-gray-500 italic">Fetching on-chain data payload...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </section>
+        </div>
     </div>
 
     <script>
@@ -124,32 +164,50 @@
         Chart.defaults.color = '#94a3b8';
         Chart.defaults.font.family = "'Inter', sans-serif";
 
+        let lineChartInstance = null;
+        let pieChartInstance = null;
+
+        function switchTab(tab) {
+            document.getElementById('tab-roi').classList.toggle('hidden', tab !== 'roi');
+            document.getElementById('tab-activation').classList.toggle('hidden', tab !== 'activation');
+            document.getElementById('btn-roi').classList.toggle('active', tab === 'roi');
+            document.getElementById('btn-activation').classList.toggle('active', tab === 'activation');
+
+            if (tab === 'activation') {
+                setTimeout(() => {
+                    if (lineChartInstance) lineChartInstance.resize();
+                    if (pieChartInstance) pieChartInstance.resize();
+                }, 50);
+            }
+        }
+
         async function initializeDashboard() {
             try {
                 const res = await fetch(`data.json?t=${Date.now()}`);
                 const data = await res.json();
 
-                // Populate Global Headers
+                // Global Headers
                 document.getElementById('global-eth').innerText = formatUSD(data.market.ethPriceUsd);
                 document.getElementById('global-token').innerText = data.market.tokenPriceUsd < 0.01 ? `$${data.market.tokenPriceUsd.toFixed(5)}` : `$${data.market.tokenPriceUsd.toFixed(4)}`;
                 document.getElementById('global-floor').innerText = `${data.market.nftFloorEth} ETH`;
                 
-                // Base entry cost calculation
                 const baseNftCostUsd = data.market.tokenPriceUsd * 666666 * 1.10;
                 document.getElementById('base-entry-cost').innerText = formatUSD(baseNftCostUsd);
                 
                 const updateDate = new Date(data.lastUpdated);
                 document.getElementById('last-updated').innerText = `Last automated sync: ${updateDate.toLocaleString()}`;
 
-                // Populate Activation Stats & Charts
+                // Activation Stats & Charts
                 if (data.activation) {
                     document.getElementById('stat-active').innerText = formatNum(data.activation.activeCount);
                     document.getElementById('stat-total').innerText = formatNum(data.activation.totalSupply);
                     document.getElementById('stat-percent').innerText = `${data.activation.percentActivated}%`;
+                    document.getElementById('stat-lifetime').innerText = formatNum(data.activation.totalEverActivated);
+                    document.getElementById('stat-broken').innerText = formatNum(data.activation.totalBroken);
 
-                    // Line Chart Initialization
                     if (data.activation.history && data.activation.history.labels) {
-                        new Chart(document.getElementById('activationLineChart'), {
+                        if (lineChartInstance) lineChartInstance.destroy();
+                        lineChartInstance = new Chart(document.getElementById('activationLineChart'), {
                             type: 'line',
                             data: {
                                 labels: data.activation.history.labels,
@@ -158,10 +216,10 @@
                                     data: data.activation.history.cumulative,
                                     borderColor: '#3b82f6',
                                     backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                                    borderWidth: 2,
+                                    borderWidth: 2.5,
                                     fill: true,
-                                    tension: 0.3,
-                                    pointRadius: 3,
+                                    tension: 0.2,
+                                    pointRadius: 1,
                                     pointBackgroundColor: '#3b82f6'
                                 }]
                             },
@@ -170,16 +228,16 @@
                                 maintainAspectRatio: false,
                                 plugins: { legend: { display: false } },
                                 scales: {
-                                    x: { grid: { display: false } },
-                                    y: { grid: { color: 'rgba(51, 65, 85, 0.5)' }, ticks: { precision: 0 } }
+                                    x: { grid: { display: false }, ticks: { maxTicksLimit: 8 } },
+                                    y: { grid: { color: 'rgba(51, 65, 85, 0.4)' }, ticks: { precision: 0 } }
                                 }
                             }
                         });
                     }
 
-                    // Pie Chart Initialization
                     if (data.activation.breakdown) {
-                        new Chart(document.getElementById('tierPieChart'), {
+                        if (pieChartInstance) pieChartInstance.destroy();
+                        pieChartInstance = new Chart(document.getElementById('tierPieChart'), {
                             type: 'doughnut',
                             data: {
                                 labels: ['T0 (Floor)', 'T1 (Analyst)', 'T2 (Manager)', 'T3 (Director)', 'T4 (Partner)'],
@@ -207,15 +265,13 @@
                     }
                 }
 
-                // Populate Global Yield Table
+                // Tier Table
                 const tbody = document.getElementById('tier-table-body');
                 tbody.innerHTML = '';
 
                 data.tiers.forEach(bm => {
                     const activationCostUsd = bm.reqTokens * data.market.tokenPriceUsd;
                     const currentTotalCostUsd = baseNftCostUsd + activationCostUsd;
-                    
-                    // Cash on Cash Return
                     const estCashOnCash = (currentTotalCostUsd > 0 && bm.trackedAnnualYieldUsd > 0) ? (bm.trackedAnnualYieldUsd / currentTotalCostUsd) * 100 : 0;
 
                     let yieldDisplay = bm.trackedAnnualYieldUsd === 0 ? 
