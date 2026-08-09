@@ -1,38 +1,72 @@
 {
   "market": {
-    "ethPriceUsd": 1917.62,
-    "tokenPriceUsd": 0.03245,
-    "nftFloorEth": 12.409
+    "ethPriceUsd": 1914.21,
+    "tokenPriceUsd": 0.03278,
+    "nftFloorEth": 12.558
   },
   "activation": {
-    "activeCount": 950,
+    "activeCount": 1667,
     "totalSupply": 4444,
-    "percentActivated": 21.38,
+    "percentActivated": 37.51,
+    "totalEverActivated": 2321,
+    "totalBroken": 665,
     "breakdown": {
-      "T0": 866,
-      "T1": 36,
-      "T2": 22,
-      "T3": 17,
-      "T4": 9
+      "T0": 1477,
+      "T1": 79,
+      "T2": 44,
+      "T3": 37,
+      "T4": 30
     },
     "history": {
       "labels": [
-        "8/3",
-        "8/4",
-        "8/5",
-        "8/6",
-        "8/7",
-        "8/8",
-        "8/9"
+        "7/18/26",
+        "7/19/26",
+        "7/20/26",
+        "7/21/26",
+        "7/22/26",
+        "7/23/26",
+        "7/24/26",
+        "7/25/26",
+        "7/26/26",
+        "7/27/26",
+        "7/28/26",
+        "7/29/26",
+        "7/30/26",
+        "7/31/26",
+        "8/1/26",
+        "8/2/26",
+        "8/3/26",
+        "8/4/26",
+        "8/5/26",
+        "8/6/26",
+        "8/7/26",
+        "8/8/26",
+        "8/9/26"
       ],
       "cumulative": [
-        950,
-        950,
-        950,
-        950,
-        950,
-        950,
-        950
+        1304,
+        1405,
+        1519,
+        1575,
+        1606,
+        1650,
+        1662,
+        1669,
+        1666,
+        1668,
+        1676,
+        1660,
+        1658,
+        1658,
+        1657,
+        1658,
+        1659,
+        1663,
+        1684,
+        1693,
+        1691,
+        1675,
+        1667
       ]
     }
   },
@@ -44,7 +78,7 @@
       "multiplier": "1.00x",
       "weight": 100,
       "benchmarkId": 3032,
-      "trackedAnnualYieldUsd": 5983.497311109176
+      "trackedAnnualYieldUsd": 5973.291641796968
     },
     {
       "tier": "T1",
@@ -53,7 +87,7 @@
       "multiplier": "1.25x",
       "weight": 125,
       "benchmarkId": 1199,
-      "trackedAnnualYieldUsd": 7479.37163888647
+      "trackedAnnualYieldUsd": 7466.61455224621
     },
     {
       "tier": "T2",
@@ -62,7 +96,7 @@
       "multiplier": "1.60x",
       "weight": 160,
       "benchmarkId": 2372,
-      "trackedAnnualYieldUsd": 9573.595697774681
+      "trackedAnnualYieldUsd": 9557.266626875149
     },
     {
       "tier": "T3",
@@ -71,7 +105,7 @@
       "multiplier": "2.00x",
       "weight": 200,
       "benchmarkId": 1533,
-      "trackedAnnualYieldUsd": 11966.994622218352
+      "trackedAnnualYieldUsd": 11946.583283593936
     },
     {
       "tier": "T4",
@@ -80,8 +114,8 @@
       "multiplier": "3.33x",
       "weight": 333,
       "benchmarkId": 1258,
-      "trackedAnnualYieldUsd": 19925.046045993553
+      "trackedAnnualYieldUsd": 19891.061167183903
     }
   ],
-  "lastUpdated": "2026-08-09T01:19:58.746Z"
+  "lastUpdated": "2026-08-09T01:37:13.498Z"
 }
