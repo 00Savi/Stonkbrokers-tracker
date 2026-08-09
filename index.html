@@ -20,7 +20,6 @@
     <!-- Header Section -->
     <header class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4 md:gap-6">
         <div class="flex items-center gap-3 md:gap-4 w-full md:w-auto">
-            <!-- Logo Icon -->
             <div class="w-10 h-10 md:w-12 md:h-12 flex-shrink-0 bg-[#1e293b] border border-[#334155] rounded-xl overflow-hidden flex items-center justify-center shadow-sm">
                 <img src="logo.png" alt="StonkBrokers PFP" class="w-full h-full object-cover">
             </div>
@@ -159,18 +158,26 @@
             </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6">
-                <h3 class="text-sm font-bold text-white mb-4">Daily Activations Over Time</h3>
-                <div class="relative h-64 md:h-72 w-full">
-                    <canvas id="activationChart"></canvas>
-                </div>
-            </div>
-            <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6 flex flex-col items-center justify-center">
-                <h3 class="text-sm font-bold text-white mb-4 w-full text-left">Tier Distribution Breakdown</h3>
-                <div class="relative h-64 md:h-72 w-full flex items-center justify-center">
+        <!-- Tier Breakdown (Full Width with Side Legend) -->
+        <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6 mb-6">
+            <h3 class="text-sm font-bold text-white mb-6">Tier Distribution Breakdown</h3>
+            <div class="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-16">
+                <!-- Pie Chart -->
+                <div class="relative h-64 md:h-72 w-full md:w-1/2 flex items-center justify-center">
                     <canvas id="tierPieChart"></canvas>
                 </div>
+                <!-- Interactive Number List -->
+                <div class="w-full md:w-1/2 flex flex-col gap-3" id="tier-legend-list">
+                    <!-- JS Injected dynamically -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Daily Activations (Full Width) -->
+        <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6">
+            <h3 class="text-sm font-bold text-white mb-4">Daily Activations Over Time</h3>
+            <div class="relative h-72 md:h-80 w-full">
+                <canvas id="activationChart"></canvas>
             </div>
         </div>
     </main>
@@ -306,7 +313,6 @@
             let pctActivated = act.percentActivated || 0;
             const totalSupply = act.totalSupply || 4444;
             
-            // Safe fallback ratio calculation if missing
             if (pctActivated === 0 && totalSupply > 0) {
                 pctActivated = (activeCount / totalSupply) * 100;
             }
@@ -317,40 +323,29 @@
             let rawLabels = history.labels;
             let rawValues = history.cumulative;
 
-            // If history only contains 2 data points, generate smooth daily interpolation points for a true multi-plot daily chart
-            if (rawLabels.length <= 2) {
-                const startVal = rawValues[0] || 0;
-                const endVal = rawValues[1] || activeCount;
-                rawLabels = ["7/15", "7/20", "7/25", "7/30", "8/3", "8/7", "Today"];
-                rawValues = [
-                    Math.round(startVal),
-                    Math.round(startVal + (endVal - startVal) * 0.2),
-                    Math.round(startVal + (endVal - startVal) * 0.4),
-                    Math.round(startVal + (endVal - startVal) * 0.6),
-                    Math.round(startVal + (endVal - startVal) * 0.8),
-                    Math.round(startVal + (endVal - startVal) * 0.95),
-                    endVal
-                ];
-            }
-
-            let estimatedBurn = activeCount * 180000;
-            let equivNfts = estimatedBurn / 666666;
+            const dualBurn = act.dualBurn || {};
+            const totalBurn = dualBurn.totalBurnTokens || (activeCount * 180000);
+            const equivNfts = dualBurn.equivalentBrokersBurnt || (totalBurn / 666666);
             
-            document.getElementById('stat-total-burn').innerText = formatNumber(estimatedBurn) + " STONK";
+            document.getElementById('stat-total-burn').innerText = formatNumber(totalBurn) + " STONK";
             document.getElementById('stat-equiv-nfts').innerText = formatNumber(equivNfts, 2) + " Brokers";
 
             document.getElementById('stat-pct-activated').innerText = pctActivated.toFixed(2) + "%";
             document.getElementById('stat-active-count').innerText = formatNumber(activeCount) + " Units";
 
+            const maxActive = rawValues[rawValues.length - 1] || 1;
+            const scaledBurnHistory = rawValues.map(v => (v / maxActive) * totalBurn);
+
             window.burnChartData = {
                 labels: rawLabels,
-                burnHistory: rawValues.map(v => v * 150000)
+                burnHistory: scaledBurnHistory
             };
 
             window.activationChartData = {
                 historyLabels: rawLabels,
                 historyValues: rawValues,
-                breakdown: [breakdown.T0 || 0, breakdown.T1 || 0, breakdown.T2 || 0, breakdown.T3 || 0, breakdown.T4 || 0]
+                breakdownObj: breakdown,
+                breakdownArr: [breakdown.T0 || 0, breakdown.T1 || 0, breakdown.T2 || 0, breakdown.T3 || 0, breakdown.T4 || 0]
             };
         }
 
@@ -387,7 +382,7 @@
                             grid: { color: '#334155', borderDash: [4, 4] }, 
                             ticks: { 
                                 color: '#94a3b8',
-                                callback: (value) => (value >= 1000 ? (value / 1000).toFixed(0) + 'k' : value)
+                                callback: (value) => (value >= 1000 ? (value / 1000000).toFixed(1) + 'M' : value)
                             } 
                         }
                     }
@@ -395,7 +390,7 @@
             });
         }
 
-        function renderActivationCharts({ historyLabels, historyValues, breakdown }) {
+        function renderActivationCharts({ historyLabels, historyValues, breakdownObj, breakdownArr }) {
             const ctxLine = document.getElementById('activationChart').getContext('2d');
             if (activationChartInstance) activationChartInstance.destroy();
 
@@ -426,6 +421,31 @@
                 }
             });
 
+            // Generate Side Legend List
+            const legendList = document.getElementById('tier-legend-list');
+            legendList.innerHTML = `
+                <div class="flex justify-between items-center bg-[#1e293b] p-3 rounded-lg border border-[#334155]">
+                    <div class="flex items-center gap-3"><div class="w-4 h-4 rounded-md bg-[#60a5fa]"></div><span class="text-sm font-bold text-slate-300">T0: Floor Trader</span></div>
+                    <span class="text-white font-bold tracking-wide">${formatNumber(breakdownObj.T0 || 0)}</span>
+                </div>
+                <div class="flex justify-between items-center bg-[#1e293b] p-3 rounded-lg border border-[#334155]">
+                    <div class="flex items-center gap-3"><div class="w-4 h-4 rounded-md bg-[#34d399]"></div><span class="text-sm font-bold text-slate-300">T1: Analyst</span></div>
+                    <span class="text-white font-bold tracking-wide">${formatNumber(breakdownObj.T1 || 0)}</span>
+                </div>
+                <div class="flex justify-between items-center bg-[#1e293b] p-3 rounded-lg border border-[#334155]">
+                    <div class="flex items-center gap-3"><div class="w-4 h-4 rounded-md bg-[#f472b6]"></div><span class="text-sm font-bold text-slate-300">T2: Portfolio Mgr</span></div>
+                    <span class="text-white font-bold tracking-wide">${formatNumber(breakdownObj.T2 || 0)}</span>
+                </div>
+                <div class="flex justify-between items-center bg-[#1e293b] p-3 rounded-lg border border-[#334155]">
+                    <div class="flex items-center gap-3"><div class="w-4 h-4 rounded-md bg-[#fbbf24]"></div><span class="text-sm font-bold text-slate-300">T3: Managing Dir</span></div>
+                    <span class="text-white font-bold tracking-wide">${formatNumber(breakdownObj.T3 || 0)}</span>
+                </div>
+                <div class="flex justify-between items-center bg-[#1e293b] p-3 rounded-lg border border-[#334155]">
+                    <div class="flex items-center gap-3"><div class="w-4 h-4 rounded-md bg-[#a78bfa]"></div><span class="text-sm font-bold text-slate-300">T4: Partner</span></div>
+                    <span class="text-white font-bold tracking-wide">${formatNumber(breakdownObj.T4 || 0)}</span>
+                </div>
+            `;
+
             const ctxPie = document.getElementById('tierPieChart').getContext('2d');
             if (tierPieChartInstance) tierPieChartInstance.destroy();
 
@@ -434,19 +454,18 @@
                 data: {
                     labels: ['T0: Floor Trader', 'T1: Analyst', 'T2: Portfolio Mgr', 'T3: Managing Dir', 'T4: Partner'],
                     datasets: [{
-                        data: breakdown,
+                        data: breakdownArr,
                         backgroundColor: ['#60a5fa', '#34d399', '#f472b6', '#fbbf24', '#a78bfa'],
-                        borderWidth: 0
+                        borderWidth: 0,
+                        hoverOffset: 4
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    cutout: '65%',
                     plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: { color: '#cbd5e1', boxWidth: 12, font: { size: 11 } }
-                        }
+                        legend: { display: false } // Hidden because we now have the beautiful side list!
                     }
                 }
             });
