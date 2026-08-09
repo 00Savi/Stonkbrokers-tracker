@@ -8,77 +8,82 @@
     <style>
         body { background-color: #0f172a; color: #cbd5e1; }
         .card { background-color: #1e293b; border-color: #334155; }
+        /* Custom scrollbar for webkit to make horizontal scrolling sleeker */
+        ::-webkit-scrollbar { height: 6px; width: 6px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
     </style>
 </head>
-<body class="p-4 md:p-8 font-sans antialiased">
+<body class="p-4 md:p-8 font-sans antialiased overflow-x-hidden">
     
     <!-- Header Section -->
-    <header class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-6">
-        <div class="flex items-center gap-4">
+    <header class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4 md:gap-6">
+        <div class="flex items-center gap-3 md:gap-4 w-full md:w-auto">
             <!-- Logo Icon -->
-            <div class="w-12 h-12 bg-[#1e293b] border border-[#334155] rounded-xl overflow-hidden flex items-center justify-center shadow-sm">
+            <div class="w-10 h-10 md:w-12 md:h-12 flex-shrink-0 bg-[#1e293b] border border-[#334155] rounded-xl overflow-hidden flex items-center justify-center shadow-sm">
                 <img src="logo.png" alt="StonkBrokers PFP" class="w-full h-full object-cover">
             </div>
             <div>
-                <h1 class="text-2xl font-bold text-white flex items-center gap-3">
+                <h1 class="text-xl md:text-2xl font-bold text-white flex items-center gap-2 md:gap-3 flex-wrap">
                     StonkBrokers Tracker 
-                    <span class="text-[10px] bg-yellow-900/40 text-yellow-500 px-2 py-0.5 rounded border border-yellow-700/50 uppercase tracking-wider">Beta</span>
+                    <span class="text-[9px] md:text-[10px] bg-yellow-900/40 text-yellow-500 px-2 py-0.5 rounded border border-yellow-700/50 uppercase tracking-wider">Beta</span>
                 </h1>
-                <p class="text-sm text-slate-400 mt-0.5">Community Fan Project • Not affiliated with $STONKBROKER or Clutch Markets</p>
+                <p class="text-xs md:text-sm text-slate-400 mt-0.5">Community Fan Project • Not affiliated</p>
             </div>
         </div>
         
         <!-- Live Market Stats -->
-        <div class="flex gap-6 text-sm bg-[#1e293b] border border-[#334155] px-6 py-3 rounded-xl shadow-sm">
+        <div class="flex w-full md:w-auto justify-between md:justify-start gap-2 md:gap-6 text-xs md:text-sm bg-[#1e293b] border border-[#334155] px-4 md:px-6 py-3 rounded-xl shadow-sm">
             <div>
-                <p class="text-slate-400 mb-0.5">ETH Price</p>
+                <p class="text-slate-400 mb-0.5">ETH</p>
                 <p class="text-white font-bold" id="eth-price">Loading...</p>
             </div>
             <div>
-                <p class="text-slate-400 mb-0.5">$STONK Price</p>
+                <p class="text-slate-400 mb-0.5">$STONK</p>
                 <p class="text-white font-bold" id="stonk-price">Loading...</p>
             </div>
             <div>
-                <p class="text-slate-400 mb-0.5">NFT Floor <span class="text-xs text-slate-500">(Base + 10%)</span></p>
+                <p class="text-slate-400 mb-0.5">Floor <span class="hidden sm:inline text-[10px] md:text-xs text-slate-500">(Base + 10%)</span></p>
                 <p class="text-white font-bold" id="nft-floor">Loading...</p>
             </div>
         </div>
     </header>
 
     <!-- Navigation Tabs -->
-    <div class="max-w-6xl mx-auto flex gap-4 mb-6">
-        <button class="bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition shadow-lg shadow-blue-500/20">
+    <div class="max-w-6xl mx-auto flex flex-col sm:flex-row gap-3 md:gap-4 mb-6">
+        <button class="w-full sm:w-auto justify-center bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition shadow-lg shadow-blue-500/20">
             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 0h8v12H6V4zm2 2v2h4V6H8zm0 4v2h4v-2H8zm0 4v2h4v-2H8z"></path></svg>
             Tier ROI Benchmarks
         </button>
-        <button class="bg-transparent border border-[#334155] hover:bg-[#1e293b] text-slate-300 px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition opacity-60 cursor-not-allowed">
+        <button class="w-full sm:w-auto justify-center bg-transparent border border-[#334155] hover:bg-[#1e293b] text-slate-300 px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition opacity-60 cursor-not-allowed">
             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg>
             Ecosystem Activation
         </button>
     </div>
 
     <!-- Main Data Card -->
-    <main class="max-w-6xl mx-auto card rounded-2xl border p-6 mb-8 shadow-xl">
+    <main class="max-w-6xl mx-auto card rounded-2xl border p-4 md:p-6 mb-8 shadow-xl overflow-hidden">
         
         <!-- Card Header -->
-        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
             <div>
-                <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                <h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2">
                     <svg class="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20"><path d="M3 12v3c0 1.657 3.134 3 7 3s7-1.343 7-3v-3c0 1.657-3.134 3-7 3s-7-1.343-7-3z"></path><path d="M3 7v3c0 1.657 3.134 3 7 3s7-1.343 7-3V7c0 1.657-3.134 3-7 3S3 8.657 3 7z"></path><path d="M17 5c0 1.657-3.134 3-7 3S3 6.657 3 5s3.134-3 7-3 7 1.343 7 3z"></path></svg>
                     Global Yield ROI Benchmarks
                 </h2>
-                <p class="text-sm text-slate-400 mt-1" id="last-sync">Last automated sync: Loading...</p>
+                <p class="text-xs md:text-sm text-slate-400 mt-1" id="last-sync">Last automated sync: Loading...</p>
             </div>
             
-            <div class="bg-[#0f172a] border border-[#334155] rounded-lg px-4 py-2.5 text-sm shadow-inner">
+            <div class="bg-[#0f172a] border border-[#334155] rounded-lg px-4 py-2.5 text-sm shadow-inner w-full md:w-auto text-center md:text-left flex justify-between md:justify-start items-center">
                 <span class="text-slate-400 mr-2">Floor Entry Cost:</span> 
                 <span class="text-white font-bold tracking-wide" id="floor-cost">Loading...</span>
             </div>
         </div>
 
-        <!-- Data Table -->
-        <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse">
+        <!-- Data Table Wrapper -->
+        <div class="overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0 pb-2">
+            <table class="w-full text-left border-collapse min-w-[850px]">
                 <thead>
                     <tr class="text-xs uppercase tracking-wider text-slate-500 border-b border-[#334155]">
                         <th class="pb-4 font-medium pl-2">Tier</th>
@@ -96,19 +101,19 @@
     </main>
 
     <!-- Methodology & Disclaimer Section -->
-    <div class="max-w-6xl mx-auto card rounded-xl p-6 border mb-12 shadow-lg">
+    <div class="max-w-6xl mx-auto card rounded-xl p-5 md:p-6 border mb-12 shadow-lg">
         <div class="flex items-center gap-2 mb-4">
-            <svg class="w-5 h-5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+            <svg class="w-5 h-5 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                 <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
             </svg>
-            <h3 class="text-lg font-bold text-white">Methodology & Disclaimer</h3>
+            <h3 class="text-base md:text-lg font-bold text-white">Methodology & Disclaimer</h3>
         </div>
         
-        <p class="text-sm text-slate-300 mb-5 leading-relaxed">
+        <p class="text-xs md:text-sm text-slate-300 mb-5 leading-relaxed">
             <strong class="text-white">Methodology:</strong> Cash-on-Cash (CoC) return metrics are calculated using a Dual-Capture Oracle Model to ensure absolute on-chain accuracy. The tracker samples the trailing 7-day realized Native ETH and tracked ERC-20 token distributions sent to a representative, fully active Partner (T4) wallet. This baseline calculates the exact yield per weight unit, which is then mathematically extrapolated across the live active network weight. This global yield is annualized and evaluated against the current AMM floor purchase costs plus tier activation requirements.
         </p>
         
-        <p class="text-sm text-slate-400 italic leading-relaxed border-t border-[#334155] pt-5">
+        <p class="text-xs md:text-sm text-slate-400 italic leading-relaxed border-t border-[#334155] pt-5">
             <strong class="text-slate-300 not-italic">Disclaimer:</strong> Tracked yield values are calculated using Mark-to-Market spot pricing at the exact time of the dashboard's last automated sync, rather than the historical price at the time of the drop. Yields fluctuate based on network activation weight, market token prices, and community protocol volume. This is a community-built tracking tool and does not guarantee future returns.
         </p>
     </div>
