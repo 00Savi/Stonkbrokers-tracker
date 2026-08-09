@@ -27,6 +27,7 @@ const TOKEN_TICKERS = {
 };
 
 const ACTIVATION_MANAGER = "0xacd5ae3c060c1137fe2ee86b0ab2ef697456f664".toLowerCase();
+const NFT_CONTRACT = "0x539cdd042c2f3d93ebc5be7dfff0c79f3b4fabf0".toLowerCase();
 const PROTOCOL_CONTRACTS = [
   "0x1f12fe622c11947f93f53d63f68f7f46b6d081c9", // CLOCK IN V2
   "0x55642a3f10f1af5145d3d59021b1d6b03bb8692c"  // SAFETY DEPOSIT CLOCK IN (FEE ROUTER)
@@ -56,7 +57,7 @@ const tierStructure = [
 async function secureFetch(url) {
   for (let i = 0; i < 4; i++) {
     try {
-      const res = await fetch(url, { headers: { "Accept": "application/json", "User-Agent": "StonkBrokersTracker/4.5" } });
+      const res = await fetch(url, { headers: { "Accept": "application/json", "User-Agent": "StonkBrokersTracker/4.6" } });
       if (res.status === 429) throw new Error("rate");
       return await res.json();
     } catch (e) {
@@ -101,6 +102,41 @@ async function loadPrices() {
   market.nftFloorEth = +((666666 * market.tokenPriceUsd * 1.10) / market.ethPriceUsd).toFixed(3);
 }
 
+async function getBurnEvents() {
+  console.log("Fetching NFT burn events to sanitize ledger...");
+  const burnEvents = [];
+  const deadAddresses = [
+    "0x000000000000000000000000000000000000dead",
+    "0x0000000000000000000000000000000000000000"
+  ];
+  
+  for (const addr of deadAddresses) {
+    let page = 1;
+    while(true) {
+      const url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokennfttx&contractaddress=${NFT_CONTRACT}&address=${addr}&page=${page}&offset=1000&sort=asc&apikey=${API_KEY}`;
+      const data = await secureFetch(url);
+      const txs = Array.isArray(data.result) ? data.result : [];
+      if (txs.length === 0) break;
+      
+      for (const tx of txs) {
+        if ((tx.to || "").toLowerCase() === addr) {
+           burnEvents.push({
+              isBurn: true,
+              blockNumber: tx.blockNumber,
+              logIndex: (parseInt(tx.transactionIndex || 0, 10) * 1000).toString(), 
+              timeStamp: tx.timeStamp,
+              tokenId: tx.tokenID
+           });
+        }
+      }
+      if (txs.length < 1000) break;
+      page++;
+      await sleep(250);
+    }
+  }
+  return burnEvents;
+}
+
 async function fetchActivations() {
   console.log("Fetching activation logs safely via Dynamic Block Pointer...");
   let allLogs = [];
@@ -114,7 +150,7 @@ async function fetchActivations() {
   } catch {}
 
   let currentBlock = 0;
-  let seenLogs = new Set(); // Prevent duplicates
+  let seenLogs = new Set(); 
 
   // Dynamic Pagination Loop
   while (currentBlock <= latestBlock) {
@@ -139,12 +175,17 @@ async function fetchActivations() {
     console.log(`  Scanned from block ${currentBlock}, found ${logs.length} logs...`);
 
     if (logs.length < 1000) {
-      break; // Reached the end of the history
+      break; 
     } else {
-      // Advance block pointer safely
       currentBlock = lastBlockInChunk === currentBlock ? currentBlock + 1 : lastBlockInChunk;
     }
     await sleep(300);
+  }
+
+  const burnEvents = await getBurnEvents();
+  if (burnEvents.length > 0) {
+    allLogs.push(...burnEvents);
+    console.log(`  Injected ${burnEvents.length} burn events into the timeline.`);
   }
 
   allLogs.sort((a, b) => {
@@ -159,8 +200,21 @@ async function fetchActivations() {
 
   const activeBrokers = new Map(); 
   const historyMap = new Map(); 
+  let totalBroken = 0;
 
   for (const log of allLogs) {
+    if (log.isBurn) {
+        const tokenId = log.tokenId.toString();
+        if (activeBrokers.has(tokenId)) {
+            activeBrokers.delete(tokenId);
+            totalBroken++;
+            const timeStampVal = parseInt(log.timeStamp, 10);
+            const dayKey = new Date(timeStampVal * 1000).setUTCHours(0,0,0,0);
+            historyMap.set(dayKey, activeBrokers.size);
+        }
+        continue;
+    }
+
     try {
       const topics = [];
       if (log.topics && Array.isArray(log.topics)) {
@@ -183,6 +237,7 @@ async function fetchActivations() {
         const rawTier = parsed.args.tier.toString();
         activeBrokers.set(tokenId, `T${rawTier}`);
       } else if (parsed.name === "ActivationCleared") {
+        totalBroken++;
         activeBrokers.delete(tokenId);
       }
 
@@ -221,15 +276,16 @@ async function fetchActivations() {
   }
 
   const activeCount = activeBrokers.size;
-  const totalSupply = 4444;
+  const uniqueBurned = new Set(burnEvents.map(b => b.tokenId));
+  const circulatingSupply = 4444 - uniqueBurned.size;
 
-  console.log(`Live Activations: ${activeCount}/${totalSupply}`);
+  console.log(`Live Activations: ${activeCount}/${circulatingSupply} (Burned: ${uniqueBurned.size})`);
   console.log(`Tier Breakdown:`, breakdown);
 
   return { 
     activeCount, 
-    totalSupply, 
-    percentActivated: +((activeCount / totalSupply) * 100).toFixed(2), 
+    totalSupply: circulatingSupply, 
+    percentActivated: +((activeCount / circulatingSupply) * 100).toFixed(2), 
     breakdown, 
     history: { labels, cumulative } 
   };
