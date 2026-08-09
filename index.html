@@ -74,7 +74,7 @@
                         <h3 class="text-lg font-semibold flex items-center">
                             <i class="fa-solid fa-layer-group text-primary mr-2"></i> Global Yield ROI Benchmarks
                         </h3>
-                        <p class="text-sm text-gray-400 mt-1" id="last-updated">Estimated returns based on on-chain hybrid sampling vs. live floor entry costs.</p>
+                        <p class="text-sm text-gray-400 mt-1" id="last-updated">Estimated returns based on global network distributions vs. live floor entry costs.</p>
                     </div>
                     <div class="text-xs text-gray-500 bg-gray-800/50 px-3 py-1.5 rounded-lg border border-gray-700">
                         Floor Entry Cost: <span class="font-mono text-gray-300" id="base-entry-cost">Loading...</span>
@@ -101,7 +101,7 @@
             <!-- Methodology & Disclaimers Box -->
             <div class="glass-card rounded-2xl p-6 border border-gray-800 text-gray-400 text-xs space-y-3">
                 <h4 class="text-gray-200 font-semibold text-sm flex items-center"><i class="fa-solid fa-circle-info text-primary mr-2"></i> Methodology & Disclaimer</h4>
-                <p><strong>Methodology:</strong> Cash-on-Cash (CoC) return metrics are calculated by taking a 7-day trailing sample of realized payouts across ecosystem benchmark wallets, annualizing the receipts, and evaluating them against current AMM floor purchase costs plus tier activation requirements.</p>
+                <p><strong>Methodology:</strong> Cash-on-Cash (CoC) return metrics are calculated by taking a 7-day trailing sample of realized global protocol distributions, dynamically dividing by the live active network weight, annualizing the receipts, and evaluating them against current AMM floor purchase costs plus tier activation requirements.</p>
                 <p><strong>Disclaimer:</strong> This dashboard provides automated on-chain analytics for informational and community use only. <strong>This is not financial advice.</strong> Cryptocurrency and NFT tokenomics carry inherent volatility and smart contract risks. Past yields do not guarantee future performance. Always perform your own research before deploying capital.</p>
             </div>
         </div>
@@ -132,10 +132,9 @@
                 </div>
             </div>
 
-            <!-- Charts Grid: Doughnut & Massive Full-Width Line Graph -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <!-- Tier Distribution Pie Chart -->
-                <div class="glass-card rounded-2xl p-6 lg:col-span-1 flex flex-col">
+            <!-- Middle Row: Pie Chart & Ecosystem Explainer -->
+            <div class="flex flex-col lg:flex-row gap-6">
+                <div class="glass-card rounded-2xl p-6 w-full lg:w-1/3 flex flex-col">
                     <h3 class="text-sm font-semibold text-gray-300 mb-4 flex items-center">
                         <i class="fa-solid fa-chart-pie text-success mr-2"></i> Current Tier Distribution
                     </h3>
@@ -143,15 +142,20 @@
                         <canvas id="tierPieChart"></canvas>
                     </div>
                 </div>
+                <div class="glass-card rounded-2xl p-6 w-full lg:w-2/3 flex flex-col justify-center text-gray-400 text-sm">
+                    <h3 class="text-gray-200 font-semibold mb-3 flex items-center"><i class="fa-solid fa-server text-primary mr-2"></i> Network Analytics</h3>
+                    <p class="mb-3 leading-relaxed">This dashboard maintains an active ledger of the ecosystem by directly indexing and replaying all historical logs from the StonkBrokers Activation Manager smart contract.</p>
+                    <p class="leading-relaxed">When a broker activates, they lock tokens from the circulating supply to secure their weighted multiplier. Upon the execution of a true ownership transfer (NFT sale or wallet move), the smart contract automatically triggers an <code class="text-danger bg-gray-800 px-1 py-0.5 rounded">ActivationCleared</code> event. This strips the tier, resets the multiplier back to base weight, and mathematically increases the yield share for all remaining active holders.</p>
+                </div>
+            </div>
 
-                <!-- Massive All-Time Lifecycle Line Chart -->
-                <div class="glass-card rounded-2xl p-6 lg:col-span-2 flex flex-col">
-                    <h3 class="text-sm font-semibold text-gray-300 mb-4 flex items-center">
-                        <i class="fa-solid fa-chart-line text-primary mr-2"></i> Project Lifetime Activations (All-Time Cumulative)
-                    </h3>
-                    <div class="relative flex-grow w-full min-h-[220px]">
-                        <canvas id="activationLineChart"></canvas>
-                    </div>
+            <!-- Bottom Row: Massive All-Time Lifecycle Line Chart -->
+            <div class="glass-card rounded-2xl p-6 w-full">
+                <h3 class="text-sm font-semibold text-gray-300 mb-4 flex items-center">
+                    <i class="fa-solid fa-chart-line text-primary mr-2"></i> Project Lifetime Activations (All-Time Cumulative)
+                </h3>
+                <div class="relative w-full h-80">
+                    <canvas id="activationLineChart"></canvas>
                 </div>
             </div>
         </div>
@@ -186,7 +190,6 @@
                 const res = await fetch(`data.json?t=${Date.now()}`);
                 const data = await res.json();
 
-                // Global Headers
                 document.getElementById('global-eth').innerText = formatUSD(data.market.ethPriceUsd);
                 document.getElementById('global-token').innerText = data.market.tokenPriceUsd < 0.01 ? `$${data.market.tokenPriceUsd.toFixed(5)}` : `$${data.market.tokenPriceUsd.toFixed(4)}`;
                 document.getElementById('global-floor').innerText = `${data.market.nftFloorEth} ETH`;
@@ -197,7 +200,6 @@
                 const updateDate = new Date(data.lastUpdated);
                 document.getElementById('last-updated').innerText = `Last automated sync: ${updateDate.toLocaleString()}`;
 
-                // Activation Stats & Charts
                 if (data.activation) {
                     document.getElementById('stat-active').innerText = formatNum(data.activation.activeCount);
                     document.getElementById('stat-total').innerText = formatNum(data.activation.totalSupply);
@@ -226,9 +228,9 @@
                             options: {
                                 responsive: true,
                                 maintainAspectRatio: false,
-                                plugins: { legend: { display: false } },
+                                plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
                                 scales: {
-                                    x: { grid: { display: false }, ticks: { maxTicksLimit: 8 } },
+                                    x: { grid: { display: false }, ticks: { maxTicksLimit: 12 } },
                                     y: { grid: { color: 'rgba(51, 65, 85, 0.4)' }, ticks: { precision: 0 } }
                                 }
                             }
@@ -258,14 +260,13 @@
                                 maintainAspectRatio: false,
                                 cutout: '65%',
                                 plugins: {
-                                    legend: { position: 'right', labels: { boxWidth: 10, font: { size: 11 } } }
+                                    legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } }
                                 }
                             }
                         });
                     }
                 }
 
-                // Tier Table
                 const tbody = document.getElementById('tier-table-body');
                 tbody.innerHTML = '';
 
