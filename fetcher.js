@@ -87,15 +87,13 @@ async function secureFetch(url) {
   return { result: [] };
 }
 
-// 100% BULLETPROOF TOKEN HOLDER PAGINATION
-// Bypasses V2 Cloudflare block entirely by utilizing the V1 PRO API
+// Fixed: Now filters out 0-balance wallets from the V1 API list
 async function fetchTokenHoldersSafe(contractAddress) {
   console.log(`Fetching exact token holders for ${contractAddress} via PRO API pagination...`);
   let page = 1;
-  let totalHolders = 0;
+  let activeHolders = 0;
   let hasData = false;
 
-  // 1. Try looping the V1 PRO Endpoint (Immune to Cloudflare)
   while (true) {
     let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=token&action=getTokenHolders&contractaddress=${contractAddress}&page=${page}&offset=1000&apikey=${API_KEY}`;
     let res = await secureFetch(url);
@@ -107,16 +105,26 @@ async function fetchTokenHoldersSafe(contractAddress) {
 
     if (res && res.result && Array.isArray(res.result)) {
         hasData = true;
-        totalHolders += res.result.length;
+        
+        // Loop through the page and only count wallets with a balance > 0
+        for (const holder of res.result) {
+            try {
+                const bal = BigInt(holder.value || 0);
+                if (bal > 0n) {
+                    activeHolders++;
+                }
+            } catch(e) {}
+        }
+        
         if (res.result.length < 1000) break; // Finished all pages!
         page++;
         await sleep(250);
     } else {
-        break; // Unsupported or hard failure
+        break; 
     }
   }
   
-  if (hasData) return totalHolders;
+  if (hasData) return activeHolders;
 
   // 2. Absolute Final Fallback: Attempt disguised V2
   console.log("V1 Pagination failed. Falling back to V2 API with disguised headers...");
@@ -250,7 +258,7 @@ async function fetchAllLogs(address, topic0 = null) {
 
 // Re-creates the NFT Ledger LOCALLY. 100% immune to API rate limits and Web blocks.
 async function getExactNftHolders() {
-  console.log("Calculating exact NFT holders directly from Transfer logs (Immune to Cloudflare)...");
+  console.log("Calculating exact NFT holders directly from Transfer logs...");
   const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
   const logs = await fetchAllLogs(NFT_CONTRACT, TRANSFER_TOPIC);
 
@@ -362,10 +370,9 @@ async function getOwnershipStats(equivBurnt, previousData) {
     if (res && res.result) ammVaultNfts = parseInt(res.result, 10);
   } catch (e) {}
 
-  // 1. The Cloudflare-Immune NFT Ledger Calculation
   const trueUniqueNftHolders = await getExactNftHolders();
 
-  // 2. The Robust STONK Holders calculation (V1 Pagination -> V2 Fallback)
+  // STONK Holders fetched with 0-balance filters
   let rawStonkHolders = await fetchTokenHoldersSafe(STONK_TOKEN_CONTRACT);
   const trueUniqueStonkHolders = rawStonkHolders > 3 ? rawStonkHolders - 3 : 0;
 
@@ -390,6 +397,7 @@ async function getOwnershipStats(equivBurnt, previousData) {
   const now = new Date();
   const dateStr = `${now.getMonth() + 1}/${now.getDate()}`;
 
+  // Self-Healing logic: This overwrites the massive spike from the buggy run!
   if (histLabels[histLabels.length - 1] === dateStr) {
       histData[histData.length - 1] = trueUniqueStonkHolders;
   } else {
