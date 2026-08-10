@@ -1,17 +1,43 @@
 {
   "market": {
-    "ethPriceUsd": 1920.3,
-    "tokenPriceUsd": 0.03029,
-    "nftFloorEth": 11.567
+    "ethPriceUsd": 1909.01,
+    "tokenPriceUsd": 0.03117,
+    "nftFloorEth": 11.974
   },
   "activation": {
-    "activeCount": 1662,
+    "activeCount": 1661,
     "breakdown": {
-      "T0": 1473,
-      "T1": 77,
+      "T0": 1471,
+      "T1": 78,
       "T2": 46,
       "T3": 36,
       "T4": 30
+    },
+    "percentActivated": 37.38,
+    "totalSupply": 4444,
+    "history": {
+      "labels": [
+        "7/15",
+        "7/20",
+        "7/25",
+        "7/30",
+        "8/3",
+        "8/7",
+        "Today"
+      ],
+      "cumulative": [
+        415,
+        664,
+        997,
+        1329,
+        1495,
+        1578,
+        1661
+      ]
+    },
+    "dualBurn": {
+      "totalBurnTokens": 533785606,
+      "equivalentBrokersBurnt": 800.68
     }
   },
   "tiers": [
@@ -21,7 +47,7 @@
       "reqTokens": 66666,
       "multiplier": "1.00x",
       "weight": 100,
-      "trackedAnnualYieldUsd": 5470.313220245898
+      "trackedAnnualYieldUsd": 5584.138697363487
     },
     {
       "tier": "T1",
@@ -29,7 +55,7 @@
       "reqTokens": 166666,
       "multiplier": "1.25x",
       "weight": 125,
-      "trackedAnnualYieldUsd": 6837.891525307373
+      "trackedAnnualYieldUsd": 6980.17337170436
     },
     {
       "tier": "T2",
@@ -37,7 +63,7 @@
       "reqTokens": 366666,
       "multiplier": "1.60x",
       "weight": 160,
-      "trackedAnnualYieldUsd": 8752.501152393437
+      "trackedAnnualYieldUsd": 8934.62191578158
     },
     {
       "tier": "T3",
@@ -45,7 +71,7 @@
       "reqTokens": 666666,
       "multiplier": "2.00x",
       "weight": 200,
-      "trackedAnnualYieldUsd": 10940.626440491797
+      "trackedAnnualYieldUsd": 11168.277394726974
     },
     {
       "tier": "T4",
@@ -53,8 +79,8 @@
       "reqTokens": 1666666,
       "multiplier": "3.33x",
       "weight": 333,
-      "trackedAnnualYieldUsd": 18216.14302341884
+      "trackedAnnualYieldUsd": 18595.181862220412
     }
   ],
-  "lastUpdated": "2026-08-09T18:39:11.296Z"
+  "lastUpdated": "2026-08-10T00:00:40.771Z"
 }
