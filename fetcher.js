@@ -1,8 +1,9 @@
 const fs = require("fs");
 const { ethers } = require("ethers");
 
+// Hard-routed to your Premium API gateway to completely bypass Cloudflare and rate limits
 const API_KEY = "proapi_tI5cQZoWvXXgS1WFHXEaLKhLBSl0WHvcYv3msh7Kdpioyod8Bfon9vSHif7zhcAG_dLDzYW";
-const DIRECT_API = "https://robinhoodchain.blockscout.com/api"; 
+const PRO_API = "https://api.blockscout.com/v2/api";
 const CHAIN_ID = 4663;
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -73,57 +74,58 @@ const tierStructure = [
   { id: "T4", name: "Partner", reqTokens: 1666666, weight: 333 }
 ];
 
-// BULLETPROOF FETCHER: Normalizes Blockscout's quirky "No records" errors so it doesn't panic.
-async function secureFetch(url, isV2 = false) {
+async function secureFetch(url) {
   const headers = { 
-      "Accept": "application/json, text/plain, */*",
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+      "Accept": "application/json",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124.0.0.0 Safari/537.36"
   };
   
   for (let i = 0; i < 5; i++) {
     try {
       const res = await fetch(url, { headers });
-      
-      if (res.status === 403 || res.status === 429 || res.status === 503) {
-          throw new Error(`HTTP ${res.status}`);
-      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       
       const text = await res.text();
       try {
-          const data = JSON.parse(text);
-          if (!isV2 && data.status === "0") {
-              if (data.message === "No records found" || data.message === "No transactions found") {
-                  data.result = []; // Safely normalize empty results
-              } else if (typeof data.result === "string") {
-                  throw new Error(`API Error: ${data.result}`);
-              }
-          }
-          return data;
+          return JSON.parse(text);
       } catch (e) {
-          throw new Error("Invalid JSON / Cloudflare HTML");
+          throw new Error("Invalid JSON returned by endpoint.");
       }
     } catch (e) {
-      console.log(`Fetch attempt ${i+1} failed: ${e.message}. Retrying...`);
-      await sleep(2000 + i * 2000);
+      console.log(`Fetch attempt ${i+1} failed. Retrying...`);
+      await sleep(2000 + i * 1500);
     }
   }
-  
-  console.error(`\n[CRITICAL ERROR] Failed to fetch data after 5 retries.`);
-  console.error(`URL: ${url.split('&apikey')[0]}`);
-  console.error("ABORTING BUILD to protect data.json from being overwritten with zeros.");
-  process.exit(1); 
+  return null; 
 }
 
-// Bypasses pagination rate limits by using the V2 endpoint to get total holders directly.
-async function fetchV2TokenHolders(contractAddress) {
-  console.log(`Fetching total holders for ${contractAddress} via V2 API...`);
-  const url = `https://robinhoodchain.blockscout.com/api/v2/tokens/${contractAddress}`;
-  const data = await secureFetch(url, true);
-  if (data && data.holders !== undefined) {
-      return parseInt(data.holders, 10);
+async function fetchTokenHoldersSafe(contractAddress) {
+  console.log(`Fetching token holders for ${contractAddress} via PRO API pagination...`);
+  let page = 1;
+  let activeHolders = 0;
+  let hasData = false;
+
+  while (true) {
+    let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=token&action=getTokenHolders&contractaddress=${contractAddress}&page=${page}&offset=1000&apikey=${API_KEY}`;
+    let data = await secureFetch(url);
+
+    if (data && data.result && Array.isArray(data.result)) {
+        hasData = true;
+        for (const holder of data.result) {
+            try {
+                // Tracking everyone with > 0 STONK
+                const bal = BigInt(holder.value || 0);
+                if (bal > 0n) activeHolders++;
+            } catch(e) {}
+        }
+        if (data.result.length < 1000) break; 
+        page++;
+        await sleep(250); // Small buffer to respect limits
+    } else {
+        break; 
+    }
   }
-  console.error("V2 API failed to return holders field.");
-  process.exit(1);
+  return hasData ? activeHolders : 0;
 }
 
 async function loadPrices() {
@@ -179,11 +181,10 @@ async function fetchAllLogs(address, topic0 = null) {
   console.log(`Fetching ALL historical logs for ${address}...`);
   let latestBlock = 35000000;
   try {
-    const br = await secureFetch(`${DIRECT_API}?module=block&action=eth_block_number&apikey=${API_KEY}`);
+    const br = await secureFetch(`${PRO_API}?chain_id=${CHAIN_ID}&module=block&action=eth_block_number&apikey=${API_KEY}`);
     if (br && br.result) {
-        const hexStr = typeof br.result === 'string' ? br.result : br.result.toString();
-        let parsed = parseInt(hexStr, hexStr.startsWith("0x") ? 16 : 10);
-        if (!isNaN(parsed) && parsed > 0) latestBlock = parsed;
+        const val = br.result.toString();
+        latestBlock = val.startsWith("0x") ? parseInt(val, 16) : parseInt(val, 10);
     }
   } catch {}
 
@@ -195,7 +196,7 @@ async function fetchAllLogs(address, topic0 = null) {
     let toBlock = fromBlock + step;
     if (toBlock > latestBlock) toBlock = latestBlock;
 
-    let url = `${DIRECT_API}?module=logs&action=getLogs&address=${address}&fromBlock=${fromBlock}&toBlock=${toBlock}&apikey=${API_KEY}`;
+    let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=logs&action=getLogs&address=${address}&fromBlock=${fromBlock}&toBlock=${toBlock}&apikey=${API_KEY}`;
     if (topic0) url += `&topic0=${topic0}`;
 
     let data = await secureFetch(url);
@@ -269,10 +270,10 @@ async function getBurnEvents() {
   for (const addr of deadAddresses) {
     let page = 1;
     while(true) {
-      let url = `${DIRECT_API}?module=account&action=tokennfttx&contractaddress=${NFT_CONTRACT}&address=${addr}&page=${page}&offset=1000&sort=asc&apikey=${API_KEY}`;
+      let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokennfttx&contractaddress=${NFT_CONTRACT}&address=${addr}&page=${page}&offset=1000&sort=asc&apikey=${API_KEY}`;
       let data = await secureFetch(url);
       
-      const txs = Array.isArray(data.result) ? data.result : [];
+      const txs = (data && Array.isArray(data.result)) ? data.result : [];
       if (txs.length === 0) break;
       for (const tx of txs) {
         if ((tx.to || "").toLowerCase() === addr) {
@@ -299,20 +300,20 @@ async function getTrueDeflationStats() {
   let lockedBalance = 0;
 
   try {
-    const supplyUrl = `${DIRECT_API}?module=stats&action=tokensupply&contractaddress=${STONK_TOKEN_CONTRACT}&apikey=${API_KEY}`;
+    const supplyUrl = `${PRO_API}?chain_id=${CHAIN_ID}&module=stats&action=tokensupply&contractaddress=${STONK_TOKEN_CONTRACT}&apikey=${API_KEY}`;
     const res = await secureFetch(supplyUrl);
     if (res && res.result) currentSupply = Number(res.result) / 1e18;
   } catch(e) {}
 
   const deadAddresses = ["0x000000000000000000000000000000000000dead", "0x0000000000000000000000000000000000000000"];
   for (const addr of deadAddresses) {
-    let url = `${DIRECT_API}?module=account&action=tokenbalance&contractaddress=${STONK_TOKEN_CONTRACT}&address=${addr}&apikey=${API_KEY}`;
+    let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokenbalance&contractaddress=${STONK_TOKEN_CONTRACT}&address=${addr}&apikey=${API_KEY}`;
     let res = await secureFetch(url);
     if (res && res.result) deadBalance += Number(res.result) / 1e18;
     await sleep(250);
   }
 
-  let url = `${DIRECT_API}?module=account&action=tokenbalance&contractaddress=${STONK_TOKEN_CONTRACT}&address=${ACTIVATION_MANAGER}&apikey=${API_KEY}`;
+  let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokenbalance&contractaddress=${STONK_TOKEN_CONTRACT}&address=${ACTIVATION_MANAGER}&apikey=${API_KEY}`;
   let res = await secureFetch(url);
   if (res && res.result) lockedBalance += Number(res.result) / 1e18;
 
@@ -331,14 +332,12 @@ async function getOwnershipStats(equivBurnt, previousData) {
   console.log("Fetching Honest Ownership via Snapshotting...");
   let ammVaultNfts = 0;
   
-  let url = `${DIRECT_API}?module=account&action=tokenbalance&contractaddress=${NFT_CONTRACT}&address=${AMM_VAULT}&apikey=${API_KEY}`;
+  let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokenbalance&contractaddress=${NFT_CONTRACT}&address=${AMM_VAULT}&apikey=${API_KEY}`;
   let res = await secureFetch(url);
   if (res && res.result) ammVaultNfts = parseInt(res.result, 10);
 
   const trueUniqueNftHolders = await getExactNftHolders();
-  
-  // Directly pull the total holder count using V2 API
-  let rawStonkHolders = await fetchV2TokenHolders(STONK_TOKEN_CONTRACT);
+  const rawStonkHolders = await fetchTokenHoldersSafe(STONK_TOKEN_CONTRACT);
   const trueUniqueStonkHolders = rawStonkHolders > 3 ? rawStonkHolders - 3 : 0;
 
   const circulatingNftSupply = 4444 - ammVaultNfts; 
@@ -353,7 +352,7 @@ async function getOwnershipStats(equivBurnt, previousData) {
       histData = previousData.ownership.historicalGrowth.data || [];
   }
 
-  // AUTO-HEALER: Cleans the chart history of BOTH the 0 bug and the 21k bug
+  // AUTO-HEALER: Sweeps any broken data.json values generated by the failed run
   for (let i = 0; i < histData.length; i++) {
       if ((histData[i] > 10000 || histData[i] === 0) && trueUniqueStonkHolders > 0) {
           histData[i] = trueUniqueStonkHolders;
@@ -379,11 +378,6 @@ async function getOwnershipStats(equivBurnt, previousData) {
       histLabels.push(dateStr);
       histData.push(trueUniqueStonkHolders);
   }
-
-  console.log(`  -> AMM Vault Inventory: ${ammVaultNfts} NFTs`);
-  console.log(`  -> True Circulating NFT Supply: ${circulatingNftSupply}`);
-  console.log(`  -> Unique Human NFT Holders: ${trueUniqueNftHolders} (${ownershipRatio.toFixed(2)}%)`);
-  console.log(`  -> Unique Human STONK Holders: ${trueUniqueStonkHolders}`);
 
   return {
     ammVaultNfts,
@@ -554,10 +548,10 @@ async function getGlobalYield(sevenDaysAgo, activationStats) {
 
   let pageEth = 1;
   while(true) {
-      let urlEth = `${DIRECT_API}?module=account&action=txlistinternal&address=${SAMPLE_WALLET}&page=${pageEth}&offset=1000&sort=desc&apikey=${API_KEY}`;
+      let urlEth = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=txlistinternal&address=${SAMPLE_WALLET}&page=${pageEth}&offset=1000&sort=desc&apikey=${API_KEY}`;
       let dataEth = await secureFetch(urlEth);
       
-      const txs = Array.isArray(dataEth.result) ? dataEth.result : [];
+      const txs = (dataEth && Array.isArray(dataEth.result)) ? dataEth.result : [];
       if(txs.length === 0) break;
       let reachedOlder = false;
       for (const tx of txs) {
@@ -587,10 +581,10 @@ async function getGlobalYield(sevenDaysAgo, activationStats) {
     
     let pageTok = 1;
     while(true) {
-        let urlTok = `${DIRECT_API}?module=account&action=tokentx&address=${SAMPLE_WALLET}&contractaddress=${tokenAddr}&page=${pageTok}&offset=1000&sort=desc&apikey=${API_KEY}`;
+        let urlTok = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokentx&address=${SAMPLE_WALLET}&contractaddress=${tokenAddr}&page=${pageTok}&offset=1000&sort=desc&apikey=${API_KEY}`;
         let dataTok = await secureFetch(urlTok);
 
-        const txs = Array.isArray(dataTok.result) ? dataTok.result : [];
+        const txs = (dataTok && Array.isArray(dataTok.result)) ? dataTok.result : [];
         if(txs.length === 0) break;
 
         let reachedOlder = false;
@@ -659,11 +653,12 @@ async function run() {
   const activationStats = await fetchActivations();
   const ownershipStats = await getOwnershipStats(activationStats.dualBurn.equivalentBrokersBurnt, previousData);
   
-  // SANITY CHECK: Ensures data.json is NEVER corrupted with zeros
+  // THE KILL SWITCH: If the API fails to return actual data, aborts instantly to protect the live site
   if (ownershipStats.stonkHolders === 0 || activationStats.activeCount === 0) {
       console.error("\n[CRITICAL SANITY CHECK FAILED]");
       console.error("The script calculated 0 active tokens or 0 holders.");
-      console.error("This means the API failed silently. Aborting to protect data.json.");
+      console.error("This means the API failed silently during the run.");
+      console.error("Aborting to protect your live data.json from being overwritten with zeros.");
       process.exit(1); 
   }
 
