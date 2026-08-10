@@ -211,7 +211,7 @@
         </div>
     </main>
 
-    <!-- NEW PHASE 3: Ownership Stats -->
+    <!-- View 4: Ownership Stats -->
     <main id="view-ownership" class="max-w-6xl mx-auto card rounded-2xl border p-4 md:p-6 mb-8 shadow-xl hidden">
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div>
@@ -239,7 +239,6 @@
                 <p class="text-xl md:text-3xl font-extrabold text-slate-300" id="stat-amm-vault">Loading...</p>
                 <p class="text-[10px] md:text-xs text-slate-500 mt-1">Liquidity held in Anvil Pool</p>
             </div>
-            <!-- FIX: Removed "minus burns" from description because we fixed the double-deduction math -->
             <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner border-b-4 border-b-blue-500">
                 <p class="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">True Circulating NFTs</p>
                 <p class="text-xl md:text-3xl font-extrabold text-blue-400" id="stat-circ-supply">Loading...</p>
@@ -253,7 +252,6 @@
                 <p class="text-2xl md:text-3xl font-extrabold text-purple-400" id="stat-nft-holders">Loading...</p>
                 <p class="text-xs text-slate-500 mt-1">Wallets holding at least 1 StonkBroker</p>
             </div>
-            <!-- FIX: Left-aligned and re-added the percentage calculation display -->
             <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-5 shadow-sm ring-1 ring-emerald-500/20">
                 <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Ownership Concentration</p>
                 <p class="text-2xl md:text-3xl font-extrabold text-emerald-400" id="stat-own-ratio">Loading...</p>
@@ -274,14 +272,25 @@
         </div>
     </main>
 
+    <!-- NEW Methodology & Disclaimer Section -->
     <div class="max-w-6xl mx-auto card rounded-xl p-5 md:p-6 border mb-12 shadow-lg">
         <div class="flex items-center gap-2 mb-4">
             <svg class="w-5 h-5 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
             <h3 class="text-base md:text-lg font-bold text-white">Methodology & Disclaimer</h3>
         </div>
-        <p class="text-xs md:text-sm text-slate-300 mb-5 leading-relaxed">
-            <strong class="text-white">Methodology:</strong> Cash-on-Cash (CoC) return metrics are calculated using a Dual-Capture Oracle Model to ensure absolute on-chain accuracy. The tracker samples the trailing 7-day realized Native ETH and tracked ERC-20 token distributions sent to a representative, fully active Partner (T4) wallet. This baseline calculates the exact yield per weight unit, which is then mathematically extrapolated across the live active network weight. This global yield is annualized and evaluated against the current AMM floor purchase costs plus tier activation requirements.
-        </p>
+        
+        <div class="text-xs md:text-sm text-slate-300 mb-5 leading-relaxed space-y-4">
+            <p>
+                <strong class="text-white">Yield & ROI (Dual-Capture Oracle):</strong> Cash-on-Cash (CoC) returns are calculated by sampling the trailing 7-day realized Native ETH and tracked ERC-20 token distributions sent to a representative, fully active Partner (T4) wallet. This baseline calculates the exact yield per weight unit, which is mathematically extrapolated across the live network weight, annualized, and evaluated against current AMM floor purchase costs plus tier activation requirements.
+            </p>
+            <p>
+                <strong class="text-white">True Circulating Supply:</strong> Calculated as the Genesis Supply (4,444) minus the live inventory currently held within the Anvil AMM Pool. Burnt/locked tokens are physically trapped inside the AMM Vault, meaning they are inherently excluded from the circulating supply.
+            </p>
+            <p>
+                <strong class="text-white">Holder Metrics & Anti-Dust Filter:</strong> Unique token holders are calculated by directly indexing the blockchain ledger and applying a strict "Anti-Dust" filter. Any wallet holding less than 1 full token is discarded to eliminate MEV bots, DEX routers, and abandoned fractional dust. Furthermore, protocol system wallets (the AMM Vault and burn addresses) are explicitly removed from all holder counts to provide a mathematically honest representation of unique human ownership.
+            </p>
+        </div>
+        
         <p class="text-xs md:text-sm text-slate-400 italic leading-relaxed border-t border-[#334155] pt-5">
             <strong class="text-slate-300 not-italic">Disclaimer:</strong> Tracked yield values are calculated using Mark-to-Market spot pricing at the exact time of the dashboard's last automated sync, rather than the historical price at the time of the drop. Yields fluctuate based on network activation weight, market token prices, and community protocol volume. This is a community-built tracking tool and does not guarantee future returns.
         </p>
@@ -498,7 +507,6 @@
             document.getElementById('stat-nft-holders').innerText = formatNumber(own.nftHolders || 0) + ' Wallets';
             document.getElementById('stat-stonk-holders').innerText = formatNumber(own.stonkHolders || 0) + ' Wallets';
             
-            // FIX: Reverted to properly display the honest percentage calculation
             document.getElementById('stat-own-ratio').innerText = (own.ownershipRatio || 0).toFixed(2) + '%';
 
             const stats = act.stats || { '24h': {}, '7d': {}, '30d': {}, 'allTime': {} };
