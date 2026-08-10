@@ -17,7 +17,6 @@
 </head>
 <body class="p-4 md:p-8 font-sans antialiased overflow-x-hidden">
     
-    <!-- Header Section -->
     <header class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4 md:gap-6">
         <div class="flex items-center gap-3 md:gap-4 w-full md:w-auto">
             <div class="w-10 h-10 md:w-12 md:h-12 flex-shrink-0 bg-[#1e293b] border border-[#334155] rounded-xl overflow-hidden flex items-center justify-center shadow-sm">
@@ -32,7 +31,6 @@
             </div>
         </div>
         
-        <!-- Live Market Stats -->
         <div class="flex w-full md:w-auto justify-between md:justify-start gap-2 md:gap-6 text-xs md:text-sm bg-[#1e293b] border border-[#334155] px-4 md:px-6 py-3 rounded-xl shadow-sm">
             <div>
                 <p class="text-slate-400 mb-0.5">ETH</p>
@@ -49,7 +47,6 @@
         </div>
     </header>
 
-    <!-- Navigation Tabs -->
     <div class="max-w-6xl mx-auto flex flex-wrap gap-3 md:gap-4 mb-6">
         <button id="tab-roi" onclick="switchTab('roi')" class="flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition shadow-lg shadow-blue-500/25">
             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 0h8v12H6V4zm2 2v2h4V6H8zm0 4v2h4v-2H8zm0 4v2h4v-2H8z"></path></svg>
@@ -63,6 +60,10 @@
             <svg class="w-4 h-4 text-blue-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg>
             Ecosystem Activation
         </button>
+        <button id="tab-ownership" onclick="switchTab('ownership')" class="flex-1 sm:flex-none justify-center bg-transparent border border-[#334155] hover:bg-[#1e293b] text-slate-300 px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition">
+            <svg class="w-4 h-4 text-emerald-400" fill="currentColor" viewBox="0 0 20 20"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"></path></svg>
+            Ownership Stats
+        </button>
     </div>
 
     <!-- View 1: Tier ROI Benchmarks -->
@@ -75,13 +76,11 @@
                 </h2>
                 <p class="text-xs md:text-sm text-slate-400 mt-1" id="last-sync">Last automated sync: Loading...</p>
             </div>
-            
             <div class="bg-[#0f172a] border border-[#334155] rounded-lg px-4 py-2.5 text-sm shadow-inner w-full md:w-auto text-center md:text-left flex justify-between md:justify-start items-center">
                 <span class="text-slate-400 mr-2">Floor Entry Cost:</span> 
                 <span class="text-white font-bold tracking-wide" id="floor-cost">Loading...</span>
             </div>
         </div>
-
         <div class="overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0 pb-2">
             <table class="w-full text-left border-collapse min-w-[850px]">
                 <thead>
@@ -90,12 +89,10 @@
                         <th class="pb-4 font-medium">Activation Req.</th>
                         <th class="pb-4 font-medium">Current Total Cost</th>
                         <th class="pb-4 font-medium">Expected Yield <span class="normal-case">(Annualized)</span></th>
-                        <th class="pb-4 font-medium text-right pr-2">Est. ROI (CoC)</th>
+                        <th class="pb-4 font-medium text-right pr-4">Est. ROI (CoC)</th>
                     </tr>
                 </thead>
-                <tbody id="tiers-body">
-                    <!-- JavaScript will inject rows here -->
-                </tbody>
+                <tbody id="tiers-body"></tbody>
             </table>
         </div>
     </main>
@@ -126,7 +123,14 @@
         </div>
 
         <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6">
-            <h3 class="text-sm font-bold text-white mb-4">Daily Cumulative Token Burn Over Time</h3>
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-sm font-bold text-white hidden sm:block">Cumulative Token Burn Over Time</h3>
+                <div class="flex bg-[#1e293b] rounded-lg p-1 border border-[#334155] w-full sm:w-auto justify-between">
+                    <button onclick="updateBurnChart('7d')" id="btn-burn-7d" class="px-4 py-1.5 text-xs font-bold rounded-md text-slate-400 hover:text-white transition w-1/3 sm:w-auto">7D</button>
+                    <button onclick="updateBurnChart('30d')" id="btn-burn-30d" class="px-4 py-1.5 text-xs font-bold rounded-md text-slate-400 hover:text-white transition w-1/3 sm:w-auto">30D</button>
+                    <button onclick="updateBurnChart('all')" id="btn-burn-all" class="px-4 py-1.5 text-xs font-bold rounded-md bg-[#334155] text-white transition shadow-sm w-1/3 sm:w-auto">ALL TIME</button>
+                </div>
+            </div>
             <div class="relative h-72 md:h-80 w-full">
                 <canvas id="burnChart"></canvas>
             </div>
@@ -158,43 +162,126 @@
             </div>
         </div>
 
-        <!-- Tier Breakdown (Full Width with Side Legend) -->
-        <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6 mb-6">
-            <h3 class="text-sm font-bold text-white mb-6">Tier Distribution Breakdown</h3>
-            <div class="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-16">
-                <!-- Pie Chart -->
-                <div class="relative h-64 md:h-72 w-full md:w-1/2 flex items-center justify-center">
-                    <canvas id="tierPieChart"></canvas>
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-4 shadow-sm">
+                <p class="text-[10px] uppercase tracking-wider text-slate-400 mb-2">Last 24 Hours</p>
+                <div class="flex justify-between items-end">
+                    <div><p class="text-lg font-bold text-emerald-400" id="stat-act-24h">0</p><p class="text-[10px] text-slate-500">Activations</p></div>
+                    <div class="text-right"><p class="text-lg font-bold text-rose-400" id="stat-deact-24h">0</p><p class="text-[10px] text-slate-500">Deactivations</p></div>
                 </div>
-                <!-- Interactive Number List -->
-                <div class="w-full md:w-1/2 flex flex-col gap-3" id="tier-legend-list">
-                    <!-- JS Injected dynamically -->
+            </div>
+            <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-4 shadow-sm">
+                <p class="text-[10px] uppercase tracking-wider text-slate-400 mb-2">Last 7 Days</p>
+                <div class="flex justify-between items-end">
+                    <div><p class="text-lg font-bold text-emerald-400" id="stat-act-7d">0</p><p class="text-[10px] text-slate-500">Activations</p></div>
+                    <div class="text-right"><p class="text-lg font-bold text-rose-400" id="stat-deact-7d">0</p><p class="text-[10px] text-slate-500">Deactivations</p></div>
+                </div>
+            </div>
+            <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-4 shadow-sm">
+                <p class="text-[10px] uppercase tracking-wider text-slate-400 mb-2">Last 30 Days</p>
+                <div class="flex justify-between items-end">
+                    <div><p class="text-lg font-bold text-emerald-400" id="stat-act-30d">0</p><p class="text-[10px] text-slate-500">Activations</p></div>
+                    <div class="text-right"><p class="text-lg font-bold text-rose-400" id="stat-deact-30d">0</p><p class="text-[10px] text-slate-500">Deactivations</p></div>
+                </div>
+            </div>
+            <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-4 shadow-sm">
+                <p class="text-[10px] uppercase tracking-wider text-slate-400 mb-2">All Time</p>
+                <div class="flex justify-between items-end">
+                    <div><p class="text-lg font-bold text-emerald-400" id="stat-act-all">0</p><p class="text-[10px] text-slate-500">Activations</p></div>
+                    <div class="text-right"><p class="text-lg font-bold text-rose-400" id="stat-deact-all">0</p><p class="text-[10px] text-slate-500">Deactivations</p></div>
                 </div>
             </div>
         </div>
 
-        <!-- Daily Activations (Full Width) -->
+        <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6 mb-6">
+            <h3 class="text-sm font-bold text-white mb-6">Tier Distribution Breakdown</h3>
+            <div class="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-16">
+                <div class="relative h-64 md:h-72 w-full md:w-1/2 flex items-center justify-center">
+                    <canvas id="tierPieChart"></canvas>
+                </div>
+                <div class="w-full md:w-1/2 flex flex-col gap-3" id="tier-legend-list"></div>
+            </div>
+        </div>
+
         <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6">
-            <h3 class="text-sm font-bold text-white mb-4">Daily Activations Over Time</h3>
+            <h3 class="text-sm font-bold text-white mb-4">Historical Activity (Net vs. Daily)</h3>
             <div class="relative h-72 md:h-80 w-full">
                 <canvas id="activationChart"></canvas>
             </div>
         </div>
     </main>
 
-    <!-- Methodology & Disclaimer Section -->
+    <!-- NEW PHASE 3: Ownership Stats -->
+    <main id="view-ownership" class="max-w-6xl mx-auto card rounded-2xl border p-4 md:p-6 mb-8 shadow-xl hidden">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+            <div>
+                <h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2">
+                    <svg class="w-5 h-5 text-emerald-400" fill="currentColor" viewBox="0 0 20 20"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"></path></svg>
+                    Protocol Ownership & Distribution
+                </h2>
+                <p class="text-xs md:text-sm text-slate-400 mt-1">Network transparency, true circulating supply, and wallet decentralization</p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
+                <p class="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Current Max Supply</p>
+                <p class="text-xl md:text-3xl font-extrabold text-white" id="stat-max-supply">Loading...</p>
+                <p class="text-[10px] md:text-xs text-slate-500 mt-1">Genesis 4,444 minus burnt</p>
+            </div>
+            <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
+                <p class="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Permanently Burnt</p>
+                <p class="text-xl md:text-3xl font-extrabold text-orange-400" id="stat-burnt-nfts">Loading...</p>
+                <p class="text-[10px] md:text-xs text-slate-500 mt-1">Equivalent locked/removed</p>
+            </div>
+            <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
+                <p class="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">AMM Vault Inventory</p>
+                <p class="text-xl md:text-3xl font-extrabold text-slate-300" id="stat-amm-vault">Loading...</p>
+                <p class="text-[10px] md:text-xs text-slate-500 mt-1">Liquidity held in Anvil Pool</p>
+            </div>
+            <!-- FIX: Removed "minus burns" from description because we fixed the double-deduction math -->
+            <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner border-b-4 border-b-blue-500">
+                <p class="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">True Circulating NFTs</p>
+                <p class="text-xl md:text-3xl font-extrabold text-blue-400" id="stat-circ-supply">Loading...</p>
+                <p class="text-[10px] md:text-xs text-slate-500 mt-1">Genesis 4,444 minus AMM Vault</p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-5 shadow-sm">
+                <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Unique NFT Holders</p>
+                <p class="text-2xl md:text-3xl font-extrabold text-purple-400" id="stat-nft-holders">Loading...</p>
+                <p class="text-xs text-slate-500 mt-1">Wallets holding at least 1 StonkBroker</p>
+            </div>
+            <!-- FIX: Left-aligned and re-added the percentage calculation display -->
+            <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-5 shadow-sm ring-1 ring-emerald-500/20">
+                <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Ownership Concentration</p>
+                <p class="text-2xl md:text-3xl font-extrabold text-emerald-400" id="stat-own-ratio">Loading...</p>
+                <p class="text-xs text-slate-500 mt-1">Unique humans / True Circulating Supply</p>
+            </div>
+            <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-5 shadow-sm">
+                <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Unique $STONK Holders</p>
+                <p class="text-2xl md:text-3xl font-extrabold text-purple-400" id="stat-stonk-holders">Loading...</p>
+                <p class="text-xs text-slate-500 mt-1">Active addresses with a token balance</p>
+            </div>
+        </div>
+
+        <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6 mb-6">
+            <h3 class="text-sm font-bold text-white mb-4">True Active Token Holders Over Time</h3>
+            <div class="relative h-72 md:h-80 w-full">
+                <canvas id="ownershipChart"></canvas>
+            </div>
+        </div>
+    </main>
+
     <div class="max-w-6xl mx-auto card rounded-xl p-5 md:p-6 border mb-12 shadow-lg">
         <div class="flex items-center gap-2 mb-4">
-            <svg class="w-5 h-5 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
-            </svg>
+            <svg class="w-5 h-5 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
             <h3 class="text-base md:text-lg font-bold text-white">Methodology & Disclaimer</h3>
         </div>
-        
         <p class="text-xs md:text-sm text-slate-300 mb-5 leading-relaxed">
             <strong class="text-white">Methodology:</strong> Cash-on-Cash (CoC) return metrics are calculated using a Dual-Capture Oracle Model to ensure absolute on-chain accuracy. The tracker samples the trailing 7-day realized Native ETH and tracked ERC-20 token distributions sent to a representative, fully active Partner (T4) wallet. This baseline calculates the exact yield per weight unit, which is then mathematically extrapolated across the live active network weight. This global yield is annualized and evaluated against the current AMM floor purchase costs plus tier activation requirements.
         </p>
-        
         <p class="text-xs md:text-sm text-slate-400 italic leading-relaxed border-t border-[#334155] pt-5">
             <strong class="text-slate-300 not-italic">Disclaimer:</strong> Tracked yield values are calculated using Mark-to-Market spot pricing at the exact time of the dashboard's last automated sync, rather than the historical price at the time of the drop. Yields fluctuate based on network activation weight, market token prices, and community protocol volume. This is a community-built tracking tool and does not guarantee future returns.
         </p>
@@ -208,20 +295,28 @@
         let burnChartInstance = null;
         let activationChartInstance = null;
         let tierPieChartInstance = null;
+        let ownershipChartInstance = null;
+        let tierChartInstances = {};
+
+        window.fullBurnLabels = [];
+        window.fullBurnData = [];
+        window.tierChartData = {};
 
         function switchTab(tab) {
             const btnRoi = document.getElementById('tab-roi');
             const btnBurn = document.getElementById('tab-burn');
             const btnActivation = document.getElementById('tab-activation');
+            const btnOwnership = document.getElementById('tab-ownership');
             
             const viewRoi = document.getElementById('view-roi');
             const viewBurn = document.getElementById('view-burn');
             const viewActivation = document.getElementById('view-activation');
+            const viewOwnership = document.getElementById('view-ownership');
 
-            [btnRoi, btnBurn, btnActivation].forEach(b => {
+            [btnRoi, btnBurn, btnActivation, btnOwnership].forEach(b => {
                 b.className = "flex-1 sm:flex-none justify-center bg-transparent border border-[#334155] hover:bg-[#1e293b] text-slate-300 px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition";
             });
-            [viewRoi, viewBurn, viewActivation].forEach(v => v.classList.add('hidden'));
+            [viewRoi, viewBurn, viewActivation, viewOwnership].forEach(v => v.classList.add('hidden'));
 
             if (tab === 'roi') {
                 btnRoi.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition shadow-lg shadow-blue-500/25";
@@ -229,11 +324,15 @@
             } else if (tab === 'burn') {
                 btnBurn.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition shadow-lg shadow-blue-500/25";
                 viewBurn.classList.remove('hidden');
-                if (window.burnChartData) renderBurnChart(window.burnChartData);
+                if (window.fullBurnData.length) updateBurnChart('all');
             } else if (tab === 'activation') {
                 btnActivation.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition shadow-lg shadow-blue-500/25";
                 viewActivation.classList.remove('hidden');
                 if (window.activationChartData) renderActivationCharts(window.activationChartData);
+            } else if (tab === 'ownership') {
+                btnOwnership.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition shadow-lg shadow-blue-500/25";
+                viewOwnership.classList.remove('hidden');
+                if (window.ownershipChartData) renderOwnershipChart(window.ownershipChartData);
             }
         }
 
@@ -241,7 +340,6 @@
             try {
                 const res = await fetch('data.json?v=' + new Date().getTime());
                 const data = await res.json();
-                
                 const m = data.market;
                 
                 document.getElementById('eth-price').innerText = formatCurrency(m.ethPriceUsd);
@@ -273,30 +371,50 @@
                         yieldHtml = `<span class="text-slate-500 italic">No yield tracked</span>`;
                         roiHtml = `<span class="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-2.5 py-1 rounded text-sm font-bold shadow-sm opacity-50">0.00%</span>`;
                     }
+
+                    window.tierChartData[t.tier] = {
+                        labels: t.dailyDates,
+                        data: t.dailyYields,
+                        name: t.name
+                    };
                     
                     const tr = document.createElement('tr');
-                    tr.className = 'border-b border-[#334155]/50 hover:bg-[#334155]/20 transition-colors duration-150';
+                    tr.className = 'cursor-pointer border-b border-[#334155]/50 hover:bg-[#334155]/20 transition-colors duration-150 group';
+                    tr.onclick = () => toggleTierDetails(t.tier);
                     tr.innerHTML = `
                         <td class="py-5 pl-2">
                             <div class="flex items-center gap-3">
                                 <div class="bg-[#0f172a] border border-[#334155] text-blue-400 px-2.5 py-1 rounded text-xs font-bold shadow-inner">${t.tier}</div>
-                                <div>
-                                    <div class="text-white font-bold">${t.name}</div>
-                                    <div class="text-xs text-slate-500 mt-0.5">Weight: <span class="text-yellow-500 font-semibold">${t.weight}x</span></div>
-                                </div>
+                                <div><div class="text-white font-bold">${t.name}</div><div class="text-xs text-slate-500 mt-0.5">Weight: <span class="text-yellow-500 font-semibold">${t.weight}x</span></div></div>
                             </div>
                         </td>
-                        <td class="py-5">
-                            <span class="text-white font-bold">${formatNumber(t.reqTokens)}</span> <span class="text-slate-500 text-sm ml-1">STONK</span>
-                        </td>
-                        <td class="py-5">
-                            <div class="text-white font-bold text-base">${formatCurrency(totalCostUsd)}</div>
-                            <div class="text-xs text-slate-500 mt-0.5">Floor + ${formatCurrency(activationCostUsd)} Act.</div>
-                        </td>
+                        <td class="py-5"><span class="text-white font-bold">${formatNumber(t.reqTokens)}</span> <span class="text-slate-500 text-sm ml-1">STONK</span></td>
+                        <td class="py-5"><div class="text-white font-bold text-base">${formatCurrency(totalCostUsd)}</div><div class="text-xs text-slate-500 mt-0.5">Floor + ${formatCurrency(activationCostUsd)} Act.</div></td>
                         <td class="py-5">${yieldHtml}</td>
-                        <td class="py-5 text-right pr-2">${roiHtml}</td>
+                        <td class="py-5 text-right pr-4">
+                            <div class="flex items-center justify-end gap-3">
+                                ${roiHtml}
+                                <svg id="chevron-${t.tier}" class="w-4 h-4 text-slate-500 transition-transform duration-200 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </div>
+                        </td>
                     `;
                     tbody.appendChild(tr);
+
+                    const detailsTr = document.createElement('tr');
+                    detailsTr.id = `details-${t.tier}`;
+                    detailsTr.className = 'hidden bg-[#0f172a]/40 border-b border-[#334155]/50';
+                    detailsTr.innerHTML = `
+                        <td colspan="5" class="p-4 md:p-6">
+                            <div class="flex justify-between items-center mb-3">
+                                <h4 class="text-sm font-bold text-slate-300">Trailing 7-Day Realized Yield</h4>
+                                <span class="text-xs text-slate-500">Based on Oracle Wallet Inflows</span>
+                            </div>
+                            <div class="relative h-32 md:h-40 w-full">
+                                <canvas id="chart-${t.tier}"></canvas>
+                            </div>
+                        </td>
+                    `;
+                    tbody.appendChild(detailsTr);
                 });
 
                 processMetricsData(data);
@@ -307,21 +425,62 @@
             }
         }
 
+        function toggleTierDetails(tierId) {
+            const detailsRow = document.getElementById('details-' + tierId);
+            const isHidden = detailsRow.classList.contains('hidden');
+            const chevron = document.getElementById('chevron-' + tierId);
+            
+            if (isHidden) {
+                detailsRow.classList.remove('hidden');
+                if (chevron) chevron.style.transform = 'rotate(180deg)';
+                
+                if (!tierChartInstances[tierId]) {
+                    const ctx = document.getElementById('chart-' + tierId).getContext('2d');
+                    const cData = window.tierChartData[tierId];
+                    tierChartInstances[tierId] = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: cData.labels,
+                            datasets: [{
+                                label: 'Daily Yield (USD)',
+                                data: cData.data,
+                                borderColor: '#3b82f6',
+                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                borderWidth: 2,
+                                fill: true,
+                                tension: 0.4,
+                                pointRadius: 3,
+                                pointBackgroundColor: '#3b82f6'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => formatCurrency(ctx.raw) } } },
+                            scales: {
+                                x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
+                                y: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: (v) => '$' + v } }
+                            }
+                        }
+                    });
+                }
+            } else {
+                detailsRow.classList.add('hidden');
+                if (chevron) chevron.style.transform = 'rotate(0deg)';
+            }
+        }
+
         function processMetricsData(data) {
             const act = data.activation || {};
+            const own = data.ownership || {};
             const activeCount = act.activeCount || 0;
             let pctActivated = act.percentActivated || 0;
             const totalSupply = act.totalSupply || 4444;
             
-            if (pctActivated === 0 && totalSupply > 0) {
-                pctActivated = (activeCount / totalSupply) * 100;
-            }
+            if (pctActivated === 0 && totalSupply > 0) pctActivated = (activeCount / totalSupply) * 100;
 
             const breakdown = act.breakdown || { T0: 0, T1: 0, T2: 0, T3: 0, T4: 0 };
-            const history = act.history || { labels: [], cumulative: [] };
-
-            let rawLabels = history.labels;
-            let rawValues = history.cumulative;
+            const history = act.history || { labels: [], cumulative: [], dailyActivations: [], dailyDeactivations: [] };
 
             const dualBurn = act.dualBurn || {};
             const totalBurn = dualBurn.totalBurnTokens || (activeCount * 180000);
@@ -329,37 +488,74 @@
             
             document.getElementById('stat-total-burn').innerText = formatNumber(totalBurn) + " STONK";
             document.getElementById('stat-equiv-nfts').innerText = formatNumber(equivNfts, 2) + " Brokers";
-
             document.getElementById('stat-pct-activated').innerText = pctActivated.toFixed(2) + "%";
             document.getElementById('stat-active-count').innerText = formatNumber(activeCount) + " Units";
 
-            const maxActive = rawValues[rawValues.length - 1] || 1;
-            const scaledBurnHistory = rawValues.map(v => (v / maxActive) * totalBurn);
+            document.getElementById('stat-max-supply').innerText = formatNumber(own.currentMaxSupply || 0, 2) + ' Brokers';
+            document.getElementById('stat-circ-supply').innerText = formatNumber(own.circulatingNftSupply || 0) + ' Brokers';
+            document.getElementById('stat-amm-vault').innerText = formatNumber(own.ammVaultNfts || 0) + ' Brokers';
+            document.getElementById('stat-burnt-nfts').innerText = formatNumber(own.burntNfts || 0, 2) + ' Brokers';
+            document.getElementById('stat-nft-holders').innerText = formatNumber(own.nftHolders || 0) + ' Wallets';
+            document.getElementById('stat-stonk-holders').innerText = formatNumber(own.stonkHolders || 0) + ' Wallets';
+            
+            // FIX: Reverted to properly display the honest percentage calculation
+            document.getElementById('stat-own-ratio').innerText = (own.ownershipRatio || 0).toFixed(2) + '%';
 
-            window.burnChartData = {
-                labels: rawLabels,
-                burnHistory: scaledBurnHistory
-            };
+            const stats = act.stats || { '24h': {}, '7d': {}, '30d': {}, 'allTime': {} };
+            document.getElementById('stat-act-24h').innerText = formatNumber(stats['24h'].activated || 0);
+            document.getElementById('stat-deact-24h').innerText = formatNumber(stats['24h'].deactivated || 0);
+            document.getElementById('stat-act-7d').innerText = formatNumber(stats['7d'].activated || 0);
+            document.getElementById('stat-deact-7d').innerText = formatNumber(stats['7d'].deactivated || 0);
+            document.getElementById('stat-act-30d').innerText = formatNumber(stats['30d'].activated || 0);
+            document.getElementById('stat-deact-30d').innerText = formatNumber(stats['30d'].deactivated || 0);
+            document.getElementById('stat-act-all').innerText = formatNumber(stats['allTime'].activated || 0);
+            document.getElementById('stat-deact-all').innerText = formatNumber(stats['allTime'].deactivated || 0);
+
+            const maxActive = history.cumulative[history.cumulative.length - 1] || 1;
+            window.fullBurnLabels = history.labels;
+            window.fullBurnData = history.cumulative.map(v => (v / maxActive) * totalBurn);
 
             window.activationChartData = {
-                historyLabels: rawLabels,
-                historyValues: rawValues,
+                historyLabels: history.labels,
+                historyValues: history.cumulative,
+                dailyActs: history.dailyActivations,
+                dailyDeacts: history.dailyDeactivations,
                 breakdownObj: breakdown,
                 breakdownArr: [breakdown.T0 || 0, breakdown.T1 || 0, breakdown.T2 || 0, breakdown.T3 || 0, breakdown.T4 || 0]
             };
+
+            if (own.historicalGrowth) {
+                window.ownershipChartData = own.historicalGrowth;
+            }
         }
 
-        function renderBurnChart({ labels, burnHistory }) {
+        function updateBurnChart(timeframe) {
+            ['7d', '30d', 'all'].forEach(tf => {
+                const btn = document.getElementById(`btn-burn-${tf}`);
+                if (tf === timeframe) {
+                    btn.className = "px-4 py-1.5 text-xs font-bold rounded-md bg-[#334155] text-white transition shadow-sm w-1/3 sm:w-auto";
+                } else {
+                    btn.className = "px-4 py-1.5 text-xs font-bold rounded-md text-slate-400 hover:text-white transition w-1/3 sm:w-auto";
+                }
+            });
+
+            let sliceCount = window.fullBurnLabels.length;
+            if (timeframe === '7d') sliceCount = 7;
+            if (timeframe === '30d') sliceCount = 30;
+
+            const slicedLabels = window.fullBurnLabels.slice(-sliceCount);
+            const slicedData = window.fullBurnData.slice(-sliceCount);
+
             const ctx = document.getElementById('burnChart').getContext('2d');
             if (burnChartInstance) burnChartInstance.destroy();
 
             burnChartInstance = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: labels,
+                    labels: slicedLabels,
                     datasets: [{
                         label: 'Cumulative $STONK Burnt',
-                        data: burnHistory,
+                        data: slicedData,
                         borderColor: '#fb923c',
                         backgroundColor: 'rgba(251, 146, 60, 0.1)',
                         borderWidth: 3,
@@ -372,56 +568,67 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: { callbacks: { label: (context) => formatNumber(context.raw) + ' STONK' } }
-                    },
+                    plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => formatNumber(ctx.raw) + ' STONK' } } },
                     scales: {
                         x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
-                        y: { 
-                            grid: { color: '#334155', borderDash: [4, 4] }, 
-                            ticks: { 
-                                color: '#94a3b8',
-                                callback: (value) => (value >= 1000 ? (value / 1000000).toFixed(1) + 'M' : value)
-                            } 
-                        }
+                        y: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: (v) => (v >= 1000000 ? (v / 1000000).toFixed(1) + 'M' : v) } }
                     }
                 }
             });
         }
 
-        function renderActivationCharts({ historyLabels, historyValues, breakdownObj, breakdownArr }) {
+        function renderActivationCharts({ historyLabels, historyValues, dailyActs, dailyDeacts, breakdownObj, breakdownArr }) {
             const ctxLine = document.getElementById('activationChart').getContext('2d');
             if (activationChartInstance) activationChartInstance.destroy();
 
             activationChartInstance = new Chart(ctxLine, {
-                type: 'line',
+                type: 'bar',
                 data: {
                     labels: historyLabels,
-                    datasets: [{
-                        label: 'Active Brokers',
-                        data: historyValues,
-                        borderColor: '#3b82f6',
-                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                        borderWidth: 3,
-                        fill: true,
-                        tension: 0.3,
-                        pointRadius: 4,
-                        pointBackgroundColor: '#3b82f6'
-                    }]
+                    datasets: [
+                        {
+                            type: 'line',
+                            label: 'Net Active Brokers',
+                            data: historyValues,
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.05)',
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.3,
+                            pointRadius: 0,
+                            yAxisID: 'y'
+                        },
+                        {
+                            type: 'bar',
+                            label: 'Daily Activations',
+                            data: dailyActs,
+                            backgroundColor: '#34d399',
+                            borderRadius: 4,
+                            yAxisID: 'y1'
+                        },
+                        {
+                            type: 'bar',
+                            label: 'Daily Deactivations',
+                            data: dailyDeacts,
+                            backgroundColor: '#f43f5e',
+                            borderRadius: 4,
+                            yAxisID: 'y1'
+                        }
+                    ]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: { legend: { display: true, position: 'top', labels: { color: '#94a3b8', boxWidth: 12 } } },
                     scales: {
-                        x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
-                        y: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }
+                        x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8', maxTicksLimit: 14 } },
+                        y: { type: 'linear', display: true, position: 'left', grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
+                        y1: { type: 'linear', display: false, position: 'right', grid: { drawOnChartArea: false }, min: 0 }
                     }
                 }
             });
 
-            // Generate Side Legend List
             const legendList = document.getElementById('tier-legend-list');
             legendList.innerHTML = `
                 <div class="flex justify-between items-center bg-[#1e293b] p-3 rounded-lg border border-[#334155]">
@@ -464,8 +671,37 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     cutout: '65%',
-                    plugins: {
-                        legend: { display: false } // Hidden because we now have the beautiful side list!
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        function renderOwnershipChart({ labels, data }) {
+            const ctx = document.getElementById('ownershipChart').getContext('2d');
+            if (ownershipChartInstance) ownershipChartInstance.destroy();
+
+            ownershipChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Active $STONK Holders',
+                        data: data,
+                        borderColor: '#a855f7',
+                        backgroundColor: 'rgba(168, 85, 247, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        stepped: true,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
+                        y: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }
                     }
                 }
             });
