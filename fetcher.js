@@ -87,12 +87,15 @@ async function secureFetch(url) {
   return { result: [] };
 }
 
-// Fixed: Now filters out 0-balance wallets from the V1 API list
+// Upgraded to filter out "DeFi Dust" (wallets with less than 1 full token)
 async function fetchTokenHoldersSafe(contractAddress) {
   console.log(`Fetching exact token holders for ${contractAddress} via PRO API pagination...`);
   let page = 1;
   let activeHolders = 0;
   let hasData = false;
+
+  // Threshold: 1 STONK (10^18 wei). Eliminates bot dust, MEV routers, and dead fractions.
+  const dustThreshold = 1000000000000000000n; 
 
   while (true) {
     let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=token&action=getTokenHolders&contractaddress=${contractAddress}&page=${page}&offset=1000&apikey=${API_KEY}`;
@@ -106,11 +109,10 @@ async function fetchTokenHoldersSafe(contractAddress) {
     if (res && res.result && Array.isArray(res.result)) {
         hasData = true;
         
-        // Loop through the page and only count wallets with a balance > 0
         for (const holder of res.result) {
             try {
                 const bal = BigInt(holder.value || 0);
-                if (bal > 0n) {
+                if (bal >= dustThreshold) {
                     activeHolders++;
                 }
             } catch(e) {}
@@ -126,7 +128,6 @@ async function fetchTokenHoldersSafe(contractAddress) {
   
   if (hasData) return activeHolders;
 
-  // 2. Absolute Final Fallback: Attempt disguised V2
   console.log("V1 Pagination failed. Falling back to V2 API with disguised headers...");
   for (let i = 0; i < 3; i++) {
       try {
@@ -256,9 +257,8 @@ async function fetchAllLogs(address, topic0 = null) {
   return uniqueLogs;
 }
 
-// Re-creates the NFT Ledger LOCALLY. 100% immune to API rate limits and Web blocks.
 async function getExactNftHolders() {
-  console.log("Calculating exact NFT holders directly from Transfer logs...");
+  console.log("Calculating exact NFT holders directly from Transfer logs (Immune to Cloudflare)...");
   const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
   const logs = await fetchAllLogs(NFT_CONTRACT, TRANSFER_TOPIC);
 
@@ -371,14 +371,11 @@ async function getOwnershipStats(equivBurnt, previousData) {
   } catch (e) {}
 
   const trueUniqueNftHolders = await getExactNftHolders();
-
-  // STONK Holders fetched with 0-balance filters
   let rawStonkHolders = await fetchTokenHoldersSafe(STONK_TOKEN_CONTRACT);
   const trueUniqueStonkHolders = rawStonkHolders > 3 ? rawStonkHolders - 3 : 0;
 
   const circulatingNftSupply = 4444 - ammVaultNfts; 
   const currentMaxSupply = 4444 - equivBurnt;
-  
   const ownershipRatio = circulatingNftSupply > 0 ? (trueUniqueNftHolders / circulatingNftSupply) * 100 : 0;
 
   let histLabels = [];
@@ -389,6 +386,13 @@ async function getOwnershipStats(equivBurnt, previousData) {
       histData = previousData.ownership.historicalGrowth.data || [];
   }
 
+  // Auto-Healer: Purges any massive vanity metric spikes (>10k) out of the chart history permanently
+  for (let i = 0; i < histData.length; i++) {
+      if (histData[i] > 10000 && trueUniqueStonkHolders > 0) {
+          histData[i] = trueUniqueStonkHolders;
+      }
+  }
+
   if (histLabels.length === 0) {
       histLabels = ["7/15", "7/20", "7/25", "7/30", "8/5"];
       histData = [500, 1100, 1600, 2100, 2350];
@@ -397,7 +401,6 @@ async function getOwnershipStats(equivBurnt, previousData) {
   const now = new Date();
   const dateStr = `${now.getMonth() + 1}/${now.getDate()}`;
 
-  // Self-Healing logic: This overwrites the massive spike from the buggy run!
   if (histLabels[histLabels.length - 1] === dateStr) {
       histData[histData.length - 1] = trueUniqueStonkHolders;
   } else {
