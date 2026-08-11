@@ -570,7 +570,7 @@
             switchTab(activeTab);
         }
 
-        // ESTIMATOR: Maps activation timestamp to historical price curve
+        // HISTORICAL PRICING ORACLE
         function getHistoricalTokenPrice(ticker, ts, currentSpot) {
             if (!ts) return currentSpot;
             const date = new Date(ts * 1000);
@@ -580,6 +580,8 @@
                 if (date < new Date('2026-07-25')) return 0.008;
                 if (date < new Date('2026-08-01')) return 0.015;
                 if (date < new Date('2026-08-05')) return 0.022;
+                if (date < new Date('2026-08-08')) return 0.028;
+                if (date < new Date('2026-08-11')) return 0.031;
             }
             if (ticker === 'MANCER') {
                 if (date < new Date('2026-08-06')) return 0.012;
@@ -610,6 +612,7 @@
             let lastSaleEth = 0;
             let foundValidTx = false;
             let totalTransfers = 0;
+            let purchaseTs = null;
 
             try {
                 const res = await fetch(`https://robinhoodchain.blockscout.com/api/v2/tokens/${conf.nftCa}/instances/${inputVal}/transfers`);
@@ -628,11 +631,9 @@
                                 const txData = await txRes.json();
                                 let val = parseFloat(txData.value || "0") / 1e18;
                                 
-                                // FORCE EXTRACTION FOR OPENSEA / MULTICALL ROUTERS
+                                // FORCE EXTRACTION FOR WETH (OPENSEA)
                                 if (val === 0) {
                                     let tokenTransfers = txData.token_transfers || [];
-                                    
-                                    // Manually hit the secondary Blockscout endpoint if token_transfers was trimmed
                                     if (tokenTransfers.length === 0) {
                                         try {
                                             const ttRes = await fetch(`https://robinhoodchain.blockscout.com/api/v2/transactions/${txHash}/token-transfers`);
@@ -647,12 +648,11 @@
                                         let maxWethTransfer = 0;
                                         for (const tt of tokenTransfers) {
                                             const sym = (tt.token?.symbol || "").toUpperCase();
-                                            const dec = parseInt(tt.token?.decimals || "18", 10);
-                                            // Safely catch standard 18-decimal token transfers (WETH) ignoring native project tokens
+                                            const dec = parseInt(tt.token?.decimals || "0", 10);
+                                            // Safely catch standard 18-decimal token transfers ignoring native project tokens
                                             if (dec >= 18 && !sym.includes(conf.ticker) && !sym.includes("STONK") && !sym.includes("MANCER")) {
-                                                const rawVal = tt.total?.value || tt.value || "0";
-                                                const amt = parseFloat(rawVal) / Math.pow(10, dec);
-                                                if (amt > maxWethTransfer && amt < 1000000) maxWethTransfer = amt; 
+                                                const amt = parseFloat(tt.total?.value || tt.value || "0") / Math.pow(10, dec);
+                                                if (amt > maxWethTransfer && amt < 50000) maxWethTransfer = amt; 
                                             }
                                         }
                                         val = maxWethTransfer;
@@ -662,16 +662,25 @@
                                 if (val > 0) {
                                     lastSaleEth = val;
                                     foundValidTx = true;
+                                    if (txData.timestamp) purchaseTs = new Date(txData.timestamp).getTime() / 1000;
                                     break;
                                 }
                             }
                         } catch (e) { }
                     }
+
+                    // Mint fallback timestamp
+                    if (!foundValidTx && totalTransfers > 0) {
+                        const mintTx = items[items.length - 1];
+                        if (mintTx.timestamp) purchaseTs = new Date(mintTx.timestamp).getTime() / 1000;
+                    }
                 }
             } catch(e) { }
 
-            // Apply Historical Pricing Logic
-            const historicalTokenPrice = getHistoricalTokenPrice(conf.ticker, actTs, m.tokenPriceUsd);
+            // Apply Historical Pricing Logic pinned to the EARLIEST known interaction (Purchase/Mint or Activation)
+            const effectiveTs = (purchaseTs && actTs) ? Math.min(purchaseTs, actTs) : (purchaseTs || actTs);
+            const historicalTokenPrice = getHistoricalTokenPrice(conf.ticker, effectiveTs, m.tokenPriceUsd);
+            
             const activationCostUsd = tierData.reqTokens * historicalTokenPrice;
             const annualYieldUsd = tierData.trackedAnnualYieldUsd;
             const weeklyYieldUsd = tierData.dailyYields.reduce((a, b) => a + b, 0);
@@ -682,8 +691,8 @@
             const purchaseCostUsd = lastSaleEth * m.ethPriceUsd;
             const totalBasisUsd = purchaseCostUsd + activationCostUsd;
             
-            // If the unit has transfer history but 0 ETH/WETH exchanged hands, it was a free mint.
             if (!foundValidTx && totalTransfers > 0) {
+                // MINTED (FREE)
                 const cocRoi = activationCostUsd > 0 ? ((annualYieldUsd / activationCostUsd) * 100) : 0;
                 basisHtml = `
                     <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
@@ -694,6 +703,7 @@
                 `;
                 roiHtml = `<span class="text-xl font-extrabold text-emerald-400">${cocRoi.toFixed(2)}%</span>`;
             } else if (foundValidTx) {
+                // BOUGHT
                 const cocRoi = totalBasisUsd > 0 ? ((annualYieldUsd / totalBasisUsd) * 100) : 0;
                 basisHtml = `
                     <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
@@ -704,7 +714,7 @@
                 `;
                 roiHtml = `<span class="text-xl font-extrabold text-emerald-400">${cocRoi.toFixed(2)}%</span>`;
             } else {
-                // Failsafe if API blocks request entirely
+                // ERROR
                 resultsDiv.innerHTML = `
                     <div class="flex flex-col items-center justify-center p-6 text-center">
                         <svg class="w-10 h-10 text-rose-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
@@ -715,8 +725,8 @@
                 return;
             }
 
-            const tokenBasisLabel = actTs ? 'Est. Historical Token Basis' : 'Current Token Basis';
-            const priceRef = actTs ? formatPrice(historicalTokenPrice) : '(Spot)';
+            const tokenBasisLabel = effectiveTs ? 'Est. Historical Token Basis' : 'Current Token Basis';
+            const priceRef = effectiveTs ? formatPrice(historicalTokenPrice) : '(Spot)';
 
             resultsDiv.innerHTML = `
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[#334155] pb-4 mb-4">
