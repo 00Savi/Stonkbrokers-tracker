@@ -1,35 +1,38 @@
-name: Update Tracker Data
+name: Fetch Protocol Data
 
 on:
-  workflow_dispatch:
   schedule:
-    - cron: '0 */6 * * *' # Runs automatically at minute 0 past every 6th hour
+    - cron: '0 * * * *' # Runs every hour
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
-  update:
+  update-data:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write # Required for the bot to push data.json back to the repo
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v3
         with:
-          node-version: '22' # Clears the Node 20 deprecation warning
+          node-version: '18'
 
-      - name: Install dependencies
+      - name: Install Dependencies
         run: npm install ethers
 
-      - name: Run updater
+      - name: Run Fetcher Script
         run: node fetcher.js
+        env:
+          BLOCKSCOUT_API_KEY: ${{ secrets.BLOCKSCOUT_API_KEY }}
 
-      - name: Commit and push if changed
+      - name: Commit and Push Data
         run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add data.json
-          git commit -m "Automated sync: Update Global Yield ROI Benchmarks" || echo "No changes to commit"
+          git commit -m "Automated data sync" || echo "No changes to commit"
           git push
