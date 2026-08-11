@@ -1,7 +1,8 @@
 const fs = require("fs");
 const { ethers } = require("ethers");
 
-const API_KEY = "proapi_tI5cQZoWvXXgS1WFHXEaLKhLBSl0WHvcYv3msh7Kdpioyod8Bfon9vSHif7zhcAG_dLDzYW";
+// SECURE API KEY CALL - Pulls from GitHub Secrets
+const API_KEY = process.env.BLOCKSCOUT_API_KEY;
 const PRO_API = "https://api.blockscout.com/v2/api";
 const CHAIN_ID = 4663;
 
@@ -41,7 +42,7 @@ const FALLBACK_STOCK_PRICES = {
 
 const PROJECTS = {
   stonk: {
-    genesisBlock: 0, 
+    genesisBlock: 12600000, 
     tokenCa: "0xe934e36a439c94017b64a3fece66af12099abf50",
     nftCa: "0x539cdd042c2f3d93ebc5be7dfff0c79f3b4fabf0",
     activationCa: "0xacd5ae3c060c1137fe2ee86b0ab2ef697456f664",
@@ -62,7 +63,7 @@ const PROJECTS = {
     ]
   },
   mancer: {
-    genesisBlock: 0, 
+    genesisBlock: 29000000, 
     tokenCa: "0xc72F232a6869e6CF34dC06129AfFD07F8a2a246A".toLowerCase(),
     nftCa: "0x797a2e030b7e49107c8f07bf0300ea9cae88ca57".toLowerCase(),
     activationCa: "0x47c2194cAacfC778c0Baa41E10008bb7D720Cd59".toLowerCase(),
@@ -88,7 +89,6 @@ const PROTOCOL_CONTRACTS = [
   "0x55642a3f10f1af5145d3d59021b1d6b03bb8692c"  
 ];
 
-// EXPANDED ABI: Catches all possible variations of the Activated event to ensure T4 is not missed
 const ACTIVATION_ABI = [
   "event Activated(uint256 indexed tokenId, address indexed owner, uint256 tier, uint256 feePaid)",
   "event Activated(uint256 tokenId, address owner, uint256 tier, uint256 feePaid)",
@@ -240,30 +240,34 @@ async function fetchAllLogs(address, genesisBlock, topic0 = null) {
     await sleep(200); 
   }
 
-  const uniqueLogsMap = new Map();
-  for (const log of allLogs) {
-      const logIdx = log.logIndex !== undefined ? log.logIndex : (log.log_index || "0");
-      uniqueLogsMap.set(log.transactionHash + "-" + logIdx.toString(), log); 
-  }
-  
-  const uniqueLogs = Array.from(uniqueLogsMap.values());
-
-  const parseHex = (val) => {
+  const parseNum = (val) => {
     if (val === undefined || val === null) return 0;
     if (typeof val === 'number') return val;
-    const str = val.toString().replace("0x", "");
-    return parseInt(str, 16) || 0;
+    const str = val.toString().trim();
+    if (str.startsWith("0x") || str.startsWith("0X")) return parseInt(str, 16);
+    return parseInt(str, 10);
   };
 
-  // STRICT CHRONOLOGICAL SORTING: Safely handles identical timestamps by mathematically ordering the log receipt indices.
+  const uniqueLogsMap = new Map();
+  for (const log of allLogs) {
+      const idxStr = log.logIndex !== undefined ? log.logIndex : (log.log_index !== undefined ? log.log_index : (log.index !== undefined ? log.index : "0"));
+      const idx = parseNum(idxStr);
+      uniqueLogsMap.set(log.transactionHash + "-" + idx, log); 
+  }
+  const uniqueLogs = Array.from(uniqueLogsMap.values());
+
   uniqueLogs.sort((a, b) => {
-    const blockA = parseHex(a.blockNumber);
-    const blockB = parseHex(b.blockNumber);
+    const blockA = parseNum(a.blockNumber);
+    const blockB = parseNum(b.blockNumber);
     if (blockA !== blockB) return blockA - blockB;
-    
-    const idxA = parseHex(a.logIndex !== undefined ? a.logIndex : (a.log_index !== undefined ? a.log_index : a.index));
-    const idxB = parseHex(b.logIndex !== undefined ? b.logIndex : (b.log_index !== undefined ? b.log_index : b.index));
-    return idxA - idxB;
+
+    const txIdxA = parseNum(a.transactionIndex);
+    const txIdxB = parseNum(b.transactionIndex);
+    if (txIdxA !== txIdxB) return txIdxA - txIdxB;
+
+    const logIdxA = parseNum(a.logIndex !== undefined ? a.logIndex : (a.log_index !== undefined ? a.log_index : a.index));
+    const logIdxB = parseNum(b.logIndex !== undefined ? b.logIndex : (b.log_index !== undefined ? b.log_index : b.index));
+    return logIdxA - logIdxB;
   });
 
   return uniqueLogs;
