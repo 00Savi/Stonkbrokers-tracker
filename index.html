@@ -6,7 +6,6 @@
     <title>Protocol Ecosystem Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- ADDED: html2canvas library for the Share to X screenshot feature -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
         body { background-color: #0f172a; color: #cbd5e1; }
@@ -571,7 +570,6 @@
             switchTab(activeTab);
         }
 
-        // UPGRADED: Deep searches the parent transactions to find actual ETH values sent during mints/buys
         async function lookupUnitRoi() {
             const inputVal = document.getElementById('lookup-id-input').value.trim();
             const resultsDiv = document.getElementById('lookup-results');
@@ -585,19 +583,19 @@
             const m = proj.market;
             const activeMap = proj.activation.activeTokenTiers || {};
             
+            const isActivated = activeMap[inputVal] !== undefined;
             const tierId = activeMap[inputVal] || 'T0';
             const tierData = proj.tiers.find(t => t.tier === tierId) || proj.tiers[0];
 
             let lastSaleEth = 0;
-            let fetchError = false;
+            let foundValidTx = false;
+
             try {
-                // Fetch the token's transfer history
                 const res = await fetch(`https://robinhoodchain.blockscout.com/api/v2/tokens/${conf.nftCa}/instances/${inputVal}/transfers`);
                 if (res.ok) {
                     const data = await res.json();
                     const items = data.items || [];
                     
-                    // Dig into the parent transactions to find the true ETH purchase value
                     for (const transfer of items) {
                         const txHash = transfer.tx_hash || transfer.hash;
                         if (!txHash) continue;
@@ -606,63 +604,68 @@
                         if (txRes.ok) {
                             const txData = await txRes.json();
                             const val = parseFloat(txData.value || "0") / 1e18;
-                            // A real purchase/mint transaction contains sent ETH
                             if (val > 0) {
                                 lastSaleEth = val;
+                                foundValidTx = true;
                                 break;
                             }
                         }
                     }
-                } else {
-                    fetchError = true;
                 }
             } catch(e) {
                 console.warn("Could not fetch last sale price:", e);
-                fetchError = true;
             }
 
-            if (lastSaleEth === 0 || fetchError) {
-                resultsDiv.innerHTML = `
-                    <div class="flex flex-col items-center justify-center p-6 text-center">
-                        <svg class="w-10 h-10 text-rose-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                        <h4 class="text-lg font-bold text-white mb-1">On-Chain History Not Found</h4>
-                        <p class="text-sm text-slate-400 max-w-md">We couldn't locate a previous on-chain purchase price for Unit #${inputVal}. Please refer to the global floor benchmarks above.</p>
-                    </div>
-                `;
-                return;
-            }
-
-            const purchaseCostUsd = lastSaleEth * m.ethPriceUsd;
             const activationCostUsd = tierData.reqTokens * m.tokenPriceUsd;
-            const totalBasisUsd = purchaseCostUsd + activationCostUsd;
-            
             const annualYieldUsd = tierData.trackedAnnualYieldUsd;
             const weeklyYieldUsd = tierData.dailyYields.reduce((a, b) => a + b, 0);
-            const cocRoi = totalBasisUsd > 0 ? ((annualYieldUsd / totalBasisUsd) * 100) : 0;
+
+            let basisHtml = '';
+            let roiHtml = '';
+
+            if (foundValidTx) {
+                const purchaseCostUsd = lastSaleEth * m.ethPriceUsd;
+                const totalBasisUsd = purchaseCostUsd + activationCostUsd;
+                const cocRoi = totalBasisUsd > 0 ? ((annualYieldUsd / totalBasisUsd) * 100) : 0;
+                
+                basisHtml = `
+                    <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
+                        <p class="text-[10px] uppercase text-slate-400 mb-0.5">Last Sale Basis</p>
+                        <p class="text-base font-bold text-white">${formatCurrency(purchaseCostUsd)}</p>
+                        <p class="text-[10px] text-slate-500">${lastSaleEth.toFixed(3)} ETH</p>
+                    </div>
+                `;
+                roiHtml = `<span class="text-xl font-extrabold text-emerald-400">${cocRoi.toFixed(2)}%</span>`;
+            } else {
+                basisHtml = `
+                    <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
+                        <p class="text-[10px] uppercase text-slate-400 mb-0.5">Last Sale Basis</p>
+                        <p class="text-base font-bold text-slate-500">Unknown</p>
+                        <p class="text-[10px] text-rose-400/80">Non-ETH Tx / Minted</p>
+                    </div>
+                `;
+                roiHtml = `<span class="text-xl font-extrabold text-slate-500">N/A</span>`;
+            }
 
             resultsDiv.innerHTML = `
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[#334155] pb-4 mb-4">
                     <div>
                         <div class="flex items-center gap-2 mb-1">
                             <span class="text-xs uppercase font-bold text-blue-400 bg-blue-900/30 px-2 py-0.5 rounded border border-blue-800/50">${tierData.tier}: ${tierData.name}</span>
-                            <span class="text-xs font-semibold ${activeMap[inputVal] ? 'text-emerald-400 bg-emerald-900/20' : 'text-slate-400 bg-slate-800'} px-2 py-0.5 rounded border border-[#334155]">
-                                ${activeMap[inputVal] ? 'Active Unit' : 'Unactivated'}
+                            <span class="text-xs font-semibold ${isActivated ? 'text-emerald-400 bg-emerald-900/20' : 'text-slate-400 bg-slate-800'} px-2 py-0.5 rounded border border-[#334155]">
+                                ${isActivated ? 'Active Unit' : 'Unactivated'}
                             </span>
                         </div>
                         <h4 class="text-lg font-bold text-white">Unit #${inputVal} Analysis</h4>
                     </div>
                     <div class="bg-[#1e293b] px-5 py-2.5 rounded-lg border border-[#334155] text-right w-full md:w-auto flex justify-between md:block items-center">
                         <span class="text-xs uppercase text-slate-400 md:block">Individual CoC ROI</span>
-                        <span class="text-xl font-extrabold text-emerald-400">${cocRoi.toFixed(2)}%</span>
+                        ${roiHtml}
                     </div>
                 </div>
                 
                 <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
-                        <p class="text-[10px] uppercase text-slate-400 mb-0.5">Last Sale Basis</p>
-                        <p class="text-base font-bold text-white">${formatCurrency(purchaseCostUsd)}</p>
-                        <p class="text-[10px] text-slate-500">${lastSaleEth.toFixed(3)} ETH</p>
-                    </div>
+                    ${basisHtml}
                     <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
                         <p class="text-[10px] uppercase text-slate-400 mb-0.5">Activation Token Basis</p>
                         <p class="text-base font-bold text-white">${formatCurrency(activationCostUsd)}</p>
@@ -987,22 +990,14 @@
             });
         }
 
-        // UPGRADED: Utilizes HTML2Canvas to copy a direct screenshot of the active tab to the user's clipboard!
         async function shareToX() {
             const conf = masterData.projects[currentProjectKey].config;
-            const act = masterData.projects[currentProjectKey].activation;
-            const own = masterData.projects[currentProjectKey].ownership;
             
-            const activeCount = act.activeCount || 0;
-            let pctActivated = act.percentActivated || 0;
-            if (pctActivated === 0) pctActivated = (activeCount / act.totalSupply) * 100;
-            
-            const text = `Just checked the $${conf.ticker} Ecosystem Tracker by @savicrypto! 📊\n\n🔥 Total Active Units: ${formatNumber(activeCount)} (${pctActivated.toFixed(2)}%)\n💼 Unique NFT Holders: ${formatNumber(own.nftHolders)}\n📈 Ownership Concentration: ${own.ownershipRatio.toFixed(2)}%\n\nTrack real-time network yields, burns & individual unit ROI below 👇\n`;
+            const text = `Checking out the $${conf.ticker} Ecosystem Tracker by @savicrypto! 📊\n\nTrack real-time network yields, burns & individual unit ROI below 👇\n`;
             
             const url = window.location.href;
             const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
             
-            // 1. Identify which tab is currently visible
             let activeViewId = 'view-roi';
             ['view-roi', 'view-burn', 'view-activation', 'view-ownership'].forEach(id => {
                 if (!document.getElementById(id).classList.contains('hidden')) {
@@ -1016,14 +1011,12 @@
             shareBtn.innerText = "Capturing...";
             
             const originalBg = elementToCapture.style.backgroundColor;
-            elementToCapture.style.backgroundColor = '#0f172a'; // Force dark background for transparency safety
+            elementToCapture.style.backgroundColor = '#0f172a';
 
             try {
-                // 2. Render the specific DOM element into an image canvas
                 const canvas = await html2canvas(elementToCapture, { backgroundColor: '#0f172a', scale: 2 });
                 elementToCapture.style.backgroundColor = originalBg;
 
-                // 3. Convert canvas to a blob and push directly to user's system clipboard
                 canvas.toBlob(async function(blob) {
                     try {
                         const item = new ClipboardItem({ "image/png": blob });
