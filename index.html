@@ -606,17 +606,31 @@
                                 const txData = await txRes.json();
                                 let val = parseFloat(txData.value || "0") / 1e18;
                                 
-                                // NEW WETH EXTRACTION: If native ETH is 0, actively search the transaction's internal tokens for WETH
-                                if (val === 0 && txData.token_transfers && txData.token_transfers.length > 0) {
-                                    let maxTokenTransfer = 0;
-                                    for (const tt of txData.token_transfers) {
-                                        if (tt.token && parseInt(tt.token.decimals || "0", 10) > 0) {
-                                            const dec = parseInt(tt.token.decimals, 10);
-                                            const amt = parseFloat(tt.total?.value || tt.value || "0") / Math.pow(10, dec);
-                                            if (amt > maxTokenTransfer) maxTokenTransfer = amt;
-                                        }
+                                if (val === 0) {
+                                    let tokenTransfers = txData.token_transfers || [];
+                                    
+                                    if (tokenTransfers.length === 0) {
+                                        try {
+                                            const ttRes = await fetch(`https://robinhoodchain.blockscout.com/api/v2/transactions/${txHash}/token-transfers`);
+                                            if (ttRes.ok) {
+                                                const ttData = await ttRes.json();
+                                                tokenTransfers = ttData.items || [];
+                                            }
+                                        } catch (e) {}
                                     }
-                                    val = maxTokenTransfer;
+                                    
+                                    if (tokenTransfers.length > 0) {
+                                        let maxWethTransfer = 0;
+                                        for (const tt of tokenTransfers) {
+                                            const sym = (tt.token?.symbol || "").toUpperCase();
+                                            if (sym.includes("ETH")) {
+                                                const dec = parseInt(tt.token?.decimals || "18", 10);
+                                                const amt = parseFloat(tt.total?.value || tt.value || "0") / Math.pow(10, dec);
+                                                if (amt > maxWethTransfer) maxWethTransfer = amt;
+                                            }
+                                        }
+                                        val = maxWethTransfer;
+                                    }
                                 }
 
                                 if (val > 0) {
@@ -672,9 +686,16 @@
                         </div>
                         <h4 class="text-lg font-bold text-white">Unit #${inputVal} Analysis</h4>
                     </div>
-                    <div class="bg-[#1e293b] px-5 py-2.5 rounded-lg border border-[#334155] text-right w-full md:w-auto flex justify-between md:block items-center">
-                        <span class="text-xs uppercase text-slate-400 md:block">Individual CoC ROI</span>
-                        ${roiHtml}
+                    
+                    <div class="flex flex-col sm:flex-row gap-3 w-full md:w-auto items-stretch sm:items-center">
+                        <div class="bg-[#1e293b] px-5 py-2.5 rounded-lg border border-[#334155] text-right w-full sm:w-auto flex justify-between sm:block items-center">
+                            <span class="text-xs uppercase text-slate-400 sm:block">Individual CoC ROI</span>
+                            ${roiHtml}
+                        </div>
+                        <button onclick="shareUnitToX('${inputVal}')" data-html2canvas-ignore="true" class="bg-black hover:bg-[#1da1f2] border border-[#334155] text-white px-4 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition shadow-sm w-full sm:w-auto">
+                            <svg class="w-4 h-4 fill-current text-white" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 24.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                            <span id="unit-share-btn-text">Share Unit</span>
+                        </button>
                     </div>
                 </div>
                 
@@ -683,7 +704,7 @@
                     <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
                         <p class="text-[10px] uppercase text-slate-400 mb-0.5">Current Token Basis</p>
                         <p class="text-base font-bold text-white">${formatCurrency(activationCostUsd)}</p>
-                        <p class="text-[10px] text-slate-500">${formatNumber(tierData.reqTokens)} ${conf.ticker}</p>
+                        <p class="text-[10px] text-slate-500">${formatNumber(tierData.reqTokens)} ${conf.ticker} (Spot)</p>
                     </div>
                     <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
                         <p class="text-[10px] uppercase text-slate-400 mb-0.5">Trailing 7-Day Revenue</p>
@@ -697,6 +718,44 @@
                     </div>
                 </div>
             `;
+        }
+
+        // Dedicated Share function specifically for the Unit Lookup Results
+        async function shareUnitToX(unitId) {
+            const conf = masterData.projects[currentProjectKey].config;
+            const text = `Just checked my $${conf.ticker} Unit #${unitId} on the Ecosystem Tracker by @savicrypto! 📊🔥\n\nTrack your real-time yields, burns & individual unit ROI below 👇\nhttps://savicrypto.xyz/`;
+            const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+            
+            const elementToCapture = document.getElementById('lookup-results');
+            const shareBtn = document.getElementById('unit-share-btn-text');
+            const ogText = shareBtn.innerText;
+            shareBtn.innerText = "Capturing...";
+            
+            const originalBg = elementToCapture.style.backgroundColor;
+            elementToCapture.style.backgroundColor = '#0f172a';
+
+            try {
+                const canvas = await html2canvas(elementToCapture, { backgroundColor: '#0f172a', scale: 2 });
+                elementToCapture.style.backgroundColor = originalBg;
+
+                canvas.toBlob(async function(blob) {
+                    try {
+                        const item = new ClipboardItem({ "image/png": blob });
+                        await navigator.clipboard.write([item]);
+                        alert("📸 Unit Analysis Screenshot Copied!\n\nJust hit Paste (Ctrl+V / Cmd+V) when X/Twitter opens to attach it to your post.");
+                        window.open(twitterUrl, '_blank');
+                    } catch (err) {
+                        console.error("Clipboard copy failed: ", err);
+                        alert("Could not auto-copy the screenshot to your clipboard. Opening X anyway!");
+                        window.open(twitterUrl, '_blank');
+                    }
+                    shareBtn.innerText = ogText;
+                }, 'image/png');
+            } catch (e) {
+                console.error("html2canvas failed: ", e);
+                window.open(twitterUrl, '_blank');
+                shareBtn.innerText = ogText;
+            }
         }
 
         function toggleTierDetails(tierId) {
@@ -1005,7 +1064,6 @@
         }
 
         async function shareToX() {
-            // EXACT TEXT REQUESTED
             const text = `Track real-time network yields, burns & individual unit ROI below 👇\nhttps://savicrypto.xyz/ follow @savicrypto for live updates`;
             const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
             
