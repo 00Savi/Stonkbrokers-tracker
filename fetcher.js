@@ -88,11 +88,14 @@ const PROTOCOL_CONTRACTS = [
   "0x55642a3f10f1af5145d3d59021b1d6b03bb8692c"  
 ];
 
+// EXPANDED ABI: Catches all possible variations of the Activated event to ensure T4 is not missed
 const ACTIVATION_ABI = [
   "event Activated(uint256 indexed tokenId, address indexed owner, uint256 tier, uint256 feePaid)",
   "event Activated(uint256 tokenId, address owner, uint256 tier, uint256 feePaid)",
   "event Activated(uint256 indexed tokenId, address indexed owner, uint8 tier, uint256 feePaid)",
   "event Activated(uint256 tokenId, address owner, uint8 tier, uint8 tierBytes, uint256 feePaid)",
+  "event Activated(uint256 indexed tokenId, address indexed owner, uint256 tier)",
+  "event Activated(uint256 tokenId, address owner, uint256 tier)",
   "event ActivationCleared(uint256 indexed tokenId)",
   "event ActivationCleared(uint256 tokenId)"
 ];
@@ -206,7 +209,7 @@ async function loadMarketPrices() {
 }
 
 async function fetchAllLogs(address, genesisBlock, topic0 = null) {
-  let latestBlock = 35000000;
+  let latestBlock = 999999999;
   try {
     const br = await secureFetch(`${PRO_API}?chain_id=${CHAIN_ID}&module=block&action=eth_block_number&apikey=${API_KEY}`);
     if (br && br.result) {
@@ -239,50 +242,31 @@ async function fetchAllLogs(address, genesisBlock, topic0 = null) {
 
   const uniqueLogsMap = new Map();
   for (const log of allLogs) {
-      // Create a unique key per log to prevent duplicates
       const logIdx = log.logIndex !== undefined ? log.logIndex : (log.log_index || "0");
       uniqueLogsMap.set(log.transactionHash + "-" + logIdx.toString(), log); 
   }
   
   const uniqueLogs = Array.from(uniqueLogsMap.values());
 
-  // STRICT CHRONOLOGICAL SORTING: Safely extracts Hex values to ensure multi-tier upgrades in the same block order perfectly
   const parseHex = (val) => {
-    if (!val && val !== 0) return 0;
+    if (val === undefined || val === null) return 0;
+    if (typeof val === 'number') return val;
     const str = val.toString().replace("0x", "");
     return parseInt(str, 16) || 0;
   };
 
+  // STRICT CHRONOLOGICAL SORTING: Safely handles identical timestamps by mathematically ordering the log receipt indices.
   uniqueLogs.sort((a, b) => {
     const blockA = parseHex(a.blockNumber);
     const blockB = parseHex(b.blockNumber);
     if (blockA !== blockB) return blockA - blockB;
     
-    const idxA = parseHex(a.logIndex || a.log_index || a.index);
-    const idxB = parseHex(b.logIndex || b.log_index || b.index);
+    const idxA = parseHex(a.logIndex !== undefined ? a.logIndex : (a.log_index !== undefined ? a.log_index : a.index));
+    const idxB = parseHex(b.logIndex !== undefined ? b.logIndex : (b.log_index !== undefined ? b.log_index : b.index));
     return idxA - idxB;
   });
 
   return uniqueLogs;
-}
-
-async function getExactNftHolders(nftCa, genesis) {
-  const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
-  const logs = await fetchAllLogs(nftCa, genesis, TRANSFER_TOPIC);
-
-  const balances = new Map();
-  for (const log of logs) {
-      const from = log.topics[1] ? "0x" + log.topics[1].slice(-40).toLowerCase() : null;
-      const to = log.topics[2] ? "0x" + log.topics[2].slice(-40).toLowerCase() : null;
-      if (from && from !== "0x0000000000000000000000000000000000000000") balances.set(from, (balances.get(from) || 0) - 1);
-      if (to && to !== "0x0000000000000000000000000000000000000000") balances.set(to, (balances.get(to) || 0) + 1);
-  }
-
-  let activeHolders = 0;
-  for (const [addr, bal] of balances.entries()) {
-      if (bal > 0 && !addr.includes("dead") && addr !== "0x0000000000000000000000000000000000000000") activeHolders++;
-  }
-  return activeHolders;
 }
 
 async function getTrueDeflationStats(conf) {
@@ -402,7 +386,6 @@ async function fetchActivations(conf) {
           
           if (isAct) { 
             tierId = `T${parsed.args.tier.toString()}`; 
-            // Save as an object to export the exact activation timestamp to the frontend!
             activeBrokers.set(tokenId, { t: tierId, ts: ts }); 
           } 
           else if (isDeact) { 
@@ -466,7 +449,6 @@ async function fetchActivations(conf) {
     tierStats, 
     history, 
     dualBurn,
-    // Safely exports the new mapping object (Tier + Timestamp) to the frontend lookup tool
     activeTokenTiers: Object.fromEntries(activeBrokers) 
   };
 }
