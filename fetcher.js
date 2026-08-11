@@ -237,32 +237,30 @@ async function fetchAllLogs(address, genesisBlock, topic0 = null) {
     await sleep(200); 
   }
 
-  const getLogIdx = (obj) => {
-    if (obj.logIndex !== undefined && obj.logIndex !== null) return obj.logIndex;
-    if (obj.log_index !== undefined && obj.log_index !== null) return obj.log_index;
-    if (obj.index !== undefined && obj.index !== null) return obj.index;
-    return 0;
-  };
-
-  const getInt = (val) => {
-    if (val === undefined || val === null) return 0;
-    if (typeof val === "number") return val;
-    return val.toString().startsWith("0x") ? parseInt(val, 16) : parseInt(val, 10);
-  };
-
   const uniqueLogsMap = new Map();
-  for (const log of allLogs) { 
-      const idx = getLogIdx(log);
-      uniqueLogsMap.set(log.transactionHash + "-" + idx, log); 
+  for (const log of allLogs) {
+      // Create a unique key per log to prevent duplicates
+      const logIdx = log.logIndex !== undefined ? log.logIndex : (log.log_index || "0");
+      uniqueLogsMap.set(log.transactionHash + "-" + logIdx.toString(), log); 
   }
+  
   const uniqueLogs = Array.from(uniqueLogsMap.values());
 
-  // ENFORCED: Strict sequential chronological sorting to prevent multi-tier overwrites
+  // STRICT CHRONOLOGICAL SORTING: Safely extracts Hex values to ensure multi-tier upgrades in the same block order perfectly
+  const parseHex = (val) => {
+    if (!val && val !== 0) return 0;
+    const str = val.toString().replace("0x", "");
+    return parseInt(str, 16) || 0;
+  };
+
   uniqueLogs.sort((a, b) => {
-    const blockA = getInt(a.blockNumber);
-    const blockB = getInt(b.blockNumber);
+    const blockA = parseHex(a.blockNumber);
+    const blockB = parseHex(b.blockNumber);
     if (blockA !== blockB) return blockA - blockB;
-    return getInt(getLogIdx(a)) - getInt(getLogIdx(b));
+    
+    const idxA = parseHex(a.logIndex || a.log_index || a.index);
+    const idxB = parseHex(b.logIndex || b.log_index || b.index);
+    return idxA - idxB;
   });
 
   return uniqueLogs;
@@ -401,8 +399,16 @@ async function fetchActivations(conf) {
 
       if (isAct || isDeact) {
           let tierId = null;
-          if (isAct) { tierId = `T${parsed.args.tier.toString()}`; activeBrokers.set(tokenId, tierId); } 
-          else if (isDeact) { tierId = activeBrokers.get(tokenId); activeBrokers.delete(tokenId); }
+          
+          if (isAct) { 
+            tierId = `T${parsed.args.tier.toString()}`; 
+            // Save as an object to export the exact activation timestamp to the frontend!
+            activeBrokers.set(tokenId, { t: tierId, ts: ts }); 
+          } 
+          else if (isDeact) { 
+            tierId = activeBrokers.has(tokenId) ? activeBrokers.get(tokenId).t : null;
+            activeBrokers.delete(tokenId); 
+          }
 
           if (tierId && tierStats[tierId]) {
               if (isAct) tierStats[tierId].allTime.act++;
@@ -448,7 +454,7 @@ async function fetchActivations(conf) {
   }
 
   const breakdown = { T0: 0, T1: 0, T2: 0, T3: 0, T4: 0 };
-  for (const tier of activeBrokers.values()) { if (breakdown[tier] !== undefined) breakdown[tier]++; }
+  for (const val of activeBrokers.values()) { if (breakdown[val.t] !== undefined) breakdown[val.t]++; }
 
   const dualBurn = await getTrueDeflationStats(conf);
 
@@ -460,7 +466,8 @@ async function fetchActivations(conf) {
     tierStats, 
     history, 
     dualBurn,
-    activeTokenTiers: Object.fromEntries(activeBrokers)
+    // Safely exports the new mapping object (Tier + Timestamp) to the frontend lookup tool
+    activeTokenTiers: Object.fromEntries(activeBrokers) 
   };
 }
 
