@@ -570,6 +570,24 @@
             switchTab(activeTab);
         }
 
+        // ESTIMATOR: Maps activation timestamp to historical price curve
+        function getHistoricalTokenPrice(ticker, ts, currentSpot) {
+            if (!ts) return currentSpot;
+            const date = new Date(ts * 1000);
+            
+            if (ticker === 'STONK') {
+                if (date < new Date('2026-07-20')) return 0.004;
+                if (date < new Date('2026-07-25')) return 0.008;
+                if (date < new Date('2026-08-01')) return 0.015;
+                if (date < new Date('2026-08-05')) return 0.022;
+            }
+            if (ticker === 'MANCER') {
+                if (date < new Date('2026-08-06')) return 0.012;
+                if (date < new Date('2026-08-09')) return 0.015;
+            }
+            return currentSpot;
+        }
+
         async function lookupUnitRoi() {
             const inputVal = document.getElementById('lookup-id-input').value.trim();
             const resultsDiv = document.getElementById('lookup-results');
@@ -583,8 +601,10 @@
             const m = proj.market;
             const activeMap = proj.activation.activeTokenTiers || {};
             
-            const isActivated = activeMap[inputVal] !== undefined;
-            const tierId = activeMap[inputVal] || 'T0';
+            const tokenData = activeMap[inputVal];
+            const isActivated = tokenData !== undefined;
+            const tierId = isActivated ? tokenData.t : 'T0';
+            const actTs = isActivated ? tokenData.ts : null;
             const tierData = proj.tiers.find(t => t.tier === tierId) || proj.tiers[0];
 
             let lastSaleEth = 0;
@@ -608,8 +628,11 @@
                                 const txData = await txRes.json();
                                 let val = parseFloat(txData.value || "0") / 1e18;
                                 
+                                // FORCE EXTRACTION FOR OPENSEA / MULTICALL ROUTERS
                                 if (val === 0) {
                                     let tokenTransfers = txData.token_transfers || [];
+                                    
+                                    // Manually hit the secondary Blockscout endpoint if token_transfers was trimmed
                                     if (tokenTransfers.length === 0) {
                                         try {
                                             const ttRes = await fetch(`https://robinhoodchain.blockscout.com/api/v2/transactions/${txHash}/token-transfers`);
@@ -625,7 +648,7 @@
                                         for (const tt of tokenTransfers) {
                                             const sym = (tt.token?.symbol || "").toUpperCase();
                                             const dec = parseInt(tt.token?.decimals || "18", 10);
-                                            // Fallback WETH catcher
+                                            // Safely catch standard 18-decimal token transfers (WETH) ignoring native project tokens
                                             if (dec >= 18 && !sym.includes(conf.ticker) && !sym.includes("STONK") && !sym.includes("MANCER")) {
                                                 const rawVal = tt.total?.value || tt.value || "0";
                                                 const amt = parseFloat(rawVal) / Math.pow(10, dec);
@@ -647,7 +670,9 @@
                 }
             } catch(e) { }
 
-            const activationCostUsd = tierData.reqTokens * m.tokenPriceUsd;
+            // Apply Historical Pricing Logic
+            const historicalTokenPrice = getHistoricalTokenPrice(conf.ticker, actTs, m.tokenPriceUsd);
+            const activationCostUsd = tierData.reqTokens * historicalTokenPrice;
             const annualYieldUsd = tierData.trackedAnnualYieldUsd;
             const weeklyYieldUsd = tierData.dailyYields.reduce((a, b) => a + b, 0);
 
@@ -690,6 +715,9 @@
                 return;
             }
 
+            const tokenBasisLabel = actTs ? 'Est. Historical Token Basis' : 'Current Token Basis';
+            const priceRef = actTs ? formatPrice(historicalTokenPrice) : '(Spot)';
+
             resultsDiv.innerHTML = `
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[#334155] pb-4 mb-4">
                     <div>
@@ -717,9 +745,9 @@
                 <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
                     ${basisHtml}
                     <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
-                        <p class="text-[10px] uppercase text-slate-400 mb-0.5">Current Token Basis</p>
+                        <p class="text-[10px] uppercase text-slate-400 mb-0.5">${tokenBasisLabel}</p>
                         <p class="text-base font-bold text-white">${formatCurrency(activationCostUsd)}</p>
-                        <p class="text-[10px] text-slate-500">${formatNumber(tierData.reqTokens)} ${conf.ticker} (Spot)</p>
+                        <p class="text-[10px] text-slate-500">${formatNumber(tierData.reqTokens)} ${conf.ticker} at ${priceRef}</p>
                     </div>
                     <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
                         <p class="text-[10px] uppercase text-slate-400 mb-0.5">Trailing 7-Day Revenue</p>
@@ -1079,7 +1107,7 @@
                 elementToCapture.style.backgroundColor = originalBg;
                 shareBtn.innerText = ogText;
                 
-                alert("✅ SCREENSHOT COPIED!\n\nJust hit Paste (Ctrl+V / Cmd+V) when X/Twitter opens to attach it!");
+                alert("✅ DASHBOARD SCREENSHOT COPIED!\n\nJust hit Paste (Ctrl+V / Cmd+V) when X/Twitter opens to attach it!");
                 window.open(twitterUrl, '_blank');
             } catch (e) {
                 console.error("Clipboard copy failed: ", e);
@@ -1112,7 +1140,7 @@
                 elementToCapture.style.backgroundColor = originalBg;
                 shareBtn.innerText = ogText;
                 
-                alert("✅ SCREENSHOT COPIED!\n\nJust hit Paste (Ctrl+V / Cmd+V) when X/Twitter opens to attach it!");
+                alert("✅ UNIT ANALYSIS COPIED!\n\nJust hit Paste (Ctrl+V / Cmd+V) when X/Twitter opens to attach it!");
                 window.open(twitterUrl, '_blank');
             } catch (e) {
                 console.error("Clipboard copy failed: ", e);
