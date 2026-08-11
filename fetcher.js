@@ -122,12 +122,10 @@ async function secureFetch(url) {
   process.exit(1); 
 }
 
-// Re-engineered to directly query Blockscout for exact holder ledger, replacing clunky log scraping
 async function fetchTokenHoldersSafe(contractAddress, isNft = false) {
   let page = 1;
   let activeHolders = 0;
   let hasData = false;
-  // NFT needs >0 threshold. ERC20 needs 1 full token threshold (1e18) to filter dust.
   const dustThreshold = isNft ? 1n : 1000000000000000000n; 
 
   while (true) {
@@ -294,7 +292,6 @@ async function getOwnershipStats(conf, equivBurnt, previousData) {
   let rawNftHolders = await fetchTokenHoldersSafe(conf.nftCa, true);
   let trueUniqueNftHolders = rawNftHolders > 0 ? rawNftHolders : 0;
   
-  // Exclude AMM Vault and Dead Addresses
   if (conf.ticker === "STONK" && trueUniqueNftHolders > 3) trueUniqueNftHolders -= 3; 
   if (conf.ticker === "MANCER" && trueUniqueNftHolders > 2) trueUniqueNftHolders -= 2; 
 
@@ -418,7 +415,16 @@ async function fetchActivations(conf) {
 
   const dualBurn = await getTrueDeflationStats(conf);
 
-  return { activeCount: activeBrokers.size, breakdown, percentActivated: +((activeBrokers.size / conf.maxSupply) * 100).toFixed(2), totalSupply: conf.maxSupply, tierStats, history, dualBurn };
+  return { 
+    activeCount: activeBrokers.size, 
+    breakdown, 
+    percentActivated: +((activeBrokers.size / conf.maxSupply) * 100).toFixed(2), 
+    totalSupply: conf.maxSupply, 
+    tierStats, 
+    history, 
+    dualBurn,
+    activeTokenTiers: Object.fromEntries(activeBrokers) // Exports key-value map for Individual Lookup Tool
+  };
 }
 
 async function getGlobalYield(conf, sevenDaysAgo, activationStats, marketData) {
@@ -584,7 +590,7 @@ async function run() {
         activation: activationStats,
         ownership: ownershipStats,
         tiers: mappedTiers,
-        config: { ticker: conf.ticker, unitValue: conf.unitValue, logo: conf.logo }
+        config: { ticker: conf.ticker, unitValue: conf.unitValue, logo: conf.logo, nftCa: conf.nftCa }
       };
   }
 
