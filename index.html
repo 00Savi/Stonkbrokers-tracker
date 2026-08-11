@@ -588,15 +588,15 @@
             const tierData = proj.tiers.find(t => t.tier === tierId) || proj.tiers[0];
 
             let lastSaleEth = 0;
-            let fetchError = false;
+            let foundValidTx = false;
+            let totalTransfers = 0;
 
             try {
                 const res = await fetch(`https://robinhoodchain.blockscout.com/api/v2/tokens/${conf.nftCa}/instances/${inputVal}/transfers`);
                 if (res.ok) {
                     const data = await res.json();
                     const items = data.items || [];
-                    
-                    if (items.length === 0) fetchError = true;
+                    totalTransfers = items.length;
                     
                     for (const transfer of items) {
                         const txHash = transfer.transaction_hash || transfer.tx_hash || transfer.hash;
@@ -624,10 +624,12 @@
                                         let maxWethTransfer = 0;
                                         for (const tt of tokenTransfers) {
                                             const sym = (tt.token?.symbol || "").toUpperCase();
-                                            const dec = parseInt(tt.token?.decimals || "0", 10);
+                                            const dec = parseInt(tt.token?.decimals || "18", 10);
+                                            // Fallback WETH catcher
                                             if (dec >= 18 && !sym.includes(conf.ticker) && !sym.includes("STONK") && !sym.includes("MANCER")) {
-                                                const amt = parseFloat(tt.total?.value || tt.value || "0") / Math.pow(10, dec);
-                                                if (amt > maxWethTransfer && amt < 50000) maxWethTransfer = amt; 
+                                                const rawVal = tt.total?.value || tt.value || "0";
+                                                const amt = parseFloat(rawVal) / Math.pow(10, dec);
+                                                if (amt > maxWethTransfer && amt < 1000000) maxWethTransfer = amt; 
                                             }
                                         }
                                         val = maxWethTransfer;
@@ -636,28 +638,14 @@
 
                                 if (val > 0) {
                                     lastSaleEth = val;
+                                    foundValidTx = true;
                                     break;
                                 }
                             }
                         } catch (e) { }
                     }
-                } else {
-                    fetchError = true;
                 }
-            } catch(e) { 
-                fetchError = true;
-            }
-
-            if (fetchError) {
-                resultsDiv.innerHTML = `
-                    <div class="flex flex-col items-center justify-center p-6 text-center">
-                        <svg class="w-10 h-10 text-rose-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                        <h4 class="text-lg font-bold text-white mb-1">On-Chain History Not Found</h4>
-                        <p class="text-sm text-slate-400 max-w-md">We couldn't locate data for Unit #${inputVal}. Please refer to the global floor benchmarks above.</p>
-                    </div>
-                `;
-                return;
-            }
+            } catch(e) { }
 
             const activationCostUsd = tierData.reqTokens * m.tokenPriceUsd;
             const annualYieldUsd = tierData.trackedAnnualYieldUsd;
@@ -668,17 +656,10 @@
 
             const purchaseCostUsd = lastSaleEth * m.ethPriceUsd;
             const totalBasisUsd = purchaseCostUsd + activationCostUsd;
-            const cocRoi = totalBasisUsd > 0 ? ((annualYieldUsd / totalBasisUsd) * 100) : 0;
-
-            if (lastSaleEth > 0) {
-                basisHtml = `
-                    <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
-                        <p class="text-[10px] uppercase text-slate-400 mb-0.5">Last Sale Basis</p>
-                        <p class="text-base font-bold text-white">${formatCurrency(purchaseCostUsd)}</p>
-                        <p class="text-[10px] text-slate-500">${lastSaleEth.toFixed(3)} ETH</p>
-                    </div>
-                `;
-            } else {
+            
+            // If the unit has transfer history but 0 ETH/WETH exchanged hands, it was a free mint.
+            if (!foundValidTx && totalTransfers > 0) {
+                const cocRoi = activationCostUsd > 0 ? ((annualYieldUsd / activationCostUsd) * 100) : 0;
                 basisHtml = `
                     <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
                         <p class="text-[10px] uppercase text-slate-400 mb-0.5">Last Sale Basis</p>
@@ -686,9 +667,28 @@
                         <p class="text-[10px] text-emerald-500/80">Minted (Free)</p>
                     </div>
                 `;
+                roiHtml = `<span class="text-xl font-extrabold text-emerald-400">${cocRoi.toFixed(2)}%</span>`;
+            } else if (foundValidTx) {
+                const cocRoi = totalBasisUsd > 0 ? ((annualYieldUsd / totalBasisUsd) * 100) : 0;
+                basisHtml = `
+                    <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
+                        <p class="text-[10px] uppercase text-slate-400 mb-0.5">Last Sale Basis</p>
+                        <p class="text-base font-bold text-white">${formatCurrency(purchaseCostUsd)}</p>
+                        <p class="text-[10px] text-slate-500">${lastSaleEth.toFixed(3)} ETH</p>
+                    </div>
+                `;
+                roiHtml = `<span class="text-xl font-extrabold text-emerald-400">${cocRoi.toFixed(2)}%</span>`;
+            } else {
+                // Failsafe if API blocks request entirely
+                resultsDiv.innerHTML = `
+                    <div class="flex flex-col items-center justify-center p-6 text-center">
+                        <svg class="w-10 h-10 text-rose-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                        <h4 class="text-lg font-bold text-white mb-1">On-Chain History Not Found</h4>
+                        <p class="text-sm text-slate-400 max-w-md">We couldn't locate data for Unit #${inputVal}. Please refer to the global floor benchmarks above.</p>
+                    </div>
+                `;
+                return;
             }
-            
-            roiHtml = `<span class="text-xl font-extrabold text-emerald-400">${cocRoi.toFixed(2)}%</span>`;
 
             resultsDiv.innerHTML = `
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[#334155] pb-4 mb-4">
@@ -707,7 +707,7 @@
                             <span class="text-xs uppercase text-slate-400 sm:block">Individual CoC ROI</span>
                             ${roiHtml}
                         </div>
-                        <button onclick="shareUnitToX('${inputVal}')" data-html2canvas-ignore="true" class="bg-black hover:bg-[#1da1f2] border border-[#334155] text-white px-4 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition shadow-sm w-full sm:w-auto">
+                        <button onclick="shareUnitToX()" data-html2canvas-ignore="true" class="bg-black hover:bg-[#1da1f2] border border-[#334155] text-white px-4 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition shadow-sm w-full sm:w-auto">
                             <svg class="w-4 h-4 fill-current text-white" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 24.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
                             <span id="unit-share-btn-text">Share Unit</span>
                         </button>
@@ -1040,6 +1040,16 @@
             });
         }
 
+        // Helper to safely execute clipboard promises based on a direct click
+        const makeImagePromise = async (element) => {
+            const canvas = await html2canvas(element, { backgroundColor: '#0f172a', scale: 2 });
+            return new Promise((resolve) => {
+                canvas.toBlob((blob) => {
+                    resolve(blob);
+                }, 'image/png');
+            });
+        };
+
         async function shareToX() {
             const text = `@savicrypto\nhttps://savicrypto.xyz/`;
             const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
@@ -1060,30 +1070,27 @@
             elementToCapture.style.backgroundColor = '#0f172a';
 
             try {
-                const canvas = await html2canvas(elementToCapture, { backgroundColor: '#0f172a', scale: 2 });
+                const item = new ClipboardItem({
+                    'image/png': makeImagePromise(elementToCapture)
+                });
+                
+                await navigator.clipboard.write([item]);
+                
                 elementToCapture.style.backgroundColor = originalBg;
-
-                canvas.toBlob(async function(blob) {
-                    try {
-                        const item = new ClipboardItem({ "image/png": blob });
-                        await navigator.clipboard.write([item]);
-                        alert("✅ SCREENSHOT COPIED TO CLIPBOARD!\n\nTwitter blocks auto-attaching images, so we copied it for you.\n\nWhen Twitter opens, just right-click and select 'Paste' (or press Ctrl+V / Cmd+V) to attach the image to your post!");
-                        window.open(twitterUrl, '_blank');
-                    } catch (err) {
-                        console.error("Clipboard copy failed: ", err);
-                        alert("Could not auto-copy the screenshot to your clipboard. Your browser may be blocking access. Opening X anyway!");
-                        window.open(twitterUrl, '_blank');
-                    }
-                    shareBtn.innerText = ogText;
-                }, 'image/png');
-            } catch (e) {
-                console.error("html2canvas failed: ", e);
-                window.open(twitterUrl, '_blank');
                 shareBtn.innerText = ogText;
+                
+                alert("✅ SCREENSHOT COPIED!\n\nJust hit Paste (Ctrl+V / Cmd+V) when X/Twitter opens to attach it!");
+                window.open(twitterUrl, '_blank');
+            } catch (e) {
+                console.error("Clipboard copy failed: ", e);
+                elementToCapture.style.backgroundColor = originalBg;
+                shareBtn.innerText = ogText;
+                alert("Screenshot auto-copy failed. Your browser may block this feature. Opening X anyway!");
+                window.open(twitterUrl, '_blank');
             }
         }
         
-        async function shareUnitToX(unitId) {
+        async function shareUnitToX() {
             const text = `@savicrypto\nhttps://savicrypto.xyz/`;
             const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
             
@@ -1096,26 +1103,23 @@
             elementToCapture.style.backgroundColor = '#0f172a';
 
             try {
-                const canvas = await html2canvas(elementToCapture, { backgroundColor: '#0f172a', scale: 2 });
+                const item = new ClipboardItem({
+                    'image/png': makeImagePromise(elementToCapture)
+                });
+                
+                await navigator.clipboard.write([item]);
+                
                 elementToCapture.style.backgroundColor = originalBg;
-
-                canvas.toBlob(async function(blob) {
-                    try {
-                        const item = new ClipboardItem({ "image/png": blob });
-                        await navigator.clipboard.write([item]);
-                        alert("✅ SCREENSHOT COPIED TO CLIPBOARD!\n\nTwitter blocks auto-attaching images, so we copied it for you.\n\nWhen Twitter opens, just right-click and select 'Paste' (or press Ctrl+V / Cmd+V) to attach the image to your post!");
-                        window.open(twitterUrl, '_blank');
-                    } catch (err) {
-                        console.error("Clipboard copy failed: ", err);
-                        alert("Could not auto-copy the screenshot to your clipboard. Your browser may be blocking access. Opening X anyway!");
-                        window.open(twitterUrl, '_blank');
-                    }
-                    shareBtn.innerText = ogText;
-                }, 'image/png');
-            } catch (e) {
-                console.error("html2canvas failed: ", e);
-                window.open(twitterUrl, '_blank');
                 shareBtn.innerText = ogText;
+                
+                alert("✅ SCREENSHOT COPIED!\n\nJust hit Paste (Ctrl+V / Cmd+V) when X/Twitter opens to attach it!");
+                window.open(twitterUrl, '_blank');
+            } catch (e) {
+                console.error("Clipboard copy failed: ", e);
+                elementToCapture.style.backgroundColor = originalBg;
+                shareBtn.innerText = ogText;
+                alert("Screenshot auto-copy failed. Your browser may block this feature. Opening X anyway!");
+                window.open(twitterUrl, '_blank');
             }
         }
         
