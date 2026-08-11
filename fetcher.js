@@ -237,24 +237,54 @@ async function fetchAllLogs(address, genesisBlock, topic0 = null) {
     await sleep(200); 
   }
 
-  const uniqueLogsMap = new Map();
-  for (const log of allLogs) { uniqueLogsMap.set(log.transactionHash + "-" + log.logIndex, log); }
-  const uniqueLogs = Array.from(uniqueLogsMap.values());
+  const getLogIdx = (obj) => {
+    if (obj.logIndex !== undefined && obj.logIndex !== null) return obj.logIndex;
+    if (obj.log_index !== undefined && obj.log_index !== null) return obj.log_index;
+    if (obj.index !== undefined && obj.index !== null) return obj.index;
+    return 0;
+  };
 
   const getInt = (val) => {
-    if (!val && val !== 0) return 0;
+    if (val === undefined || val === null) return 0;
+    if (typeof val === "number") return val;
     return val.toString().startsWith("0x") ? parseInt(val, 16) : parseInt(val, 10);
   };
 
-  // STRICT CRYPTOGRAPHIC LOG SORTING (Prevents multi-tier jumps from overwriting)
+  const uniqueLogsMap = new Map();
+  for (const log of allLogs) { 
+      const idx = getLogIdx(log);
+      uniqueLogsMap.set(log.transactionHash + "-" + idx, log); 
+  }
+  const uniqueLogs = Array.from(uniqueLogsMap.values());
+
+  // ENFORCED: Strict sequential chronological sorting to prevent multi-tier overwrites
   uniqueLogs.sort((a, b) => {
     const blockA = getInt(a.blockNumber);
     const blockB = getInt(b.blockNumber);
     if (blockA !== blockB) return blockA - blockB;
-    return getInt(a.logIndex) - getInt(b.logIndex);
+    return getInt(getLogIdx(a)) - getInt(getLogIdx(b));
   });
 
   return uniqueLogs;
+}
+
+async function getExactNftHolders(nftCa, genesis) {
+  const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+  const logs = await fetchAllLogs(nftCa, genesis, TRANSFER_TOPIC);
+
+  const balances = new Map();
+  for (const log of logs) {
+      const from = log.topics[1] ? "0x" + log.topics[1].slice(-40).toLowerCase() : null;
+      const to = log.topics[2] ? "0x" + log.topics[2].slice(-40).toLowerCase() : null;
+      if (from && from !== "0x0000000000000000000000000000000000000000") balances.set(from, (balances.get(from) || 0) - 1);
+      if (to && to !== "0x0000000000000000000000000000000000000000") balances.set(to, (balances.get(to) || 0) + 1);
+  }
+
+  let activeHolders = 0;
+  for (const [addr, bal] of balances.entries()) {
+      if (bal > 0 && !addr.includes("dead") && addr !== "0x0000000000000000000000000000000000000000") activeHolders++;
+  }
+  return activeHolders;
 }
 
 async function getTrueDeflationStats(conf) {
@@ -430,7 +460,7 @@ async function fetchActivations(conf) {
     tierStats, 
     history, 
     dualBurn,
-    activeTokenTiers: Object.fromEntries(activeBrokers) 
+    activeTokenTiers: Object.fromEntries(activeBrokers)
   };
 }
 
