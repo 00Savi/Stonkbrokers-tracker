@@ -13,6 +13,9 @@
         ::-webkit-scrollbar-track { background: #0f172a; }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #475569; }
+        
+        .dropdown-menu { display: none; }
+        .dropdown-container:hover .dropdown-menu { display: block; }
     </style>
 </head>
 <body class="p-4 md:p-8 font-sans antialiased overflow-x-hidden">
@@ -24,10 +27,20 @@
             </div>
             
             <div class="relative group inline-block">
-                <!-- Added solid padding around the button to bridge the hover gap perfectly -->
                 <div class="py-2 cursor-pointer flex items-center gap-2 md:gap-3">
-                    <span id="project-title" class="text-xl md:text-2xl font-bold text-white group-hover:text-blue-400 transition">StonkBrokers Tracker</span>
-                    <svg class="w-5 h-5 text-slate-400 group-hover:text-blue-400 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span id="project-title" class="text-xl md:text-2xl font-bold text-white group-hover:text-blue-400 transition">StonkBrokers Tracker</span>
+                            <svg class="w-5 h-5 text-slate-400 group-hover:text-blue-400 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5">
+                            Built by 
+                            <a href="https://x.com/savicrypto" target="_blank" class="text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1 hover:underline">
+                                @savicrypto
+                                <span class="bg-blue-500/20 text-blue-400 border border-blue-500/30 text-[9px] px-1.5 py-0.2 rounded-full font-semibold">Follow</span>
+                            </a>
+                        </p>
+                    </div>
                 </div>
                 
                 <div class="absolute left-0 top-[85%] mt-1 w-56 bg-[#1e293b] border border-[#334155] rounded-xl shadow-2xl py-2 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
@@ -84,7 +97,6 @@
             </button>
         </div>
         
-        <!-- Feature Request: Share to X Button -->
         <button onclick="shareToX()" class="flex-1 sm:flex-none w-full sm:w-auto justify-center bg-black hover:bg-[#1da1f2] border border-[#334155] text-white px-5 py-2.5 rounded-lg font-bold flex items-center gap-2 transition shadow-sm group">
             <svg class="w-4 h-4 fill-current text-white" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 24.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
             Share Stats
@@ -106,7 +118,7 @@
                 <span class="text-white font-bold tracking-wide" id="floor-cost">Loading...</span>
             </div>
         </div>
-        <div class="overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0 pb-2">
+        <div class="overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0 pb-2 mb-8">
             <table class="w-full text-left border-collapse min-w-[850px]">
                 <thead>
                     <tr class="text-xs uppercase tracking-wider text-slate-500 border-b border-[#334155]">
@@ -119,6 +131,25 @@
                 </thead>
                 <tbody id="tiers-body"></tbody>
             </table>
+        </div>
+
+        <div class="pt-6 border-t border-[#334155]">
+            <div class="flex items-center gap-2 mb-2">
+                <svg class="w-5 h-5 text-emerald-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a8 8 0 1114.32 4.906l5.387 5.387a1 1 0 01-1.414 1.414l-5.387-5.387A8 8 0 012 8z" clip-rule="evenodd"></path></svg>
+                <h3 class="text-base md:text-lg font-bold text-white">Individual Unit ROI Calculator</h3>
+            </div>
+            <p class="text-xs text-slate-400 mb-4">Enter a specific Token ID to analyze its exact cost basis, historical last sale price, and individual Cash-on-Cash performance.</p>
+            
+            <div class="flex flex-col sm:flex-row gap-3 max-w-md mb-4">
+                <input type="number" id="lookup-id-input" placeholder="Enter Token ID (e.g. 105)" class="bg-[#0f172a] border border-[#334155] text-white px-4 py-2.5 rounded-lg text-sm w-full focus:outline-none focus:border-blue-500">
+                <button onclick="lookupUnitRoi()" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-6 py-2.5 rounded-lg text-sm transition flex-shrink-0 flex items-center justify-center gap-2 shadow-md">
+                    Analyze Unit
+                </button>
+            </div>
+
+            <div id="lookup-results" class="hidden bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner mt-4">
+                <!-- Results populated dynamically by JS -->
+            </div>
         </div>
     </main>
 
@@ -449,7 +480,7 @@
             const m = data.market;
             const conf = data.config;
             
-            document.getElementById('header-logo').src = conf.logo || 'logo.png';
+            document.getElementById('header-logo').src = conf.logo || 'Stonkbroker.png';
             document.getElementById('project-title').innerText = projectKey === 'stonk' ? 'StonkBrokers Tracker' : 'Mancer Tracker';
             document.getElementById('dynamic-ticker-label').innerText = `$${conf.ticker}`;
             document.getElementById('dynamic-burn-label').innerText = `Total $${conf.ticker} Burnt`;
@@ -466,6 +497,9 @@
             const syncDate = new Date(masterData.lastUpdated);
             document.getElementById('last-sync').innerText = 'Last automated sync: ' + syncDate.toLocaleString();
             
+            document.getElementById('lookup-results').classList.add('hidden');
+            document.getElementById('lookup-id-input').value = '';
+
             const tbody = document.getElementById('tiers-body');
             tbody.innerHTML = '';
             tierChartInstances = {}; 
@@ -533,6 +567,105 @@
             const activeTabElement = document.querySelector('button.bg-blue-500');
             const activeTab = activeTabElement ? activeTabElement.id.replace('tab-', '') : 'roi';
             switchTab(activeTab);
+        }
+
+        async function lookupUnitRoi() {
+            const inputVal = document.getElementById('lookup-id-input').value.trim();
+            const resultsDiv = document.getElementById('lookup-results');
+            if (!inputVal) return;
+
+            resultsDiv.classList.remove('hidden');
+            resultsDiv.innerHTML = '<p class="text-xs text-slate-400 animate-pulse">Scanning blockchain ledger for Token #' + inputVal + ' transfers & tier status...</p>';
+
+            const proj = masterData.projects[currentProjectKey];
+            const conf = proj.config;
+            const m = proj.market;
+            const activeMap = proj.activation.activeTokenTiers || {};
+            
+            const tierId = activeMap[inputVal] || 'T0';
+            const tierData = proj.tiers.find(t => t.tier === tierId) || proj.tiers[0];
+
+            let lastSaleEth = 0;
+            let fetchError = false;
+            try {
+                const res = await fetch(`https://robinhoodchain.blockscout.com/api/v2/tokens/${conf.nftCa}/instances/${inputVal}/transfers`);
+                if (res.ok) {
+                    const data = await res.json();
+                    const items = data.items || [];
+                    for (const tx of items) {
+                        const val = parseFloat(tx.total?.value || "0") / 1e18;
+                        if (val > 0) {
+                            lastSaleEth = val;
+                            break;
+                        }
+                    }
+                } else {
+                    fetchError = true;
+                }
+            } catch(e) {
+                console.warn("Could not fetch last sale price:", e);
+                fetchError = true;
+            }
+
+            if (lastSaleEth === 0 || fetchError) {
+                resultsDiv.innerHTML = `
+                    <div class="flex flex-col items-center justify-center p-6 text-center">
+                        <svg class="w-10 h-10 text-rose-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                        <h4 class="text-lg font-bold text-white mb-1">On-Chain History Not Found</h4>
+                        <p class="text-sm text-slate-400 max-w-md">We couldn't locate a previous on-chain purchase price for Unit #${inputVal}. Please refer to the global floor benchmarks above.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const purchaseCostUsd = lastSaleEth * m.ethPriceUsd;
+            const activationCostUsd = tierData.reqTokens * m.tokenPriceUsd;
+            const totalBasisUsd = purchaseCostUsd + activationCostUsd;
+            
+            const annualYieldUsd = tierData.trackedAnnualYieldUsd;
+            const weeklyYieldUsd = tierData.dailyYields.reduce((a, b) => a + b, 0);
+            const cocRoi = totalBasisUsd > 0 ? ((annualYieldUsd / totalBasisUsd) * 100) : 0;
+
+            resultsDiv.innerHTML = `
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[#334155] pb-4 mb-4">
+                    <div>
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="text-xs uppercase font-bold text-blue-400 bg-blue-900/30 px-2 py-0.5 rounded border border-blue-800/50">${tierData.tier}: ${tierData.name}</span>
+                            <span class="text-xs font-semibold ${activeMap[inputVal] ? 'text-emerald-400 bg-emerald-900/20' : 'text-slate-400 bg-slate-800'} px-2 py-0.5 rounded border border-[#334155]">
+                                ${activeMap[inputVal] ? 'Active Unit' : 'Unactivated'}
+                            </span>
+                        </div>
+                        <h4 class="text-lg font-bold text-white">Unit #${inputVal} Analysis</h4>
+                    </div>
+                    <div class="bg-[#1e293b] px-5 py-2.5 rounded-lg border border-[#334155] text-right w-full md:w-auto flex justify-between md:block items-center">
+                        <span class="text-xs uppercase text-slate-400 md:block">Individual CoC ROI</span>
+                        <span class="text-xl font-extrabold text-emerald-400">${cocRoi.toFixed(2)}%</span>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
+                        <p class="text-[10px] uppercase text-slate-400 mb-0.5">Last Sale Basis</p>
+                        <p class="text-base font-bold text-white">${formatCurrency(purchaseCostUsd)}</p>
+                        <p class="text-[10px] text-slate-500">${lastSaleEth.toFixed(3)} ETH</p>
+                    </div>
+                    <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
+                        <p class="text-[10px] uppercase text-slate-400 mb-0.5">Activation Token Basis</p>
+                        <p class="text-base font-bold text-white">${formatCurrency(activationCostUsd)}</p>
+                        <p class="text-[10px] text-slate-500">${formatNumber(tierData.reqTokens)} ${conf.ticker}</p>
+                    </div>
+                    <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
+                        <p class="text-[10px] uppercase text-slate-400 mb-0.5">Trailing 7-Day Revenue</p>
+                        <p class="text-base font-bold text-emerald-400">${formatCurrency(weeklyYieldUsd)}</p>
+                        <p class="text-[10px] text-slate-500">Realized Inflows</p>
+                    </div>
+                    <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
+                        <p class="text-[10px] uppercase text-slate-400 mb-0.5">Forecasted Annual Yield</p>
+                        <p class="text-base font-bold text-emerald-400">${formatCurrency(annualYieldUsd)} /yr</p>
+                        <p class="text-[10px] text-slate-500">Weight: ${tierData.weight}x</p>
+                    </div>
+                </div>
+            `;
         }
 
         function toggleTierDetails(tierId) {
@@ -849,7 +982,7 @@
             let pctActivated = act.percentActivated || 0;
             if (pctActivated === 0) pctActivated = (activeCount / act.totalSupply) * 100;
             
-            const text = `Just checked the $${conf.ticker} Ecosystem Tracker! 📊\n\n🔥 Total Active Units: ${formatNumber(activeCount)} (${pctActivated.toFixed(2)}%)\n💼 Unique NFT Holders: ${formatNumber(own.nftHolders)}\n📈 Ownership Concentration: ${own.ownershipRatio.toFixed(2)}%\n\nTrack real-time network yields & burns below 👇\n`;
+            const text = `Just checked the $${conf.ticker} Ecosystem Tracker by @savicrypto! 📊\n\n🔥 Total Active Units: ${formatNumber(activeCount)} (${pctActivated.toFixed(2)}%)\n💼 Unique NFT Holders: ${formatNumber(own.nftHolders)}\n📈 Ownership Concentration: ${own.ownershipRatio.toFixed(2)}%\n\nTrack real-time network yields, burns & individual unit ROI below 👇\n`;
             
             const url = window.location.href;
             window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, '_blank');
