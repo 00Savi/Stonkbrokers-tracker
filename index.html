@@ -397,10 +397,11 @@
         const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
         const formatNumber = (val, decimals = 0) => new Intl.NumberFormat('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val);
         
+        // UPGRADED FORMATTER: Perfectly handles sub-dollar token prices without artificially rounding
         function formatPrice(val) {
             if (!val || val === 0) return "$0.00";
-            if (val < 0.01) {
-                return "$" + val.toFixed(6);
+            if (val < 1) {
+                return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 6 }).format(val);
             }
             return formatCurrency(val);
         }
@@ -584,8 +585,10 @@
                 if (date < new Date('2026-08-11')) return 0.031;
             }
             if (ticker === 'MANCER') {
-                if (date < new Date('2026-08-06')) return 0.012;
-                if (date < new Date('2026-08-09')) return 0.015;
+                // FIXED: Adjusted Mancer historical curve to accurately reflect the 0.002 level
+                if (date < new Date('2026-08-06')) return 0.0022;
+                if (date < new Date('2026-08-09')) return 0.0025;
+                if (date < new Date('2026-08-15')) return 0.0028;
             }
             return currentSpot;
         }
@@ -631,9 +634,9 @@
                                 const txData = await txRes.json();
                                 let val = parseFloat(txData.value || "0") / 1e18;
                                 
-                                // FORCE EXTRACTION FOR WETH (OPENSEA)
                                 if (val === 0) {
                                     let tokenTransfers = txData.token_transfers || [];
+                                    
                                     if (tokenTransfers.length === 0) {
                                         try {
                                             const ttRes = await fetch(`https://robinhoodchain.blockscout.com/api/v2/transactions/${txHash}/token-transfers`);
@@ -648,10 +651,10 @@
                                         let maxWethTransfer = 0;
                                         for (const tt of tokenTransfers) {
                                             const sym = (tt.token?.symbol || "").toUpperCase();
-                                            const dec = parseInt(tt.token?.decimals || "0", 10);
-                                            // Safely catch standard 18-decimal token transfers ignoring native project tokens
+                                            const dec = parseInt(tt.token?.decimals || "18", 10);
                                             if (dec >= 18 && !sym.includes(conf.ticker) && !sym.includes("STONK") && !sym.includes("MANCER")) {
-                                                const amt = parseFloat(tt.total?.value || tt.value || "0") / Math.pow(10, dec);
+                                                const rawVal = tt.total?.value || tt.value || "0";
+                                                const amt = parseFloat(rawVal) / Math.pow(10, dec);
                                                 if (amt > maxWethTransfer && amt < 50000) maxWethTransfer = amt; 
                                             }
                                         }
@@ -669,7 +672,6 @@
                         } catch (e) { }
                     }
 
-                    // Mint fallback timestamp
                     if (!foundValidTx && totalTransfers > 0) {
                         const mintTx = items[items.length - 1];
                         if (mintTx.timestamp) purchaseTs = new Date(mintTx.timestamp).getTime() / 1000;
@@ -677,7 +679,6 @@
                 }
             } catch(e) { }
 
-            // Apply Historical Pricing Logic pinned to the EARLIEST known interaction (Purchase/Mint or Activation)
             const effectiveTs = (purchaseTs && actTs) ? Math.min(purchaseTs, actTs) : (purchaseTs || actTs);
             const historicalTokenPrice = getHistoricalTokenPrice(conf.ticker, effectiveTs, m.tokenPriceUsd);
             
@@ -692,7 +693,6 @@
             const totalBasisUsd = purchaseCostUsd + activationCostUsd;
             
             if (!foundValidTx && totalTransfers > 0) {
-                // MINTED (FREE)
                 const cocRoi = activationCostUsd > 0 ? ((annualYieldUsd / activationCostUsd) * 100) : 0;
                 basisHtml = `
                     <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
@@ -703,7 +703,6 @@
                 `;
                 roiHtml = `<span class="text-xl font-extrabold text-emerald-400">${cocRoi.toFixed(2)}%</span>`;
             } else if (foundValidTx) {
-                // BOUGHT
                 const cocRoi = totalBasisUsd > 0 ? ((annualYieldUsd / totalBasisUsd) * 100) : 0;
                 basisHtml = `
                     <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
@@ -714,7 +713,6 @@
                 `;
                 roiHtml = `<span class="text-xl font-extrabold text-emerald-400">${cocRoi.toFixed(2)}%</span>`;
             } else {
-                // ERROR
                 resultsDiv.innerHTML = `
                     <div class="flex flex-col items-center justify-center p-6 text-center">
                         <svg class="w-10 h-10 text-rose-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
@@ -1078,7 +1076,6 @@
             });
         }
 
-        // Helper to safely execute clipboard promises based on a direct click
         const makeImagePromise = async (element) => {
             const canvas = await html2canvas(element, { backgroundColor: '#0f172a', scale: 2 });
             return new Promise((resolve) => {
