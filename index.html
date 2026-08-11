@@ -6,6 +6,8 @@
     <title>Protocol Ecosystem Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- ADDED: html2canvas library for the Share to X screenshot feature -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
         body { background-color: #0f172a; color: #cbd5e1; }
         .card { background-color: #1e293b; border-color: #334155; }
@@ -99,7 +101,7 @@
         
         <button onclick="shareToX()" class="flex-1 sm:flex-none w-full sm:w-auto justify-center bg-black hover:bg-[#1da1f2] border border-[#334155] text-white px-5 py-2.5 rounded-lg font-bold flex items-center gap-2 transition shadow-sm group">
             <svg class="w-4 h-4 fill-current text-white" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 24.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-            Share Stats
+            <span id="share-btn-text">Share Stats</span>
         </button>
     </div>
 
@@ -133,7 +135,7 @@
             </table>
         </div>
 
-        <div class="pt-6 border-t border-[#334155]">
+        <div class="pt-6 border-t border-[#334155]" data-html2canvas-ignore="true">
             <div class="flex items-center gap-2 mb-2">
                 <svg class="w-5 h-5 text-emerald-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a8 8 0 1114.32 4.906l5.387 5.387a1 1 0 01-1.414 1.414l-5.387-5.387A8 8 0 012 8z" clip-rule="evenodd"></path></svg>
                 <h3 class="text-base md:text-lg font-bold text-white">Individual Unit ROI Calculator</h3>
@@ -179,7 +181,7 @@
         </div>
 
         <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6">
-            <div class="flex justify-between items-center mb-6">
+            <div class="flex justify-between items-center mb-6" data-html2canvas-ignore="true">
                 <h3 class="text-sm font-bold text-white hidden sm:block">Cumulative Token Burn Over Time</h3>
                 <div class="flex bg-[#1e293b] rounded-lg p-1 border border-[#334155] w-full sm:w-auto justify-between">
                     <button onclick="updateBurnChart('7d')" id="btn-burn-7d" class="px-4 py-1.5 text-xs font-bold rounded-md text-slate-400 hover:text-white transition w-1/3 sm:w-auto">7D</button>
@@ -218,7 +220,7 @@
             </div>
         </div>
 
-        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-4 gap-4 mt-8">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-4 gap-4 mt-8" data-html2canvas-ignore="true">
             <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider">Tier Activation Flow</h3>
             <div class="flex bg-[#1e293b] rounded-lg p-1 border border-[#334155] w-full sm:w-auto">
                 <button onclick="updateTierStats('24h')" id="btn-tier-24h" class="flex-1 sm:flex-none px-4 py-1.5 text-xs font-bold rounded-md text-slate-400 hover:text-white transition">D</button>
@@ -361,7 +363,7 @@
     </main>
 
     <!-- Dynamic Contextual Methodology Section -->
-    <div class="max-w-6xl mx-auto card rounded-xl p-5 md:p-6 border mb-12 shadow-lg">
+    <div class="max-w-6xl mx-auto card rounded-xl p-5 md:p-6 border mb-12 shadow-lg" data-html2canvas-ignore="true">
         <div class="flex items-center gap-2 mb-4">
             <svg class="w-5 h-5 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
             <h3 class="text-base md:text-lg font-bold text-white">Methodology & Disclaimer</h3>
@@ -569,6 +571,7 @@
             switchTab(activeTab);
         }
 
+        // UPGRADED: Deep searches the parent transactions to find actual ETH values sent during mints/buys
         async function lookupUnitRoi() {
             const inputVal = document.getElementById('lookup-id-input').value.trim();
             const resultsDiv = document.getElementById('lookup-results');
@@ -588,15 +591,26 @@
             let lastSaleEth = 0;
             let fetchError = false;
             try {
+                // Fetch the token's transfer history
                 const res = await fetch(`https://robinhoodchain.blockscout.com/api/v2/tokens/${conf.nftCa}/instances/${inputVal}/transfers`);
                 if (res.ok) {
                     const data = await res.json();
                     const items = data.items || [];
-                    for (const tx of items) {
-                        const val = parseFloat(tx.total?.value || "0") / 1e18;
-                        if (val > 0) {
-                            lastSaleEth = val;
-                            break;
+                    
+                    // Dig into the parent transactions to find the true ETH purchase value
+                    for (const transfer of items) {
+                        const txHash = transfer.tx_hash || transfer.hash;
+                        if (!txHash) continue;
+                        
+                        const txRes = await fetch(`https://robinhoodchain.blockscout.com/api/v2/transactions/${txHash}`);
+                        if (txRes.ok) {
+                            const txData = await txRes.json();
+                            const val = parseFloat(txData.value || "0") / 1e18;
+                            // A real purchase/mint transaction contains sent ETH
+                            if (val > 0) {
+                                lastSaleEth = val;
+                                break;
+                            }
                         }
                     }
                 } else {
@@ -973,7 +987,8 @@
             });
         }
 
-        function shareToX() {
+        // UPGRADED: Utilizes HTML2Canvas to copy a direct screenshot of the active tab to the user's clipboard!
+        async function shareToX() {
             const conf = masterData.projects[currentProjectKey].config;
             const act = masterData.projects[currentProjectKey].activation;
             const own = masterData.projects[currentProjectKey].ownership;
@@ -985,7 +1000,48 @@
             const text = `Just checked the $${conf.ticker} Ecosystem Tracker by @savicrypto! 📊\n\n🔥 Total Active Units: ${formatNumber(activeCount)} (${pctActivated.toFixed(2)}%)\n💼 Unique NFT Holders: ${formatNumber(own.nftHolders)}\n📈 Ownership Concentration: ${own.ownershipRatio.toFixed(2)}%\n\nTrack real-time network yields, burns & individual unit ROI below 👇\n`;
             
             const url = window.location.href;
-            window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, '_blank');
+            const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
+            
+            // 1. Identify which tab is currently visible
+            let activeViewId = 'view-roi';
+            ['view-roi', 'view-burn', 'view-activation', 'view-ownership'].forEach(id => {
+                if (!document.getElementById(id).classList.contains('hidden')) {
+                    activeViewId = id;
+                }
+            });
+
+            const elementToCapture = document.getElementById(activeViewId);
+            const shareBtn = document.getElementById('share-btn-text');
+            const ogText = shareBtn.innerText;
+            shareBtn.innerText = "Capturing...";
+            
+            const originalBg = elementToCapture.style.backgroundColor;
+            elementToCapture.style.backgroundColor = '#0f172a'; // Force dark background for transparency safety
+
+            try {
+                // 2. Render the specific DOM element into an image canvas
+                const canvas = await html2canvas(elementToCapture, { backgroundColor: '#0f172a', scale: 2 });
+                elementToCapture.style.backgroundColor = originalBg;
+
+                // 3. Convert canvas to a blob and push directly to user's system clipboard
+                canvas.toBlob(async function(blob) {
+                    try {
+                        const item = new ClipboardItem({ "image/png": blob });
+                        await navigator.clipboard.write([item]);
+                        alert("📸 Dashboard Screenshot Copied!\n\nJust hit Paste (Ctrl+V / Cmd+V) when X/Twitter opens to attach it to your post.");
+                        window.open(twitterUrl, '_blank');
+                    } catch (err) {
+                        console.error("Clipboard copy failed: ", err);
+                        alert("Could not auto-copy the screenshot to your clipboard. Opening X anyway!");
+                        window.open(twitterUrl, '_blank');
+                    }
+                    shareBtn.innerText = ogText;
+                }, 'image/png');
+            } catch (e) {
+                console.error("html2canvas failed: ", e);
+                window.open(twitterUrl, '_blank');
+                shareBtn.innerText = ogText;
+            }
         }
         
         initDashboard();
