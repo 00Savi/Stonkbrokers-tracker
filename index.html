@@ -415,8 +415,6 @@
         window.fullBurnData = [];
         window.tierChartData = {};
         window.tierActivationStats = null;
-        // GLOBAL ACCUMULATOR MAP
-        window.currentProjectCumulativeTokens = {};
         
         let masterData = null;
         let currentProjectKey = 'stonk';
@@ -507,18 +505,8 @@
             tbody.innerHTML = '';
             tierChartInstances = {}; 
             
-            // BUILD THE CUMULATIVE SUM MAP
-            window.currentProjectCumulativeTokens = {};
-            let runSum = 0;
             data.tiers.forEach(t => {
-                runSum += t.reqTokens;
-                window.currentProjectCumulativeTokens[t.tier] = runSum;
-            });
-            
-            data.tiers.forEach(t => {
-                // FETCH THE TRUE CUMULATIVE TOKENS FOR THIS TIER
-                const cumulativeTokens = window.currentProjectCumulativeTokens[t.tier];
-                const activationCostUsd = cumulativeTokens * m.tokenPriceUsd;
+                const activationCostUsd = t.reqTokens * m.tokenPriceUsd;
                 const totalCostUsd = floorCostUsd + activationCostUsd;
                 const yieldUsd = t.trackedAnnualYieldUsd;
                 
@@ -546,7 +534,7 @@
                             <div><div class="text-white font-bold">${t.name}</div><div class="text-xs text-slate-500 mt-0.5">Weight: <span class="text-yellow-500 font-semibold">${t.weight}x</span></div></div>
                         </div>
                     </td>
-                    <td class="py-5"><span class="text-white font-bold">${formatNumber(cumulativeTokens)}</span> <span class="text-slate-500 text-sm ml-1">${conf.ticker}</span><div class="text-[10px] text-slate-500 mt-0.5">Total Accumulated</div></td>
+                    <td class="py-5"><span class="text-white font-bold">${formatNumber(t.reqTokens)}</span> <span class="text-slate-500 text-sm ml-1">${conf.ticker}</span></td>
                     <td class="py-5"><div class="text-white font-bold text-base">${formatCurrency(totalCostUsd)}</div><div class="text-xs text-slate-500 mt-0.5">Floor + ${formatCurrency(activationCostUsd)} Act.</div></td>
                     <td class="py-5">${yieldHtml}</td>
                     <td class="py-5 text-right pr-4">
@@ -690,10 +678,8 @@
             const effectiveTs = (purchaseTs && actTs) ? Math.min(purchaseTs, actTs) : (purchaseTs || actTs);
             const historicalTokenPrice = getHistoricalTokenPrice(conf.ticker, effectiveTs, m.tokenPriceUsd);
             
-            // FETCH THE TRUE CUMULATIVE TOKENS FOR THIS TIER
-            const cumulativeTokens = window.currentProjectCumulativeTokens[tierData.tier];
-            const activationCostUsd = cumulativeTokens * historicalTokenPrice;
-            
+            // DIRECT REQUIREMENT (reqTokens is flat total for tier)
+            const activationCostUsd = tierData.reqTokens * historicalTokenPrice;
             const annualYieldUsd = tierData.trackedAnnualYieldUsd;
             const weeklyYieldUsd = tierData.dailyYields.reduce((a, b) => a + b, 0);
 
@@ -766,7 +752,7 @@
                     <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
                         <p class="text-[10px] uppercase text-slate-400 mb-0.5">${tokenBasisLabel}</p>
                         <p class="text-base font-bold text-white">${formatCurrency(activationCostUsd)}</p>
-                        <p class="text-[10px] text-slate-500">${formatNumber(cumulativeTokens)} ${conf.ticker} at ${priceRef}</p>
+                        <p class="text-[10px] text-slate-500">${formatNumber(tierData.reqTokens)} ${conf.ticker} at ${priceRef}</p>
                     </div>
                     <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
                         <p class="text-[10px] uppercase text-slate-400 mb-0.5">Trailing 7-Day Revenue</p>
