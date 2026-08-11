@@ -241,10 +241,17 @@ async function fetchAllLogs(address, genesisBlock, topic0 = null) {
   for (const log of allLogs) { uniqueLogsMap.set(log.transactionHash + "-" + log.logIndex, log); }
   const uniqueLogs = Array.from(uniqueLogsMap.values());
 
+  const getInt = (val) => {
+    if (!val && val !== 0) return 0;
+    return val.toString().startsWith("0x") ? parseInt(val, 16) : parseInt(val, 10);
+  };
+
+  // STRICT CRYPTOGRAPHIC LOG SORTING (Prevents multi-tier jumps from overwriting)
   uniqueLogs.sort((a, b) => {
-    const blockA = parseInt(a.blockNumber.toString().startsWith("0x") ? a.blockNumber : `0x${a.blockNumber}`, 16);
-    const blockB = parseInt(b.blockNumber.toString().startsWith("0x") ? b.blockNumber : `0x${b.blockNumber}`, 16);
-    return blockA !== blockB ? blockA - blockB : parseInt(a.logIndex, 16) - parseInt(b.logIndex, 16);
+    const blockA = getInt(a.blockNumber);
+    const blockB = getInt(b.blockNumber);
+    if (blockA !== blockB) return blockA - blockB;
+    return getInt(a.logIndex) - getInt(b.logIndex);
   });
 
   return uniqueLogs;
@@ -423,7 +430,7 @@ async function fetchActivations(conf) {
     tierStats, 
     history, 
     dualBurn,
-    activeTokenTiers: Object.fromEntries(activeBrokers)
+    activeTokenTiers: Object.fromEntries(activeBrokers) 
   };
 }
 
