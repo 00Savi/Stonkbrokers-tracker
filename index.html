@@ -597,7 +597,7 @@
                     const items = data.items || [];
                     
                     for (const transfer of items) {
-                        const txHash = transfer.tx_hash || transfer.hash;
+                        const txHash = transfer.transaction_hash || transfer.tx_hash || transfer.hash;
                         if (!txHash) continue;
                         
                         try {
@@ -606,7 +606,6 @@
                                 const txData = await txRes.json();
                                 let val = parseFloat(txData.value || "0") / 1e18;
                                 
-                                // FORCE EXTRACTION FOR WETH (OPENSEA)
                                 if (val === 0) {
                                     let tokenTransfers = txData.token_transfers || [];
                                     if (tokenTransfers.length === 0) {
@@ -624,10 +623,9 @@
                                         for (const tt of tokenTransfers) {
                                             const sym = (tt.token?.symbol || "").toUpperCase();
                                             const dec = parseInt(tt.token?.decimals || "0", 10);
-                                            // Safely catch 18-decimal token transfers that aren't the native project tokens
                                             if (dec >= 18 && !sym.includes(conf.ticker) && !sym.includes("STONK") && !sym.includes("MANCER")) {
                                                 const amt = parseFloat(tt.total?.value || tt.value || "0") / Math.pow(10, dec);
-                                                if (amt > maxWethTransfer && amt < 50000) maxWethTransfer = amt; // Safety cap
+                                                if (amt > maxWethTransfer && amt < 50000) maxWethTransfer = amt; 
                                             }
                                         }
                                         val = maxWethTransfer;
@@ -1053,11 +1051,11 @@
                     try {
                         const item = new ClipboardItem({ "image/png": blob });
                         await navigator.clipboard.write([item]);
-                        alert("📸 Dashboard Screenshot Copied!\n\nJust hit Paste (Ctrl+V / Cmd+V) when X/Twitter opens to attach it to your post.");
+                        alert("✅ SCREENSHOT COPIED TO CLIPBOARD!\\n\\nTwitter blocks auto-attaching images, so we copied it for you.\\n\\nWhen Twitter opens, just right-click and select 'Paste' (or press Ctrl+V / Cmd+V) to attach the image to your post!");
                         window.open(twitterUrl, '_blank');
                     } catch (err) {
                         console.error("Clipboard copy failed: ", err);
-                        alert("Could not auto-copy the screenshot to your clipboard. Opening X anyway!");
+                        alert("Could not auto-copy the screenshot to your clipboard. Your browser may be blocking access. Opening X anyway!");
                         window.open(twitterUrl, '_blank');
                     }
                     shareBtn.innerText = ogText;
@@ -1089,11 +1087,11 @@
                     try {
                         const item = new ClipboardItem({ "image/png": blob });
                         await navigator.clipboard.write([item]);
-                        alert("📸 Unit Analysis Screenshot Copied!\n\nJust hit Paste (Ctrl+V / Cmd+V) when X/Twitter opens to attach it to your post.");
+                        alert("✅ SCREENSHOT COPIED TO CLIPBOARD!\\n\\nTwitter blocks auto-attaching images, so we copied it for you.\\n\\nWhen Twitter opens, just right-click and select 'Paste' (or press Ctrl+V / Cmd+V) to attach the image to your post!");
                         window.open(twitterUrl, '_blank');
                     } catch (err) {
                         console.error("Clipboard copy failed: ", err);
-                        alert("Could not auto-copy the screenshot to your clipboard. Opening X anyway!");
+                        alert("Could not auto-copy the screenshot to your clipboard. Your browser may be blocking access. Opening X anyway!");
                         window.open(twitterUrl, '_blank');
                     }
                     shareBtn.innerText = ogText;
