@@ -559,7 +559,9 @@
             if (pctActivated === 0 && totalSupply > 0) pctActivated = (activeCount / totalSupply) * 100;
 
             const breakdown = act.breakdown || { T0: 0, T1: 0, T2: 0, T3: 0, T4: 0 };
-            const history = act.history || { labels: [], cumulative: [], dailyActivations: [], dailyDeactivations: [] };
+            
+            // FIX: Ensure history perfectly handles cumulativeGross
+            const history = act.history || { labels: [], cumulative: [], cumulativeGross: [], dailyActivations: [], dailyDeactivations: [] };
 
             const dualBurn = act.dualBurn || {};
             const totalBurn = dualBurn.totalBurnTokens || (activeCount * 180000);
@@ -584,13 +586,16 @@
                 updateTierStats('allTime'); 
             }
 
-            const maxActive = history.cumulative[history.cumulative.length - 1] || 1;
+            // FIX: Use cumulativeGross (pure activations) to ensure the burn chart ONLY goes up
+            const grossArr = history.cumulativeGross && history.cumulativeGross.length > 0 ? history.cumulativeGross : history.cumulative;
+            const maxGross = grossArr[grossArr.length - 1] || 1;
+            
             window.fullBurnLabels = history.labels;
-            window.fullBurnData = history.cumulative.map(v => (v / maxActive) * totalBurn);
+            window.fullBurnData = grossArr.map(v => (v / maxGross) * totalBurn);
 
             window.activationChartData = {
                 historyLabels: history.labels,
-                historyValues: history.cumulative,
+                historyValues: history.cumulative, // The Net active chart can still go up and down
                 dailyActs: history.dailyActivations,
                 dailyDeacts: history.dailyDeactivations,
                 breakdownObj: breakdown,
