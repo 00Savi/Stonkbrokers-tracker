@@ -41,7 +41,7 @@ const FALLBACK_STOCK_PRICES = {
 
 const PROJECTS = {
   stonk: {
-    genesisBlock: 12600000,
+    genesisBlock: 0, 
     tokenCa: "0xe934e36a439c94017b64a3fece66af12099abf50",
     nftCa: "0x539cdd042c2f3d93ebc5be7dfff0c79f3b4fabf0",
     activationCa: "0xacd5ae3c060c1137fe2ee86b0ab2ef697456f664",
@@ -62,7 +62,7 @@ const PROJECTS = {
     ]
   },
   mancer: {
-    genesisBlock: 29000000, 
+    genesisBlock: 0, 
     tokenCa: "0xc72F232a6869e6CF34dC06129AfFD07F8a2a246A".toLowerCase(),
     nftCa: "0x797a2e030b7e49107c8f07bf0300ea9cae88ca57".toLowerCase(),
     activationCa: "0x47c2194cAacfC778c0Baa41E10008bb7D720Cd59".toLowerCase(),
@@ -423,7 +423,7 @@ async function fetchActivations(conf) {
     tierStats, 
     history, 
     dualBurn,
-    activeTokenTiers: Object.fromEntries(activeBrokers) // Exports key-value map for Individual Lookup Tool
+    activeTokenTiers: Object.fromEntries(activeBrokers)
   };
 }
 
