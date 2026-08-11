@@ -603,7 +603,28 @@
                         const txRes = await fetch(`https://robinhoodchain.blockscout.com/api/v2/transactions/${txHash}`);
                         if (txRes.ok) {
                             const txData = await txRes.json();
-                            const val = parseFloat(txData.value || "0") / 1e18;
+                            let val = parseFloat(txData.value || "0") / 1e18;
+                            
+                            // NEW: If native ETH value is 0, check for WETH transfers leaving the buyer's wallet (OpenSea trades)
+                            if (val === 0 && txData.token_transfers && txData.token_transfers.length > 0) {
+                                let wethSentByBuyer = 0;
+                                let maxWethTransfer = 0;
+                                const buyerAddress = (transfer.to?.hash || transfer.to || "").toLowerCase();
+                                
+                                for (const tt of txData.token_transfers) {
+                                    const sym = (tt.token?.symbol || "").toUpperCase();
+                                    if (sym.includes("ETH")) {
+                                        const dec = parseInt(tt.token?.decimals || "18", 10);
+                                        const amt = parseFloat(tt.total?.value || tt.value || "0") / Math.pow(10, dec);
+                                        
+                                        const sender = (tt.from?.hash || tt.from || "").toLowerCase();
+                                        if (sender === buyerAddress) wethSentByBuyer += amt;
+                                        if (amt > maxWethTransfer) maxWethTransfer = amt;
+                                    }
+                                }
+                                val = wethSentByBuyer > 0 ? wethSentByBuyer : maxWethTransfer;
+                            }
+
                             if (val > 0) {
                                 lastSaleEth = val;
                                 foundValidTx = true;
@@ -991,12 +1012,9 @@
         }
 
         async function shareToX() {
-            const conf = masterData.projects[currentProjectKey].config;
-            
-            const text = `Checking out the $${conf.ticker} Ecosystem Tracker by @savicrypto! 📊\n\nTrack real-time network yields, burns & individual unit ROI below 👇\n`;
-            
-            const url = window.location.href;
-            const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
+            // EXACT TEXT REQUESTED
+            const text = `Track real-time network yields, burns & individual unit ROI below 👇\n\nhttps://savicrypto.xyz/ follow @savicrypto for live updates`;
+            const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
             
             let activeViewId = 'view-roi';
             ['view-roi', 'view-burn', 'view-activation', 'view-ownership'].forEach(id => {
