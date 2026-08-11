@@ -600,42 +600,35 @@
                         const txHash = transfer.tx_hash || transfer.hash;
                         if (!txHash) continue;
                         
-                        const txRes = await fetch(`https://robinhoodchain.blockscout.com/api/v2/transactions/${txHash}`);
-                        if (txRes.ok) {
-                            const txData = await txRes.json();
-                            let val = parseFloat(txData.value || "0") / 1e18;
-                            
-                            // NEW: If native ETH value is 0, check for WETH transfers leaving the buyer's wallet (OpenSea trades)
-                            if (val === 0 && txData.token_transfers && txData.token_transfers.length > 0) {
-                                let wethSentByBuyer = 0;
-                                let maxWethTransfer = 0;
-                                const buyerAddress = (transfer.to?.hash || transfer.to || "").toLowerCase();
+                        try {
+                            const txRes = await fetch(`https://robinhoodchain.blockscout.com/api/v2/transactions/${txHash}`);
+                            if (txRes.ok) {
+                                const txData = await txRes.json();
+                                let val = parseFloat(txData.value || "0") / 1e18;
                                 
-                                for (const tt of txData.token_transfers) {
-                                    const sym = (tt.token?.symbol || "").toUpperCase();
-                                    if (sym.includes("ETH")) {
-                                        const dec = parseInt(tt.token?.decimals || "18", 10);
-                                        const amt = parseFloat(tt.total?.value || tt.value || "0") / Math.pow(10, dec);
-                                        
-                                        const sender = (tt.from?.hash || tt.from || "").toLowerCase();
-                                        if (sender === buyerAddress) wethSentByBuyer += amt;
-                                        if (amt > maxWethTransfer) maxWethTransfer = amt;
+                                // NEW WETH EXTRACTION: If native ETH is 0, actively search the transaction's internal tokens for WETH
+                                if (val === 0 && txData.token_transfers && txData.token_transfers.length > 0) {
+                                    let maxTokenTransfer = 0;
+                                    for (const tt of txData.token_transfers) {
+                                        if (tt.token && parseInt(tt.token.decimals || "0", 10) > 0) {
+                                            const dec = parseInt(tt.token.decimals, 10);
+                                            const amt = parseFloat(tt.total?.value || tt.value || "0") / Math.pow(10, dec);
+                                            if (amt > maxTokenTransfer) maxTokenTransfer = amt;
+                                        }
                                     }
+                                    val = maxTokenTransfer;
                                 }
-                                val = wethSentByBuyer > 0 ? wethSentByBuyer : maxWethTransfer;
-                            }
 
-                            if (val > 0) {
-                                lastSaleEth = val;
-                                foundValidTx = true;
-                                break;
+                                if (val > 0) {
+                                    lastSaleEth = val;
+                                    foundValidTx = true;
+                                    break;
+                                }
                             }
-                        }
+                        } catch (e) { }
                     }
                 }
-            } catch(e) {
-                console.warn("Could not fetch last sale price:", e);
-            }
+            } catch(e) { }
 
             const activationCostUsd = tierData.reqTokens * m.tokenPriceUsd;
             const annualYieldUsd = tierData.trackedAnnualYieldUsd;
@@ -688,7 +681,7 @@
                 <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
                     ${basisHtml}
                     <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
-                        <p class="text-[10px] uppercase text-slate-400 mb-0.5">Activation Token Basis</p>
+                        <p class="text-[10px] uppercase text-slate-400 mb-0.5">Current Token Basis</p>
                         <p class="text-base font-bold text-white">${formatCurrency(activationCostUsd)}</p>
                         <p class="text-[10px] text-slate-500">${formatNumber(tierData.reqTokens)} ${conf.ticker}</p>
                     </div>
@@ -1013,7 +1006,7 @@
 
         async function shareToX() {
             // EXACT TEXT REQUESTED
-            const text = `Track real-time network yields, burns & individual unit ROI below 👇\n\nhttps://savicrypto.xyz/ follow @savicrypto for live updates`;
+            const text = `Track real-time network yields, burns & individual unit ROI below 👇\nhttps://savicrypto.xyz/ follow @savicrypto for live updates`;
             const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
             
             let activeViewId = 'view-roi';
