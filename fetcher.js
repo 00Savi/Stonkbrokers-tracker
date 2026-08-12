@@ -89,13 +89,19 @@ const PROTOCOL_CONTRACTS = [
   "0x55642a3f10f1af5145d3d59021b1d6b03bb8692c"  
 ];
 
+// MASSIVE ABI NET: Caught every variation of Upgrade and Activation
 const ACTIVATION_ABI = [
   "event Activated(uint256 indexed tokenId, address indexed owner, uint256 tier, uint256 feePaid)",
   "event Activated(uint256 tokenId, address owner, uint256 tier, uint256 feePaid)",
   "event Activated(uint256 indexed tokenId, address indexed owner, uint8 tier, uint256 feePaid)",
-  "event Activated(uint256 tokenId, address owner, uint8 tier, uint8 tierBytes, uint256 feePaid)",
+  "event Activated(uint256 tokenId, address owner, uint8 tier, uint256 feePaid)",
   "event Activated(uint256 indexed tokenId, address indexed owner, uint256 tier)",
   "event Activated(uint256 tokenId, address owner, uint256 tier)",
+  "event Activated(uint256 indexed tokenId, uint256 tier)",
+  "event Activated(uint256 tokenId, uint256 tier)",
+  "event TierUpgraded(uint256 indexed tokenId, uint256 oldTier, uint256 newTier)",
+  "event Upgraded(uint256 indexed tokenId, uint256 oldTier, uint256 newTier)",
+  "event Upgraded(uint256 indexed tokenId, uint256 newTier)",
   "event ActivationCleared(uint256 indexed tokenId)",
   "event ActivationCleared(uint256 tokenId)"
 ];
@@ -220,7 +226,8 @@ async function fetchAllLogs(address, genesisBlock, topic0 = null) {
 
   let allLogs = [];
   let fromBlock = genesisBlock; 
-  let step = 5000000; 
+  // MICRO-STEPPING: Dropped to 500,000 to completely eliminate silent Blockscout API log truncation
+  let step = 500000; 
 
   while (fromBlock <= latestBlock) {
     let toBlock = fromBlock + step;
@@ -236,7 +243,7 @@ async function fetchAllLogs(address, genesisBlock, topic0 = null) {
 
     allLogs.push(...logs);
     fromBlock = toBlock + 1;
-    step = 5000000; 
+    step = 500000; 
     await sleep(200); 
   }
 
@@ -382,14 +389,23 @@ async function fetchActivations(conf) {
       if (!parsed) continue;
 
       const tokenId = parsed.args.tokenId.toString();
-      const isAct = parsed.name === "Activated";
+      
+      // EXPANDED TO CATCH 'Upgraded' and 'TierUpgraded'
+      const isAct = parsed.name === "Activated" || parsed.name.includes("Upgraded");
       const isDeact = parsed.name === "ActivationCleared";
+      
+      // X-RAY DEBUGGER for Unit 1258
+      if (tokenId === "1258") {
+          console.log(`[X-RAY 1258] Event: ${parsed.name} | Block: ${log.blockNumber} | LogIdx: ${log.logIndex !== undefined ? log.logIndex : log.log_index}`);
+      }
 
       if (isAct || isDeact) {
           let tierId = null;
           
           if (isAct) { 
-            tierId = `T${parsed.args.tier.toString()}`; 
+            // Handles both 'tier' and 'newTier' property names depending on the exact event
+            const tierVal = parsed.args.newTier !== undefined ? parsed.args.newTier : parsed.args.tier;
+            tierId = `T${tierVal.toString()}`; 
             activeBrokers.set(tokenId, { t: tierId, ts: ts }); 
           } 
           else if (isDeact) { 
