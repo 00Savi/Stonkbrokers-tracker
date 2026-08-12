@@ -30,7 +30,8 @@ const TOKEN_TICKERS = {
   "0x5d111f5083c89589009d1d64eadd84dc615836b4": "DEX", 
   "0x020bfc650a365f8bb26819deaabf3e21291018b4": "DEX", 
   "0x6245e67affa44a23077f0ea7f981a8dc743a0c47": "DEX", 
-  "0x27efeae1817d90974623cb2ed455c424beffa5ab": "DEX"  
+  "0x27efeae1817d90974623cb2ed455c424beffa5ab": "DEX",
+  "0xe3fa12da7fa026b21817f16622e8ae48fa785166": "YARD" // Added YARD 
 };
 
 const MEMES = [
@@ -64,6 +65,7 @@ const PROJECTS = {
     yieldMode: "oracle_wallet",
     oracleSource: "0xe7207caa913b54aa4411e847a3a49eee0568cccf",
     oracleWeight: 333,
+    underConstruction: false,
     tiers: [
       { id: "T0", name: "Floor Trader", reqTokens: 66666, weight: 100 },
       { id: "T1", name: "Analyst", reqTokens: 166666, weight: 125 },
@@ -84,12 +86,34 @@ const PROJECTS = {
     logo: "logo.png",
     yieldMode: "protocol_vault",
     oracleSource: "0x47c2194cAacfC778c0Baa41E10008bb7D720Cd59".toLowerCase(), 
+    underConstruction: false,
     tiers: [
       { id: "T0", name: "Apprentice", reqTokens: 50000, weight: 100 },
       { id: "T1", name: "Mage", reqTokens: 110000, weight: 125 },
       { id: "T2", name: "Wizard", reqTokens: 225000, weight: 160 },
       { id: "T3", name: "Elder", reqTokens: 450000, weight: 200 },
       { id: "T4", name: "Grand Mancer", reqTokens: 1200000, weight: 333 }
+    ]
+  },
+  tickeryard: {
+    genesisBlock: 33500000, // Safe estimate for August launch block
+    tokenCa: "0xE3FA12dA7fa026B21817f16622E8AE48fA785166".toLowerCase(),
+    nftCa: "0x2756bffc4cccb0cbebeb675a8593ca80c8db8a97".toLowerCase(),
+    activationCa: "0xEf5f726990442bC3207d72D1F9DcF8677Cf02358".toLowerCase(),
+    ammCa: "0xFe0b24A3b4052aD78f10fa75a27118c3e54a00e6".toLowerCase(),
+    maxSupply: 3333,
+    unitValue: 300030,
+    ticker: "YARD",
+    logo: "Stonkbroker.png", // Inherits default logo or you can add a tickeryard.png later
+    yieldMode: "protocol_vault",
+    oracleSource: "0xEf5f726990442bC3207d72D1F9DcF8677Cf02358".toLowerCase(), 
+    underConstruction: true, // TRIGGERS THE "AWAITING EPOCH" UI
+    tiers: [
+      { id: "T0", name: "Groundskeeper", reqTokens: 30003, weight: 100 },
+      { id: "T1", name: "Apprentice", reqTokens: 45004.5, weight: 125 },
+      { id: "T2", name: "Foreman", reqTokens: 90009, weight: 160 },
+      { id: "T3", name: "Manager", reqTokens: 150015, weight: 200 },
+      { id: "T4", name: "Master", reqTokens: 300030, weight: 333 }
     ]
   }
 };
@@ -680,6 +704,7 @@ async function run() {
         activation: activationStats,
         ownership: ownershipStats,
         tiers: mappedTiers,
+        underConstruction: conf.underConstruction, // Added to pass flag to frontend
         config: { ticker: conf.ticker, unitValue: conf.unitValue, logo: conf.logo, nftCa: conf.nftCa }
       };
   }
