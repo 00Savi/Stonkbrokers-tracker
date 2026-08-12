@@ -1,7 +1,7 @@
 const fs = require("fs");
 const { ethers } = require("ethers");
 
-// SECURE API KEY CALL - Pulls from GitHub Secrets
+// SECURE API KEY CALL
 const API_KEY = process.env.BLOCKSCOUT_API_KEY;
 const PRO_API = "https://api.blockscout.com/v2/api";
 const CHAIN_ID = 4663;
@@ -89,9 +89,10 @@ const PROTOCOL_CONTRACTS = [
   "0x55642a3f10f1af5145d3d59021b1d6b03bb8692c"  
 ];
 
-// MASSIVE ABI NET: Caught every variation of Upgrade and Activation
+// OMNI-ABI: Encompasses every variation of uint formatting to guarantee a parsing match
 const ACTIVATION_ABI = [
   "event Activated(uint256 indexed tokenId, address indexed owner, uint256 tier, uint256 feePaid)",
+  "event Activated(uint256 indexed tokenId, address owner, uint256 tier, uint256 feePaid)",
   "event Activated(uint256 tokenId, address owner, uint256 tier, uint256 feePaid)",
   "event Activated(uint256 indexed tokenId, address indexed owner, uint8 tier, uint256 feePaid)",
   "event Activated(uint256 tokenId, address owner, uint8 tier, uint256 feePaid)",
@@ -99,9 +100,20 @@ const ACTIVATION_ABI = [
   "event Activated(uint256 tokenId, address owner, uint256 tier)",
   "event Activated(uint256 indexed tokenId, uint256 tier)",
   "event Activated(uint256 tokenId, uint256 tier)",
+  "event Activated(uint256 indexed tokenId, uint8 tier)",
+  "event Activated(uint256 tokenId, uint8 tier)",
   "event TierUpgraded(uint256 indexed tokenId, uint256 oldTier, uint256 newTier)",
+  "event TierUpgraded(uint256 tokenId, uint256 oldTier, uint256 newTier)",
+  "event TierUpgraded(uint256 indexed tokenId, uint8 oldTier, uint8 newTier)",
+  "event TierUpgraded(uint256 tokenId, uint8 oldTier, uint8 newTier)",
   "event Upgraded(uint256 indexed tokenId, uint256 oldTier, uint256 newTier)",
+  "event Upgraded(uint256 tokenId, uint256 oldTier, uint256 newTier)",
+  "event Upgraded(uint256 indexed tokenId, uint8 oldTier, uint8 newTier)",
+  "event Upgraded(uint256 tokenId, uint8 oldTier, uint8 newTier)",
   "event Upgraded(uint256 indexed tokenId, uint256 newTier)",
+  "event Upgraded(uint256 tokenId, uint256 newTier)",
+  "event Upgraded(uint256 indexed tokenId, uint8 newTier)",
+  "event Upgraded(uint256 tokenId, uint8 newTier)",
   "event ActivationCleared(uint256 indexed tokenId)",
   "event ActivationCleared(uint256 tokenId)"
 ];
@@ -110,6 +122,7 @@ const iface = new ethers.Interface(ACTIVATION_ABI);
 let ethPriceUsd = 1917;
 let tokenPrices = {};
 
+// HARDENED RATE-LIMIT CATCHER
 async function secureFetch(url) {
   const headers = { "Accept": "application/json" };
   for (let i = 0; i < 5; i++) {
@@ -119,15 +132,37 @@ async function secureFetch(url) {
           console.error("\n[CRITICAL ERROR] HTTP 402: Payment Required. PRO API Key Out of Credits!");
           process.exit(1);
       }
+      if (res.status === 429) {
+          console.warn(`[API] 429 Rate limit hit. Pausing for 3s...`);
+          await sleep(3000);
+          continue;
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      
       const text = await res.text();
       const data = JSON.parse(text);
-      if (data.status === "0" && (data.message === "No records found" || data.message === "No transactions found")) return { result: [] };
+      
+      if (data.status === "0") {
+          if (data.message === "No records found" || data.message === "No transactions found") return { result: [] };
+          
+          // The Silent-Skip Catcher
+          if (typeof data.result === 'string' && (data.result.toLowerCase().includes("rate limit") || data.result.toLowerCase().includes("limit"))) {
+              console.warn(`[API] Silent string rate limit caught. Pausing for 3s...`);
+              await sleep(3000);
+              continue;
+          }
+          if (data.message && (data.message.toLowerCase().includes("rate limit") || data.message.toLowerCase().includes("limit"))) {
+              console.warn(`[API] Silent message rate limit caught. Pausing for 3s...`);
+              await sleep(3000);
+              continue;
+          }
+      }
       return data;
     } catch (e) {
       await sleep(1500 * (i + 1));
     }
   }
+  console.error("\n[CRITICAL ERROR] Failed to fetch after 5 retries: " + url);
   process.exit(1); 
 }
 
@@ -151,7 +186,7 @@ async function fetchTokenHoldersSafe(contractAddress, isNft = false) {
         }
         if (data.result.length < 1000) break; 
         page++;
-        await sleep(200); 
+        await sleep(300); 
     } else {
         break; 
     }
@@ -179,7 +214,7 @@ async function loadMarketPrices() {
       } catch {}
       markets[key].nftFloorEth = +((conf.unitValue * markets[key].tokenPriceUsd * 1.10) / ethPriceUsd).toFixed(3);
       tokenPrices[conf.tokenCa.toLowerCase()] = markets[key].tokenPriceUsd;
-      await sleep(250);
+      await sleep(300);
   }
 
   for (const [addr, ticker] of Object.entries(TOKEN_TICKERS)) {
@@ -198,7 +233,7 @@ async function loadMarketPrices() {
           tokenPrices[addr] = parseFloat(best.priceUsd);
         }
       } catch {}
-      await sleep(150);
+      await sleep(200);
       continue;
     }
 
@@ -208,7 +243,7 @@ async function loadMarketPrices() {
       const p = d?.chart?.result?.[0]?.meta?.regularMarketPrice;
       if (p) tokenPrices[addr] = p; else tokenPrices[addr] = FALLBACK_STOCK_PRICES[ticker] || 100;
     } catch { tokenPrices[addr] = FALLBACK_STOCK_PRICES[ticker] || 100; }
-    await sleep(150);
+    await sleep(200);
   }
 
   return markets;
@@ -226,7 +261,6 @@ async function fetchAllLogs(address, genesisBlock, topic0 = null) {
 
   let allLogs = [];
   let fromBlock = genesisBlock; 
-  // MICRO-STEPPING: Dropped to 500,000 to completely eliminate silent Blockscout API log truncation
   let step = 500000; 
 
   while (fromBlock <= latestBlock) {
@@ -244,7 +278,8 @@ async function fetchAllLogs(address, genesisBlock, topic0 = null) {
     allLogs.push(...logs);
     fromBlock = toBlock + 1;
     step = 500000; 
-    await sleep(200); 
+    // SLOWED TO STAY UNDER 5 REQ/SEC LIMIT
+    await sleep(300); 
   }
 
   const parseNum = (val) => {
@@ -294,7 +329,7 @@ async function getTrueDeflationStats(conf) {
   for (const addr of deadAddresses) {
     let res = await secureFetch(`${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokenbalance&contractaddress=${conf.tokenCa}&address=${addr}&apikey=${API_KEY}`);
     if (res && res.result) deadBalance += Number(res.result) / 1e18;
-    await sleep(200); 
+    await sleep(300); 
   }
 
   let totalBurnTokens = 0;
@@ -390,23 +425,18 @@ async function fetchActivations(conf) {
 
       const tokenId = parsed.args.tokenId.toString();
       
-      // EXPANDED TO CATCH 'Upgraded' and 'TierUpgraded'
       const isAct = parsed.name === "Activated" || parsed.name.includes("Upgraded");
       const isDeact = parsed.name === "ActivationCleared";
-      
-      // X-RAY DEBUGGER for Unit 1258
-      if (tokenId === "1258") {
-          console.log(`[X-RAY 1258] Event: ${parsed.name} | Block: ${log.blockNumber} | LogIdx: ${log.logIndex !== undefined ? log.logIndex : log.log_index}`);
-      }
 
       if (isAct || isDeact) {
           let tierId = null;
           
           if (isAct) { 
-            // Handles both 'tier' and 'newTier' property names depending on the exact event
             const tierVal = parsed.args.newTier !== undefined ? parsed.args.newTier : parsed.args.tier;
-            tierId = `T${tierVal.toString()}`; 
-            activeBrokers.set(tokenId, { t: tierId, ts: ts }); 
+            if (tierVal !== undefined && tierVal !== null) {
+                tierId = `T${tierVal.toString()}`; 
+                activeBrokers.set(tokenId, { t: tierId, ts: ts }); 
+            }
           } 
           else if (isDeact) { 
             tierId = activeBrokers.has(tokenId) ? activeBrokers.get(tokenId).t : null;
@@ -427,7 +457,12 @@ async function fetchActivations(conf) {
           if (isAct) dailyData[dateStr].activated++;
           if (isDeact) dailyData[dateStr].deactivated++;
       }
-    } catch (e) {}
+    } catch (e) {
+        // Deep X-Ray debugger for failed parses
+        if (log.topics && log.topics.length > 1 && log.topics[1].includes("4ea")) { 
+            console.log(`[X-RAY 1258] ABI parse failed for log in Block ${log.blockNumber}: ${e.message}`);
+        }
+    }
   }
 
   if (minTs < now - (60 * 86400)) minTs = now - (60 * 86400);
@@ -509,7 +544,7 @@ async function getGlobalYield(conf, sevenDaysAgo, activationStats, marketData) {
             }
           }
           if(reachedOlder || txs.length < 1000) break;
-          pageEth++; await sleep(200); 
+          pageEth++; await sleep(300); 
       }
 
       for (const tokenAddr of Object.keys(TOKEN_TICKERS)) {
@@ -541,7 +576,7 @@ async function getGlobalYield(conf, sevenDaysAgo, activationStats, marketData) {
               }
             }
             if(reachedOlder || txs.length < 1000) break;
-            pageTok++; await sleep(200); 
+            pageTok++; await sleep(300); 
         }
       }
 
@@ -587,7 +622,7 @@ async function getGlobalYield(conf, sevenDaysAgo, activationStats, marketData) {
             }
           }
           if(reachedOlder || txs.length < 1000) break;
-          page++; await sleep(200); 
+          page++; await sleep(300); 
       }
       return { global7DayUsd: totalSampleUsd, dailyDates, dailyUsdPerWeight };
   }
