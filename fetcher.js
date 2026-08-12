@@ -1,7 +1,6 @@
 const fs = require("fs");
 const { ethers } = require("ethers");
 
-// SECURE API KEY CALL
 const API_KEY = process.env.BLOCKSCOUT_API_KEY;
 const PRO_API = "https://api.blockscout.com/v2/api";
 const CHAIN_ID = 4663;
@@ -33,6 +32,17 @@ const TOKEN_TICKERS = {
   "0x6245e67affa44a23077f0ea7f981a8dc743a0c47": "DEX", 
   "0x27efeae1817d90974623cb2ed455c424beffa5ab": "DEX"  
 };
+
+const MEMES = [
+  { name: "Cashcat", ca: "0x020bfC650A365f8BB26819deAAbF3E21291018b4" },
+  { name: "Tendies", ca: "0x45242320DBB855EeA8Fd36804C6487E10E97FCF9" },
+  { name: "Index", ca: "0x56910D4409F3a0C78C64DD8D0545FF0705389870" },
+  { name: "Pipedog", ca: "0x5Cb6F181081301b44905F3ae15419112ecaBd8A6" },
+  { name: "Hmm", ca: "0x7FE995a80075dF3Dc8Ae11A9b82c7FE4202CD87f" },
+  { name: "Clockin", ca: null }, // No CA yet
+  { name: "Up", ca: "0x57C0E45cB534413D1C20A4240955d6bB250BB4F1" },
+  { name: "Ai", ca: "0x2E8c31162b855A2ffa90F6F8634643Ad6F111e18" }
+];
 
 const FALLBACK_STOCK_PRICES = {
   "AAPL": 220, "AMZN": 180, "NVDA": 120, "SLV": 27, "MSFT": 420,
@@ -89,32 +99,14 @@ const PROTOCOL_CONTRACTS = [
   "0x55642a3f10f1af5145d3d59021b1d6b03bb8692c"  
 ];
 
-// OMNI-ABI: Now includes the missing 'ActivationUpgraded' event signature
 const ACTIVATION_ABI = [
   "event ActivationUpgraded(uint256 indexed tokenId, address indexed owner, uint8 fromTier, uint8 toTier, uint256 feePaid)",
   "event Activated(uint256 indexed tokenId, address indexed owner, uint256 tier, uint256 feePaid)",
-  "event Activated(uint256 indexed tokenId, address owner, uint256 tier, uint256 feePaid)",
   "event Activated(uint256 tokenId, address owner, uint256 tier, uint256 feePaid)",
   "event Activated(uint256 indexed tokenId, address indexed owner, uint8 tier, uint256 feePaid)",
   "event Activated(uint256 tokenId, address owner, uint8 tier, uint256 feePaid)",
   "event Activated(uint256 indexed tokenId, address indexed owner, uint256 tier)",
   "event Activated(uint256 tokenId, address owner, uint256 tier)",
-  "event Activated(uint256 indexed tokenId, uint256 tier)",
-  "event Activated(uint256 tokenId, uint256 tier)",
-  "event Activated(uint256 indexed tokenId, uint8 tier)",
-  "event Activated(uint256 tokenId, uint8 tier)",
-  "event TierUpgraded(uint256 indexed tokenId, uint256 oldTier, uint256 newTier)",
-  "event TierUpgraded(uint256 tokenId, uint256 oldTier, uint256 newTier)",
-  "event TierUpgraded(uint256 indexed tokenId, uint8 oldTier, uint8 newTier)",
-  "event TierUpgraded(uint256 tokenId, uint8 oldTier, uint8 newTier)",
-  "event Upgraded(uint256 indexed tokenId, uint256 oldTier, uint256 newTier)",
-  "event Upgraded(uint256 tokenId, uint256 oldTier, uint256 newTier)",
-  "event Upgraded(uint256 indexed tokenId, uint8 oldTier, uint8 newTier)",
-  "event Upgraded(uint256 tokenId, uint8 oldTier, uint8 newTier)",
-  "event Upgraded(uint256 indexed tokenId, uint256 newTier)",
-  "event Upgraded(uint256 tokenId, uint256 newTier)",
-  "event Upgraded(uint256 indexed tokenId, uint8 newTier)",
-  "event Upgraded(uint256 tokenId, uint8 newTier)",
   "event ActivationCleared(uint256 indexed tokenId)",
   "event ActivationCleared(uint256 tokenId)"
 ];
@@ -123,7 +115,6 @@ const iface = new ethers.Interface(ACTIVATION_ABI);
 let ethPriceUsd = 1917;
 let tokenPrices = {};
 
-// HARDENED RATE-LIMIT CATCHER
 async function secureFetch(url) {
   const headers = { "Accept": "application/json" };
   for (let i = 0; i < 5; i++) {
@@ -133,40 +124,24 @@ async function secureFetch(url) {
           console.error("\n[CRITICAL ERROR] HTTP 402: Payment Required. PRO API Key Out of Credits!");
           process.exit(1);
       }
-      if (res.status === 429) {
-          console.warn(`[API] 429 Rate limit hit. Pausing for 3s...`);
-          await sleep(3000);
-          continue;
-      }
+      if (res.status === 429) { await sleep(3000); continue; }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      
       const text = await res.text();
       const data = JSON.parse(text);
-      
       if (data.status === "0") {
           if (data.message === "No records found" || data.message === "No transactions found") return { result: [] };
-          
-          if (typeof data.result === 'string' && (data.result.toLowerCase().includes("rate limit") || data.result.toLowerCase().includes("limit"))) {
-              console.warn(`[API] Silent string rate limit caught. Pausing for 3s...`);
-              await sleep(3000);
-              continue;
-          }
-          if (data.message && (data.message.toLowerCase().includes("rate limit") || data.message.toLowerCase().includes("limit"))) {
-              console.warn(`[API] Silent message rate limit caught. Pausing for 3s...`);
-              await sleep(3000);
-              continue;
-          }
+          if (typeof data.result === 'string' && data.result.toLowerCase().includes("limit")) { await sleep(3000); continue; }
       }
       return data;
     } catch (e) {
       await sleep(1500 * (i + 1));
     }
   }
-  console.error("\n[CRITICAL ERROR] Failed to fetch after 5 retries: " + url);
   process.exit(1); 
 }
 
 async function fetchTokenHoldersSafe(contractAddress, isNft = false) {
+  if (!contractAddress) return 0;
   let page = 1;
   let activeHolders = 0;
   let hasData = false;
@@ -186,7 +161,7 @@ async function fetchTokenHoldersSafe(contractAddress, isNft = false) {
         }
         if (data.result.length < 1000) break; 
         page++;
-        await sleep(300); 
+        await sleep(200); 
     } else {
         break; 
     }
@@ -214,38 +189,8 @@ async function loadMarketPrices() {
       } catch {}
       markets[key].nftFloorEth = +((conf.unitValue * markets[key].tokenPriceUsd * 1.10) / ethPriceUsd).toFixed(3);
       tokenPrices[conf.tokenCa.toLowerCase()] = markets[key].tokenPriceUsd;
-      await sleep(300);
+      await sleep(250);
   }
-
-  for (const [addr, ticker] of Object.entries(TOKEN_TICKERS)) {
-    if (!ticker) {
-      if (addr.includes("5fc5360d") || addr.includes("1383b43a")) tokenPrices[addr] = 1.0;
-      continue;
-    }
-    if (tokenPrices[addr]) continue;
-
-    if (ticker === "DEX") {
-      try {
-        const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${addr}`);
-        const d = await res.json();
-        if (d?.pairs?.length) {
-          const best = d.pairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
-          tokenPrices[addr] = parseFloat(best.priceUsd);
-        }
-      } catch {}
-      await sleep(200);
-      continue;
-    }
-
-    try {
-      const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1d`);
-      const d = await res.json();
-      const p = d?.chart?.result?.[0]?.meta?.regularMarketPrice;
-      if (p) tokenPrices[addr] = p; else tokenPrices[addr] = FALLBACK_STOCK_PRICES[ticker] || 100;
-    } catch { tokenPrices[addr] = FALLBACK_STOCK_PRICES[ticker] || 100; }
-    await sleep(200);
-  }
-
   return markets;
 }
 
@@ -278,7 +223,7 @@ async function fetchAllLogs(address, genesisBlock, topic0 = null) {
     allLogs.push(...logs);
     fromBlock = toBlock + 1;
     step = 500000; 
-    await sleep(300); 
+    await sleep(200); 
   }
 
   const parseNum = (val) => {
@@ -307,7 +252,7 @@ async function fetchAllLogs(address, genesisBlock, topic0 = null) {
     if (txIdxA !== txIdxB) return txIdxA - txIdxB;
 
     const logIdxA = parseNum(a.logIndex !== undefined ? a.logIndex : (a.log_index !== undefined ? a.log_index : a.index));
-    const logIdxB = parseNum(b.logIndex !== undefined ? b.logIndex : (b.log_index !== undefined ? b.log_index : b.index));
+    const logIdxB = parseNum(b.logIndex !== undefined ? b.logIndex : (b.log_index !== undefined ? b.log_index : a.index));
     return logIdxA - logIdxB;
   });
 
@@ -328,7 +273,7 @@ async function getTrueDeflationStats(conf) {
   for (const addr of deadAddresses) {
     let res = await secureFetch(`${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokenbalance&contractaddress=${conf.tokenCa}&address=${addr}&apikey=${API_KEY}`);
     if (res && res.result) deadBalance += Number(res.result) / 1e18;
-    await sleep(300); 
+    await sleep(200); 
   }
 
   let totalBurnTokens = 0;
@@ -344,7 +289,6 @@ async function getTrueDeflationStats(conf) {
   }
   
   const equivalentBrokersBurnt = totalBurnTokens / conf.unitValue;
-
   return { totalBurnTokens: Math.round(totalBurnTokens), equivalentBrokersBurnt: parseFloat(equivalentBrokersBurnt.toFixed(2)) };
 }
 
@@ -423,21 +367,13 @@ async function fetchActivations(conf) {
       if (!parsed) continue;
 
       const tokenId = parsed.args.tokenId.toString();
-      
-      // GROK FIX: Added 'ActivationUpgraded' to the conditional catch
       const isAct = parsed.name === "Activated" || parsed.name === "ActivationUpgraded" || parsed.name.includes("Upgraded");
       const isDeact = parsed.name === "ActivationCleared";
 
       if (isAct || isDeact) {
           let tierId = null;
-          
           if (isAct) { 
-            // GROK FIX: Gracefully cascades through toTier -> newTier -> tier
-            const tierVal = 
-                parsed.args.toTier !== undefined ? parsed.args.toTier :
-                parsed.args.newTier !== undefined ? parsed.args.newTier : 
-                parsed.args.tier;
-                
+            const tierVal = parsed.args.toTier !== undefined ? parsed.args.toTier : (parsed.args.newTier !== undefined ? parsed.args.newTier : parsed.args.tier);
             if (tierVal !== undefined && tierVal !== null) {
                 tierId = `T${tierVal.toString()}`; 
                 activeBrokers.set(tokenId, { t: tierId, ts: ts }); 
@@ -544,7 +480,7 @@ async function getGlobalYield(conf, sevenDaysAgo, activationStats, marketData) {
             }
           }
           if(reachedOlder || txs.length < 1000) break;
-          pageEth++; await sleep(300); 
+          pageEth++; await sleep(200); 
       }
 
       for (const tokenAddr of Object.keys(TOKEN_TICKERS)) {
@@ -576,7 +512,7 @@ async function getGlobalYield(conf, sevenDaysAgo, activationStats, marketData) {
               }
             }
             if(reachedOlder || txs.length < 1000) break;
-            pageTok++; await sleep(300); 
+            pageTok++; await sleep(200); 
         }
       }
 
@@ -622,10 +558,70 @@ async function getGlobalYield(conf, sevenDaysAgo, activationStats, marketData) {
             }
           }
           if(reachedOlder || txs.length < 1000) break;
-          page++; await sleep(300); 
+          page++; await sleep(200); 
       }
       return { global7DayUsd: totalSampleUsd, dailyDates, dailyUsdPerWeight };
   }
+}
+
+async function loadMemePrices() {
+  const memeResults = [];
+  const validMemes = MEMES.filter(m => m.ca !== null);
+  const addresses = validMemes.map(m => m.ca).join(",");
+  
+  let pairsMap = {};
+  try {
+      const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${addresses}`);
+      const data = await res.json();
+      if (data && data.pairs) {
+          data.pairs.forEach(pair => {
+              const tokenAddr = pair.baseToken?.address?.toLowerCase();
+              if (tokenAddr && !pairsMap[tokenAddr]) {
+                  pairsMap[tokenAddr] = pair; // grab highest liquidity pair
+              }
+          });
+      }
+  } catch(e) {}
+
+  for (const meme of MEMES) {
+      if (!meme.ca) {
+          memeResults.push({
+              name: meme.name,
+              ca: null,
+              volume24h: 0,
+              liquidity: 0,
+              priceChange24h: 0,
+              fdv: 0,
+              marketCap: 0,
+              holders: 0,
+              burnt: "Coming Soon"
+          });
+          continue;
+      }
+
+      const pair = pairsMap[meme.ca.toLowerCase()];
+      const volume24h = pair?.volume?.h24 || 0;
+      const liquidity = pair?.liquidity?.usd || 0;
+      const priceChange24h = pair?.priceChange?.h24 || 0;
+      const fdv = pair?.fdv || 0;
+      const marketCap = pair?.marketCap || fdv;
+      
+      const holders = await fetchTokenHoldersSafe(meme.ca, false);
+      await sleep(250);
+
+      memeResults.push({
+          name: meme.name,
+          ca: meme.ca,
+          volume24h,
+          liquidity,
+          priceChange24h,
+          fdv,
+          marketCap,
+          holders,
+          burnt: "Tracked On-Chain"
+      });
+  }
+  return memeResults;
 }
 
 async function run() {
@@ -634,9 +630,10 @@ async function run() {
   try { if (fs.existsSync("data.json")) previousData = JSON.parse(fs.readFileSync("data.json", "utf8")); } catch(e) {}
 
   const markets = await loadMarketPrices();
+  const memeData = await loadMemePrices();
   const sevenDaysAgo = Math.floor(Date.now() / 1000) - 7 * 24 * 3600;
   
-  const finalJson = { lastUpdated: new Date().toISOString(), projects: {} };
+  const finalJson = { lastUpdated: new Date().toISOString(), projects: {}, memes: memeData };
 
   for (const [projectKey, conf] of Object.entries(PROJECTS)) {
       console.log(`\n--- Processing ${projectKey.toUpperCase()} ---`);
@@ -676,7 +673,7 @@ async function run() {
   }
 
   fs.writeFileSync("data.json", JSON.stringify(finalJson, null, 2));
-  console.log("\n✓ Multi-Project Dashboard payload generated successfully.");
+  console.log("\n✓ Dashboard payload generated successfully with Memes.");
 }
 
 run().catch(err => { console.error(err); process.exit(1); });
