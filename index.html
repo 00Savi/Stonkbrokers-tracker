@@ -16,9 +16,6 @@
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #475569; }
         
-        .dropdown-menu { display: none; }
-        .dropdown-container:hover .dropdown-menu { display: block; }
-
         @keyframes pulse-border {
             0% { border-color: rgba(245, 158, 11, 0.4); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
             70% { border-color: rgba(245, 158, 11, 0); box-shadow: 0 0 0 4px rgba(245, 158, 11, 0); }
@@ -41,12 +38,12 @@
                 <img id="header-logo" src="Stonkbroker.png" alt="PFP" class="w-full h-full object-cover">
             </div>
             
-            <div class="relative group inline-block">
-                <div class="py-2 cursor-pointer flex items-center gap-2 md:gap-3">
+            <div class="relative inline-block" id="project-dropdown-container">
+                <div id="project-dropdown-trigger" onclick="toggleDropdown(event)" class="py-2 cursor-pointer flex items-center gap-2 md:gap-3">
                     <div>
                         <div class="flex items-center gap-2">
-                            <span id="project-title" class="text-xl md:text-2xl font-bold text-white group-hover:text-blue-400 transition">StonkBrokers Tracker</span>
-                            <svg class="w-5 h-5 text-slate-400 group-hover:text-blue-400 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            <span id="project-title" class="text-xl md:text-2xl font-bold text-white hover:text-blue-400 transition">StonkBrokers Tracker</span>
+                            <svg class="w-5 h-5 text-slate-400 hover:text-blue-400 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                         </div>
                         <p class="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5">
                             Built by 
@@ -58,21 +55,21 @@
                     </div>
                 </div>
                 
-                <div class="absolute left-0 top-[85%] mt-1 w-56 bg-[#1e293b] border border-[#334155] rounded-xl shadow-2xl py-2 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
-                    <div onclick="loadProject('stonk')" class="px-4 py-2 hover:bg-[#334155] cursor-pointer flex items-center gap-3 text-white font-semibold transition">
+                <div id="project-dropdown-menu" class="absolute left-0 top-[85%] mt-1 w-56 bg-[#1e293b] border border-[#334155] rounded-xl shadow-2xl py-2 z-50 hidden transition-all duration-200">
+                    <div onclick="selectProject('stonk')" class="px-4 py-2 hover:bg-[#334155] cursor-pointer flex items-center gap-3 text-white font-semibold transition">
                         <div class="w-2 h-2 rounded-full bg-blue-500"></div> StonkBrokers
                     </div>
-                    <div onclick="loadProject('mancer')" class="px-4 py-2 hover:bg-[#334155] cursor-pointer flex items-center gap-3 text-white font-semibold transition">
+                    <div onclick="selectProject('mancer')" class="px-4 py-2 hover:bg-[#334155] cursor-pointer flex items-center gap-3 text-white font-semibold transition">
                         <div class="w-2 h-2 rounded-full bg-purple-500"></div> Mancer
                     </div>
-                    <div onclick="loadProject('tickeryard')" class="px-4 py-2 hover:bg-[#334155] cursor-pointer flex items-center gap-3 text-white font-semibold transition">
+                    <div onclick="selectProject('tickeryard')" class="px-4 py-2 hover:bg-[#334155] cursor-pointer flex items-center gap-3 text-white font-semibold transition">
                         <div class="w-2 h-2 rounded-full bg-cyan-400"></div> TickerYard <span class="text-[9px] bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 px-1.5 py-0.2 rounded font-semibold ml-auto">New</span>
                     </div>
                     <div class="border-t border-[#334155] my-1"></div>
                     <div class="px-4 py-2 flex items-center gap-3 text-slate-400 font-semibold cursor-not-allowed opacity-75">
                         <div class="w-2 h-2 rounded-full bg-orange-500"></div> Pitboys / DERP <span class="text-[9px] bg-orange-500/20 text-orange-400 border border-orange-500/30 px-1.5 py-0.2 rounded font-semibold ml-auto">Soon</span>
                     </div>
-                    <div onclick="loadProject('memes')" class="px-4 py-2 hover:bg-[#334155] cursor-pointer flex items-center gap-3 text-white font-semibold transition">
+                    <div onclick="selectProject('memes')" class="px-4 py-2 hover:bg-[#334155] cursor-pointer flex items-center gap-3 text-white font-semibold transition">
                         <div class="w-2 h-2 rounded-full bg-emerald-500"></div> Robinhood Tokens <span class="text-[9px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.2 rounded font-semibold ml-auto">Live</span>
                     </div>
                 </div>
@@ -84,11 +81,11 @@
                 <p class="text-slate-400 mb-0.5">ETH</p>
                 <p class="text-white font-bold" id="eth-price">Loading...</p>
             </div>
-            <div>
+            <div id="token-price-box">
                 <p class="text-slate-400 mb-0.5" id="dynamic-ticker-label">$TOKEN</p>
                 <p class="text-white font-bold" id="token-price">Loading...</p>
             </div>
-            <div>
+            <div id="nft-floor-box">
                 <p class="text-slate-400 mb-0.5">Floor <span class="hidden sm:inline text-[10px] md:text-xs text-slate-500">(Base + 10%)</span></p>
                 <p class="text-white font-bold" id="nft-floor">Loading...</p>
             </div>
@@ -133,7 +130,6 @@
             </div>
         </div>
 
-        <!-- DYOR & Financial Advice Disclaimer Box -->
         <div class="mb-6 p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-200/90 text-xs md:text-sm flex items-start gap-3">
             <svg class="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
             <div>
@@ -166,7 +162,7 @@
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
             <div>
                 <h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2">
-                    <svg class="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20"><path d="M3 12v3c0 1.657 3.134 3 7 3s7-1.343 7-3v-3c0 1.657-3.134 3-7 3s-7-1.343-7-3z"></path><path d="M3 7v3c0 1.657 3.134 3 7 3s7-1.343 7-3V7c0 1.657-3.134 3-7 3S3 8.657 3 7z"></path><path d="M17 5c0 1.657-3.134 3-7 3S3 6.657 3 5s3.134-3 7-3 7 1.343 7 3z"></path></svg>
+                    <svg class="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20"><path d="M3 12v3c0 1.657 3.134 3 7 3s7-1.343 7-3v-3c0 1.657-3.134 3-7 3s-7-1.343-7-3z"></path><path d="M3 7v3c0 1.657 3.134 3 7 3s7-1.343 7-3V7c0 1.657-3.134 3-7 3S3 8.657 3 5s3.134-3 7-3 7 1.343 7 3z"></path><path d="M17 5c0 1.657-3.134 3-7 3S3 6.657 3 5s3.134-3 7-3 7 1.343 7 3z"></path></svg>
                     Global Yield ROI Benchmarks
                 </h2>
                 <p class="text-xs md:text-sm text-slate-400 mt-1" id="last-sync">Last automated sync: Loading...</p>
@@ -393,37 +389,6 @@
         </div>
     </main>
 
-    <!-- Dynamic Contextual Methodology Section -->
-    <div class="max-w-6xl mx-auto card rounded-xl p-5 md:p-6 border mb-12 shadow-lg" data-html2canvas-ignore="true">
-        <div class="flex items-center gap-2 mb-4">
-            <svg class="w-5 h-5 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
-            <h3 class="text-base md:text-lg font-bold text-white">Methodology & Disclaimer</h3>
-        </div>
-        
-        <div class="text-xs md:text-sm text-slate-300 mb-5 leading-relaxed space-y-4">
-            <p id="meth-roi" class="meth-section">
-                <strong class="text-white">Yield & ROI (Global Network Oracle):</strong> Cash-on-Cash (CoC) returns are calculated dynamically based on the selected project's architecture. Automated distributions sample incoming transactions to an active oracle wallet. Soft-staking mechanics track real-time global, aggregate distributions flowing outbound from the central protocol vault. This total is mathematically divided against the live active network weight and evaluated against AMM floor entry costs.
-            </p>
-
-            <p id="meth-burn" class="meth-section hidden">
-                <strong class="text-white">Token Burn Tracking:</strong> The total burnt token count is calculated by directly indexing the balances of the network's standard dead addresses (0x000... and 0xdead), combined with the tokens permanently locked inside the protocol's Activation Manager/Staking Vault smart contracts. The equivalent metric divides this total by the standard token tier requirement.
-            </p>
-
-            <p id="meth-activation" class="meth-section hidden">
-                <strong class="text-white">Ecosystem Activation Metrics:</strong> Live network activation metrics are derived by parsing the entire historical event log of the protocol's Activation Manager smart contract. The script actively tallies 'Activated' and 'ActivationCleared' on-chain events to mathematically map the live network weight, chronological tier flow, and tier composition.
-            </p>
-
-            <p id="meth-ownership" class="meth-section hidden">
-                <strong class="text-white">True Circulating Supply:</strong> Calculated as the Genesis Supply minus the live inventory currently held within the AMM Pool. Burnt/locked tokens are physically trapped inside the AMM Vault, meaning they are inherently excluded from the circulating supply.<br><br>
-                <strong class="text-white">Holder Metrics & Anti-Dust Filter:</strong> Unique token holders are calculated by directly indexing the blockchain ledger and applying a strict "Anti-Dust" filter. Any wallet holding less than 1 full token is discarded to eliminate MEV bots, DEX routers, and abandoned fractional dust. Furthermore, protocol system wallets (the AMM Vault and burn addresses) are explicitly removed from all holder counts to provide a mathematically honest representation of unique human ownership.
-            </p>
-        </div>
-        
-        <p class="text-xs md:text-sm text-slate-400 italic leading-relaxed border-t border-[#334155] pt-5">
-            <strong class="text-slate-300 not-italic">Disclaimer:</strong> Tracked yield values are calculated using Mark-to-Market spot pricing at the exact time of the dashboard's last automated sync, rather than the historical price at the time of the drop. Yields fluctuate based on network activation weight, market token prices, and community protocol volume. This is a community-built tracking tool and does not guarantee future returns.
-        </p>
-    </div>
-
     <!-- Logic Script -->
     <script>
         const MINING_CONFIG = {
@@ -455,6 +420,27 @@
         let tierPieChartInstance = null;
         let ownershipChartInstance = null;
         let tierChartInstances = {};
+
+        // Mobile Webview / In-App Dropdown Toggle
+        function toggleDropdown(e) {
+            if (e) e.stopPropagation();
+            const menu = document.getElementById('project-dropdown-menu');
+            if (menu) menu.classList.toggle('hidden');
+        }
+
+        function selectProject(key) {
+            const menu = document.getElementById('project-dropdown-menu');
+            if (menu) menu.classList.add('hidden');
+            loadProject(key);
+        }
+
+        document.addEventListener('click', (e) => {
+            const container = document.getElementById('project-dropdown-container');
+            const menu = document.getElementById('project-dropdown-menu');
+            if (menu && container && !container.contains(e.target)) {
+                menu.classList.add('hidden');
+            }
+        });
 
         function switchTab(tab) {
             const btnRoi = document.getElementById('tab-roi');
@@ -520,15 +506,16 @@
         function loadProject(projectKey) {
             currentProjectKey = projectKey;
             
+            const ethPrice = masterData?.projects?.['stonk']?.market?.ethPriceUsd || 0;
+            document.getElementById('eth-price').innerText = ethPrice ? formatCurrency(ethPrice) : '---';
+
             if (projectKey === 'memes') {
-                const ethPrice = masterData.projects['stonk'].market.ethPriceUsd;
-                document.getElementById('eth-price').innerText = formatCurrency(ethPrice);
-                
                 document.getElementById('header-logo').src = 'Stonkbroker.png';
                 document.getElementById('project-title').innerText = 'Robinhood Tokens';
                 document.getElementById('dynamic-ticker-label').innerText = '$TOKENS';
-                document.getElementById('token-price').innerText = '---';
-                document.getElementById('nft-floor').innerText = '---';
+                
+                document.getElementById('token-price-box').classList.add('hidden');
+                document.getElementById('nft-floor-box').classList.add('hidden');
                 document.getElementById('standard-tabs').classList.add('hidden');
                 
                 renderMemesTable();
@@ -536,7 +523,10 @@
                 return;
             }
 
+            document.getElementById('token-price-box').classList.remove('hidden');
+            document.getElementById('nft-floor-box').classList.remove('hidden');
             document.getElementById('standard-tabs').classList.remove('hidden');
+            
             const data = masterData.projects[projectKey];
             const m = data.market;
             const conf = data.config;
@@ -550,7 +540,6 @@
             document.getElementById('project-title').innerText = projectKey === 'stonk' ? 'StonkBrokers Tracker' : (projectKey === 'mancer' ? 'Mancer Tracker' : 'TickerYard Tracker');
             document.getElementById('dynamic-ticker-label').innerText = `$${conf.ticker}`;
             document.getElementById('token-price').innerText = formatPrice(m.tokenPriceUsd);
-            document.getElementById('eth-price').innerText = formatCurrency(m.ethPriceUsd);
             document.getElementById('nft-floor').innerText = m.nftFloorEth.toFixed(3) + ' ETH';
             
             const floorCostUsd = m.nftFloorEth * m.ethPriceUsd;
@@ -561,7 +550,9 @@
             
             const tbody = document.getElementById('tiers-body');
             tbody.innerHTML = '';
-            
+            tierChartInstances = {};
+            window.tierChartData = {};
+
             data.tiers.forEach(t => {
                 const activationCostUsd = t.reqTokens * m.tokenPriceUsd;
                 const totalCostUsd = floorCostUsd + activationCostUsd;
@@ -583,21 +574,98 @@
                         roiHtml = `<span class="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-2.5 py-1 rounded text-sm font-bold shadow-sm opacity-50">0.00%</span>`;
                     }
                 }
-                
+
+                window.tierChartData[t.tier] = { labels: t.dailyDates || [], data: t.dailyYields || [], name: t.name };
+
                 const tr = document.createElement('tr');
-                tr.className = 'border-b border-[#334155]/50 hover:bg-[#334155]/20 transition-colors';
+                tr.className = 'cursor-pointer border-b border-[#334155]/50 hover:bg-[#334155]/20 transition-colors group';
+                tr.onclick = () => toggleTierDetails(t.tier);
                 tr.innerHTML = `
-                    <td class="py-5 pl-2"><div class="text-white font-bold">${t.tier}: ${t.name}</div></td>
+                    <td class="py-5 pl-2">
+                        <div class="flex items-center gap-3">
+                            <div class="bg-[#0f172a] border border-[#334155] text-blue-400 px-2.5 py-1 rounded text-xs font-bold shadow-inner">${t.tier}</div>
+                            <div><div class="text-white font-bold">${t.name}</div><div class="text-xs text-slate-500 mt-0.5">Weight: <span class="text-yellow-500 font-semibold">${t.weight}x</span></div></div>
+                        </div>
+                    </td>
                     <td class="py-5"><span class="text-white font-bold">${formatNumber(t.reqTokens)}</span> ${conf.ticker}</td>
-                    <td class="py-5"><div class="text-white font-bold">${formatCurrency(totalCostUsd)}</div></td>
+                    <td class="py-5"><div class="text-white font-bold">${formatCurrency(totalCostUsd)}</div><div class="text-xs text-slate-500 mt-0.5">Floor + ${formatCurrency(activationCostUsd)} Act.</div></td>
                     <td class="py-5">${yieldHtml}</td>
-                    <td class="py-5 text-right pr-4">${roiHtml}</td>
+                    <td class="py-5 text-right pr-4">
+                        <div class="flex items-center justify-end gap-3">
+                            ${roiHtml}
+                            <svg id="chevron-${t.tier}" class="w-4 h-4 text-slate-500 transition-transform duration-200 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </div>
+                    </td>
                 `;
                 tbody.appendChild(tr);
+
+                const detailsTr = document.createElement('tr');
+                detailsTr.id = `details-${t.tier}`;
+                detailsTr.className = 'hidden bg-[#0f172a]/40 border-b border-[#334155]/50';
+                detailsTr.innerHTML = `
+                    <td colspan="5" class="p-4 md:p-6">
+                        <div class="flex justify-between items-center mb-3">
+                            <h4 class="text-sm font-bold text-slate-300">Trailing 7-Day Realized Yield</h4>
+                            <span class="text-xs text-slate-500">Based on On-Chain Distributions</span>
+                        </div>
+                        <div class="relative h-32 md:h-40 w-full">
+                            <canvas id="chart-${t.tier}"></canvas>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(detailsTr);
             });
 
             processMetricsData(data);
             switchTab('roi');
+        }
+
+        function toggleTierDetails(tierId) {
+            const detailsRow = document.getElementById('details-' + tierId);
+            if (!detailsRow) return;
+            const isHidden = detailsRow.classList.contains('hidden');
+            const chevron = document.getElementById('chevron-' + tierId);
+            
+            if (isHidden) {
+                detailsRow.classList.remove('hidden');
+                if (chevron) chevron.style.transform = 'rotate(180deg)';
+                
+                if (!tierChartInstances[tierId]) {
+                    const canvas = document.getElementById('chart-' + tierId);
+                    if (!canvas) return;
+                    const ctx = canvas.getContext('2d');
+                    const cData = window.tierChartData[tierId] || { labels: [], data: [] };
+                    tierChartInstances[tierId] = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: cData.labels,
+                            datasets: [{
+                                label: 'Daily Yield (USD)',
+                                data: cData.data,
+                                borderColor: '#3b82f6',
+                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                borderWidth: 2,
+                                fill: true,
+                                tension: 0.4,
+                                pointRadius: 3,
+                                pointBackgroundColor: '#3b82f6'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => formatCurrency(ctx.raw) } } },
+                            scales: {
+                                x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
+                                y: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: (v) => '$' + v } }
+                            }
+                        }
+                    });
+                }
+            } else {
+                detailsRow.classList.add('hidden');
+                if (chevron) chevron.style.transform = 'rotate(0deg)';
+            }
         }
 
         function renderMemesTable() {
@@ -605,16 +673,22 @@
             tbody.innerHTML = '';
             const memes = masterData.memes || [];
 
-            memes.forEach(meme => {
+            memes.forEach((meme, index) => {
                 const roiColor = meme.priceChange24h >= 0 ? 'text-emerald-400' : 'text-rose-400';
                 const roiSign = meme.priceChange24h >= 0 ? '+' : '';
                 
                 const copyBtn = meme.ca ? `
-                    <button onclick="navigator.clipboard.writeText('${meme.ca}'); alert('Copied CA for ${meme.name}:\\n${meme.ca}');" class="text-[10px] bg-[#334155] hover:bg-slate-600 text-slate-200 px-2 py-0.5 rounded border border-slate-600 ml-2 transition" title="Copy Contract Address">Copy CA</button>
+                    <button onclick="event.stopPropagation(); navigator.clipboard.writeText('${meme.ca}'); alert('Copied CA for ${meme.name}:\\n${meme.ca}');" class="text-[10px] bg-[#334155] hover:bg-slate-600 text-slate-200 px-2 py-0.5 rounded border border-slate-600 ml-2 transition" title="Copy Contract Address">Copy CA</button>
                 ` : `<span class="text-[10px] text-slate-500 ml-2">No CA</span>`;
                 
+                // Express Burnt as raw number + % of 1B supply
+                const totalSupply = 1000000000;
+                const burntPct = meme.burnt > 0 ? ((meme.burnt / totalSupply) * 100).toFixed(2) + '%' : '0.00%';
+                const burntFormatted = meme.burnt > 0 ? `${formatNumber(meme.burnt)} <span class="text-xs text-orange-300 font-normal">(${burntPct})</span>` : '0 (0.00%)';
+
                 const tr = document.createElement('tr');
-                tr.className = 'border-b border-[#334155]/50 hover:bg-[#334155]/20 transition-colors';
+                tr.className = 'cursor-pointer border-b border-[#334155]/50 hover:bg-[#334155]/20 transition-colors group';
+                tr.onclick = () => toggleMemeDetails(index);
                 tr.innerHTML = `
                     <td class="py-4 pl-2 font-bold text-white flex items-center justify-between pr-4">
                         <div class="flex items-center gap-2">
@@ -626,20 +700,69 @@
                     <td class="py-4 text-slate-200">${formatCurrency(meme.volume24h)}</td>
                     <td class="py-4 text-slate-200">${formatCurrency(meme.liquidity)}</td>
                     <td class="py-4 font-bold ${roiColor}">${roiSign}${meme.priceChange24h.toFixed(2)}%</td>
-                    <td class="py-4 text-emerald-400 font-semibold">${meme.roi}</td>
+                    <td class="py-4 text-emerald-400 font-semibold">${meme.roi || '0.00%'}</td>
                     <td class="py-4 text-slate-200">${formatCurrency(meme.fdv)}</td>
                     <td class="py-4 text-slate-200">${formatCurrency(meme.marketCap)}</td>
                     <td class="py-4 text-purple-400 font-semibold">${formatNumber(meme.holders)}</td>
-                    <td class="py-4 text-right pr-4 text-orange-400 font-semibold">${formatNumber(meme.burnt)}</td>
+                    <td class="py-4 text-right pr-4 text-orange-400 font-semibold">
+                        <div class="flex items-center justify-end gap-2">
+                            <span>${burntFormatted}</span>
+                            <svg id="meme-chevron-${index}" class="w-4 h-4 text-slate-500 transition-transform duration-200 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </div>
+                    </td>
                 `;
                 tbody.appendChild(tr);
+
+                // Expandable Interactive Chart Row
+                const detailsTr = document.createElement('tr');
+                detailsTr.id = `meme-details-${index}`;
+                detailsTr.className = 'hidden bg-[#0f172a]/60 border-b border-[#334155]/50';
+                
+                const chartContent = meme.ca ? `
+                    <div class="relative w-full h-[450px] rounded-xl overflow-hidden border border-[#334155] shadow-inner">
+                        <iframe src="https://dexscreener.com/robinhoodchain/${meme.ca}?embed=1&theme=dark&trades=0&info=0" class="w-full h-full border-0"></iframe>
+                    </div>
+                ` : `
+                    <div class="p-8 text-center text-slate-400 italic bg-[#1e293b]/40 rounded-xl border border-[#334155]">
+                        Interactive chart unavailable (Contract Address pending launch).
+                    </div>
+                `;
+
+                detailsTr.innerHTML = `
+                    <td colspan="9" class="p-4 md:p-6">
+                        <div class="flex justify-between items-center mb-3">
+                            <h4 class="text-sm font-bold text-white flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                                ${meme.name} Live Interactive Chart
+                            </h4>
+                            <span class="text-xs text-slate-400">Toggle 24H / 7D / 30D inside chart controls</span>
+                        </div>
+                        ${chartContent}
+                    </td>
+                `;
+                tbody.appendChild(detailsTr);
             });
+        }
+
+        function toggleMemeDetails(index) {
+            const detailsRow = document.getElementById('meme-details-' + index);
+            if (!detailsRow) return;
+            const isHidden = detailsRow.classList.contains('hidden');
+            const chevron = document.getElementById('meme-chevron-' + index);
+            
+            if (isHidden) {
+                detailsRow.classList.remove('hidden');
+                if (chevron) chevron.style.transform = 'rotate(180deg)';
+            } else {
+                detailsRow.classList.add('hidden');
+                if (chevron) chevron.style.transform = 'rotate(0deg)';
+            }
         }
 
         let memeSortDirections = {};
         function sortMemesTable(colIndex, isNumeric) {
             const tbody = document.getElementById('memes-body');
-            const rows = Array.from(tbody.querySelectorAll('tr'));
+            const rows = Array.from(tbody.querySelectorAll('tr')).filter(row => !row.id.startsWith('meme-details-'));
             
             memeSortDirections[colIndex] = !memeSortDirections[colIndex];
             const asc = memeSortDirections[colIndex];
@@ -657,7 +780,14 @@
                 }
             });
 
-            rows.forEach(row => tbody.appendChild(row));
+            rows.forEach(row => {
+                tbody.appendChild(row);
+                const detailId = row.getAttribute('onclick')?.match(/\d+/)?.[0];
+                if (detailId !== undefined) {
+                    const detailRow = document.getElementById('meme-details-' + detailId);
+                    if (detailRow) tbody.appendChild(detailRow);
+                }
+            });
         }
 
         async function lookupUnitRoi() {
@@ -679,11 +809,17 @@
             const tierData = proj.tiers.find(t => t.tier === tierId) || proj.tiers[0];
 
             let seatedSeats = 0;
+
+            // Timeout race condition safety wrapper to prevent infinite "Scanning..." state
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("RPC Timeout")), 6000));
+            
             if (isActivated && currentProjectKey === 'stonk') {
                 try {
                     const provider = new ethers.JsonRpcProvider("https://rpc.mainnet.chain.robinhood.com");
                     const pitMineContract = new ethers.Contract("0x2d0da469115232aD00159757f9d25f81D498206D", ["function activeSlotCount(uint256 tokenId) view returns (uint256)"], provider);
-                    seatedSeats = Number(await pitMineContract.activeSlotCount(inputVal));
+                    const callPromise = pitMineContract.activeSlotCount(inputVal);
+                    const count = await Promise.race([callPromise, timeoutPromise]);
+                    seatedSeats = Number(count);
                 } catch (e) {}
             }
 
@@ -777,7 +913,7 @@
                         </div>
                         <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
                             <p class="text-[10px] uppercase text-slate-400">Trailing 7-Day Revenue</p>
-                            <p class="text-base font-bold text-emerald-400">${formatCurrency(weeklyYieldUsd)}</p>
+                            <p class="text-base font-bold text-emerald-400">$0.00</p>
                         </div>
                         <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
                             <p class="text-[10px] uppercase text-slate-400">Forecasted Annual Yield</p>
