@@ -432,13 +432,13 @@
 
         function resolveIpfsUrl(url) {
             if (!url) return '';
-            if (url.startsWith('ipfs://')) {
-                return url.replace('ipfs://', 'https://cloudflare-ipfs.com/ipfs/');
+            let cleaned = url.replace('ipfs://ipfs/', 'ipfs://');
+            if (cleaned.startsWith('ipfs://')) {
+                return cleaned.replace('ipfs://', 'https://cloudflare-ipfs.com/ipfs/');
             }
-            return url;
+            return cleaned;
         }
 
-        // Extremely robust fetch with exponential backoff for Blockscout Rate Limits
         async function fetchWithRetry(resource, options = {}, maxRetries = 3) {
             const { timeout = 8000 } = options;
             for (let attempt = 0; attempt < maxRetries; attempt++) {
@@ -858,7 +858,7 @@
 
                 let seatedSeats = 0;
 
-                // 1. Check PitMine (StonkBrokers only) with strict timeout
+                // 1. Check PitMine (StonkBrokers only)
                 const pitTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error("RPC Timeout")), 4000));
                 if (isActivated && currentProjectKey === 'stonk') {
                     try {
@@ -871,46 +871,47 @@
                     }
                 }
 
-                // 2. Multi-Gateway IPFS Image Resolver for Unique Artwork
-                let imageUrl = null;
+                // 2. Resolve Unique NFT Art (Direct RPC -> Blockscout Metadata -> Blockscout General)
                 let imageSources = [];
 
-                // Prefer Blockscout because they pre-index Robinhood Chain correctly
                 try {
-                    const imgRes = await fetchWithRetry(`https://robinhoodchain.blockscout.com/api/v2/tokens/${conf.nftCa}/instances/${inputVal}`, {timeout: 6000});
-                    if (imgRes.ok) {
-                        const imgData = await imgRes.json();
-                        if (imgData.image_url) imageSources.push(resolveIpfsUrl(imgData.image_url));
-                        let meta = imgData.metadata;
-                        if (typeof meta === 'string') { try { meta = JSON.parse(meta); } catch(e) {} }
-                        if (meta?.image) imageSources.push(resolveIpfsUrl(meta.image));
-                        if (meta?.image_url) imageSources.push(resolveIpfsUrl(meta.image_url));
-                    }
-                } catch(e) { console.warn("Blockscout image fetch failed", e); }
-
-                // Fallback to RPC if Blockscout is blank or timed out
-                if (imageSources.length === 0) {
-                    try {
-                        const provider = new ethers.JsonRpcProvider("https://rpc.mainnet.chain.robinhood.com");
-                        const nftContract = new ethers.Contract(conf.nftCa, ["function tokenURI(uint256) view returns (string)"], provider);
-                        const uriTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error("RPC Timeout")), 6000));
-                        let tokenUri = await Promise.race([nftContract.tokenURI(inputVal), uriTimeout]);
-                        
-                        if (tokenUri) {
-                            if (tokenUri.startsWith("data:application/json;base64,")) {
-                                const jsonStr = atob(tokenUri.split(",")[1]);
-                                const meta = JSON.parse(jsonStr);
+                    const provider = new ethers.JsonRpcProvider("https://rpc.mainnet.chain.robinhood.com");
+                    const nftContract = new ethers.Contract(conf.nftCa, ["function tokenURI(uint256) view returns (string)"], provider);
+                    const uriTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error("RPC Timeout")), 5000));
+                    
+                    let tokenUri = await Promise.race([nftContract.tokenURI(inputVal), uriTimeout]);
+                    if (tokenUri) {
+                        if (tokenUri.startsWith("data:application/json;base64,")) {
+                            const jsonStr = atob(tokenUri.split(",")[1]);
+                            const meta = JSON.parse(jsonStr);
+                            if (meta.image) imageSources.push(resolveIpfsUrl(meta.image));
+                        } else {
+                            const httpUri = resolveIpfsUrl(tokenUri);
+                            const metaRes = await fetchWithRetry(httpUri, {timeout: 4000});
+                            if (metaRes.ok) {
+                                const meta = await metaRes.json();
                                 if (meta.image) imageSources.push(resolveIpfsUrl(meta.image));
-                            } else {
-                                const httpUri = resolveIpfsUrl(tokenUri);
-                                const metaRes = await fetchWithRetry(httpUri, {timeout: 6000});
-                                if (metaRes.ok) {
-                                    const meta = await metaRes.json();
-                                    if (meta.image) imageSources.push(resolveIpfsUrl(meta.image));
-                                }
                             }
                         }
-                    } catch(e) { console.warn("RPC tokenURI fetch failed", e); }
+                    }
+                } catch (e) {
+                    console.warn("Direct RPC tokenURI failed, falling back to Blockscout...", e);
+                }
+
+                try {
+                    const imgRes = await fetchWithRetry(`https://robinhoodchain.blockscout.com/api/v2/tokens/${conf.nftCa}/instances/${inputVal}`, {timeout: 4000});
+                    if (imgRes.ok) {
+                        const imgData = await imgRes.json();
+                        let meta = imgData?.metadata;
+                        if (typeof meta === 'string') { try { meta = JSON.parse(meta); } catch(e) {} }
+                        
+                        if (meta?.image) imageSources.push(resolveIpfsUrl(meta.image));
+                        if (meta?.image_url) imageSources.push(resolveIpfsUrl(meta.image_url));
+                        if (imgData?.image_url) imageSources.push(resolveIpfsUrl(imgData.image_url));
+                        if (imgData?.animation_url) imageSources.push(resolveIpfsUrl(imgData.animation_url));
+                    }
+                } catch(e) {
+                    console.warn("Blockscout image fetch failed", e);
                 }
 
                 let nftImageHtml = `
@@ -925,13 +926,11 @@
                         const primary = uniqueSources[0];
                         const pinata = primary.replace('cloudflare-ipfs.com', 'gateway.pinata.cloud');
                         const dweb = primary.replace('cloudflare-ipfs.com', 'dweb.link');
-                        
-                        // Triple-threat onerror IPFS cascading fallback
                         nftImageHtml = `<img src="${primary}" onerror="this.onerror=null; this.src='${pinata}'; this.onerror=function(){this.onerror=null; this.src='${dweb}';};" alt="Unit #${inputVal}" crossorigin="anonymous" class="w-12 h-12 md:w-16 md:h-16 rounded-xl border border-[#334155] object-cover bg-[#0f172a] flex-shrink-0 shadow-md">`;
                     }
                 }
 
-                // 3. Optimized Transaction Inspector (Inspects max 2 transfers to eliminate API Rate Limit timeouts!)
+                // 3. Optimized Transaction Inspector
                 let lastSaleEth = 0;
                 let foundValidTx = false;
                 let totalTransfers = 0;
@@ -945,7 +944,6 @@
                         const items = txsData.items || [];
                         totalTransfers = items.length;
                         
-                        // CAPPED AT TOP 2 TRANSFERS: Prevents firing 10+ requests and getting rate-limited!
                         const itemsToCheck = items.slice(0, 2);
                         
                         for (const transfer of itemsToCheck) {
@@ -953,7 +951,7 @@
                             if (!txHash) continue;
                             
                             if (itemsToCheck.length > 1 && itemsToCheck.indexOf(transfer) > 0) {
-                                await sleep(500); // Backoff between heavy tx checks
+                                await sleep(500); 
                             }
 
                             try {
@@ -1042,7 +1040,6 @@
                 let basisHtml = '';
                 let cocRoiHtml = '';
 
-                // Soft UI State: If API failed, keep the rest of the card functional but mark the failure
                 if (txApiFailed) {
                     basisHtml = `
                         <div class="bg-amber-900/20 p-3 rounded-lg border border-amber-800/50">
