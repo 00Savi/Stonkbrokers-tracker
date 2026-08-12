@@ -39,7 +39,7 @@ const MEMES = [
   { name: "Index", ca: "0x56910D4409F3a0C78C64DD8D0545FF0705389870" },
   { name: "Pipedog", ca: "0x5Cb6F181081301b44905F3ae15419112ecaBd8A6" },
   { name: "Hmm", ca: "0x7FE995a80075dF3Dc8Ae11A9b82c7FE4202CD87f" },
-  { name: "Clockin", ca: null }, // No CA yet
+  { name: "Clockin", ca: null }, 
   { name: "Up", ca: "0x57C0E45cB534413D1C20A4240955d6bB250BB4F1" },
   { name: "Ai", ca: "0x2E8c31162b855A2ffa90F6F8634643Ad6F111e18" }
 ];
@@ -577,7 +577,7 @@ async function loadMemePrices() {
           data.pairs.forEach(pair => {
               const tokenAddr = pair.baseToken?.address?.toLowerCase();
               if (tokenAddr && !pairsMap[tokenAddr]) {
-                  pairsMap[tokenAddr] = pair; // grab highest liquidity pair
+                  pairsMap[tokenAddr] = pair;
               }
           });
       }
@@ -594,7 +594,8 @@ async function loadMemePrices() {
               fdv: 0,
               marketCap: 0,
               holders: 0,
-              burnt: "Coming Soon"
+              burnt: 0,
+              roi: "0.00%"
           });
           continue;
       }
@@ -607,7 +608,17 @@ async function loadMemePrices() {
       const marketCap = pair?.marketCap || fdv;
       
       const holders = await fetchTokenHoldersSafe(meme.ca, false);
-      await sleep(250);
+      
+      // Fetch actual burnt balance from dead address 0x000...dead
+      let burntBalance = 0;
+      try {
+          const burnRes = await secureFetch(`${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokenbalance&contractaddress=${meme.ca}&address=0x000000000000000000000000000000000000dead&apikey=${API_KEY}`);
+          if (burnRes && burnRes.result) {
+              burntBalance = Number(burnRes.result) / 1e18;
+          }
+      } catch(e) {}
+
+      await sleep(200);
 
       memeResults.push({
           name: meme.name,
@@ -618,7 +629,8 @@ async function loadMemePrices() {
           fdv,
           marketCap,
           holders,
-          burnt: "Tracked On-Chain"
+          burnt: Math.round(burntBalance),
+          roi: "0.00%" // Placeholder for future wallet-drop ROI tracking
       });
   }
   return memeResults;
@@ -673,7 +685,7 @@ async function run() {
   }
 
   fs.writeFileSync("data.json", JSON.stringify(finalJson, null, 2));
-  console.log("\n✓ Dashboard payload generated successfully with Memes.");
+  console.log("\n✓ Dashboard payload generated successfully.");
 }
 
 run().catch(err => { console.error(err); process.exit(1); });
