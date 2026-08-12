@@ -65,15 +65,15 @@
                     <div onclick="loadProject('mancer')" class="px-4 py-2 hover:bg-[#334155] cursor-pointer flex items-center gap-3 text-white font-semibold transition">
                         <div class="w-2 h-2 rounded-full bg-purple-500"></div> Mancer
                     </div>
+                    <div onclick="loadProject('tickeryard')" class="px-4 py-2 hover:bg-[#334155] cursor-pointer flex items-center gap-3 text-white font-semibold transition">
+                        <div class="w-2 h-2 rounded-full bg-cyan-400"></div> TickerYard <span class="text-[9px] bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 px-1.5 py-0.2 rounded font-semibold ml-auto">New</span>
+                    </div>
                     <div class="border-t border-[#334155] my-1"></div>
                     <div class="px-4 py-2 flex items-center gap-3 text-slate-400 font-semibold cursor-not-allowed opacity-75">
                         <div class="w-2 h-2 rounded-full bg-orange-500"></div> Pitboys / DERP <span class="text-[9px] bg-orange-500/20 text-orange-400 border border-orange-500/30 px-1.5 py-0.2 rounded font-semibold ml-auto">Soon</span>
                     </div>
                     <div onclick="loadProject('memes')" class="px-4 py-2 hover:bg-[#334155] cursor-pointer flex items-center gap-3 text-white font-semibold transition">
                         <div class="w-2 h-2 rounded-full bg-emerald-500"></div> Memes <span class="text-[9px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.2 rounded font-semibold ml-auto">Live</span>
-                    </div>
-                    <div class="px-4 py-2 flex items-center gap-3 text-slate-500 font-semibold cursor-not-allowed opacity-60">
-                        <div class="w-2 h-2 rounded-full bg-slate-600"></div> TickerYard <span class="text-[9px] bg-slate-800 px-1.5 rounded ml-auto">Soon</span>
                     </div>
                 </div>
             </div>
@@ -133,7 +133,6 @@
             </div>
         </div>
 
-        <!-- DYOR & Financial Advice Disclaimer Box -->
         <div class="mb-6 p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-200/90 text-xs md:text-sm flex items-start gap-3">
             <svg class="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
             <div>
@@ -391,7 +390,7 @@
             liveEthPriceUsd = m.ethPriceUsd;
 
             document.getElementById('header-logo').src = conf.logo || 'Stonkbroker.png';
-            document.getElementById('project-title').innerText = projectKey === 'stonk' ? 'StonkBrokers Tracker' : 'Mancer Tracker';
+            document.getElementById('project-title').innerText = projectKey === 'stonk' ? 'StonkBrokers Tracker' : (projectKey === 'mancer' ? 'Mancer Tracker' : 'TickerYard Tracker');
             document.getElementById('dynamic-ticker-label').innerText = `$${conf.ticker}`;
             document.getElementById('token-price').innerText = formatPrice(m.tokenPriceUsd);
             document.getElementById('nft-floor').innerText = m.nftFloorEth.toFixed(3) + ' ETH';
@@ -409,7 +408,24 @@
                 const activationCostUsd = t.reqTokens * m.tokenPriceUsd;
                 const totalCostUsd = floorCostUsd + activationCostUsd;
                 const yieldUsd = t.trackedAnnualYieldUsd;
-                const roi = totalCostUsd > 0 ? (yieldUsd / totalCostUsd) * 100 : 0;
+                
+                let roiHtml = '';
+                let yieldHtml = '';
+                
+                // TICKERYARD UNDER CONSTRUCTION OVERRIDE
+                if (data.underConstruction) {
+                    roiHtml = `<span class="bg-orange-900/20 text-orange-400 border border-orange-800/50 px-2.5 py-1 rounded text-[10px] font-bold shadow-sm uppercase tracking-wider">Awaiting Data</span>`;
+                    yieldHtml = `<span class="text-slate-500 italic text-sm">Epoch Initializing...</span>`;
+                } else {
+                    if (yieldUsd > 0) {
+                        const roi = (yieldUsd / totalCostUsd) * 100;
+                        yieldHtml = `<span class="text-white font-bold text-base">${formatCurrency(yieldUsd)}</span> <span class="text-slate-500">/yr</span>`;
+                        roiHtml = `<span class="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-2.5 py-1 rounded text-sm font-bold shadow-sm">${roi.toFixed(2)}%</span>`;
+                    } else {
+                        yieldHtml = `<span class="text-slate-500 italic">No yield tracked</span>`;
+                        roiHtml = `<span class="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-2.5 py-1 rounded text-sm font-bold shadow-sm opacity-50">0.00%</span>`;
+                    }
+                }
                 
                 const tr = document.createElement('tr');
                 tr.className = 'border-b border-[#334155]/50 hover:bg-[#334155]/20 transition-colors';
@@ -417,12 +433,13 @@
                     <td class="py-5 pl-2"><div class="text-white font-bold">${t.tier}: ${t.name}</div></td>
                     <td class="py-5"><span class="text-white font-bold">${formatNumber(t.reqTokens)}</span> ${conf.ticker}</td>
                     <td class="py-5"><div class="text-white font-bold">${formatCurrency(totalCostUsd)}</div></td>
-                    <td class="py-5"><span class="text-white font-bold">${formatCurrency(yieldUsd)}</span> /yr</td>
-                    <td class="py-5 text-right pr-4"><span class="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-2.5 py-1 rounded text-sm font-bold">${roi.toFixed(2)}%</span></td>
+                    <td class="py-5">${yieldHtml}</td>
+                    <td class="py-5 text-right pr-4">${roiHtml}</td>
                 `;
                 tbody.appendChild(tr);
             });
 
+            processMetricsData(data);
             switchTab('roi');
         }
 
@@ -568,30 +585,86 @@
                 }
             }
 
-            resultsDiv.innerHTML = `
-                <div class="flex justify-between items-center border-b border-[#334155] pb-4 mb-4">
-                    <h4 class="text-lg font-bold text-white">Unit #${inputVal} Analysis (${tierData.tier}: ${tierData.name})</h4>
-                    <span class="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-3 py-1 rounded text-sm font-bold">${cocRoi.toFixed(2)}% CoC ROI</span>
-                </div>
-                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
-                        <p class="text-[10px] uppercase text-slate-400">Est. Token Basis</p>
-                        <p class="text-base font-bold text-white">${formatCurrency(activationCostUsd)}</p>
+            // TICKERYARD UNDER CONSTRUCTION OVERRIDE FOR LOOKUP MODULE
+            if (proj.underConstruction) {
+                resultsDiv.innerHTML = `
+                    <div class="flex justify-between items-center border-b border-[#334155] pb-4 mb-4">
+                        <h4 class="text-lg font-bold text-white">Unit #${inputVal} Analysis (${tierData.tier}: ${tierData.name})</h4>
+                        <span class="bg-orange-900/20 text-orange-400 border border-orange-800/50 px-3 py-1 rounded text-sm font-bold uppercase tracking-wider">Awaiting Data</span>
                     </div>
-                    <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
-                        <p class="text-[10px] uppercase text-slate-400">Trailing 7-Day Revenue</p>
-                        <p class="text-base font-bold text-emerald-400">$0.00</p>
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
+                            <p class="text-[10px] uppercase text-slate-400">Est. Token Basis</p>
+                            <p class="text-base font-bold text-white">${formatCurrency(activationCostUsd)}</p>
+                        </div>
+                        <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60 opacity-50">
+                            <p class="text-[10px] uppercase text-slate-400">Trailing 7-Day Revenue</p>
+                            <p class="text-base font-bold text-slate-400 italic">Initializing...</p>
+                        </div>
+                        <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60 opacity-50">
+                            <p class="text-[10px] uppercase text-slate-400">Forecasted Annual Yield</p>
+                            <p class="text-base font-bold text-slate-400 italic">Awaiting 7D Epoch</p>
+                        </div>
+                        <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60 flex items-center justify-center text-center">
+                            <p class="text-xs text-slate-400">Weight: <span class="text-yellow-400 font-bold">${tierData.weight}x</span></p>
+                        </div>
                     </div>
-                    <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
-                        <p class="text-[10px] uppercase text-slate-400">Forecasted Annual Yield</p>
-                        <p class="text-base font-bold text-emerald-400">${formatCurrency(annualYieldUsd)} /yr</p>
+                `;
+            } else {
+                resultsDiv.innerHTML = `
+                    <div class="flex justify-between items-center border-b border-[#334155] pb-4 mb-4">
+                        <h4 class="text-lg font-bold text-white">Unit #${inputVal} Analysis (${tierData.tier}: ${tierData.name})</h4>
+                        <span class="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-3 py-1 rounded text-sm font-bold">${cocRoi.toFixed(2)}% CoC ROI</span>
                     </div>
-                    <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60 flex items-center justify-center text-center">
-                        <p class="text-xs text-slate-400">Weight: <span class="text-yellow-400 font-bold">${tierData.weight}x</span></p>
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
+                            <p class="text-[10px] uppercase text-slate-400">Est. Token Basis</p>
+                            <p class="text-base font-bold text-white">${formatCurrency(activationCostUsd)}</p>
+                        </div>
+                        <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
+                            <p class="text-[10px] uppercase text-slate-400">Trailing 7-Day Revenue</p>
+                            <p class="text-base font-bold text-emerald-400">${formatCurrency(weeklyYieldUsd)}</p>
+                        </div>
+                        <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
+                            <p class="text-[10px] uppercase text-slate-400">Forecasted Annual Yield</p>
+                            <p class="text-base font-bold text-emerald-400">${formatCurrency(annualYieldUsd)} /yr</p>
+                        </div>
+                        <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60 flex items-center justify-center text-center">
+                            <p class="text-xs text-slate-400">Weight: <span class="text-yellow-400 font-bold">${tierData.weight}x</span></p>
+                        </div>
+                        ${derpMiningHtml}
                     </div>
-                    ${derpMiningHtml}
-                </div>
-            `;
+                `;
+            }
+        }
+
+        function processMetricsData(data) {
+            const act = data.activation || {};
+            const own = data.ownership || {};
+            const activeCount = act.activeCount || 0;
+            let pctActivated = act.percentActivated || 0;
+            const totalSupply = act.totalSupply || 4444;
+            const conf = data.config;
+
+            if (pctActivated === 0 && totalSupply > 0) pctActivated = (activeCount / totalSupply) * 100;
+
+            const dualBurn = act.dualBurn || {};
+            const totalBurn = dualBurn.totalBurnTokens || 0;
+            const equivNfts = dualBurn.equivalentBrokersBurnt || 0;
+            
+            document.getElementById('stat-total-burn').innerText = formatNumber(totalBurn) + ` ${conf.ticker}`;
+            document.getElementById('stat-equiv-nfts').innerText = formatNumber(equivNfts, 2) + " Units";
+            document.getElementById('stat-pct-activated').innerText = pctActivated.toFixed(2) + "%";
+            document.getElementById('stat-active-count').innerText = formatNumber(activeCount) + " Units";
+
+            document.getElementById('stat-max-supply').innerText = formatNumber(own.currentMaxSupply || 0, 2) + ' Units';
+            document.getElementById('stat-circ-supply').innerText = formatNumber(own.circulatingNftSupply || 0) + ' Units';
+            document.getElementById('stat-amm-vault').innerText = formatNumber(own.ammVaultNfts || 0) + ' Units';
+            document.getElementById('stat-burnt-nfts').innerText = formatNumber(own.burntNfts || 0, 2) + ' Units';
+            document.getElementById('stat-nft-holders').innerText = formatNumber(own.nftHolders || 0) + ' Wallets';
+            document.getElementById('stat-stonk-holders').innerText = formatNumber(own.stonkHolders || 0) + ' Wallets';
+            
+            document.getElementById('stat-own-ratio').innerText = (own.ownershipRatio || 0).toFixed(2) + '%';
         }
 
         initDashboard();
