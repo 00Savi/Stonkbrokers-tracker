@@ -7,6 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.1/ethers.umd.min.js"></script>
     <style>
         body { background-color: #0f172a; color: #cbd5e1; }
         .card { background-color: #1e293b; border-color: #334155; }
@@ -17,6 +18,18 @@
         
         .dropdown-menu { display: none; }
         .dropdown-container:hover .dropdown-menu { display: block; }
+
+        /* Custom animation for the DERP Mining Card */
+        @keyframes pulse-border {
+            0% { border-color: rgba(245, 158, 11, 0.4); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
+            70% { border-color: rgba(245, 158, 11, 0); box-shadow: 0 0 0 4px rgba(245, 158, 11, 0); }
+            100% { border-color: rgba(245, 158, 11, 0); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+        }
+        .mining-card {
+            animation: pulse-border 3s infinite;
+            background: linear-gradient(145deg, rgba(30, 41, 59, 0.9) 0%, rgba(67, 33, 10, 0.2) 100%);
+            border: 1px solid rgba(245, 158, 11, 0.4);
+        }
     </style>
 </head>
 <body class="p-4 md:p-8 font-sans antialiased overflow-x-hidden">
@@ -71,9 +84,9 @@
                 <p class="text-slate-400 mb-0.5" id="dynamic-ticker-label">$TOKEN</p>
                 <p class="text-white font-bold" id="token-price">Loading...</p>
             </div>
-            <div>
-                <p class="text-slate-400 mb-0.5">Floor <span class="hidden sm:inline text-[10px] md:text-xs text-slate-500">(Base + 10%)</span></p>
-                <p class="text-white font-bold" id="nft-floor">Loading...</p>
+            <div id="derp-ticker-box" class="hidden border-l border-[#334155] pl-4 md:pl-6">
+                <p class="text-slate-400 mb-0.5">$DERP</p>
+                <p class="text-orange-400 font-bold" id="derp-price">Loading...</p>
             </div>
         </div>
     </header>
@@ -394,6 +407,18 @@
 
     <!-- Logic Script -->
     <script>
+        // ==========================================
+        // $DERP MINING CONFIGURATION
+        // Adjust these variables as the network evolves
+        // ==========================================
+        const MINING_CONFIG = {
+            shiftsPerDay: 1,              // Based on MIN_SHIFT_TTL = 86400 seconds (1 shift per day)
+            avgDerpPerShiftOrange: 120,   // StonkBrokers average payout
+            avgDerpPerShiftBlue: 65,      // Pitboys average payout
+            ethGasPerShift: 0.000013      // Estimated network cost per shift (Clock-in + Clock-out)
+        };
+        // ==========================================
+
         const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
         const formatNumber = (val, decimals = 0) => new Intl.NumberFormat('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val);
         
@@ -415,9 +440,12 @@
         window.fullBurnData = [];
         window.tierChartData = {};
         window.tierActivationStats = null;
+        window.currentProjectCumulativeTokens = {};
         
         let masterData = null;
         let currentProjectKey = 'stonk';
+        let liveDerpPriceUsd = 0;
+        let liveEthPriceUsd = 0;
 
         function switchTab(tab) {
             const btnRoi = document.getElementById('tab-roi');
@@ -464,10 +492,27 @@
             }
         }
 
+        // Live fetcher for the $DERP Mining Extension
+        async function fetchLiveDerpPrice() {
+            try {
+                const r = await fetch(`https://api.dexscreener.com/latest/dex/tokens/0x6543B7746ca744C4bb2198191E71f40FF04C41b9`);
+                const j = await r.json();
+                if (j?.pairs?.length) {
+                    const best = j.pairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
+                    liveDerpPriceUsd = parseFloat(best.priceUsd);
+                    document.getElementById('derp-price').innerText = formatPrice(liveDerpPriceUsd);
+                    document.getElementById('derp-ticker-box').classList.remove('hidden');
+                }
+            } catch (e) {
+                console.error("Could not fetch DERP price:", e);
+            }
+        }
+
         async function initDashboard() {
             try {
                 const res = await fetch('data.json?v=' + new Date().getTime());
                 masterData = await res.json();
+                fetchLiveDerpPrice(); // Boot up the DERP Oracle
                 loadProject('stonk');
             } catch (e) {
                 console.error("Dashboard Sync Failed: ", e);
@@ -481,6 +526,8 @@
             const m = data.market;
             const conf = data.config;
             
+            liveEthPriceUsd = m.ethPriceUsd;
+
             document.getElementById('header-logo').src = conf.logo || 'Stonkbroker.png';
             document.getElementById('project-title').innerText = projectKey === 'stonk' ? 'StonkBrokers Tracker' : 'Mancer Tracker';
             document.getElementById('dynamic-ticker-label').innerText = `$${conf.ticker}`;
@@ -504,6 +551,9 @@
             const tbody = document.getElementById('tiers-body');
             tbody.innerHTML = '';
             tierChartInstances = {}; 
+            
+            window.currentProjectCumulativeTokens = {};
+            data.tiers.forEach(t => { window.currentProjectCumulativeTokens[t.tier] = t.reqTokens; });
             
             data.tiers.forEach(t => {
                 const activationCostUsd = t.reqTokens * m.tokenPriceUsd;
@@ -596,7 +646,7 @@
             if (!inputVal) return;
 
             resultsDiv.classList.remove('hidden');
-            resultsDiv.innerHTML = '<p class="text-xs text-slate-400 animate-pulse">Scanning blockchain ledger for Token #' + inputVal + ' transfers & tier status...</p>';
+            resultsDiv.innerHTML = '<p class="text-xs text-slate-400 animate-pulse">Scanning blockchain ledger for Token #' + inputVal + ' history & active mining status...</p>';
 
             const proj = masterData.projects[currentProjectKey];
             const conf = proj.config;
@@ -678,10 +728,28 @@
             const effectiveTs = (purchaseTs && actTs) ? Math.min(purchaseTs, actTs) : (purchaseTs || actTs);
             const historicalTokenPrice = getHistoricalTokenPrice(conf.ticker, effectiveTs, m.tokenPriceUsd);
             
-            // DIRECT REQUIREMENT (reqTokens is flat total for tier)
             const activationCostUsd = tierData.reqTokens * historicalTokenPrice;
             const annualYieldUsd = tierData.trackedAnnualYieldUsd;
             const weeklyYieldUsd = tierData.dailyYields.reduce((a, b) => a + b, 0);
+
+            // ==========================================
+            // LIVE RPC CALL: Check if seated in PitMine
+            // ==========================================
+            let isSeated = false;
+            if (isActivated && currentProjectKey === 'stonk') {
+                try {
+                    const provider = new ethers.JsonRpcProvider("https://rpc.mainnet.chain.robinhood.com");
+                    const pitMineAddress = "0x2d0da469115232aD00159757f9d25f81D498206D";
+                    const pitMineAbi = ["function activeSlotCount(uint256 tokenId) view returns (uint256)"];
+                    const pitMineContract = new ethers.Contract(pitMineAddress, pitMineAbi, provider);
+                    
+                    const count = await pitMineContract.activeSlotCount(inputVal);
+                    isSeated = Number(count) > 0;
+                } catch (e) {
+                    console.error("Failed to query PitMine:", e);
+                }
+            }
+            // ==========================================
 
             let basisHtml = '';
             let roiHtml = '';
@@ -722,6 +790,76 @@
 
             const tokenBasisLabel = effectiveTs ? 'Est. Historical Token Basis' : 'Current Token Basis';
             const priceRef = effectiveTs ? formatPrice(historicalTokenPrice) : '(Spot)';
+
+            // ==========================================
+            // THE $DERP MINING UI ENGINE (BONUS YIELD)
+            // ==========================================
+            let derpMiningHtml = '';
+            
+            if (isActivated && currentProjectKey === 'stonk' && liveDerpPriceUsd > 0) {
+                const dailyDerpMined = MINING_CONFIG.avgDerpPerShiftOrange * MINING_CONFIG.shiftsPerDay;
+                const grossDailyDerpUsd = dailyDerpMined * liveDerpPriceUsd;
+                const dailyGasCostUsd = MINING_CONFIG.ethGasPerShift * liveEthPriceUsd * MINING_CONFIG.shiftsPerDay;
+                
+                const netDailyProfitUsd = grossDailyDerpUsd - dailyGasCostUsd;
+                const netAnnualProfitUsd = netDailyProfitUsd > 0 ? (netDailyProfitUsd * 365) : 0;
+                
+                if (netAnnualProfitUsd > 0) {
+                    if (isSeated) {
+                        derpMiningHtml = `
+                            <div class="col-span-2 lg:col-span-4 mt-2">
+                                <div class="mining-card p-4 rounded-xl relative overflow-hidden group border border-orange-500/40">
+                                    <div class="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 bg-orange-500/20 rounded-full blur-3xl group-hover:bg-orange-500/30 transition-all duration-500"></div>
+                                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center relative z-10 gap-4">
+                                        <div class="flex items-center gap-3">
+                                            <div class="w-10 h-10 rounded-full bg-orange-500/20 border border-orange-500/40 flex items-center justify-center flex-shrink-0 shadow-[0_0_15px_rgba(245,158,11,0.3)]">
+                                                <svg class="w-5 h-5 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                                            </div>
+                                            <div>
+                                                <h4 class="text-base font-bold text-white flex items-center gap-2">
+                                                    $DERP Mining Yield
+                                                    <span class="bg-emerald-500 text-white text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">Active Miner</span>
+                                                </h4>
+                                                <p class="text-xs text-orange-200/70 mt-0.5">Estimated Net Profit (After Gas & Fees)</p>
+                                            </div>
+                                        </div>
+                                        <div class="text-right w-full sm:w-auto">
+                                            <p class="text-xl md:text-2xl font-black text-emerald-400 drop-shadow-md">+ ${formatCurrency(netAnnualProfitUsd)} <span class="text-sm text-emerald-400/70 font-bold">/yr</span></p>
+                                            <p class="text-[10px] text-orange-200/50 mt-1">Based on ${MINING_CONFIG.shiftsPerDay} shift/day @ ${MINING_CONFIG.avgDerpPerShiftOrange} DERP avg</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        derpMiningHtml = `
+                            <div class="col-span-2 lg:col-span-4 mt-2">
+                                <div class="p-4 rounded-xl relative overflow-hidden group border border-dashed border-[#334155] bg-[#1e293b]/60 hover:bg-[#1e293b] transition-colors">
+                                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center relative z-10 gap-4">
+                                        <div class="flex items-center gap-3">
+                                            <div class="w-10 h-10 rounded-full bg-slate-800 border border-slate-600 flex items-center justify-center flex-shrink-0 opacity-70">
+                                                <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                                            </div>
+                                            <div>
+                                                <h4 class="text-base font-bold text-slate-300 flex items-center gap-2">
+                                                    Potential $DERP Yield
+                                                    <span class="bg-slate-700 text-slate-300 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">Unseated</span>
+                                                </h4>
+                                                <p class="text-xs text-slate-500 mt-0.5">Projected Net Profit if you buy a seat in the Pit</p>
+                                            </div>
+                                        </div>
+                                        <div class="text-right w-full sm:w-auto opacity-70">
+                                            <p class="text-xl md:text-2xl font-black text-orange-400 drop-shadow-md">+ ${formatCurrency(netAnnualProfitUsd)} <span class="text-sm text-orange-400/70 font-bold">/yr</span></p>
+                                            <p class="text-[10px] text-slate-500 mt-1">Based on ${MINING_CONFIG.shiftsPerDay} shift/day @ ${MINING_CONFIG.avgDerpPerShiftOrange} DERP avg</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                }
+            }
+            // ==========================================
 
             resultsDiv.innerHTML = `
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[#334155] pb-4 mb-4">
@@ -764,6 +902,7 @@
                         <p class="text-base font-bold text-emerald-400">${formatCurrency(annualYieldUsd)} /yr</p>
                         <p class="text-[10px] text-slate-500">Weight: ${tierData.weight}x</p>
                     </div>
+                    ${derpMiningHtml}
                 </div>
             `;
         }
