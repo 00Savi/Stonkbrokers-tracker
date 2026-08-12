@@ -16,6 +16,9 @@
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #475569; }
         
+        .dropdown-menu { display: none; }
+        .dropdown-container:hover .dropdown-menu { display: block; }
+
         @keyframes pulse-border {
             0% { border-color: rgba(245, 158, 11, 0.4); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
             70% { border-color: rgba(245, 158, 11, 0); box-shadow: 0 0 0 4px rgba(245, 158, 11, 0); }
@@ -112,8 +115,8 @@
             </button>
         </div>
         
-        <button onclick="shareToX()" class="flex-1 sm:flex-none w-full sm:w-auto justify-center bg-black hover:bg-[#1da1f2] border border-[#334155] text-white px-5 py-2.5 rounded-lg font-bold flex items-center gap-2 transition shadow-sm group">
-            <svg class="w-4 h-4 fill-current text-white" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 24.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+        <button onclick="shareToX('view-active')" class="flex-1 sm:flex-none w-full sm:w-auto justify-center bg-black hover:bg-[#1da1f2] border border-[#334155] text-white px-5 py-2.5 rounded-lg font-bold flex items-center gap-2 transition shadow-sm group">
+            <svg class="w-4 h-4 fill-current text-white group-hover:text-white" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 24.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
             <span id="share-btn-text">Share Stats</span>
         </button>
     </div>
@@ -162,7 +165,7 @@
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
             <div>
                 <h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2">
-                    <svg class="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20"><path d="M3 12v3c0 1.657 3.134 3 7 3s7-1.343 7-3v-3c0 1.657-3.134 3-7 3s-7-1.343-7-3z"></path><path d="M3 7v3c0 1.657 3.134 3 7 3s7-1.343 7-3V7c0 1.657-3.134 3-7 3S3 8.657 3 5s3.134-3 7-3 7 1.343 7 3z"></path><path d="M17 5c0 1.657-3.134 3-7 3S3 6.657 3 5s3.134-3 7-3 7 1.343 7 3z"></path></svg>
+                    <svg class="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20"><path d="M3 12v3c0 1.657 3.134 3 7 3s7-1.343 7-3v-3c0 1.657-3.134 3-7 3s-7-1.343-7-3z"></path><path d="M3 7v3c0 1.657 3.134 3 7 3s7-1.343 7-3V7c0 1.657-3.134 3-7 3S3 8.657 3 7z"></path><path d="M17 5c0 1.657-3.134 3-7 3S3 6.657 3 5s3.134-3 7-3 7 1.343 7 3z"></path></svg>
                     Global Yield ROI Benchmarks
                 </h2>
                 <p class="text-xs md:text-sm text-slate-400 mt-1" id="last-sync">Last automated sync: Loading...</p>
@@ -389,6 +392,37 @@
         </div>
     </main>
 
+    <!-- Dynamic Contextual Methodology Section -->
+    <div class="max-w-6xl mx-auto card rounded-xl p-5 md:p-6 border mb-12 shadow-lg" data-html2canvas-ignore="true">
+        <div class="flex items-center gap-2 mb-4">
+            <svg class="w-5 h-5 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
+            <h3 class="text-base md:text-lg font-bold text-white">Methodology & Disclaimer</h3>
+        </div>
+        
+        <div class="text-xs md:text-sm text-slate-300 mb-5 leading-relaxed space-y-4">
+            <p id="meth-roi" class="meth-section">
+                <strong class="text-white">Yield & ROI (Global Network Oracle):</strong> Cash-on-Cash (CoC) returns are calculated dynamically based on the selected project's architecture. Automated distributions sample incoming transactions to an active oracle wallet. Soft-staking mechanics track real-time global, aggregate distributions flowing outbound from the central protocol vault. This total is mathematically divided against the live active network weight and evaluated against AMM floor entry costs.
+            </p>
+
+            <p id="meth-burn" class="meth-section hidden">
+                <strong class="text-white">Token Burn Tracking:</strong> The total burnt token count is calculated by directly indexing the balances of the network's standard dead addresses (0x000... and 0xdead), combined with the tokens permanently locked inside the protocol's Activation Manager/Staking Vault smart contracts. The equivalent metric divides this total by the standard token tier requirement.
+            </p>
+
+            <p id="meth-activation" class="meth-section hidden">
+                <strong class="text-white">Ecosystem Activation Metrics:</strong> Live network activation metrics are derived by parsing the entire historical event log of the protocol's Activation Manager smart contract. The script actively tallies 'Activated' and 'ActivationCleared' on-chain events to mathematically map the live network weight, chronological tier flow, and tier composition.
+            </p>
+
+            <p id="meth-ownership" class="meth-section hidden">
+                <strong class="text-white">True Circulating Supply:</strong> Calculated as the Genesis Supply minus the live inventory currently held within the AMM Pool. Burnt/locked tokens are physically trapped inside the AMM Vault, meaning they are inherently excluded from the circulating supply.<br><br>
+                <strong class="text-white">Holder Metrics & Anti-Dust Filter:</strong> Unique token holders are calculated by directly indexing the blockchain ledger and applying a strict "Anti-Dust" filter. Any wallet holding less than 1 full token is discarded to eliminate MEV bots, DEX routers, and abandoned fractional dust. Furthermore, protocol system wallets (the AMM Vault and burn addresses) are explicitly removed from all holder counts to provide a mathematically honest representation of unique human ownership.
+            </p>
+        </div>
+        
+        <p class="text-xs md:text-sm text-slate-400 italic leading-relaxed border-t border-[#334155] pt-5">
+            <strong class="text-slate-300 not-italic">Disclaimer:</strong> Tracked yield values are calculated using Mark-to-Market spot pricing at the exact time of the dashboard's last automated sync, rather than the historical price at the time of the drop. Yields fluctuate based on network activation weight, market token prices, and community protocol volume. This is a community-built tracking tool and does not guarantee future returns.
+        </p>
+    </div>
+
     <!-- Logic Script -->
     <script>
         const MINING_CONFIG = {
@@ -410,6 +444,16 @@
             return formatCurrency(val);
         }
 
+        // Custom Timeout Fetch function to prevent infinite spinning when the RPC or Blockscout hangs
+        async function fetchWithTimeout(resource, options = {}) {
+            const { timeout = 8000 } = options;
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), timeout);
+            const response = await fetch(resource, { ...options, signal: controller.signal });
+            clearTimeout(id);
+            return response;
+        }
+
         let masterData = null;
         let currentProjectKey = 'stonk';
         let liveDerpPriceUsd = 0;
@@ -421,7 +465,6 @@
         let ownershipChartInstance = null;
         let tierChartInstances = {};
 
-        // Mobile Webview / In-App Dropdown Toggle
         function toggleDropdown(e) {
             if (e) e.stopPropagation();
             const menu = document.getElementById('project-dropdown-menu');
@@ -684,7 +727,7 @@
                 // Express Burnt as raw number + % of 1B supply
                 const totalSupply = 1000000000;
                 const burntPct = meme.burnt > 0 ? ((meme.burnt / totalSupply) * 100).toFixed(2) + '%' : '0.00%';
-                const burntFormatted = meme.burnt > 0 ? `${formatNumber(meme.burnt)} <span class="text-xs text-orange-300 font-normal">(${burntPct})</span>` : '0 (0.00%)';
+                const burntFormatted = meme.burnt > 0 ? `${formatNumber(meme.burnt)} <span class="text-[10px] text-orange-300 font-normal">(${burntPct})</span>` : '0 <span class="text-[10px] text-slate-500 font-normal">(0.00%)</span>';
 
                 const tr = document.createElement('tr');
                 tr.className = 'cursor-pointer border-b border-[#334155]/50 hover:bg-[#334155]/20 transition-colors group';
@@ -713,14 +756,14 @@
                 `;
                 tbody.appendChild(tr);
 
-                // Expandable Interactive Chart Row
+                // Expandable Interactive Chart Row (Fixed slug to 'robinhood')
                 const detailsTr = document.createElement('tr');
                 detailsTr.id = `meme-details-${index}`;
                 detailsTr.className = 'hidden bg-[#0f172a]/60 border-b border-[#334155]/50';
                 
                 const chartContent = meme.ca ? `
                     <div class="relative w-full h-[450px] rounded-xl overflow-hidden border border-[#334155] shadow-inner">
-                        <iframe src="https://dexscreener.com/robinhoodchain/${meme.ca}?embed=1&theme=dark&trades=0&info=0" class="w-full h-full border-0"></iframe>
+                        <iframe src="https://dexscreener.com/robinhood/${meme.ca}?embed=1&theme=dark&trades=0&info=0" class="w-full h-full border-0"></iframe>
                     </div>
                 ` : `
                     <div class="p-8 text-center text-slate-400 italic bg-[#1e293b]/40 rounded-xl border border-[#334155]">
@@ -810,8 +853,8 @@
 
             let seatedSeats = 0;
 
-            // Timeout race condition safety wrapper to prevent infinite "Scanning..." state
-            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("RPC Timeout")), 6000));
+            // 1. TIMEOUT FAILSAFE FOR HANGING RPC CALLS
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("RPC Timeout")), 8000));
             
             if (isActivated && currentProjectKey === 'stonk') {
                 try {
@@ -820,7 +863,30 @@
                     const callPromise = pitMineContract.activeSlotCount(inputVal);
                     const count = await Promise.race([callPromise, timeoutPromise]);
                     seatedSeats = Number(count);
-                } catch (e) {}
+                } catch (e) {
+                    console.error("PitMine lookup timeout/fail", e);
+                }
+            }
+
+            // 2. FETCH NFT IMAGE VIA BLOCKSCOUT API (WITH TIMEOUT)
+            let nftImageHtml = `
+                <div class="w-12 h-12 md:w-16 md:h-16 rounded-xl bg-[#1e293b] border border-[#334155] flex items-center justify-center flex-shrink-0">
+                    <svg class="w-6 h-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                </div>
+            `;
+            
+            try {
+                const imgRes = await fetchWithTimeout(`https://robinhoodchain.blockscout.com/api/v2/tokens/${conf.nftCa}/instances/${inputVal}`, {timeout: 4000});
+                if (imgRes.ok) {
+                    const imgData = await imgRes.json();
+                    let imageUrl = imgData?.metadata?.image || imgData?.image_url || imgData?.animation_url;
+                    if (imageUrl) {
+                        if (imageUrl.startsWith("ipfs://")) imageUrl = imageUrl.replace("ipfs://", "https://ipfs.io/ipfs/");
+                        nftImageHtml = `<img src="${imageUrl}" alt="Unit #${inputVal}" crossorigin="anonymous" class="w-12 h-12 md:w-16 md:h-16 rounded-xl border border-[#334155] object-cover bg-[#0f172a] flex-shrink-0 shadow-md">`;
+                    }
+                }
+            } catch (e) {
+                console.error("NFT Image fetch failed", e);
             }
 
             const activationCostUsd = tierData.reqTokens * m.tokenPriceUsd;
@@ -878,9 +944,33 @@
 
             if (proj.underConstruction) {
                 resultsDiv.innerHTML = `
-                    <div class="flex justify-between items-center border-b border-[#334155] pb-4 mb-4">
-                        <h4 class="text-lg font-bold text-white">Unit #${inputVal} Analysis (${tierData.tier}: ${tierData.name})</h4>
-                        <span class="bg-orange-900/20 text-orange-400 border border-orange-800/50 px-3 py-1 rounded text-sm font-bold uppercase tracking-wider">Awaiting Data</span>
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[#334155] pb-4 mb-4">
+                        <div class="flex items-center gap-4">
+                            ${nftImageHtml}
+                            <div>
+                                <div class="flex items-center gap-2 mb-1">
+                                    <span class="text-xs uppercase font-bold text-blue-400 bg-blue-900/30 px-2 py-0.5 rounded border border-blue-800/50">${tierData.tier}: ${tierData.name}</span>
+                                    <span class="text-xs font-semibold ${isActivated ? 'text-emerald-400 bg-emerald-900/20' : 'text-slate-400 bg-slate-800'} px-2 py-0.5 rounded border border-[#334155]">
+                                        ${isActivated ? 'Active Unit' : 'Unactivated'}
+                                    </span>
+                                </div>
+                                <h4 class="text-lg font-bold text-white">Unit #${inputVal} Analysis</h4>
+                            </div>
+                        </div>
+                        
+                        <div class="flex flex-col sm:flex-row gap-3 w-full md:w-auto items-stretch sm:items-center">
+                            <div class="bg-[#1e293b] px-5 py-2.5 rounded-lg border border-[#334155] text-right w-full sm:w-auto flex justify-between sm:block items-center">
+                                <span class="text-xs uppercase text-slate-400 sm:block">Individual CoC ROI</span>
+                                <span class="bg-orange-900/20 text-orange-400 border border-orange-800/50 px-2.5 py-1 rounded text-[10px] font-bold shadow-sm uppercase tracking-wider">Awaiting Data</span>
+                            </div>
+                            <button onclick="shareUnitToX()" data-html2canvas-ignore="true" class="bg-black hover:bg-[#1da1f2] border border-[#334155] text-white px-4 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition shadow-sm w-full sm:w-auto">
+                                <svg class="w-4 h-4 fill-current text-white" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 24.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                                <span id="unit-share-btn-text">Share to X</span>
+                            </button>
+                            <button onclick="document.getElementById('lookup-results').classList.add('hidden')" data-html2canvas-ignore="true" class="bg-[#1e293b] hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-[#334155] px-3 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center transition shadow-sm">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                            </button>
+                        </div>
                     </div>
                     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
                         <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
@@ -902,9 +992,33 @@
                 `;
             } else {
                 resultsDiv.innerHTML = `
-                    <div class="flex justify-between items-center border-b border-[#334155] pb-4 mb-4">
-                        <h4 class="text-lg font-bold text-white">Unit #${inputVal} Analysis (${tierData.tier}: ${tierData.name})</h4>
-                        <span class="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-3 py-1 rounded text-sm font-bold">${cocRoi.toFixed(2)}% CoC ROI</span>
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[#334155] pb-4 mb-4">
+                        <div class="flex items-center gap-4">
+                            ${nftImageHtml}
+                            <div>
+                                <div class="flex items-center gap-2 mb-1">
+                                    <span class="text-xs uppercase font-bold text-blue-400 bg-blue-900/30 px-2 py-0.5 rounded border border-blue-800/50">${tierData.tier}: ${tierData.name}</span>
+                                    <span class="text-xs font-semibold ${isActivated ? 'text-emerald-400 bg-emerald-900/20' : 'text-slate-400 bg-slate-800'} px-2 py-0.5 rounded border border-[#334155]">
+                                        ${isActivated ? 'Active Unit' : 'Unactivated'}
+                                    </span>
+                                </div>
+                                <h4 class="text-lg font-bold text-white">Unit #${inputVal} Analysis</h4>
+                            </div>
+                        </div>
+                        
+                        <div class="flex flex-col sm:flex-row gap-3 w-full md:w-auto items-stretch sm:items-center">
+                            <div class="bg-[#1e293b] px-5 py-2.5 rounded-lg border border-[#334155] text-right w-full sm:w-auto flex justify-between sm:block items-center">
+                                <span class="text-xs uppercase text-slate-400 sm:block">Individual CoC ROI</span>
+                                <span class="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-2.5 py-1 rounded text-sm font-bold shadow-sm">${cocRoi.toFixed(2)}%</span>
+                            </div>
+                            <button onclick="shareUnitToX()" data-html2canvas-ignore="true" class="bg-black hover:bg-[#1da1f2] border border-[#334155] text-white px-4 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition shadow-sm w-full sm:w-auto">
+                                <svg class="w-4 h-4 fill-current text-white" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 24.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                                <span id="unit-share-btn-text">Share to X</span>
+                            </button>
+                            <button onclick="document.getElementById('lookup-results').classList.add('hidden')" data-html2canvas-ignore="true" class="bg-[#1e293b] hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-[#334155] px-3 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center transition shadow-sm">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                            </button>
+                        </div>
                     </div>
                     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
                         <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
@@ -913,7 +1027,7 @@
                         </div>
                         <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
                             <p class="text-[10px] uppercase text-slate-400">Trailing 7-Day Revenue</p>
-                            <p class="text-base font-bold text-emerald-400">$0.00</p>
+                            <p class="text-base font-bold text-emerald-400">${formatCurrency(weeklyYieldUsd)}</p>
                         </div>
                         <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
                             <p class="text-[10px] uppercase text-slate-400">Forecasted Annual Yield</p>
@@ -1224,13 +1338,44 @@
             elementToCapture.style.backgroundColor = '#0f172a';
 
             try {
-                const canvas = await html2canvas(elementToCapture, { backgroundColor: '#0f172a', scale: 2 });
+                const canvas = await html2canvas(elementToCapture, { backgroundColor: '#0f172a', scale: 2, useCORS: true, allowTaint: true });
                 canvas.toBlob(async (blob) => {
                     const item = new ClipboardItem({ 'image/png': blob });
                     await navigator.clipboard.write([item]);
                     elementToCapture.style.backgroundColor = originalBg;
                     shareBtn.innerText = ogText;
                     alert("✅ DASHBOARD SCREENSHOT COPIED!\n\nJust hit Paste (Ctrl+V / Cmd+V) when X/Twitter opens to attach it!");
+                    window.open(twitterUrl, '_blank');
+                }, 'image/png');
+            } catch (e) {
+                console.error("Clipboard copy failed: ", e);
+                elementToCapture.style.backgroundColor = originalBg;
+                shareBtn.innerText = ogText;
+                alert("Screenshot auto-copy failed. Your browser may block this feature. Opening X anyway!");
+                window.open(twitterUrl, '_blank');
+            }
+        }
+        
+        async function shareUnitToX() {
+            const text = `@savicrypto\nhttps://savicrypto.xyz/`;
+            const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+            
+            const elementToCapture = document.getElementById('lookup-results');
+            const shareBtn = document.getElementById('unit-share-btn-text');
+            const ogText = shareBtn.innerText;
+            shareBtn.innerText = "Capturing...";
+            
+            const originalBg = elementToCapture.style.backgroundColor;
+            elementToCapture.style.backgroundColor = '#0f172a';
+
+            try {
+                const canvas = await html2canvas(elementToCapture, { backgroundColor: '#0f172a', scale: 2, useCORS: true, allowTaint: true });
+                canvas.toBlob(async (blob) => {
+                    const item = new ClipboardItem({ 'image/png': blob });
+                    await navigator.clipboard.write([item]);
+                    elementToCapture.style.backgroundColor = originalBg;
+                    shareBtn.innerText = ogText;
+                    alert("✅ UNIT ANALYSIS COPIED!\n\nJust hit Paste (Ctrl+V / Cmd+V) when X/Twitter opens to attach it!");
                     window.open(twitterUrl, '_blank');
                 }, 'image/png');
             } catch (e) {
