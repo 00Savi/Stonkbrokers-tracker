@@ -73,7 +73,7 @@
                         <div class="w-2 h-2 rounded-full bg-orange-500"></div> Pitboys / DERP <span class="text-[9px] bg-orange-500/20 text-orange-400 border border-orange-500/30 px-1.5 py-0.2 rounded font-semibold ml-auto">Soon</span>
                     </div>
                     <div onclick="loadProject('memes')" class="px-4 py-2 hover:bg-[#334155] cursor-pointer flex items-center gap-3 text-white font-semibold transition">
-                        <div class="w-2 h-2 rounded-full bg-emerald-500"></div> Memes <span class="text-[9px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.2 rounded font-semibold ml-auto">Live</span>
+                        <div class="w-2 h-2 rounded-full bg-emerald-500"></div> Robinhood Tokens <span class="text-[9px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.2 rounded font-semibold ml-auto">Live</span>
                     </div>
                 </div>
             </div>
@@ -121,18 +121,19 @@
         </button>
     </div>
 
-    <!-- View: Memes Spreadsheet Table -->
+    <!-- View: Tokens Spreadsheet Table -->
     <main id="view-memes" class="max-w-6xl mx-auto card rounded-2xl border p-4 md:p-6 mb-8 shadow-xl hidden">
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div>
                 <h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2">
                     <svg class="w-5 h-5 text-emerald-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"></path></svg>
-                    Ecosystem Meme Coins Tracker
+                    Robinhood Tokens Tracker
                 </h2>
-                <p class="text-xs md:text-sm text-slate-400 mt-1">Real-time liquidity, volume, and holder metrics for Robinhood Chain meme tokens</p>
+                <p class="text-xs md:text-sm text-slate-400 mt-1">Real-time liquidity, volume, and holder metrics for Robinhood Chain tokens</p>
             </div>
         </div>
 
+        <!-- DYOR & Financial Advice Disclaimer Box -->
         <div class="mb-6 p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-200/90 text-xs md:text-sm flex items-start gap-3">
             <svg class="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
             <div>
@@ -144,7 +145,7 @@
             <table class="w-full text-left border-collapse min-w-[1050px]" id="memes-table">
                 <thead>
                     <tr class="text-xs uppercase tracking-wider text-slate-500 border-b border-[#334155]">
-                        <th class="pb-4 font-medium pl-2 sortable" onclick="sortMemesTable(0, false)">Meme Name ↕</th>
+                        <th class="pb-4 font-medium pl-2 sortable" onclick="sortMemesTable(0, false)">Token Name ↕</th>
                         <th class="pb-4 font-medium sortable" onclick="sortMemesTable(1, true)">Volume (24h) ↕</th>
                         <th class="pb-4 font-medium sortable" onclick="sortMemesTable(2, true)">Liquidity ↕</th>
                         <th class="pb-4 font-medium sortable" onclick="sortMemesTable(3, true)">24h % Change ↕</th>
@@ -392,6 +393,37 @@
         </div>
     </main>
 
+    <!-- Dynamic Contextual Methodology Section -->
+    <div class="max-w-6xl mx-auto card rounded-xl p-5 md:p-6 border mb-12 shadow-lg" data-html2canvas-ignore="true">
+        <div class="flex items-center gap-2 mb-4">
+            <svg class="w-5 h-5 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
+            <h3 class="text-base md:text-lg font-bold text-white">Methodology & Disclaimer</h3>
+        </div>
+        
+        <div class="text-xs md:text-sm text-slate-300 mb-5 leading-relaxed space-y-4">
+            <p id="meth-roi" class="meth-section">
+                <strong class="text-white">Yield & ROI (Global Network Oracle):</strong> Cash-on-Cash (CoC) returns are calculated dynamically based on the selected project's architecture. Automated distributions sample incoming transactions to an active oracle wallet. Soft-staking mechanics track real-time global, aggregate distributions flowing outbound from the central protocol vault. This total is mathematically divided against the live active network weight and evaluated against AMM floor entry costs.
+            </p>
+
+            <p id="meth-burn" class="meth-section hidden">
+                <strong class="text-white">Token Burn Tracking:</strong> The total burnt token count is calculated by directly indexing the balances of the network's standard dead addresses (0x000... and 0xdead), combined with the tokens permanently locked inside the protocol's Activation Manager/Staking Vault smart contracts. The equivalent metric divides this total by the standard token tier requirement.
+            </p>
+
+            <p id="meth-activation" class="meth-section hidden">
+                <strong class="text-white">Ecosystem Activation Metrics:</strong> Live network activation metrics are derived by parsing the entire historical event log of the protocol's Activation Manager smart contract. The script actively tallies 'Activated' and 'ActivationCleared' on-chain events to mathematically map the live network weight, chronological tier flow, and tier composition.
+            </p>
+
+            <p id="meth-ownership" class="meth-section hidden">
+                <strong class="text-white">True Circulating Supply:</strong> Calculated as the Genesis Supply minus the live inventory currently held within the AMM Pool. Burnt/locked tokens are physically trapped inside the AMM Vault, meaning they are inherently excluded from the circulating supply.<br><br>
+                <strong class="text-white">Holder Metrics & Anti-Dust Filter:</strong> Unique token holders are calculated by directly indexing the blockchain ledger and applying a strict "Anti-Dust" filter. Any wallet holding less than 1 full token is discarded to eliminate MEV bots, DEX routers, and abandoned fractional dust. Furthermore, protocol system wallets (the AMM Vault and burn addresses) are explicitly removed from all holder counts to provide a mathematically honest representation of unique human ownership.
+            </p>
+        </div>
+        
+        <p class="text-xs md:text-sm text-slate-400 italic leading-relaxed border-t border-[#334155] pt-5">
+            <strong class="text-slate-300 not-italic">Disclaimer:</strong> Tracked yield values are calculated using Mark-to-Market spot pricing at the exact time of the dashboard's last automated sync, rather than the historical price at the time of the drop. Yields fluctuate based on network activation weight, market token prices, and community protocol volume. This is a community-built tracking tool and does not guarantee future returns.
+        </p>
+    </div>
+
     <!-- Logic Script -->
     <script>
         const MINING_CONFIG = {
@@ -489,13 +521,12 @@
             currentProjectKey = projectKey;
             
             if (projectKey === 'memes') {
-                // Ensure ETH price persists even on the Memes tab
                 const ethPrice = masterData.projects['stonk'].market.ethPriceUsd;
                 document.getElementById('eth-price').innerText = formatCurrency(ethPrice);
                 
                 document.getElementById('header-logo').src = 'Stonkbroker.png';
-                document.getElementById('project-title').innerText = 'Ecosystem Memes';
-                document.getElementById('dynamic-ticker-label').innerText = '$MEMES';
+                document.getElementById('project-title').innerText = 'Robinhood Tokens';
+                document.getElementById('dynamic-ticker-label').innerText = '$TOKENS';
                 document.getElementById('token-price').innerText = '---';
                 document.getElementById('nft-floor').innerText = '---';
                 document.getElementById('standard-tabs').classList.add('hidden');
@@ -512,7 +543,6 @@
             
             liveEthPriceUsd = m.ethPriceUsd;
 
-            // Handle Yardkeepers custom logo swap
             let logoSrc = conf.logo || 'Stonkbroker.png';
             if (projectKey === 'tickeryard') logoSrc = 'Yardkeepers.png';
 
@@ -762,9 +792,6 @@
             }
         }
 
-        // ==========================================
-        // RESTORED CHARTING FUNCTIONS
-        // ==========================================
         function updateBurnChart(timeframe) {
             ['7d', '30d', 'all'].forEach(tf => {
                 const btn = document.getElementById(`btn-burn-${tf}`);
