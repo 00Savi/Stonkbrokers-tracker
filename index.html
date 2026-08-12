@@ -29,6 +29,8 @@
             background: linear-gradient(145deg, rgba(30, 41, 59, 0.9) 0%, rgba(67, 33, 10, 0.25) 100%);
             border: 1px solid rgba(245, 158, 11, 0.4);
         }
+        th.sortable { cursor: pointer; user-select: none; }
+        th.sortable:hover { color: #60a5fa; }
     </style>
 </head>
 <body class="p-4 md:p-8 font-sans antialiased overflow-x-hidden">
@@ -130,18 +132,28 @@
                 <p class="text-xs md:text-sm text-slate-400 mt-1">Real-time liquidity, volume, and holder metrics for Robinhood Chain meme tokens</p>
             </div>
         </div>
+
+        <!-- DYOR & Financial Advice Disclaimer Box -->
+        <div class="mb-6 p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-200/90 text-xs md:text-sm flex items-start gap-3">
+            <svg class="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+            <div>
+                <strong class="text-amber-300 font-bold">Disclaimer & Verification Notice:</strong> Not financial advice. DYOR (Do Your Own Research). Token metrics are aggregated via third-party APIs. <strong>Users are solely responsible for independently verifying all token contract addresses (CAs)</strong> and authenticity before interacting, trading, or holding.
+            </div>
+        </div>
+
         <div class="overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0 pb-2 mb-4">
-            <table class="w-full text-left border-collapse min-w-[950px]">
+            <table class="w-full text-left border-collapse min-w-[1050px]" id="memes-table">
                 <thead>
                     <tr class="text-xs uppercase tracking-wider text-slate-500 border-b border-[#334155]">
-                        <th class="pb-4 font-medium pl-2">Meme Name</th>
-                        <th class="pb-4 font-medium">Volume (24h)</th>
-                        <th class="pb-4 font-medium">Liquidity</th>
-                        <th class="pb-4 font-medium">24h ROI</th>
-                        <th class="pb-4 font-medium">FDV</th>
-                        <th class="pb-4 font-medium">Market Cap</th>
-                        <th class="pb-4 font-medium">Holders</th>
-                        <th class="pb-4 font-medium text-right pr-4">Burnt</th>
+                        <th class="pb-4 font-medium pl-2 sortable" onclick="sortMemesTable(0, false)">Meme Name ↕</th>
+                        <th class="pb-4 font-medium sortable" onclick="sortMemesTable(1, true)">Volume (24h) ↕</th>
+                        <th class="pb-4 font-medium sortable" onclick="sortMemesTable(2, true)">Liquidity ↕</th>
+                        <th class="pb-4 font-medium sortable" onclick="sortMemesTable(3, true)">24h % Change ↕</th>
+                        <th class="pb-4 font-medium sortable" onclick="sortMemesTable(4, true)">ROI ↕</th>
+                        <th class="pb-4 font-medium sortable" onclick="sortMemesTable(5, true)">FDV ↕</th>
+                        <th class="pb-4 font-medium sortable" onclick="sortMemesTable(6, true)">Market Cap ↕</th>
+                        <th class="pb-4 font-medium sortable" onclick="sortMemesTable(7, true)">Holders ↕</th>
+                        <th class="pb-4 font-medium text-right pr-4 sortable" onclick="sortMemesTable(8, true)">Burnt ↕</th>
                     </tr>
                 </thead>
                 <tbody id="memes-body"></tbody>
@@ -201,23 +213,17 @@
     <main id="view-burn" class="max-w-6xl mx-auto card rounded-2xl border p-4 md:p-6 mb-8 shadow-xl hidden">
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div>
-                <h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2">
-                    <svg class="w-5 h-5 text-orange-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.214.33-.403.713-.57 1.116-.334.804-.603 1.768-.84 2.734a31.365 31.365 0 00-.613 3.58 2.64 2.64 0 01-.945-1.067c-.328-.68-.398-1.534-.398-2.654a1 1 0 00-1.788-.606 6.989 6.989 0 00-1.892 4.885 7 7 0 0012.38 4.352 1 1 0 00-1.03-1.594 5 5 0 01-8.35-3.08c0-1.127.243-2.046.688-2.73a5.617 5.617 0 011.082-1.226c.46-.388.94-.74 1.425-1.054.48-.31.964-.595 1.442-.861a1 1 0 00.385-1.45z" clip-rule="evenodd"></path></svg>
-                    Token Burn & Supply Deflation Tracker
-                </h2>
-                <p class="text-xs md:text-sm text-slate-400 mt-1">Real-time analysis of permanent supply reduction and AMM vault impact</p>
+                <h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2">Token Burn & Supply Deflation Tracker</h2>
             </div>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
                 <p class="text-xs uppercase tracking-wider text-slate-400 mb-1" id="dynamic-burn-label">Total $TOKEN Burnt</p>
                 <p class="text-2xl md:text-3xl font-extrabold text-orange-400" id="stat-total-burn">Loading...</p>
-                <p class="text-xs text-slate-500 mt-1">Permanently removed from circulating supply via activations</p>
             </div>
             <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
                 <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Equivalent NFTs Locked / Removed</p>
                 <p class="text-2xl md:text-3xl font-extrabold text-blue-400" id="stat-equiv-nfts">Loading...</p>
-                <p class="text-xs text-slate-500 mt-1" id="dynamic-equiv-label">Based on standard unit valuation</p>
             </div>
         </div>
         <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6">
@@ -232,7 +238,6 @@
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div>
                 <h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2">Ecosystem Activation Metrics</h2>
-                <p class="text-xs md:text-sm text-slate-400 mt-1">Network-wide active unit adoption and tier composition</p>
             </div>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -327,13 +332,13 @@
                 if(btnRoi) btnRoi.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition shadow-lg shadow-blue-500/25";
                 if(viewRoi) viewRoi.classList.remove('hidden');
             } else if (tab === 'burn') {
-                if(btnBurn) btnBurn.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition shadow-lg shadow-blue-500/25";
+                if(btnBurn) btnBurn.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition";
                 if(viewBurn) viewBurn.classList.remove('hidden');
             } else if (tab === 'activation') {
-                if(btnActivation) btnActivation.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition shadow-lg shadow-blue-500/25";
+                if(btnActivation) btnActivation.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition";
                 if(viewActivation) viewActivation.classList.remove('hidden');
             } else if (tab === 'ownership') {
-                if(btnOwnership) btnOwnership.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition shadow-lg shadow-blue-500/25";
+                if(btnOwnership) btnOwnership.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition";
                 if(viewOwnership) viewOwnership.classList.remove('hidden');
             } else if (tab === 'memes') {
                 if(viewMemes) viewMemes.classList.remove('hidden');
@@ -430,23 +435,57 @@
                 const roiColor = meme.priceChange24h >= 0 ? 'text-emerald-400' : 'text-rose-400';
                 const roiSign = meme.priceChange24h >= 0 ? '+' : '';
                 
+                const copyBtn = meme.ca ? `
+                    <button onclick="navigator.clipboard.writeText('${meme.ca}'); alert('Copied CA for ${meme.name}:\\n${meme.ca}');" class="text-[10px] bg-[#334155] hover:bg-slate-600 text-slate-200 px-2 py-0.5 rounded border border-slate-600 ml-2 transition" title="Copy Contract Address">Copy CA</button>
+                ` : `<span class="text-[10px] text-slate-500 ml-2">No CA</span>`;
+                
                 const tr = document.createElement('tr');
                 tr.className = 'border-b border-[#334155]/50 hover:bg-[#334155]/20 transition-colors';
                 tr.innerHTML = `
-                    <td class="py-4 pl-2 font-bold text-white flex items-center gap-2">
-                        <div class="w-2.5 h-2.5 rounded-full bg-emerald-400"></div>
-                        ${meme.name}
+                    <td class="py-4 pl-2 font-bold text-white flex items-center justify-between pr-4">
+                        <div class="flex items-center gap-2">
+                            <div class="w-2.5 h-2.5 rounded-full bg-emerald-400"></div>
+                            ${meme.name}
+                        </div>
+                        ${copyBtn}
                     </td>
                     <td class="py-4 text-slate-200">${formatCurrency(meme.volume24h)}</td>
                     <td class="py-4 text-slate-200">${formatCurrency(meme.liquidity)}</td>
                     <td class="py-4 font-bold ${roiColor}">${roiSign}${meme.priceChange24h.toFixed(2)}%</td>
+                    <td class="py-4 text-emerald-400 font-semibold">${meme.roi}</td>
                     <td class="py-4 text-slate-200">${formatCurrency(meme.fdv)}</td>
                     <td class="py-4 text-slate-200">${formatCurrency(meme.marketCap)}</td>
                     <td class="py-4 text-purple-400 font-semibold">${formatNumber(meme.holders)}</td>
-                    <td class="py-4 text-right pr-4 text-orange-400 font-semibold">${meme.burnt}</td>
+                    <td class="py-4 text-right pr-4 text-orange-400 font-semibold">${formatNumber(meme.burnt)}</td>
                 `;
                 tbody.appendChild(tr);
             });
+        }
+
+        // Column Sorting Logic for Memes Table
+        let memeSortDirections = {};
+        function sortMemesTable(colIndex, isNumeric) {
+            const table = document.getElementById('memes-table');
+            const tbody = document.getElementById('memes-body');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            
+            memeSortDirections[colIndex] = !memeSortDirections[colIndex];
+            const asc = memeSortDirections[colIndex];
+
+            rows.sort((a, b) => {
+                let cellA = a.cells[colIndex].innerText.trim();
+                let cellB = b.cells[colIndex].innerText.trim();
+
+                if (isNumeric) {
+                    let valA = parseFloat(cellA.replace(/[^0-9.-]+/g,"")) || 0;
+                    let valB = parseFloat(cellB.replace(/[^0-9.-]+/g,"")) || 0;
+                    return asc ? valA - valB : valB - valA;
+                } else {
+                    return asc ? cellA.localeCompare(cellB) : cellB.localeCompare(cellA);
+                }
+            });
+
+            rows.forEach(row => tbody.appendChild(row));
         }
 
         async function lookupUnitRoi() {
@@ -487,7 +526,8 @@
                 const netDailyProfitPerSeat = (dailyDerpPerSeat * liveDerpPriceUsd) - (MINING_CONFIG.ethGasPerShift * liveEthPriceUsd * MINING_CONFIG.shiftsPerDay);
                 const netAnnualPerSeatUsd = netDailyProfitPerSeat > 0 ? (netDailyProfitPerSeat * 365) : 0;
                 const maxAnnual16SeatsUsd = netAnnualPerSeatUsd * MINING_CONFIG.maxSeatsPerBroker;
-                const currentAnnualNetUsd = netAnnualPerSeatUsd * (seatedSeats > 0 ? seatedSeats : 1);
+                const currentActiveSeats = seatedSeats > 0 ? seatedSeats : 1;
+                const currentAnnualNetUsd = netAnnualPerSeatUsd * currentActiveSeats;
 
                 if (netAnnualPerSeatUsd > 0) {
                     if (seatedSeats > 0) {
@@ -540,7 +580,7 @@
                     </div>
                     <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
                         <p class="text-[10px] uppercase text-slate-400">Trailing 7-Day Revenue</p>
-                        <p class="text-base font-bold text-emerald-400">${formatCurrency(weeklyYieldUsd)}</p>
+                        <p class="text-base font-bold text-emerald-400">$0.00</p>
                     </div>
                     <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
                         <p class="text-[10px] uppercase text-slate-400">Forecasted Annual Yield</p>
