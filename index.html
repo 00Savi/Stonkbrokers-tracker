@@ -115,8 +115,8 @@
             </button>
         </div>
         
-        <button onclick="shareToX('view-active')" class="flex-1 sm:flex-none w-full sm:w-auto justify-center bg-black hover:bg-[#1da1f2] border border-[#334155] text-white px-5 py-2.5 rounded-lg font-bold flex items-center gap-2 transition shadow-sm group">
-            <svg class="w-4 h-4 fill-current text-white group-hover:text-white" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 24.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+        <button onclick="shareToX()" class="flex-1 sm:flex-none w-full sm:w-auto justify-center bg-black hover:bg-[#1da1f2] border border-[#334155] text-white px-5 py-2.5 rounded-lg font-bold flex items-center gap-2 transition shadow-sm group">
+            <svg class="w-4 h-4 fill-current text-white" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 24.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
             <span id="share-btn-text">Share Stats</span>
         </button>
     </div>
@@ -204,7 +204,7 @@
                 </button>
             </div>
 
-            <div id="lookup-results" class="hidden bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner mt-4"></div>
+            <div id="lookup-results" class="hidden bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner mt-4 relative"></div>
         </div>
     </main>
 
@@ -403,27 +403,12 @@
             <p id="meth-roi" class="meth-section">
                 <strong class="text-white">Yield & ROI (Global Network Oracle):</strong> Cash-on-Cash (CoC) returns are calculated dynamically based on the selected project's architecture. Automated distributions sample incoming transactions to an active oracle wallet. Soft-staking mechanics track real-time global, aggregate distributions flowing outbound from the central protocol vault. This total is mathematically divided against the live active network weight and evaluated against AMM floor entry costs.
             </p>
-
-            <p id="meth-burn" class="meth-section hidden">
-                <strong class="text-white">Token Burn Tracking:</strong> The total burnt token count is calculated by directly indexing the balances of the network's standard dead addresses (0x000... and 0xdead), combined with the tokens permanently locked inside the protocol's Activation Manager/Staking Vault smart contracts. The equivalent metric divides this total by the standard token tier requirement.
-            </p>
-
-            <p id="meth-activation" class="meth-section hidden">
-                <strong class="text-white">Ecosystem Activation Metrics:</strong> Live network activation metrics are derived by parsing the entire historical event log of the protocol's Activation Manager smart contract. The script actively tallies 'Activated' and 'ActivationCleared' on-chain events to mathematically map the live network weight, chronological tier flow, and tier composition.
-            </p>
-
-            <p id="meth-ownership" class="meth-section hidden">
-                <strong class="text-white">True Circulating Supply:</strong> Calculated as the Genesis Supply minus the live inventory currently held within the AMM Pool. Burnt/locked tokens are physically trapped inside the AMM Vault, meaning they are inherently excluded from the circulating supply.<br><br>
-                <strong class="text-white">Holder Metrics & Anti-Dust Filter:</strong> Unique token holders are calculated by directly indexing the blockchain ledger and applying a strict "Anti-Dust" filter. Any wallet holding less than 1 full token is discarded to eliminate MEV bots, DEX routers, and abandoned fractional dust. Furthermore, protocol system wallets (the AMM Vault and burn addresses) are explicitly removed from all holder counts to provide a mathematically honest representation of unique human ownership.
-            </p>
         </div>
-        
         <p class="text-xs md:text-sm text-slate-400 italic leading-relaxed border-t border-[#334155] pt-5">
             <strong class="text-slate-300 not-italic">Disclaimer:</strong> Tracked yield values are calculated using Mark-to-Market spot pricing at the exact time of the dashboard's last automated sync, rather than the historical price at the time of the drop. Yields fluctuate based on network activation weight, market token prices, and community protocol volume. This is a community-built tracking tool and does not guarantee future returns.
         </p>
     </div>
 
-    <!-- Logic Script -->
     <script>
         const MINING_CONFIG = {
             shiftsPerDay: 1,
@@ -438,13 +423,11 @@
         
         function formatPrice(val) {
             if (!val || val === 0) return "$0.00";
-            if (val < 1) {
-                return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 6 }).format(val);
-            }
+            if (val < 1) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 6 }).format(val); }
             return formatCurrency(val);
         }
 
-        // Custom Timeout Fetch function to prevent infinite spinning when the RPC or Blockscout hangs
+        // Custom timeout fetch to stop infinite freezing on dead RPC/Blockscout calls
         async function fetchWithTimeout(resource, options = {}) {
             const { timeout = 8000 } = options;
             const controller = new AbortController();
@@ -622,7 +605,7 @@
 
                 const tr = document.createElement('tr');
                 tr.className = 'cursor-pointer border-b border-[#334155]/50 hover:bg-[#334155]/20 transition-colors group';
-                tr.onclick = () => toggleTierDetails(t.tier);
+                tr.setAttribute('onclick', `toggleTierDetails('${t.tier}')`);
                 tr.innerHTML = `
                     <td class="py-5 pl-2">
                         <div class="flex items-center gap-3">
@@ -724,7 +707,6 @@
                     <button onclick="event.stopPropagation(); navigator.clipboard.writeText('${meme.ca}'); alert('Copied CA for ${meme.name}:\\n${meme.ca}');" class="text-[10px] bg-[#334155] hover:bg-slate-600 text-slate-200 px-2 py-0.5 rounded border border-slate-600 ml-2 transition" title="Copy Contract Address">Copy CA</button>
                 ` : `<span class="text-[10px] text-slate-500 ml-2">No CA</span>`;
                 
-                // Express Burnt as raw number + % of 1B supply
                 const totalSupply = 1000000000;
                 const burntPct = meme.burnt > 0 ? ((meme.burnt / totalSupply) * 100).toFixed(2) + '%' : '0.00%';
                 const burntFormatted = meme.burnt > 0 ? `${formatNumber(meme.burnt)} <span class="text-[10px] text-orange-300 font-normal">(${burntPct})</span>` : '0 <span class="text-[10px] text-slate-500 font-normal">(0.00%)</span>';
@@ -756,7 +738,6 @@
                 `;
                 tbody.appendChild(tr);
 
-                // Expandable Interactive Chart Row (Fixed slug to 'robinhood')
                 const detailsTr = document.createElement('tr');
                 detailsTr.id = `meme-details-${index}`;
                 detailsTr.className = 'hidden bg-[#0f172a]/60 border-b border-[#334155]/50';
@@ -833,214 +814,324 @@
             });
         }
 
+        // =====================================
+        // INDIVIDUAL UNIT ROI LOOKUP (Hardened)
+        // =====================================
         async function lookupUnitRoi() {
             const inputVal = document.getElementById('lookup-id-input').value.trim();
             const resultsDiv = document.getElementById('lookup-results');
             if (!inputVal) return;
 
             resultsDiv.classList.remove('hidden');
-            resultsDiv.innerHTML = '<p class="text-xs text-slate-400 animate-pulse">Scanning blockchain ledger for Token #' + inputVal + '...</p>';
+            resultsDiv.innerHTML = '<p class="text-xs text-slate-400 animate-pulse font-semibold">Scanning blockchain ledger for Token #' + inputVal + '...</p>';
 
-            const proj = masterData.projects[currentProjectKey];
-            const conf = proj.config;
-            const m = proj.market;
-            const activeMap = proj.activation.activeTokenTiers || {};
-            
-            const tokenData = activeMap[inputVal];
-            const isActivated = tokenData !== undefined;
-            const tierId = isActivated ? tokenData.t : 'T0';
-            const tierData = proj.tiers.find(t => t.tier === tierId) || proj.tiers[0];
-
-            let seatedSeats = 0;
-
-            // 1. TIMEOUT FAILSAFE FOR HANGING RPC CALLS
-            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("RPC Timeout")), 8000));
-            
-            if (isActivated && currentProjectKey === 'stonk') {
-                try {
-                    const provider = new ethers.JsonRpcProvider("https://rpc.mainnet.chain.robinhood.com");
-                    const pitMineContract = new ethers.Contract("0x2d0da469115232aD00159757f9d25f81D498206D", ["function activeSlotCount(uint256 tokenId) view returns (uint256)"], provider);
-                    const callPromise = pitMineContract.activeSlotCount(inputVal);
-                    const count = await Promise.race([callPromise, timeoutPromise]);
-                    seatedSeats = Number(count);
-                } catch (e) {
-                    console.error("PitMine lookup timeout/fail", e);
-                }
-            }
-
-            // 2. FETCH NFT IMAGE VIA BLOCKSCOUT API (WITH TIMEOUT)
-            let nftImageHtml = `
-                <div class="w-12 h-12 md:w-16 md:h-16 rounded-xl bg-[#1e293b] border border-[#334155] flex items-center justify-center flex-shrink-0">
-                    <svg class="w-6 h-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                </div>
-            `;
-            
             try {
-                const imgRes = await fetchWithTimeout(`https://robinhoodchain.blockscout.com/api/v2/tokens/${conf.nftCa}/instances/${inputVal}`, {timeout: 4000});
-                if (imgRes.ok) {
-                    const imgData = await imgRes.json();
-                    let imageUrl = imgData?.metadata?.image || imgData?.image_url || imgData?.animation_url;
-                    if (imageUrl) {
-                        if (imageUrl.startsWith("ipfs://")) imageUrl = imageUrl.replace("ipfs://", "https://ipfs.io/ipfs/");
-                        nftImageHtml = `<img src="${imageUrl}" alt="Unit #${inputVal}" crossorigin="anonymous" class="w-12 h-12 md:w-16 md:h-16 rounded-xl border border-[#334155] object-cover bg-[#0f172a] flex-shrink-0 shadow-md">`;
+                const proj = masterData.projects[currentProjectKey];
+                const conf = proj.config;
+                const m = proj.market;
+                const activeMap = proj.activation.activeTokenTiers || {};
+                
+                const tokenData = activeMap[inputVal];
+                const isActivated = tokenData !== undefined;
+                const tierId = isActivated ? tokenData.t : 'T0';
+                const tierData = proj.tiers.find(t => t.tier === tierId) || proj.tiers[0];
+
+                let seatedSeats = 0;
+
+                // 1. PitMine Check with strict 5-second timeout
+                const pitTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error("RPC Timeout")), 5000));
+                if (isActivated && currentProjectKey === 'stonk') {
+                    try {
+                        const provider = new ethers.JsonRpcProvider("https://rpc.mainnet.chain.robinhood.com");
+                        const pitMineContract = new ethers.Contract("0x2d0da469115232aD00159757f9d25f81D498206D", ["function activeSlotCount(uint256 tokenId) view returns (uint256)"], provider);
+                        const count = await Promise.race([pitMineContract.activeSlotCount(inputVal), pitTimeout]);
+                        seatedSeats = Number(count);
+                    } catch (e) {
+                        console.warn("PitMine lookup timeout/fail - skipping", e);
                     }
                 }
-            } catch (e) {
-                console.error("NFT Image fetch failed", e);
-            }
 
-            const activationCostUsd = tierData.reqTokens * m.tokenPriceUsd;
-            const annualYieldUsd = tierData.trackedAnnualYieldUsd;
-            const totalBasisUsd = activationCostUsd;
-            const cocRoi = totalBasisUsd > 0 ? ((annualYieldUsd / totalBasisUsd) * 100) : 0;
+                // 2. Fetch NFT Image with strict 4-second timeout
+                let nftImageHtml = `
+                    <div class="w-12 h-12 md:w-16 md:h-16 rounded-xl bg-[#1e293b] border border-[#334155] flex items-center justify-center flex-shrink-0">
+                        <svg class="w-6 h-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    </div>
+                `;
+                
+                try {
+                    const imgRes = await fetchWithTimeout(`https://robinhoodchain.blockscout.com/api/v2/tokens/${conf.nftCa}/instances/${inputVal}`, {timeout: 4000});
+                    if (imgRes.ok) {
+                        const imgData = await imgRes.json();
+                        let imageUrl = imgData?.metadata?.image || imgData?.image_url || imgData?.animation_url;
+                        if (imageUrl) {
+                            if (imageUrl.startsWith("ipfs://")) imageUrl = imageUrl.replace("ipfs://", "https://ipfs.io/ipfs/");
+                            nftImageHtml = `<img src="${imageUrl}" alt="Unit #${inputVal}" crossorigin="anonymous" class="w-12 h-12 md:w-16 md:h-16 rounded-xl border border-[#334155] object-cover bg-[#0f172a] flex-shrink-0 shadow-md">`;
+                        }
+                    }
+                } catch (e) {
+                    console.warn("NFT Image fetch failed", e);
+                }
 
-            let derpMiningHtml = '';
-            if (isActivated && currentProjectKey === 'stonk' && liveDerpPriceUsd > 0) {
-                const dailyDerpPerSeat = MINING_CONFIG.avgDerpPerShiftOrange * MINING_CONFIG.shiftsPerDay;
-                const netDailyProfitPerSeat = (dailyDerpPerSeat * liveDerpPriceUsd) - (MINING_CONFIG.ethGasPerShift * liveEthPriceUsd * MINING_CONFIG.shiftsPerDay);
-                const netAnnualPerSeatUsd = netDailyProfitPerSeat > 0 ? (netDailyProfitPerSeat * 365) : 0;
-                const maxAnnual16SeatsUsd = netAnnualPerSeatUsd * MINING_CONFIG.maxSeatsPerBroker;
-                const currentActiveSeats = seatedSeats > 0 ? seatedSeats : 1;
-                const currentAnnualNetUsd = netAnnualPerSeatUsd * currentActiveSeats;
+                // 3. Fetch Transaction History for Cost Basis (with timeouts)
+                let lastSaleEth = 0;
+                let foundValidTx = false;
+                let totalTransfers = 0;
+                let purchaseTs = null;
 
-                if (netAnnualPerSeatUsd > 0) {
-                    if (seatedSeats > 0) {
-                        derpMiningHtml = `
-                            <div class="col-span-2 lg:col-span-4 mt-2">
-                                <div class="mining-card p-4 rounded-xl relative overflow-hidden group">
-                                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center relative z-10 gap-4">
-                                        <div>
-                                            <h4 class="text-base font-bold text-white">$DERP Mining Yield <span class="bg-emerald-500 text-white text-[9px] px-2 py-0.5 rounded font-bold uppercase">Active: ${seatedSeats}/16 Seats</span></h4>
-                                            <p class="text-xs text-orange-200/70">Estimated Net Profit (After Gas & Fees)</p>
-                                        </div>
-                                        <div class="text-right">
-                                            <p class="text-xl font-black text-emerald-400">+ ${formatCurrency(currentAnnualNetUsd)} <span class="text-xs">/yr</span></p>
-                                            <p class="text-[10px] text-slate-400">Max 16-Seat Cap: ${formatCurrency(maxAnnual16SeatsUsd)}/yr</p>
+                try {
+                    const txsRes = await fetchWithTimeout(`https://robinhoodchain.blockscout.com/api/v2/tokens/${conf.nftCa}/instances/${inputVal}/transfers`, {timeout: 4000});
+                    if (txsRes.ok) {
+                        const txsData = await txsRes.json();
+                        const items = txsData.items || [];
+                        totalTransfers = items.length;
+                        
+                        for (const transfer of items) {
+                            const txHash = transfer.transaction_hash || transfer.tx_hash || transfer.hash;
+                            if (!txHash) continue;
+                            
+                            try {
+                                const txRes = await fetchWithTimeout(`https://robinhoodchain.blockscout.com/api/v2/transactions/${txHash}`, {timeout: 3000});
+                                if (txRes.ok) {
+                                    const txData = await txRes.json();
+                                    let val = parseFloat(txData.value || "0") / 1e18;
+                                    
+                                    if (val === 0) {
+                                        let tokenTransfers = txData.token_transfers || [];
+                                        if (tokenTransfers.length === 0) {
+                                            try {
+                                                const ttRes = await fetchWithTimeout(`https://robinhoodchain.blockscout.com/api/v2/transactions/${txHash}/token-transfers`, {timeout: 3000});
+                                                if (ttRes.ok) {
+                                                    const ttData = await ttRes.json();
+                                                    tokenTransfers = ttData.items || [];
+                                                }
+                                            } catch (e) {}
+                                        }
+                                        
+                                        if (tokenTransfers.length > 0) {
+                                            let maxWethTransfer = 0;
+                                            for (const tt of tokenTransfers) {
+                                                const sym = (tt.token?.symbol || "").toUpperCase();
+                                                const dec = parseInt(tt.token?.decimals || "0", 10);
+                                                if (dec >= 18 && !sym.includes(conf.ticker) && !sym.includes("STONK") && !sym.includes("MANCER")) {
+                                                    const rawVal = tt.total?.value || tt.value || "0";
+                                                    const amt = parseFloat(rawVal) / Math.pow(10, dec);
+                                                    if (amt > maxWethTransfer && amt < 50000) maxWethTransfer = amt; 
+                                                }
+                                            }
+                                            val = maxWethTransfer;
+                                        }
+                                    }
+
+                                    if (val > 0) {
+                                        lastSaleEth = val;
+                                        foundValidTx = true;
+                                        if (txData.timestamp) purchaseTs = new Date(txData.timestamp).getTime() / 1000;
+                                        break; // Found the last true sale, exit the loop
+                                    }
+                                }
+                            } catch (e) {
+                                console.warn("Inner tx fetch failed/timeout");
+                                break; // Break loop if API starts rate limiting heavily
+                            }
+                        }
+
+                        if (!foundValidTx && totalTransfers > 0) {
+                            const mintTx = items[items.length - 1];
+                            if (mintTx.timestamp) purchaseTs = new Date(mintTx.timestamp).getTime() / 1000;
+                        }
+                    }
+                } catch (e) {
+                    console.warn("Transfer fetch timeout or failed");
+                }
+
+                // 4. Calculate Final Economics
+                function getHistoricalTokenPriceFallback(ticker, ts, currentSpot) {
+                    if (!ts) return currentSpot;
+                    const date = new Date(ts * 1000);
+                    if (ticker === 'STONK') {
+                        if (date < new Date('2026-07-20')) return 0.004;
+                        if (date < new Date('2026-07-25')) return 0.008;
+                        if (date < new Date('2026-08-01')) return 0.015;
+                        if (date < new Date('2026-08-05')) return 0.022;
+                        if (date < new Date('2026-08-08')) return 0.028;
+                        if (date < new Date('2026-08-11')) return 0.031;
+                    }
+                    if (ticker === 'MANCER') {
+                        if (date < new Date('2026-08-06')) return 0.0022;
+                        if (date < new Date('2026-08-09')) return 0.0025;
+                        if (date < new Date('2026-08-15')) return 0.0028;
+                    }
+                    return currentSpot;
+                }
+
+                const actTs = isActivated ? tokenData.ts : null;
+                const effectiveTs = (purchaseTs && actTs) ? Math.min(purchaseTs, actTs) : (purchaseTs || actTs);
+                const historicalTokenPrice = getHistoricalTokenPriceFallback(conf.ticker, effectiveTs, m.tokenPriceUsd);
+                
+                const activationCostUsd = tierData.reqTokens * historicalTokenPrice;
+                const annualYieldUsd = tierData.trackedAnnualYieldUsd;
+                const weeklyYieldUsd = (tierData.dailyYields || []).reduce((a, b) => a + b, 0);
+                
+                const purchaseCostUsd = lastSaleEth * m.ethPriceUsd;
+                const totalBasisUsd = purchaseCostUsd + activationCostUsd;
+                const cocRoi = totalBasisUsd > 0 ? ((annualYieldUsd / totalBasisUsd) * 100) : 0;
+
+                // 5. Calculate DERP Mining
+                let derpMiningHtml = '';
+                if (isActivated && currentProjectKey === 'stonk' && liveDerpPriceUsd > 0) {
+                    const dailyDerpPerSeat = MINING_CONFIG.avgDerpPerShiftOrange * MINING_CONFIG.shiftsPerDay;
+                    const netDailyProfitPerSeat = (dailyDerpPerSeat * liveDerpPriceUsd) - (MINING_CONFIG.ethGasPerShift * liveEthPriceUsd * MINING_CONFIG.shiftsPerDay);
+                    const netAnnualPerSeatUsd = netDailyProfitPerSeat > 0 ? (netDailyProfitPerSeat * 365) : 0;
+                    const maxAnnual16SeatsUsd = netAnnualPerSeatUsd * MINING_CONFIG.maxSeatsPerBroker;
+                    const currentActiveSeats = seatedSeats > 0 ? seatedSeats : 1;
+                    const currentAnnualNetUsd = netAnnualPerSeatUsd * currentActiveSeats;
+
+                    if (netAnnualPerSeatUsd > 0) {
+                        if (seatedSeats > 0) {
+                            derpMiningHtml = `
+                                <div class="col-span-2 lg:col-span-4 mt-2">
+                                    <div class="mining-card p-4 rounded-xl relative overflow-hidden group">
+                                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center relative z-10 gap-4">
+                                            <div>
+                                                <h4 class="text-base font-bold text-white">$DERP Mining Yield <span class="bg-emerald-500 text-white text-[9px] px-2 py-0.5 rounded font-bold uppercase">Active: ${seatedSeats}/16 Seats</span></h4>
+                                                <p class="text-xs text-orange-200/70">Estimated Net Profit (After Gas & Fees)</p>
+                                            </div>
+                                            <div class="text-right">
+                                                <p class="text-xl font-black text-emerald-400">+ ${formatCurrency(currentAnnualNetUsd)} <span class="text-xs">/yr</span></p>
+                                                <p class="text-[10px] text-slate-400">Max 16-Seat Cap: ${formatCurrency(maxAnnual16SeatsUsd)}/yr</p>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                        `;
-                    } else {
-                        derpMiningHtml = `
-                            <div class="col-span-2 lg:col-span-4 mt-2">
-                                <div class="p-4 rounded-xl border border-dashed border-[#334155] bg-[#1e293b]/60">
-                                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                                        <div>
-                                            <h4 class="text-base font-bold text-slate-300">Potential $DERP Yield <span class="bg-slate-700 text-slate-300 text-[9px] px-2 py-0.5 rounded font-bold uppercase">Unseated</span></h4>
-                                            <p class="text-xs text-slate-500">Projected Net Profit if seated in the Pit</p>
-                                        </div>
-                                        <div class="text-right">
-                                            <p class="text-lg font-bold text-orange-400">+ ${formatCurrency(netAnnualPerSeatUsd)} <span class="text-xs">/yr (1 Seat)</span></p>
-                                            <p class="text-xs text-orange-300 font-semibold">Max 16-Seat Capacity: + ${formatCurrency(maxAnnual16SeatsUsd)} /yr</p>
+                            `;
+                        } else {
+                            derpMiningHtml = `
+                                <div class="col-span-2 lg:col-span-4 mt-2">
+                                    <div class="p-4 rounded-xl border border-dashed border-[#334155] bg-[#1e293b]/60">
+                                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                                            <div>
+                                                <h4 class="text-base font-bold text-slate-300">Potential $DERP Yield <span class="bg-slate-700 text-slate-300 text-[9px] px-2 py-0.5 rounded font-bold uppercase">Unseated</span></h4>
+                                                <p class="text-xs text-slate-500">Projected Net Profit if seated in the Pit</p>
+                                            </div>
+                                            <div class="text-right">
+                                                <p class="text-lg font-bold text-orange-400">+ ${formatCurrency(netAnnualPerSeatUsd)} <span class="text-xs">/yr (1 Seat)</span></p>
+                                                <p class="text-xs text-orange-300 font-semibold">Max 16-Seat Capacity: + ${formatCurrency(maxAnnual16SeatsUsd)} /yr</p>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                        `;
+                            `;
+                        }
                     }
                 }
-            }
 
-            if (proj.underConstruction) {
-                resultsDiv.innerHTML = `
-                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[#334155] pb-4 mb-4">
-                        <div class="flex items-center gap-4">
-                            ${nftImageHtml}
-                            <div>
-                                <div class="flex items-center gap-2 mb-1">
-                                    <span class="text-xs uppercase font-bold text-blue-400 bg-blue-900/30 px-2 py-0.5 rounded border border-blue-800/50">${tierData.tier}: ${tierData.name}</span>
-                                    <span class="text-xs font-semibold ${isActivated ? 'text-emerald-400 bg-emerald-900/20' : 'text-slate-400 bg-slate-800'} px-2 py-0.5 rounded border border-[#334155]">
-                                        ${isActivated ? 'Active Unit' : 'Unactivated'}
-                                    </span>
+                // 6. Build the UI
+                if (proj.underConstruction) {
+                    resultsDiv.innerHTML = `
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[#334155] pb-4 mb-4">
+                            <div class="flex items-center gap-4">
+                                ${nftImageHtml}
+                                <div>
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="text-xs uppercase font-bold text-blue-400 bg-blue-900/30 px-2 py-0.5 rounded border border-blue-800/50">${tierData.tier}: ${tierData.name}</span>
+                                        <span class="text-xs font-semibold ${isActivated ? 'text-emerald-400 bg-emerald-900/20' : 'text-slate-400 bg-slate-800'} px-2 py-0.5 rounded border border-[#334155]">
+                                            ${isActivated ? 'Active Unit' : 'Unactivated'}
+                                        </span>
+                                    </div>
+                                    <h4 class="text-lg font-bold text-white">Unit #${inputVal} Analysis</h4>
                                 </div>
-                                <h4 class="text-lg font-bold text-white">Unit #${inputVal} Analysis</h4>
                             </div>
-                        </div>
-                        
-                        <div class="flex flex-col sm:flex-row gap-3 w-full md:w-auto items-stretch sm:items-center">
-                            <div class="bg-[#1e293b] px-5 py-2.5 rounded-lg border border-[#334155] text-right w-full sm:w-auto flex justify-between sm:block items-center">
-                                <span class="text-xs uppercase text-slate-400 sm:block">Individual CoC ROI</span>
-                                <span class="bg-orange-900/20 text-orange-400 border border-orange-800/50 px-2.5 py-1 rounded text-[10px] font-bold shadow-sm uppercase tracking-wider">Awaiting Data</span>
-                            </div>
-                            <button onclick="shareUnitToX()" data-html2canvas-ignore="true" class="bg-black hover:bg-[#1da1f2] border border-[#334155] text-white px-4 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition shadow-sm w-full sm:w-auto">
-                                <svg class="w-4 h-4 fill-current text-white" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 24.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-                                <span id="unit-share-btn-text">Share to X</span>
-                            </button>
-                            <button onclick="document.getElementById('lookup-results').classList.add('hidden')" data-html2canvas-ignore="true" class="bg-[#1e293b] hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-[#334155] px-3 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center transition shadow-sm">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
-                            <p class="text-[10px] uppercase text-slate-400">Est. Token Basis</p>
-                            <p class="text-base font-bold text-white">${formatCurrency(activationCostUsd)}</p>
-                        </div>
-                        <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60 opacity-50">
-                            <p class="text-[10px] uppercase text-slate-400">Trailing 7-Day Revenue</p>
-                            <p class="text-base font-bold text-slate-400 italic">Initializing...</p>
-                        </div>
-                        <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60 opacity-50">
-                            <p class="text-[10px] uppercase text-slate-400">Forecasted Annual Yield</p>
-                            <p class="text-base font-bold text-slate-400 italic">Awaiting 7D Epoch</p>
-                        </div>
-                        <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60 flex items-center justify-center text-center">
-                            <p class="text-xs text-slate-400">Weight: <span class="text-yellow-400 font-bold">${tierData.weight}x</span></p>
-                        </div>
-                    </div>
-                `;
-            } else {
-                resultsDiv.innerHTML = `
-                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[#334155] pb-4 mb-4">
-                        <div class="flex items-center gap-4">
-                            ${nftImageHtml}
-                            <div>
-                                <div class="flex items-center gap-2 mb-1">
-                                    <span class="text-xs uppercase font-bold text-blue-400 bg-blue-900/30 px-2 py-0.5 rounded border border-blue-800/50">${tierData.tier}: ${tierData.name}</span>
-                                    <span class="text-xs font-semibold ${isActivated ? 'text-emerald-400 bg-emerald-900/20' : 'text-slate-400 bg-slate-800'} px-2 py-0.5 rounded border border-[#334155]">
-                                        ${isActivated ? 'Active Unit' : 'Unactivated'}
-                                    </span>
+                            
+                            <div class="flex flex-col sm:flex-row gap-3 w-full md:w-auto items-stretch sm:items-center">
+                                <div class="bg-[#1e293b] px-5 py-2.5 rounded-lg border border-[#334155] text-right w-full sm:w-auto flex justify-between sm:block items-center">
+                                    <span class="text-xs uppercase text-slate-400 sm:block">Individual CoC ROI</span>
+                                    <span class="bg-orange-900/20 text-orange-400 border border-orange-800/50 px-2.5 py-1 rounded text-[10px] font-bold shadow-sm uppercase tracking-wider">Awaiting Data</span>
                                 </div>
-                                <h4 class="text-lg font-bold text-white">Unit #${inputVal} Analysis</h4>
+                                <button onclick="shareUnitToX()" data-html2canvas-ignore="true" class="bg-[#1da1f2] hover:bg-[#1a91da] text-white px-4 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition shadow-sm w-full sm:w-auto">
+                                    <svg class="w-4 h-4 fill-current text-white" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 24.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                                    <span id="unit-share-btn-text">Share to X</span>
+                                </button>
+                                <button onclick="document.getElementById('lookup-results').classList.add('hidden')" data-html2canvas-ignore="true" class="bg-[#1e293b] hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-[#334155] px-3 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center transition shadow-sm" title="Close Analysis">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                </button>
                             </div>
                         </div>
-                        
-                        <div class="flex flex-col sm:flex-row gap-3 w-full md:w-auto items-stretch sm:items-center">
-                            <div class="bg-[#1e293b] px-5 py-2.5 rounded-lg border border-[#334155] text-right w-full sm:w-auto flex justify-between sm:block items-center">
-                                <span class="text-xs uppercase text-slate-400 sm:block">Individual CoC ROI</span>
-                                <span class="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-2.5 py-1 rounded text-sm font-bold shadow-sm">${cocRoi.toFixed(2)}%</span>
+                        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
+                                <p class="text-[10px] uppercase text-slate-400">Est. Token Basis</p>
+                                <p class="text-base font-bold text-white">${formatCurrency(activationCostUsd)}</p>
                             </div>
-                            <button onclick="shareUnitToX()" data-html2canvas-ignore="true" class="bg-black hover:bg-[#1da1f2] border border-[#334155] text-white px-4 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition shadow-sm w-full sm:w-auto">
-                                <svg class="w-4 h-4 fill-current text-white" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 24.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-                                <span id="unit-share-btn-text">Share to X</span>
-                            </button>
-                            <button onclick="document.getElementById('lookup-results').classList.add('hidden')" data-html2canvas-ignore="true" class="bg-[#1e293b] hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-[#334155] px-3 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center transition shadow-sm">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                            </button>
+                            <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60 opacity-50">
+                                <p class="text-[10px] uppercase text-slate-400">Trailing 7-Day Revenue</p>
+                                <p class="text-base font-bold text-slate-400 italic">Initializing...</p>
+                            </div>
+                            <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60 opacity-50">
+                                <p class="text-[10px] uppercase text-slate-400">Forecasted Annual Yield</p>
+                                <p class="text-base font-bold text-slate-400 italic">Awaiting 7D Epoch</p>
+                            </div>
+                            <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60 flex items-center justify-center text-center">
+                                <p class="text-xs text-slate-400">Weight: <span class="text-yellow-400 font-bold">${tierData.weight}x</span></p>
+                            </div>
                         </div>
-                    </div>
-                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
-                            <p class="text-[10px] uppercase text-slate-400">Est. Token Basis</p>
-                            <p class="text-base font-bold text-white">${formatCurrency(activationCostUsd)}</p>
+                    `;
+                } else {
+                    const cocRoiHtml = `<span class="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-3 py-1 rounded text-sm font-bold">${cocRoi.toFixed(2)}%</span>`;
+                    
+                    resultsDiv.innerHTML = `
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[#334155] pb-4 mb-4">
+                            <div class="flex items-center gap-4">
+                                ${nftImageHtml}
+                                <div>
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="text-xs uppercase font-bold text-blue-400 bg-blue-900/30 px-2 py-0.5 rounded border border-blue-800/50">${tierData.tier}: ${tierData.name}</span>
+                                        <span class="text-xs font-semibold ${isActivated ? 'text-emerald-400 bg-emerald-900/20' : 'text-slate-400 bg-slate-800'} px-2 py-0.5 rounded border border-[#334155]">
+                                            ${isActivated ? 'Active Unit' : 'Unactivated'}
+                                        </span>
+                                    </div>
+                                    <h4 class="text-lg font-bold text-white">Unit #${inputVal} Analysis</h4>
+                                </div>
+                            </div>
+                            
+                            <div class="flex flex-col sm:flex-row gap-3 w-full md:w-auto items-stretch sm:items-center">
+                                <div class="bg-[#1e293b] px-5 py-2.5 rounded-lg border border-[#334155] text-right w-full sm:w-auto flex justify-between sm:block items-center">
+                                    <span class="text-xs uppercase text-slate-400 sm:block">Individual CoC ROI</span>
+                                    ${cocRoiHtml}
+                                </div>
+                                <button onclick="shareUnitToX()" data-html2canvas-ignore="true" class="bg-[#1da1f2] hover:bg-[#1a91da] text-white px-4 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition shadow-sm w-full sm:w-auto">
+                                    <svg class="w-4 h-4 fill-current text-white" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 24.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                                    <span id="unit-share-btn-text">Share to X</span>
+                                </button>
+                                <button onclick="document.getElementById('lookup-results').classList.add('hidden')" data-html2canvas-ignore="true" class="bg-[#1e293b] hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-[#334155] px-3 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center transition shadow-sm" title="Close Analysis">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                </button>
+                            </div>
                         </div>
-                        <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
-                            <p class="text-[10px] uppercase text-slate-400">Trailing 7-Day Revenue</p>
-                            <p class="text-base font-bold text-emerald-400">${formatCurrency(weeklyYieldUsd)}</p>
+                        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
+                                <p class="text-[10px] uppercase text-slate-400">Est. Token Basis</p>
+                                <p class="text-base font-bold text-white">${formatCurrency(activationCostUsd)}</p>
+                            </div>
+                            <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
+                                <p class="text-[10px] uppercase text-slate-400">Trailing 7-Day Revenue</p>
+                                <p class="text-base font-bold text-emerald-400">${formatCurrency(weeklyYieldUsd)}</p>
+                            </div>
+                            <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
+                                <p class="text-[10px] uppercase text-slate-400">Forecasted Annual Yield</p>
+                                <p class="text-base font-bold text-emerald-400">${formatCurrency(annualYieldUsd)} /yr</p>
+                            </div>
+                            <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60 flex items-center justify-center text-center">
+                                <p class="text-xs text-slate-400">Weight: <span class="text-yellow-400 font-bold">${tierData.weight}x</span></p>
+                            </div>
+                            ${derpMiningHtml}
                         </div>
-                        <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
-                            <p class="text-[10px] uppercase text-slate-400">Forecasted Annual Yield</p>
-                            <p class="text-base font-bold text-emerald-400">${formatCurrency(annualYieldUsd)} /yr</p>
-                        </div>
-                        <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60 flex items-center justify-center text-center">
-                            <p class="text-xs text-slate-400">Weight: <span class="text-yellow-400 font-bold">${tierData.weight}x</span></p>
-                        </div>
-                        ${derpMiningHtml}
-                    </div>
-                `;
-            }
+                    `;
+                }
+
+        } catch (globalErr) {
+            console.error(globalErr);
+            resultsDiv.innerHTML = `<p class="text-rose-400 font-bold p-4 text-center">Network Error: Could not connect to the Robinhood Chain RPC. Please try again in a moment.</p>`;
         }
+    }
 
         function updateBurnChart(timeframe) {
             ['7d', '30d', 'all'].forEach(tf => {
