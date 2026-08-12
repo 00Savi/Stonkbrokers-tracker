@@ -175,7 +175,7 @@
                 <span class="text-white font-bold tracking-wide" id="floor-cost">Loading...</span>
             </div>
         </div>
-        <div class="overflow-x-auto -mx-4 md:mx-0 px-4 md:mx-0 pb-2 mb-8">
+        <div class="overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0 pb-2 mb-8">
             <table class="w-full text-left border-collapse min-w-[850px]">
                 <thead>
                     <tr class="text-xs uppercase tracking-wider text-slate-500 border-b border-[#334155]">
@@ -428,8 +428,17 @@
             return formatCurrency(val);
         }
 
+        // Convert IPFS URIs to high-performance Cloudflare gateway
+        function resolveIpfsUrl(url) {
+            if (!url) return '';
+            if (url.startsWith('ipfs://')) {
+                return url.replace('ipfs://', 'https://cloudflare-ipfs.com/ipfs/');
+            }
+            return url;
+        }
+
         async function fetchWithTimeout(resource, options = {}) {
-            const { timeout = 8000 } = options;
+            const { timeout = 6000 } = options;
             const controller = new AbortController();
             const id = setTimeout(() => controller.abort(), timeout);
             const response = await fetch(resource, { ...options, signal: controller.signal });
@@ -814,6 +823,9 @@
             });
         }
 
+        // =====================================
+        // INDIVIDUAL UNIT ROI LOOKUP (Optimized)
+        // =====================================
         async function lookupUnitRoi() {
             const inputVal = document.getElementById('lookup-id-input').value.trim();
             const resultsDiv = document.getElementById('lookup-results');
@@ -835,6 +847,7 @@
 
                 let seatedSeats = 0;
 
+                // 1. Check PitMine (StonkBrokers only) with strict timeout
                 const pitTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error("RPC Timeout")), 4000));
                 if (isActivated && currentProjectKey === 'stonk') {
                     try {
@@ -847,38 +860,30 @@
                     }
                 }
 
-                // DIRECT IPFS / TOKENURI PARSER (Ensures unique NFT art is pulled)
-                let nftImageHtml = `
-                    <div class="w-12 h-12 md:w-16 md:h-16 rounded-xl bg-[#1e293b] border border-[#334155] flex items-center justify-center flex-shrink-0">
-                        <svg class="w-6 h-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                    </div>
-                `;
-                
+                // 2. Multi-Gateway IPFS Image Resolver for Unique Artwork
                 let imageUrl = null;
                 try {
                     const provider = new ethers.JsonRpcProvider("https://rpc.mainnet.chain.robinhood.com");
                     const nftContract = new ethers.Contract(conf.nftCa, ["function tokenURI(uint256) view returns (string)"], provider);
-                    const uriTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error("RPC Timeout")), 4000));
+                    const uriTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error("RPC Timeout")), 5000));
                     
                     let tokenUri = await Promise.race([nftContract.tokenURI(inputVal), uriTimeout]);
                     if (tokenUri) {
-                        if (tokenUri.startsWith("ipfs://")) tokenUri = tokenUri.replace("ipfs://", "https://ipfs.io/ipfs/");
-                        
-                        // Handle base64 encoded tokenURIs if used
                         if (tokenUri.startsWith("data:application/json;base64,")) {
                             const jsonStr = atob(tokenUri.split(",")[1]);
                             const meta = JSON.parse(jsonStr);
-                            if (meta.image) imageUrl = meta.image;
+                            if (meta.image) imageUrl = resolveIpfsUrl(meta.image);
                         } else {
-                            const metaRes = await fetchWithTimeout(tokenUri, {timeout: 4000});
+                            const httpUri = resolveIpfsUrl(tokenUri);
+                            const metaRes = await fetchWithTimeout(httpUri, {timeout: 4000});
                             if (metaRes.ok) {
                                 const meta = await metaRes.json();
-                                if (meta.image) imageUrl = meta.image;
+                                if (meta.image) imageUrl = resolveIpfsUrl(meta.image);
                             }
                         }
                     }
                 } catch (e) {
-                    console.warn("Direct tokenURI smart contract fetch failed, trying Blockscout v2...", e);
+                    console.warn("Direct RPC tokenURI failed, trying Blockscout v2...", e);
                 }
 
                 if (!imageUrl) {
@@ -888,16 +893,26 @@
                             const imgData = await imgRes.json();
                             let meta = imgData?.metadata;
                             if (typeof meta === 'string') { try { meta = JSON.parse(meta); } catch(e) {} }
-                            imageUrl = meta?.image || meta?.image_url || imgData?.image_url || imgData?.animation_url;
+                            let rawImg = meta?.image || meta?.image_url;
+                            if (rawImg) imageUrl = resolveIpfsUrl(rawImg);
                         }
                     } catch(e) {}
                 }
 
+                let nftImageHtml = '';
                 if (imageUrl) {
-                    if (imageUrl.startsWith("ipfs://")) imageUrl = imageUrl.replace("ipfs://", "https://ipfs.io/ipfs/");
-                    nftImageHtml = `<img src="${imageUrl}" alt="Unit #${inputVal}" crossorigin="anonymous" class="w-12 h-12 md:w-16 md:h-16 rounded-xl border border-[#334155] object-cover bg-[#0f172a] flex-shrink-0 shadow-md">`;
+                    // Uses Cloudflare primary gateway with an automated fallback to Pinata Gateway on error!
+                    const pinataFallback = imageUrl.replace("cloudflare-ipfs.com", "gateway.pinata.cloud");
+                    nftImageHtml = `<img src="${imageUrl}" onerror="this.onerror=null; this.src='${pinataFallback}';" alt="Unit #${inputVal}" crossorigin="anonymous" class="w-12 h-12 md:w-16 md:h-16 rounded-xl border border-[#334155] object-cover bg-[#0f172a] flex-shrink-0 shadow-md">`;
+                } else {
+                    nftImageHtml = `
+                        <div class="w-12 h-12 md:w-16 md:h-16 rounded-xl bg-[#1e293b] border border-[#334155] flex items-center justify-center flex-shrink-0">
+                            <svg class="w-6 h-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                        </div>
+                    `;
                 }
 
+                // 3. Optimized Transaction Inspector (Inspects max 2 transfers to eliminate API Rate Limit timeouts!)
                 let lastSaleEth = 0;
                 let foundValidTx = false;
                 let totalTransfers = 0;
@@ -911,7 +926,10 @@
                         const items = txsData.items || [];
                         totalTransfers = items.length;
                         
-                        for (const transfer of items) {
+                        // CAPPED AT TOP 2 TRANSFERS: Prevents firing 10+ requests and getting rate-limited!
+                        const itemsToCheck = items.slice(0, 2);
+                        
+                        for (const transfer of itemsToCheck) {
                             const txHash = transfer.transaction_hash || transfer.tx_hash || transfer.hash;
                             if (!txHash) continue;
                             
@@ -923,16 +941,6 @@
                                     
                                     if (val === 0) {
                                         let tokenTransfers = txData.token_transfers || [];
-                                        if (tokenTransfers.length === 0) {
-                                            try {
-                                                const ttRes = await fetchWithTimeout(`https://robinhoodchain.blockscout.com/api/v2/transactions/${txHash}/token-transfers`, {timeout: 3000});
-                                                if (ttRes.ok) {
-                                                    const ttData = await ttRes.json();
-                                                    tokenTransfers = ttData.items || [];
-                                                }
-                                            } catch (e) {}
-                                        }
-                                        
                                         if (tokenTransfers.length > 0) {
                                             let maxWethTransfer = 0;
                                             for (const tt of tokenTransfers) {
@@ -963,7 +971,7 @@
 
                         if (!foundValidTx && totalTransfers > 0 && !txApiFailed) {
                             const mintTx = items[items.length - 1];
-                            if (mintTx.timestamp) purchaseTs = new Date(mintTx.timestamp).getTime() / 1000;
+                            if (mintTx && mintTx.timestamp) purchaseTs = new Date(mintTx.timestamp).getTime() / 1000;
                         }
                     } else {
                         txApiFailed = true;
@@ -1137,7 +1145,12 @@
                         </div>
                     `;
                 } else {
-                    const cocRoiHtml = `<span class="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-3 py-1 rounded text-sm font-bold">${cocRoi.toFixed(2)}%</span>`;
+                    let cocRoiHtml = '';
+                    if (txApiFailed) {
+                        cocRoiHtml = `<span class="text-rose-400 font-bold text-sm">Timeout</span>`;
+                    } else {
+                        cocRoiHtml = `<span class="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-3 py-1 rounded text-sm font-bold">${cocRoi.toFixed(2)}%</span>`;
+                    }
                     
                     resultsDiv.innerHTML = `
                         <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[#334155] pb-4 mb-4">
