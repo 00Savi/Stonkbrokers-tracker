@@ -27,7 +27,7 @@
         }
         .mining-card {
             animation: pulse-border 3s infinite;
-            background: linear-gradient(145deg, rgba(30, 41, 59, 0.9) 0%, rgba(67, 33, 10, 0.2) 100%);
+            background: linear-gradient(145deg, rgba(30, 41, 59, 0.9) 0%, rgba(67, 33, 10, 0.25) 100%);
             border: 1px solid rgba(245, 158, 11, 0.4);
         }
     </style>
@@ -65,11 +65,14 @@
                         <div class="w-2 h-2 rounded-full bg-purple-500"></div> Mancer
                     </div>
                     <div class="border-t border-[#334155] my-1"></div>
-                    <div class="px-4 py-2 flex items-center gap-3 text-slate-500 font-semibold cursor-not-allowed opacity-60">
-                        <div class="w-2 h-2 rounded-full bg-slate-600"></div> TickerYard <span class="text-[9px] bg-slate-800 px-1.5 rounded">Soon</span>
+                    <div class="px-4 py-2 flex items-center gap-3 text-slate-400 font-semibold cursor-not-allowed opacity-75">
+                        <div class="w-2 h-2 rounded-full bg-orange-500"></div> Pitboys / DERP <span class="text-[9px] bg-orange-500/20 text-orange-400 border border-orange-500/30 px-1.5 py-0.2 rounded font-semibold ml-auto">Soon</span>
                     </div>
                     <div class="px-4 py-2 flex items-center gap-3 text-slate-500 font-semibold cursor-not-allowed opacity-60">
-                        <div class="w-2 h-2 rounded-full bg-slate-600"></div> Memes <span class="text-[9px] bg-slate-800 px-1.5 rounded">Soon</span>
+                        <div class="w-2 h-2 rounded-full bg-slate-600"></div> TickerYard <span class="text-[9px] bg-slate-800 px-1.5 rounded ml-auto">Soon</span>
+                    </div>
+                    <div class="px-4 py-2 flex items-center gap-3 text-slate-500 font-semibold cursor-not-allowed opacity-60">
+                        <div class="w-2 h-2 rounded-full bg-slate-600"></div> Memes <span class="text-[9px] bg-slate-800 px-1.5 rounded ml-auto">Soon</span>
                     </div>
                 </div>
             </div>
@@ -84,15 +87,9 @@
                 <p class="text-slate-400 mb-0.5" id="dynamic-ticker-label">$TOKEN</p>
                 <p class="text-white font-bold" id="token-price">Loading...</p>
             </div>
-            <!-- Restored NFT Floor Element -->
             <div>
                 <p class="text-slate-400 mb-0.5">Floor <span class="hidden sm:inline text-[10px] md:text-xs text-slate-500">(Base + 10%)</span></p>
                 <p class="text-white font-bold" id="nft-floor">Loading...</p>
-            </div>
-            <!-- Added DERP Price Element -->
-            <div id="derp-ticker-box" class="hidden border-l border-[#334155] pl-4 md:pl-6">
-                <p class="text-slate-400 mb-0.5">$DERP</p>
-                <p class="text-orange-400 font-bold" id="derp-price">Loading...</p>
             </div>
         </div>
     </header>
@@ -421,7 +418,8 @@
             shiftsPerDay: 1,              // Based on MIN_SHIFT_TTL = 86400 seconds (1 shift per day)
             avgDerpPerShiftOrange: 120,   // StonkBrokers average payout
             avgDerpPerShiftBlue: 65,      // Pitboys average payout
-            ethGasPerShift: 0.000013      // Estimated network cost per shift (Clock-in + Clock-out)
+            ethGasPerShift: 0.000013,     // Estimated network cost per shift (Clock-in + Clock-out)
+            maxSeatsPerBroker: 16         // Maximum seats a single broker can hold in the Pit
         };
         // ==========================================
 
@@ -498,7 +496,7 @@
             }
         }
 
-        // Live fetcher for the $DERP Mining Extension
+        // Live fetcher for $DERP spot price
         async function fetchLiveDerpPrice() {
             try {
                 const r = await fetch(`https://api.dexscreener.com/latest/dex/tokens/0x6543B7746ca744C4bb2198191E71f40FF04C41b9`);
@@ -506,8 +504,6 @@
                 if (j?.pairs?.length) {
                     const best = j.pairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
                     liveDerpPriceUsd = parseFloat(best.priceUsd);
-                    document.getElementById('derp-price').innerText = formatPrice(liveDerpPriceUsd);
-                    document.getElementById('derp-ticker-box').classList.remove('hidden');
                 }
             } catch (e) {
                 console.error("Could not fetch DERP price:", e);
@@ -518,7 +514,7 @@
             try {
                 const res = await fetch('data.json?v=' + new Date().getTime());
                 masterData = await res.json();
-                fetchLiveDerpPrice(); // Boot up the DERP Oracle
+                fetchLiveDerpPrice(); // Oracle background fetch
                 loadProject('stonk');
             } catch (e) {
                 console.error("Dashboard Sync Failed: ", e);
@@ -739,9 +735,9 @@
             const weeklyYieldUsd = tierData.dailyYields.reduce((a, b) => a + b, 0);
 
             // ==========================================
-            // LIVE RPC CALL: Check if seated in PitMine
+            // LIVE RPC CALL: Query PitMine Active Slots
             // ==========================================
-            let isSeated = false;
+            let seatedSeats = 0;
             if (isActivated && currentProjectKey === 'stonk') {
                 try {
                     const provider = new ethers.JsonRpcProvider("https://rpc.mainnet.chain.robinhood.com");
@@ -750,7 +746,7 @@
                     const pitMineContract = new ethers.Contract(pitMineAddress, pitMineAbi, provider);
                     
                     const count = await pitMineContract.activeSlotCount(inputVal);
-                    isSeated = Number(count) > 0;
+                    seatedSeats = Number(count);
                 } catch (e) {
                     console.error("Failed to query PitMine:", e);
                 }
@@ -798,41 +794,65 @@
             const priceRef = effectiveTs ? formatPrice(historicalTokenPrice) : '(Spot)';
 
             // ==========================================
-            // THE $DERP MINING UI ENGINE (BONUS YIELD)
+            // $DERP MINING ENGINE (PER-SEAT vs 16-SEAT MAX)
             // ==========================================
             let derpMiningHtml = '';
             
             if (isActivated && currentProjectKey === 'stonk' && liveDerpPriceUsd > 0) {
-                const dailyDerpMined = MINING_CONFIG.avgDerpPerShiftOrange * MINING_CONFIG.shiftsPerDay;
-                const grossDailyDerpUsd = dailyDerpMined * liveDerpPriceUsd;
-                const dailyGasCostUsd = MINING_CONFIG.ethGasPerShift * liveEthPriceUsd * MINING_CONFIG.shiftsPerDay;
+                // Per-Seat Economics
+                const dailyDerpPerSeat = MINING_CONFIG.avgDerpPerShiftOrange * MINING_CONFIG.shiftsPerDay;
+                const grossDailyUsdPerSeat = dailyDerpPerSeat * liveDerpPriceUsd;
+                const dailyGasUsdPerSeat = MINING_CONFIG.ethGasPerShift * liveEthPriceUsd * MINING_CONFIG.shiftsPerDay;
                 
-                const netDailyProfitUsd = grossDailyDerpUsd - dailyGasCostUsd;
-                const netAnnualProfitUsd = netDailyProfitUsd > 0 ? (netDailyProfitUsd * 365) : 0;
+                const netDailyProfitPerSeat = grossDailyUsdPerSeat - dailyGasUsdPerSeat;
+                const netAnnualPerSeatUsd = netDailyProfitPerSeat > 0 ? (netDailyProfitPerSeat * 365) : 0;
                 
-                if (netAnnualProfitUsd > 0) {
-                    if (isSeated) {
+                // Max Capacity Economics (16 Seats)
+                const maxAnnual16SeatsUsd = netAnnualPerSeatUsd * MINING_CONFIG.maxSeatsPerBroker;
+                
+                // Active Miner Current Yield
+                const currentActiveSeats = seatedSeats > 0 ? seatedSeats : 1;
+                const currentAnnualNetUsd = netAnnualPerSeatUsd * currentActiveSeats;
+                
+                const priceBadgeText = `$DERP @ ${formatPrice(liveDerpPriceUsd)}`;
+
+                if (netAnnualPerSeatUsd > 0) {
+                    if (seatedSeats > 0) {
                         derpMiningHtml = `
                             <div class="col-span-2 lg:col-span-4 mt-2">
-                                <div class="mining-card p-4 rounded-xl relative overflow-hidden group border border-orange-500/40">
+                                <div class="mining-card p-4.5 rounded-xl relative overflow-hidden group">
                                     <div class="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 bg-orange-500/20 rounded-full blur-3xl group-hover:bg-orange-500/30 transition-all duration-500"></div>
-                                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center relative z-10 gap-4">
+                                    
+                                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center relative z-10 gap-4">
                                         <div class="flex items-center gap-3">
                                             <div class="w-10 h-10 rounded-full bg-orange-500/20 border border-orange-500/40 flex items-center justify-center flex-shrink-0 shadow-[0_0_15px_rgba(245,158,11,0.3)]">
                                                 <svg class="w-5 h-5 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                                             </div>
                                             <div>
-                                                <h4 class="text-base font-bold text-white flex items-center gap-2">
-                                                    $DERP Mining Yield
-                                                    <span class="bg-emerald-500 text-white text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">Active Miner</span>
-                                                </h4>
-                                                <p class="text-xs text-orange-200/70 mt-0.5">Estimated Net Profit (After Gas & Fees)</p>
+                                                <div class="flex items-center gap-2">
+                                                    <h4 class="text-base font-bold text-white">$DERP Mining Yield</h4>
+                                                    <span class="bg-emerald-500 text-white text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-wide">Active Miner: ${seatedSeats}/${MINING_CONFIG.maxSeatsPerBroker} Seats</span>
+                                                    <span class="bg-orange-500/20 text-orange-300 border border-orange-500/30 text-[9px] px-1.5 py-0.5 rounded font-semibold">${priceBadgeText}</span>
+                                                </div>
+                                                <p class="text-xs text-orange-200/70 mt-0.5">Calculated Net Profit (After Gas & Shift Fees)</p>
                                             </div>
                                         </div>
-                                        <div class="text-right w-full sm:w-auto">
-                                            <p class="text-xl md:text-2xl font-black text-emerald-400 drop-shadow-md">+ ${formatCurrency(netAnnualProfitUsd)} <span class="text-sm text-emerald-400/70 font-bold">/yr</span></p>
-                                            <p class="text-[10px] text-orange-200/50 mt-1">Based on ${MINING_CONFIG.shiftsPerDay} shift/day @ ${MINING_CONFIG.avgDerpPerShiftOrange} DERP avg</p>
+                                        
+                                        <div class="flex items-center gap-6 w-full md:w-auto justify-between md:justify-end border-t md:border-t-0 border-[#334155]/60 pt-3 md:pt-0">
+                                            <div class="text-left md:text-right">
+                                                <p class="text-xs text-slate-400 uppercase tracking-wider">Per-Seat Net</p>
+                                                <p class="text-base font-bold text-slate-200">+ ${formatCurrency(netAnnualPerSeatUsd)} <span class="text-xs text-slate-500 font-normal">/yr</span></p>
+                                            </div>
+                                            <div class="text-right">
+                                                <p class="text-xs text-orange-300 uppercase font-semibold tracking-wider">Active Net Yield</p>
+                                                <p class="text-xl md:text-2xl font-black text-emerald-400 drop-shadow-md">+ ${formatCurrency(currentAnnualNetUsd)} <span class="text-xs text-emerald-400/70 font-bold">/yr</span></p>
+                                            </div>
                                         </div>
+                                    </div>
+                                    
+                                    <div class="mt-3 pt-2.5 border-t border-orange-500/20 flex flex-col sm:flex-row justify-between text-[11px] text-slate-400 gap-1">
+                                        <span>Capacity: Max ${MINING_CONFIG.maxSeatsPerBroker} seats = <strong class="text-orange-300 font-semibold">+${formatCurrency(maxAnnual16SeatsUsd)} /yr</strong></span>
+                                        <span>Based on ${MINING_CONFIG.shiftsPerDay} shift/day @ ${MINING_CONFIG.avgDerpPerShiftOrange} DERP avg per seat</span>
                                     </div>
                                 </div>
                             </div>
@@ -840,24 +860,37 @@
                     } else {
                         derpMiningHtml = `
                             <div class="col-span-2 lg:col-span-4 mt-2">
-                                <div class="p-4 rounded-xl relative overflow-hidden group border border-dashed border-[#334155] bg-[#1e293b]/60 hover:bg-[#1e293b] transition-colors">
-                                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center relative z-10 gap-4">
+                                <div class="p-4.5 rounded-xl relative overflow-hidden group border border-dashed border-[#334155] bg-[#1e293b]/60 hover:bg-[#1e293b] transition-colors">
+                                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center relative z-10 gap-4">
                                         <div class="flex items-center gap-3">
-                                            <div class="w-10 h-10 rounded-full bg-slate-800 border border-slate-600 flex items-center justify-center flex-shrink-0 opacity-70">
+                                            <div class="w-10 h-10 rounded-full bg-slate-800 border border-slate-600 flex items-center justify-center flex-shrink-0 opacity-80">
                                                 <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                                             </div>
                                             <div>
-                                                <h4 class="text-base font-bold text-slate-300 flex items-center gap-2">
-                                                    Potential $DERP Yield
-                                                    <span class="bg-slate-700 text-slate-300 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">Unseated</span>
-                                                </h4>
-                                                <p class="text-xs text-slate-500 mt-0.5">Projected Net Profit if you buy a seat in the Pit</p>
+                                                <div class="flex items-center gap-2">
+                                                    <h4 class="text-base font-bold text-slate-300">Potential $DERP Yield</h4>
+                                                    <span class="bg-slate-700 text-slate-300 text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-wide">Unseated</span>
+                                                    <span class="bg-slate-800 text-slate-400 border border-slate-700 text-[9px] px-1.5 py-0.5 rounded font-medium">${priceBadgeText}</span>
+                                                </div>
+                                                <p class="text-xs text-slate-400 mt-0.5">Projected Net Profit if seated in the Pit</p>
                                             </div>
                                         </div>
-                                        <div class="text-right w-full sm:w-auto opacity-70">
-                                            <p class="text-xl md:text-2xl font-black text-orange-400 drop-shadow-md">+ ${formatCurrency(netAnnualProfitUsd)} <span class="text-sm text-orange-400/70 font-bold">/yr</span></p>
-                                            <p class="text-[10px] text-slate-500 mt-1">Based on ${MINING_CONFIG.shiftsPerDay} shift/day @ ${MINING_CONFIG.avgDerpPerShiftOrange} DERP avg</p>
+                                        
+                                        <div class="flex items-center gap-6 w-full md:w-auto justify-between md:justify-end border-t md:border-t-0 border-[#334155]/60 pt-3 md:pt-0">
+                                            <div class="text-left md:text-right">
+                                                <p class="text-xs text-slate-400 uppercase tracking-wider">Per Seat (1 Seat)</p>
+                                                <p class="text-lg font-bold text-orange-400">+ ${formatCurrency(netAnnualPerSeatUsd)} <span class="text-xs text-orange-400/70 font-normal">/yr</span></p>
+                                            </div>
+                                            <div class="text-right">
+                                                <p class="text-xs text-orange-300 uppercase font-bold tracking-wider">Max Capacity (16 Seats)</p>
+                                                <p class="text-xl md:text-2xl font-black text-orange-400 drop-shadow-md">+ ${formatCurrency(maxAnnual16SeatsUsd)} <span class="text-xs text-orange-400/70 font-bold">/yr</span></p>
+                                            </div>
                                         </div>
+                                    </div>
+                                    
+                                    <div class="mt-3 pt-2.5 border-t border-[#334155]/60 flex flex-col sm:flex-row justify-between text-[11px] text-slate-400 gap-1">
+                                        <span>Max Capacity: 16 Seats per Broker</span>
+                                        <span>Based on ${MINING_CONFIG.shiftsPerDay} shift/day @ ${MINING_CONFIG.avgDerpPerShiftOrange} DERP avg per seat</span>
                                     </div>
                                 </div>
                             </div>
