@@ -225,7 +225,16 @@
                 <p class="text-2xl md:text-3xl font-extrabold text-blue-400" id="stat-equiv-nfts">Loading...</p>
             </div>
         </div>
+        
         <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6">
+            <div class="flex justify-between items-center mb-6" data-html2canvas-ignore="true">
+                <h3 class="text-sm font-bold text-white hidden sm:block">Cumulative Token Burn Over Time</h3>
+                <div class="flex bg-[#1e293b] rounded-lg p-1 border border-[#334155] w-full sm:w-auto justify-between">
+                    <button onclick="updateBurnChart('7d')" id="btn-burn-7d" class="px-4 py-1.5 text-xs font-bold rounded-md text-slate-400 hover:text-white transition w-1/3 sm:w-auto">7D</button>
+                    <button onclick="updateBurnChart('30d')" id="btn-burn-30d" class="px-4 py-1.5 text-xs font-bold rounded-md text-slate-400 hover:text-white transition w-1/3 sm:w-auto">30D</button>
+                    <button onclick="updateBurnChart('all')" id="btn-burn-all" class="px-4 py-1.5 text-xs font-bold rounded-md bg-[#334155] text-white transition shadow-sm w-1/3 sm:w-auto">ALL TIME</button>
+                </div>
+            </div>
             <div class="relative h-72 md:h-80 w-full">
                 <canvas id="burnChart"></canvas>
             </div>
@@ -249,7 +258,82 @@
                 <p class="text-2xl md:text-3xl font-extrabold text-blue-400" id="stat-active-count">Loading...</p>
             </div>
         </div>
+
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-4 gap-4 mt-8" data-html2canvas-ignore="true">
+            <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider">Tier Activation Flow</h3>
+            <div class="flex bg-[#1e293b] rounded-lg p-1 border border-[#334155] w-full sm:w-auto">
+                <button onclick="updateTierStats('24h')" id="btn-tier-24h" class="flex-1 sm:flex-none px-4 py-1.5 text-xs font-bold rounded-md text-slate-400 hover:text-white transition">D</button>
+                <button onclick="updateTierStats('7d')" id="btn-tier-7d" class="flex-1 sm:flex-none px-4 py-1.5 text-xs font-bold rounded-md text-slate-400 hover:text-white transition">W</button>
+                <button onclick="updateTierStats('30d')" id="btn-tier-30d" class="flex-1 sm:flex-none px-4 py-1.5 text-xs font-bold rounded-md text-slate-400 hover:text-white transition">M</button>
+                <button onclick="updateTierStats('allTime')" id="btn-tier-allTime" class="flex-1 sm:flex-none px-4 py-1.5 text-xs font-bold rounded-md bg-[#334155] text-white transition shadow-sm">ALL</button>
+            </div>
+        </div>
+        
+        <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-8">
+            <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-4 shadow-sm">
+                <div class="flex items-center gap-2 mb-3">
+                    <div class="w-2.5 h-2.5 rounded-sm bg-[#60a5fa]"></div>
+                    <p class="text-[10px] uppercase tracking-wider text-slate-300 font-bold truncate" id="t0-name">T0</p>
+                </div>
+                <div class="flex justify-between items-end">
+                    <div><p class="text-lg font-bold text-emerald-400" id="t0-act">0</p><p class="text-[9px] text-slate-500 uppercase">Act</p></div>
+                    <div class="text-right"><p class="text-lg font-bold text-rose-400" id="t0-deact">0</p><p class="text-[9px] text-slate-500 uppercase">Deact</p></div>
+                </div>
+            </div>
+            <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-4 shadow-sm">
+                <div class="flex items-center gap-2 mb-3">
+                    <div class="w-2.5 h-2.5 rounded-sm bg-[#34d399]"></div>
+                    <p class="text-[10px] uppercase tracking-wider text-slate-300 font-bold truncate" id="t1-name">T1</p>
+                </div>
+                <div class="flex justify-between items-end">
+                    <div><p class="text-lg font-bold text-emerald-400" id="t1-act">0</p><p class="text-[9px] text-slate-500 uppercase">Act</p></div>
+                    <div class="text-right"><p class="text-lg font-bold text-rose-400" id="t1-deact">0</p><p class="text-[9px] text-slate-500 uppercase">Deact</p></div>
+                </div>
+            </div>
+            <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-4 shadow-sm">
+                <div class="flex items-center gap-2 mb-3">
+                    <div class="w-2.5 h-2.5 rounded-sm bg-[#f472b6]"></div>
+                    <p class="text-[10px] uppercase tracking-wider text-slate-300 font-bold truncate" id="t2-name">T2</p>
+                </div>
+                <div class="flex justify-between items-end">
+                    <div><p class="text-lg font-bold text-emerald-400" id="t2-act">0</p><p class="text-[9px] text-slate-500 uppercase">Act</p></div>
+                    <div class="text-right"><p class="text-lg font-bold text-rose-400" id="t2-deact">0</p><p class="text-[9px] text-slate-500 uppercase">Deact</p></div>
+                </div>
+            </div>
+            <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-4 shadow-sm">
+                <div class="flex items-center gap-2 mb-3">
+                    <div class="w-2.5 h-2.5 rounded-sm bg-[#fbbf24]"></div>
+                    <p class="text-[10px] uppercase tracking-wider text-slate-300 font-bold truncate" id="t3-name">T3</p>
+                </div>
+                <div class="flex justify-between items-end">
+                    <div><p class="text-lg font-bold text-emerald-400" id="t3-act">0</p><p class="text-[9px] text-slate-500 uppercase">Act</p></div>
+                    <div class="text-right"><p class="text-lg font-bold text-rose-400" id="t3-deact">0</p><p class="text-[9px] text-slate-500 uppercase">Deact</p></div>
+                </div>
+            </div>
+            <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-4 shadow-sm">
+                <div class="flex items-center gap-2 mb-3">
+                    <div class="w-2.5 h-2.5 rounded-sm bg-[#a78bfa]"></div>
+                    <p class="text-[10px] uppercase tracking-wider text-slate-300 font-bold truncate" id="t4-name">T4</p>
+                </div>
+                <div class="flex justify-between items-end">
+                    <div><p class="text-lg font-bold text-emerald-400" id="t4-act">0</p><p class="text-[9px] text-slate-500 uppercase">Act</p></div>
+                    <div class="text-right"><p class="text-lg font-bold text-rose-400" id="t4-deact">0</p><p class="text-[9px] text-slate-500 uppercase">Deact</p></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6 mb-6">
+            <h3 class="text-sm font-bold text-white mb-6">Tier Distribution Breakdown</h3>
+            <div class="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-16">
+                <div class="relative h-64 md:h-72 w-full md:w-1/2 flex items-center justify-center">
+                    <canvas id="tierPieChart"></canvas>
+                </div>
+                <div class="w-full md:w-1/2 flex flex-col gap-3" id="tier-legend-list"></div>
+            </div>
+        </div>
+
         <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6">
+            <h3 class="text-sm font-bold text-white mb-4">Historical Activity (Net vs. Daily)</h3>
             <div class="relative h-72 md:h-80 w-full">
                 <canvas id="activationChart"></canvas>
             </div>
@@ -281,6 +365,31 @@
                 <p class="text-xl md:text-3xl font-extrabold text-blue-400" id="stat-circ-supply">Loading...</p>
             </div>
         </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-5 shadow-sm">
+                <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Unique NFT Holders</p>
+                <p class="text-2xl md:text-3xl font-extrabold text-purple-400" id="stat-nft-holders">Loading...</p>
+                <p class="text-xs text-slate-500 mt-1">Wallets holding at least 1 unit</p>
+            </div>
+            <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-5 shadow-sm ring-1 ring-emerald-500/20">
+                <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Ownership Concentration</p>
+                <p class="text-2xl md:text-3xl font-extrabold text-emerald-400" id="stat-own-ratio">Loading...</p>
+                <p class="text-xs text-slate-500 mt-1">Unique humans / True Circulating Supply</p>
+            </div>
+            <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-5 shadow-sm">
+                <p class="text-xs uppercase tracking-wider text-slate-400 mb-1" id="dynamic-holder-label">Unique $TOKEN Holders</p>
+                <p class="text-2xl md:text-3xl font-extrabold text-purple-400" id="stat-stonk-holders">Loading...</p>
+                <p class="text-xs text-slate-500 mt-1">Active addresses with a token balance</p>
+            </div>
+        </div>
+
+        <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6 mb-6">
+            <h3 class="text-sm font-bold text-white mb-4">True Active Token Holders Over Time</h3>
+            <div class="relative h-72 md:h-80 w-full">
+                <canvas id="ownershipChart"></canvas>
+            </div>
+        </div>
     </main>
 
     <!-- Logic Script -->
@@ -309,6 +418,12 @@
         let liveDerpPriceUsd = 0;
         let liveEthPriceUsd = 0;
 
+        let burnChartInstance = null;
+        let activationChartInstance = null;
+        let tierPieChartInstance = null;
+        let ownershipChartInstance = null;
+        let tierChartInstances = {};
+
         function switchTab(tab) {
             const btnRoi = document.getElementById('tab-roi');
             const btnBurn = document.getElementById('tab-burn');
@@ -331,14 +446,18 @@
                 if(btnRoi) btnRoi.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition shadow-lg shadow-blue-500/25";
                 if(viewRoi) viewRoi.classList.remove('hidden');
             } else if (tab === 'burn') {
-                if(btnBurn) btnBurn.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition";
+                if(btnBurn) btnBurn.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition shadow-lg shadow-blue-500/25";
                 if(viewBurn) viewBurn.classList.remove('hidden');
+                if (window.fullBurnData && window.fullBurnData.length) updateBurnChart('all');
             } else if (tab === 'activation') {
-                if(btnActivation) btnActivation.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition";
+                if(btnActivation) btnActivation.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition shadow-lg shadow-blue-500/25";
                 if(viewActivation) viewActivation.classList.remove('hidden');
+                if (window.tierActivationStats) updateTierStats('allTime');
+                if (window.activationChartData) renderActivationCharts(window.activationChartData);
             } else if (tab === 'ownership') {
-                if(btnOwnership) btnOwnership.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition";
+                if(btnOwnership) btnOwnership.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition shadow-lg shadow-blue-500/25";
                 if(viewOwnership) viewOwnership.classList.remove('hidden');
+                if (window.ownershipChartData) renderOwnershipChart(window.ownershipChartData);
             } else if (tab === 'memes') {
                 if(viewMemes) viewMemes.classList.remove('hidden');
             }
@@ -370,6 +489,10 @@
             currentProjectKey = projectKey;
             
             if (projectKey === 'memes') {
+                // Ensure ETH price persists even on the Memes tab
+                const ethPrice = masterData.projects['stonk'].market.ethPriceUsd;
+                document.getElementById('eth-price').innerText = formatCurrency(ethPrice);
+                
                 document.getElementById('header-logo').src = 'Stonkbroker.png';
                 document.getElementById('project-title').innerText = 'Ecosystem Memes';
                 document.getElementById('dynamic-ticker-label').innerText = '$MEMES';
@@ -389,10 +512,15 @@
             
             liveEthPriceUsd = m.ethPriceUsd;
 
-            document.getElementById('header-logo').src = conf.logo || 'Stonkbroker.png';
+            // Handle Yardkeepers custom logo swap
+            let logoSrc = conf.logo || 'Stonkbroker.png';
+            if (projectKey === 'tickeryard') logoSrc = 'Yardkeepers.png';
+
+            document.getElementById('header-logo').src = logoSrc;
             document.getElementById('project-title').innerText = projectKey === 'stonk' ? 'StonkBrokers Tracker' : (projectKey === 'mancer' ? 'Mancer Tracker' : 'TickerYard Tracker');
             document.getElementById('dynamic-ticker-label').innerText = `$${conf.ticker}`;
             document.getElementById('token-price').innerText = formatPrice(m.tokenPriceUsd);
+            document.getElementById('eth-price').innerText = formatCurrency(m.ethPriceUsd);
             document.getElementById('nft-floor').innerText = m.nftFloorEth.toFixed(3) + ' ETH';
             
             const floorCostUsd = m.nftFloorEth * m.ethPriceUsd;
@@ -412,7 +540,6 @@
                 let roiHtml = '';
                 let yieldHtml = '';
                 
-                // TICKERYARD UNDER CONSTRUCTION OVERRIDE
                 if (data.underConstruction) {
                     roiHtml = `<span class="bg-orange-900/20 text-orange-400 border border-orange-800/50 px-2.5 py-1 rounded text-[10px] font-bold shadow-sm uppercase tracking-wider">Awaiting Data</span>`;
                     yieldHtml = `<span class="text-slate-500 italic text-sm">Epoch Initializing...</span>`;
@@ -479,10 +606,8 @@
             });
         }
 
-        // Column Sorting Logic for Memes Table
         let memeSortDirections = {};
         function sortMemesTable(colIndex, isNumeric) {
-            const table = document.getElementById('memes-table');
             const tbody = document.getElementById('memes-body');
             const rows = Array.from(tbody.querySelectorAll('tr'));
             
@@ -585,7 +710,6 @@
                 }
             }
 
-            // TICKERYARD UNDER CONSTRUCTION OVERRIDE FOR LOOKUP MODULE
             if (proj.underConstruction) {
                 resultsDiv.innerHTML = `
                     <div class="flex justify-between items-center border-b border-[#334155] pb-4 mb-4">
@@ -638,6 +762,224 @@
             }
         }
 
+        // ==========================================
+        // RESTORED CHARTING FUNCTIONS
+        // ==========================================
+        function updateBurnChart(timeframe) {
+            ['7d', '30d', 'all'].forEach(tf => {
+                const btn = document.getElementById(`btn-burn-${tf}`);
+                if (btn) {
+                    if (tf === timeframe) {
+                        btn.className = "px-4 py-1.5 text-xs font-bold rounded-md bg-[#334155] text-white transition shadow-sm w-1/3 sm:w-auto";
+                    } else {
+                        btn.className = "px-4 py-1.5 text-xs font-bold rounded-md text-slate-400 hover:text-white transition w-1/3 sm:w-auto";
+                    }
+                }
+            });
+
+            if (!window.fullBurnLabels || !window.fullBurnData) return;
+
+            let sliceCount = window.fullBurnLabels.length;
+            if (timeframe === '7d') sliceCount = 7;
+            if (timeframe === '30d') sliceCount = 30;
+
+            const slicedLabels = window.fullBurnLabels.slice(-sliceCount);
+            const slicedData = window.fullBurnData.slice(-sliceCount);
+
+            const canvas = document.getElementById('burnChart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (burnChartInstance) burnChartInstance.destroy();
+
+            burnChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: slicedLabels,
+                    datasets: [{
+                        label: 'Cumulative Burnt',
+                        data: slicedData,
+                        borderColor: '#fb923c',
+                        backgroundColor: 'rgba(251, 146, 60, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 4,
+                        pointBackgroundColor: '#fb923c'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => formatNumber(ctx.raw) + ' Units' } } },
+                    scales: {
+                        x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
+                        y: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: (v) => (v >= 1000000 ? (v / 1000000).toFixed(1) + 'M' : v) } }
+                    }
+                }
+            });
+        }
+
+        function renderActivationCharts({ historyLabels, historyValues, dailyActs, dailyDeacts, breakdownObj, breakdownArr, tiers }) {
+            const canvasLine = document.getElementById('activationChart');
+            if (!canvasLine) return;
+            const ctxLine = canvasLine.getContext('2d');
+            if (activationChartInstance) activationChartInstance.destroy();
+
+            activationChartInstance = new Chart(ctxLine, {
+                type: 'bar',
+                data: {
+                    labels: historyLabels,
+                    datasets: [
+                        {
+                            type: 'line',
+                            label: 'Net Active Units',
+                            data: historyValues,
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.05)',
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.3,
+                            pointRadius: 0,
+                            yAxisID: 'y'
+                        },
+                        {
+                            type: 'bar',
+                            label: 'Daily Activations',
+                            data: dailyActs,
+                            backgroundColor: '#34d399',
+                            borderRadius: 4,
+                            yAxisID: 'y1'
+                        },
+                        {
+                            type: 'bar',
+                            label: 'Daily Deactivations',
+                            data: dailyDeacts,
+                            backgroundColor: '#f43f5e',
+                            borderRadius: 4,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: { legend: { display: true, position: 'top', labels: { color: '#94a3b8', boxWidth: 12 } } },
+                    scales: {
+                        x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8', maxTicksLimit: 14 } },
+                        y: { type: 'linear', display: true, position: 'left', grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
+                        y1: { type: 'linear', display: false, position: 'right', grid: { drawOnChartArea: false }, min: 0 }
+                    }
+                }
+            });
+
+            const legendList = document.getElementById('tier-legend-list');
+            if (legendList) {
+                legendList.innerHTML = `
+                    <div class="flex justify-between items-center bg-[#1e293b] p-3 rounded-lg border border-[#334155]">
+                        <div class="flex items-center gap-3"><div class="w-4 h-4 rounded-md bg-[#60a5fa]"></div><span class="text-sm font-bold text-slate-300">T0: ${tiers[0].name}</span></div>
+                        <span class="text-white font-bold tracking-wide">${formatNumber(breakdownObj.T0 || 0)}</span>
+                    </div>
+                    <div class="flex justify-between items-center bg-[#1e293b] p-3 rounded-lg border border-[#334155]">
+                        <div class="flex items-center gap-3"><div class="w-4 h-4 rounded-md bg-[#34d399]"></div><span class="text-sm font-bold text-slate-300">T1: ${tiers[1].name}</span></div>
+                        <span class="text-white font-bold tracking-wide">${formatNumber(breakdownObj.T1 || 0)}</span>
+                    </div>
+                    <div class="flex justify-between items-center bg-[#1e293b] p-3 rounded-lg border border-[#334155]">
+                        <div class="flex items-center gap-3"><div class="w-4 h-4 rounded-md bg-[#f472b6]"></div><span class="text-sm font-bold text-slate-300">T2: ${tiers[2].name}</span></div>
+                        <span class="text-white font-bold tracking-wide">${formatNumber(breakdownObj.T2 || 0)}</span>
+                    </div>
+                    <div class="flex justify-between items-center bg-[#1e293b] p-3 rounded-lg border border-[#334155]">
+                        <div class="flex items-center gap-3"><div class="w-4 h-4 rounded-md bg-[#fbbf24]"></div><span class="text-sm font-bold text-slate-300">T3: ${tiers[3].name}</span></div>
+                        <span class="text-white font-bold tracking-wide">${formatNumber(breakdownObj.T3 || 0)}</span>
+                    </div>
+                    <div class="flex justify-between items-center bg-[#1e293b] p-3 rounded-lg border border-[#334155]">
+                        <div class="flex items-center gap-3"><div class="w-4 h-4 rounded-md bg-[#a78bfa]"></div><span class="text-sm font-bold text-slate-300">T4: ${tiers[4].name}</span></div>
+                        <span class="text-white font-bold tracking-wide">${formatNumber(breakdownObj.T4 || 0)}</span>
+                    </div>
+                `;
+            }
+
+            const canvasPie = document.getElementById('tierPieChart');
+            if (!canvasPie) return;
+            const ctxPie = canvasPie.getContext('2d');
+            if (tierPieChartInstance) tierPieChartInstance.destroy();
+
+            tierPieChartInstance = new Chart(ctxPie, {
+                type: 'doughnut',
+                data: {
+                    labels: [tiers[0].name, tiers[1].name, tiers[2].name, tiers[3].name, tiers[4].name],
+                    datasets: [{
+                        data: breakdownArr,
+                        backgroundColor: ['#60a5fa', '#34d399', '#f472b6', '#fbbf24', '#a78bfa'],
+                        borderWidth: 0,
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '65%',
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        function renderOwnershipChart({ labels, data }) {
+            const canvas = document.getElementById('ownershipChart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (ownershipChartInstance) ownershipChartInstance.destroy();
+
+            ownershipChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Active Holders',
+                        data: data,
+                        borderColor: '#a855f7',
+                        backgroundColor: 'rgba(168, 85, 247, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        stepped: true,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
+                        y: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }
+                    }
+                }
+            });
+        }
+
+        function updateTierStats(timeframe) {
+            ['24h', '7d', '30d', 'allTime'].forEach(tf => {
+                const btn = document.getElementById(`btn-tier-${tf}`);
+                if (btn) {
+                    if (tf === timeframe) {
+                        btn.className = "flex-1 sm:flex-none px-4 py-1.5 text-xs font-bold rounded-md bg-[#334155] text-white transition shadow-sm";
+                    } else {
+                        btn.className = "flex-1 sm:flex-none px-4 py-1.5 text-xs font-bold rounded-md text-slate-400 hover:text-white transition";
+                    }
+                }
+            });
+
+            const stats = window.tierActivationStats;
+            if(!stats) return;
+
+            ['T0', 'T1', 'T2', 'T3', 'T4'].forEach(tier => {
+                const elAct = document.getElementById(`${tier.toLowerCase()}-act`);
+                const elDeact = document.getElementById(`${tier.toLowerCase()}-deact`);
+                if(elAct) elAct.innerText = formatNumber(stats[tier][timeframe].act || 0);
+                if(elDeact) elDeact.innerText = formatNumber(stats[tier][timeframe].deact || 0);
+            });
+        }
+
         function processMetricsData(data) {
             const act = data.activation || {};
             const own = data.ownership || {};
@@ -647,6 +989,9 @@
             const conf = data.config;
 
             if (pctActivated === 0 && totalSupply > 0) pctActivated = (activeCount / totalSupply) * 100;
+
+            const breakdown = act.breakdown || { T0: 0, T1: 0, T2: 0, T3: 0, T4: 0 };
+            const history = act.history || { labels: [], cumulative: [], cumulativeGross: [], dailyActivations: [], dailyDeactivations: [] };
 
             const dualBurn = act.dualBurn || {};
             const totalBurn = dualBurn.totalBurnTokens || 0;
@@ -665,6 +1010,73 @@
             document.getElementById('stat-stonk-holders').innerText = formatNumber(own.stonkHolders || 0) + ' Wallets';
             
             document.getElementById('stat-own-ratio').innerText = (own.ownershipRatio || 0).toFixed(2) + '%';
+
+            data.tiers.forEach(t => { 
+                const el = document.getElementById(`${t.tier.toLowerCase()}-name`);
+                if (el) el.innerText = `${t.tier}: ${t.name}`; 
+            });
+
+            if(act.tierStats) {
+                window.tierActivationStats = act.tierStats;
+            }
+
+            const grossArr = history.cumulativeGross && history.cumulativeGross.length > 0 ? history.cumulativeGross : history.cumulative;
+            const maxGross = grossArr[grossArr.length - 1] || 1;
+            
+            window.fullBurnLabels = history.labels;
+            window.fullBurnData = grossArr.map(v => (v / maxGross) * totalBurn);
+
+            window.activationChartData = {
+                historyLabels: history.labels,
+                historyValues: history.cumulative, 
+                dailyActs: history.dailyActivations,
+                dailyDeacts: history.dailyDeactivations,
+                breakdownObj: breakdown,
+                breakdownArr: [breakdown.T0 || 0, breakdown.T1 || 0, breakdown.T2 || 0, breakdown.T3 || 0, breakdown.T4 || 0],
+                tiers: data.tiers
+            };
+
+            if (own.historicalGrowth) {
+                window.ownershipChartData = own.historicalGrowth;
+            }
+        }
+
+        async function shareToX() {
+            const text = `@savicrypto\nhttps://savicrypto.xyz/`;
+            const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+            
+            let activeViewId = 'view-roi';
+            ['view-roi', 'view-burn', 'view-activation', 'view-ownership', 'view-memes'].forEach(id => {
+                if (!document.getElementById(id).classList.contains('hidden')) {
+                    activeViewId = id;
+                }
+            });
+
+            const elementToCapture = document.getElementById(activeViewId);
+            const shareBtn = document.getElementById('share-btn-text');
+            const ogText = shareBtn.innerText;
+            shareBtn.innerText = "Capturing...";
+            
+            const originalBg = elementToCapture.style.backgroundColor;
+            elementToCapture.style.backgroundColor = '#0f172a';
+
+            try {
+                const canvas = await html2canvas(elementToCapture, { backgroundColor: '#0f172a', scale: 2 });
+                canvas.toBlob(async (blob) => {
+                    const item = new ClipboardItem({ 'image/png': blob });
+                    await navigator.clipboard.write([item]);
+                    elementToCapture.style.backgroundColor = originalBg;
+                    shareBtn.innerText = ogText;
+                    alert("✅ DASHBOARD SCREENSHOT COPIED!\n\nJust hit Paste (Ctrl+V / Cmd+V) when X/Twitter opens to attach it!");
+                    window.open(twitterUrl, '_blank');
+                }, 'image/png');
+            } catch (e) {
+                console.error("Clipboard copy failed: ", e);
+                elementToCapture.style.backgroundColor = originalBg;
+                shareBtn.innerText = ogText;
+                alert("Screenshot auto-copy failed. Your browser may block this feature. Opening X anyway!");
+                window.open(twitterUrl, '_blank');
+            }
         }
 
         initDashboard();
