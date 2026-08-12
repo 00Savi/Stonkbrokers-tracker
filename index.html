@@ -175,7 +175,7 @@
                 <span class="text-white font-bold tracking-wide" id="floor-cost">Loading...</span>
             </div>
         </div>
-        <div class="overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0 pb-2 mb-8">
+        <div class="overflow-x-auto -mx-4 md:mx-0 px-4 md:mx-0 pb-2 mb-8">
             <table class="w-full text-left border-collapse min-w-[850px]">
                 <thead>
                     <tr class="text-xs uppercase tracking-wider text-slate-500 border-b border-[#334155]">
@@ -835,7 +835,6 @@
 
                 let seatedSeats = 0;
 
-                // 1. PitMine Check with strict timeout
                 const pitTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error("RPC Timeout")), 4000));
                 if (isActivated && currentProjectKey === 'stonk') {
                     try {
@@ -848,7 +847,7 @@
                     }
                 }
 
-                // 2. Direct tokenURI Fetch via Ethers for highly accurate NFT Image
+                // DIRECT IPFS / TOKENURI PARSER (Ensures unique NFT art is pulled)
                 let nftImageHtml = `
                     <div class="w-12 h-12 md:w-16 md:h-16 rounded-xl bg-[#1e293b] border border-[#334155] flex items-center justify-center flex-shrink-0">
                         <svg class="w-6 h-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
@@ -864,17 +863,22 @@
                     let tokenUri = await Promise.race([nftContract.tokenURI(inputVal), uriTimeout]);
                     if (tokenUri) {
                         if (tokenUri.startsWith("ipfs://")) tokenUri = tokenUri.replace("ipfs://", "https://ipfs.io/ipfs/");
-                        const metaRes = await fetchWithTimeout(tokenUri, {timeout: 4000});
-                        if (metaRes.ok) {
-                            const meta = await metaRes.json();
-                            if (meta.image) {
-                                imageUrl = meta.image;
-                                if (imageUrl.startsWith("ipfs://")) imageUrl = imageUrl.replace("ipfs://", "https://ipfs.io/ipfs/");
+                        
+                        // Handle base64 encoded tokenURIs if used
+                        if (tokenUri.startsWith("data:application/json;base64,")) {
+                            const jsonStr = atob(tokenUri.split(",")[1]);
+                            const meta = JSON.parse(jsonStr);
+                            if (meta.image) imageUrl = meta.image;
+                        } else {
+                            const metaRes = await fetchWithTimeout(tokenUri, {timeout: 4000});
+                            if (metaRes.ok) {
+                                const meta = await metaRes.json();
+                                if (meta.image) imageUrl = meta.image;
                             }
                         }
                     }
                 } catch (e) {
-                    console.warn("Direct tokenURI fetch failed, falling back to Blockscout...", e);
+                    console.warn("Direct tokenURI smart contract fetch failed, trying Blockscout v2...", e);
                 }
 
                 if (!imageUrl) {
@@ -885,16 +889,15 @@
                             let meta = imgData?.metadata;
                             if (typeof meta === 'string') { try { meta = JSON.parse(meta); } catch(e) {} }
                             imageUrl = meta?.image || meta?.image_url || imgData?.image_url || imgData?.animation_url;
-                            if (imageUrl && imageUrl.startsWith("ipfs://")) imageUrl = imageUrl.replace("ipfs://", "https://ipfs.io/ipfs/");
                         }
                     } catch(e) {}
                 }
 
                 if (imageUrl) {
+                    if (imageUrl.startsWith("ipfs://")) imageUrl = imageUrl.replace("ipfs://", "https://ipfs.io/ipfs/");
                     nftImageHtml = `<img src="${imageUrl}" alt="Unit #${inputVal}" crossorigin="anonymous" class="w-12 h-12 md:w-16 md:h-16 rounded-xl border border-[#334155] object-cover bg-[#0f172a] flex-shrink-0 shadow-md">`;
                 }
 
-                // 3. Fetch Transaction History for Cost Basis
                 let lastSaleEth = 0;
                 let foundValidTx = false;
                 let totalTransfers = 0;
@@ -954,7 +957,6 @@
                                 }
                             } catch (e) {
                                 txApiFailed = true;
-                                console.warn("Inner tx fetch failed/timeout");
                                 break; 
                             }
                         }
@@ -968,7 +970,6 @@
                     }
                 } catch (e) {
                     txApiFailed = true;
-                    console.warn("Transfer fetch timeout or failed");
                 }
 
                 function getHistoricalTokenPriceFallback(ticker, ts, currentSpot) {
@@ -1000,15 +1001,13 @@
                 
                 const purchaseCostUsd = lastSaleEth * m.ethPriceUsd;
                 
-                // If API timed out, we don't know the purchase history, so we exclude it to avoid inflating ROI
                 let totalBasisUsd = activationCostUsd;
-                if (!txApiFailed) {
+                if (!txApiFailed && foundValidTx) {
                     totalBasisUsd += purchaseCostUsd;
                 }
                 
                 const cocRoi = totalBasisUsd > 0 ? ((annualYieldUsd / totalBasisUsd) * 100) : 0;
 
-                // Build HTML for Last Sale Card based on API success
                 let basisHtml = '';
                 if (txApiFailed) {
                     basisHtml = `
@@ -1138,12 +1137,7 @@
                         </div>
                     `;
                 } else {
-                    let cocRoiHtml = '';
-                    if (txApiFailed) {
-                        cocRoiHtml = `<span class="text-rose-400 font-bold text-sm">Timeout</span>`;
-                    } else {
-                        cocRoiHtml = `<span class="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-3 py-1 rounded text-sm font-bold">${cocRoi.toFixed(2)}%</span>`;
-                    }
+                    const cocRoiHtml = `<span class="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-3 py-1 rounded text-sm font-bold">${cocRoi.toFixed(2)}%</span>`;
                     
                     resultsDiv.innerHTML = `
                         <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[#334155] pb-4 mb-4">
@@ -1495,19 +1489,25 @@
 
             try {
                 const canvas = await html2canvas(elementToCapture, { backgroundColor: '#0f172a', scale: 2, useCORS: true, allowTaint: true });
-                canvas.toBlob(async (blob) => {
-                    const item = new ClipboardItem({ 'image/png': blob });
-                    await navigator.clipboard.write([item]);
+                canvas.toBlob((blob) => {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'ecosystem-stats.png';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
                     elementToCapture.style.backgroundColor = originalBg;
                     shareBtn.innerText = ogText;
-                    alert("✅ DASHBOARD SCREENSHOT COPIED!\n\nJust hit Paste (Ctrl+V / Cmd+V) when X/Twitter opens to attach it!");
+                    alert("✅ IMAGE DOWNLOADED!\n\nThe stats image has been saved to your device. Attach it to your post on X!");
                     window.open(twitterUrl, '_blank');
                 }, 'image/png');
             } catch (e) {
-                console.error("Clipboard copy failed: ", e);
+                console.error("Image download failed: ", e);
                 elementToCapture.style.backgroundColor = originalBg;
                 shareBtn.innerText = ogText;
-                alert("Screenshot auto-copy failed. Your browser may block this feature. Opening X anyway!");
                 window.open(twitterUrl, '_blank');
             }
         }
@@ -1526,19 +1526,25 @@
 
             try {
                 const canvas = await html2canvas(elementToCapture, { backgroundColor: '#0f172a', scale: 2, useCORS: true, allowTaint: true });
-                canvas.toBlob(async (blob) => {
-                    const item = new ClipboardItem({ 'image/png': blob });
-                    await navigator.clipboard.write([item]);
+                canvas.toBlob((blob) => {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'unit-analysis.png';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
                     elementToCapture.style.backgroundColor = originalBg;
                     shareBtn.innerText = ogText;
-                    alert("✅ UNIT ANALYSIS COPIED!\n\nJust hit Paste (Ctrl+V / Cmd+V) when X/Twitter opens to attach it!");
+                    alert("✅ UNIT IMAGE DOWNLOADED!\n\nThe unit analysis image has been saved to your device. Attach it to your post on X!");
                     window.open(twitterUrl, '_blank');
                 }, 'image/png');
             } catch (e) {
-                console.error("Clipboard copy failed: ", e);
+                console.error("Image download failed: ", e);
                 elementToCapture.style.backgroundColor = originalBg;
                 shareBtn.innerText = ogText;
-                alert("Screenshot auto-copy failed. Your browser may block this feature. Opening X anyway!");
                 window.open(twitterUrl, '_blank');
             }
         }
