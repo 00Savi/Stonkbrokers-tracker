@@ -89,8 +89,9 @@ const PROTOCOL_CONTRACTS = [
   "0x55642a3f10f1af5145d3d59021b1d6b03bb8692c"  
 ];
 
-// OMNI-ABI: Encompasses every variation of uint formatting to guarantee a parsing match
+// OMNI-ABI: Now includes the missing 'ActivationUpgraded' event signature
 const ACTIVATION_ABI = [
+  "event ActivationUpgraded(uint256 indexed tokenId, address indexed owner, uint8 fromTier, uint8 toTier, uint256 feePaid)",
   "event Activated(uint256 indexed tokenId, address indexed owner, uint256 tier, uint256 feePaid)",
   "event Activated(uint256 indexed tokenId, address owner, uint256 tier, uint256 feePaid)",
   "event Activated(uint256 tokenId, address owner, uint256 tier, uint256 feePaid)",
@@ -145,7 +146,6 @@ async function secureFetch(url) {
       if (data.status === "0") {
           if (data.message === "No records found" || data.message === "No transactions found") return { result: [] };
           
-          // The Silent-Skip Catcher
           if (typeof data.result === 'string' && (data.result.toLowerCase().includes("rate limit") || data.result.toLowerCase().includes("limit"))) {
               console.warn(`[API] Silent string rate limit caught. Pausing for 3s...`);
               await sleep(3000);
@@ -278,7 +278,6 @@ async function fetchAllLogs(address, genesisBlock, topic0 = null) {
     allLogs.push(...logs);
     fromBlock = toBlock + 1;
     step = 500000; 
-    // SLOWED TO STAY UNDER 5 REQ/SEC LIMIT
     await sleep(300); 
   }
 
@@ -425,14 +424,20 @@ async function fetchActivations(conf) {
 
       const tokenId = parsed.args.tokenId.toString();
       
-      const isAct = parsed.name === "Activated" || parsed.name.includes("Upgraded");
+      // GROK FIX: Added 'ActivationUpgraded' to the conditional catch
+      const isAct = parsed.name === "Activated" || parsed.name === "ActivationUpgraded" || parsed.name.includes("Upgraded");
       const isDeact = parsed.name === "ActivationCleared";
 
       if (isAct || isDeact) {
           let tierId = null;
           
           if (isAct) { 
-            const tierVal = parsed.args.newTier !== undefined ? parsed.args.newTier : parsed.args.tier;
+            // GROK FIX: Gracefully cascades through toTier -> newTier -> tier
+            const tierVal = 
+                parsed.args.toTier !== undefined ? parsed.args.toTier :
+                parsed.args.newTier !== undefined ? parsed.args.newTier : 
+                parsed.args.tier;
+                
             if (tierVal !== undefined && tierVal !== null) {
                 tierId = `T${tierVal.toString()}`; 
                 activeBrokers.set(tokenId, { t: tierId, ts: ts }); 
@@ -457,12 +462,7 @@ async function fetchActivations(conf) {
           if (isAct) dailyData[dateStr].activated++;
           if (isDeact) dailyData[dateStr].deactivated++;
       }
-    } catch (e) {
-        // Deep X-Ray debugger for failed parses
-        if (log.topics && log.topics.length > 1 && log.topics[1].includes("4ea")) { 
-            console.log(`[X-RAY 1258] ABI parse failed for log in Block ${log.blockNumber}: ${e.message}`);
-        }
-    }
+    } catch (e) { }
   }
 
   if (minTs < now - (60 * 86400)) minTs = now - (60 * 86400);
