@@ -31,10 +31,14 @@ const TOKEN_TICKERS = {
   "0x020bfc650a365f8bb26819deaabf3e21291018b4": "DEX", 
   "0x6245e67affa44a23077f0ea7f981a8dc743a0c47": "DEX", 
   "0x27efeae1817d90974623cb2ed455c424beffa5ab": "DEX",
-  "0xe3fa12da7fa026b21817f16622e8ae48fa785166": "YARD" // Added YARD 
+  "0xe3fa12da7fa026b21817f16622e8ae48fa785166": "YARD"
 };
 
 const MEMES = [
+  { name: "StonkBroker", ca: "0xe934e36a439c94017b64a3fece66af12099abf50" },
+  { name: "Yard", ca: "0xE3FA12dA7fa026B21817f16622E8AE48fA785166" },
+  { name: "Mancer", ca: "0xc72F232a6869e6CF34dC06129AfFD07F8a2a246A" },
+  { name: "Derp", ca: "0x6543B7746ca744C4bb2198191E71f40FF04C41b9" },
   { name: "Cashcat", ca: "0x020bfC650A365f8BB26819deAAbF3E21291018b4" },
   { name: "Tendies", ca: "0x45242320DBB855EeA8Fd36804C6487E10E97FCF9" },
   { name: "Index", ca: "0x56910D4409F3a0C78C64DD8D0545FF0705389870" },
@@ -42,14 +46,27 @@ const MEMES = [
   { name: "Hmm", ca: "0x7FE995a80075dF3Dc8Ae11A9b82c7FE4202CD87f" },
   { name: "Clockin", ca: null }, 
   { name: "Up", ca: "0x57C0E45cB534413D1C20A4240955d6bB250BB4F1" },
-  { name: "Ai", ca: "0x2E8c31162b855A2ffa90F6F8634643Ad6F111e18" }
+  { name: "Ai", ca: "0x2E8c31162b855A2ffa90F6F8634643Ad6F111e18" },
+  { name: "Frong", ca: "0x6245e67affA44a23077f0Ea7f981a8DC743a0c47" },
+  { name: "Yolo", ca: "0x62C71cd34a52c30d894419CBcc55Db2aFA8032eA" },
+  { name: "Wojak", ca: "0xaCE55FE98Bab14366dD49aB5AA5dF76aA11A3c6f" },
+  { name: "Juggernaut", ca: "0xD7321801CAae694090694Ff55A9323139F043B88" }
 ];
 
-const FALLBACK_STOCK_PRICES = {
-  "AAPL": 220, "AMZN": 180, "NVDA": 120, "SLV": 27, "MSFT": 420,
-  "COST": 850, "USAR": 25, "SPCX": 30, "GOOGL": 165, "RDDT": 60,
-  "GME": 20, "USO": 75
-};
+const STOCKS = [
+  { name: "AAPL", ca: "0xaf3d76f1834a1d425780943c99ea8a608f8a93f9" },
+  { name: "AMZN", ca: "0x12f190a9f9d7d37a250758b26824b97ce941bf54" },
+  { name: "NVDA", ca: "0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec" },
+  { name: "SLV", ca: "0x411efb0e7f985935daec3d4c3ebaea0d0ad7d89f" },
+  { name: "MSFT", ca: "0xe93237c50d904957cf27e7b1133b510c669c2e74" },
+  { name: "COST", ca: "0x4ea005168d7f09a7a0ba9d1def21a479950e44c2" },
+  { name: "USAR", ca: "0xd917b029c761d264c6a312bbbcda868658ef86a6" },
+  { name: "SPCX", ca: "0x4a0e65a3eccec6dbe60ae065f2e7bb85fae35eea" },
+  { name: "GOOGL", ca: "0x2e0847e8910a9732eb3fb1bb4b70a580adad4fe3" },
+  { name: "RDDT", ca: "0x05b37fb53a299a1b874a619e1c4c404d52c36f4c" },
+  { name: "GME", ca: "0x1b0e319c6a659f002271b69db8a7df2f911c153e" },
+  { name: "USO", ca: "0xa30fa36db767ad9ed3f7a60fc79526fb4d56d344" }
+];
 
 const PROJECTS = {
   stonk: {
@@ -96,7 +113,7 @@ const PROJECTS = {
     ]
   },
   tickeryard: {
-    genesisBlock: 33500000, // Safe estimate for August launch block
+    genesisBlock: 33500000, 
     tokenCa: "0xE3FA12dA7fa026B21817f16622E8AE48fA785166".toLowerCase(),
     nftCa: "0x2756bffc4cccb0cbebeb675a8593ca80c8db8a97".toLowerCase(),
     activationCa: "0xEf5f726990442bC3207d72D1F9DcF8677Cf02358".toLowerCase(),
@@ -104,10 +121,10 @@ const PROJECTS = {
     maxSupply: 3333,
     unitValue: 300030,
     ticker: "YARD",
-    logo: "Stonkbroker.png", // Inherits default logo or you can add a tickeryard.png later
+    logo: "Yardkeepers.png", 
     yieldMode: "protocol_vault",
     oracleSource: "0xEf5f726990442bC3207d72D1F9DcF8677Cf02358".toLowerCase(), 
-    underConstruction: true, // TRIGGERS THE "AWAITING EPOCH" UI
+    underConstruction: true, 
     tiers: [
       { id: "T0", name: "Groundskeeper", reqTokens: 30003, weight: 100 },
       { id: "T1", name: "Apprentice", reqTokens: 45004.5, weight: 125 },
@@ -588,10 +605,10 @@ async function getGlobalYield(conf, sevenDaysAgo, activationStats, marketData) {
   }
 }
 
-async function loadMemePrices() {
-  const memeResults = [];
-  const validMemes = MEMES.filter(m => m.ca !== null);
-  const addresses = validMemes.map(m => m.ca).join(",");
+async function loadTokenListPrices(tokenList) {
+  const tokenResults = [];
+  const validTokens = tokenList.filter(m => m.ca !== null);
+  const addresses = validTokens.map(m => m.ca).join(",");
   
   let pairsMap = {};
   try {
@@ -607,10 +624,10 @@ async function loadMemePrices() {
       }
   } catch(e) {}
 
-  for (const meme of MEMES) {
-      if (!meme.ca) {
-          memeResults.push({
-              name: meme.name,
+  for (const item of tokenList) {
+      if (!item.ca) {
+          tokenResults.push({
+              name: item.name,
               ca: null,
               volume24h: 0,
               liquidity: 0,
@@ -624,19 +641,18 @@ async function loadMemePrices() {
           continue;
       }
 
-      const pair = pairsMap[meme.ca.toLowerCase()];
+      const pair = pairsMap[item.ca.toLowerCase()];
       const volume24h = pair?.volume?.h24 || 0;
       const liquidity = pair?.liquidity?.usd || 0;
       const priceChange24h = pair?.priceChange?.h24 || 0;
       const fdv = pair?.fdv || 0;
       const marketCap = pair?.marketCap || fdv;
       
-      const holders = await fetchTokenHoldersSafe(meme.ca, false);
+      const holders = await fetchTokenHoldersSafe(item.ca, false);
       
-      // Fetch actual burnt balance from dead address 0x000...dead
       let burntBalance = 0;
       try {
-          const burnRes = await secureFetch(`${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokenbalance&contractaddress=${meme.ca}&address=0x000000000000000000000000000000000000dead&apikey=${API_KEY}`);
+          const burnRes = await secureFetch(`${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokenbalance&contractaddress=${item.ca}&address=0x000000000000000000000000000000000000dead&apikey=${API_KEY}`);
           if (burnRes && burnRes.result) {
               burntBalance = Number(burnRes.result) / 1e18;
           }
@@ -644,9 +660,9 @@ async function loadMemePrices() {
 
       await sleep(200);
 
-      memeResults.push({
-          name: meme.name,
-          ca: meme.ca,
+      tokenResults.push({
+          name: item.name,
+          ca: item.ca,
           volume24h,
           liquidity,
           priceChange24h,
@@ -654,10 +670,10 @@ async function loadMemePrices() {
           marketCap,
           holders,
           burnt: Math.round(burntBalance),
-          roi: "0.00%" // Placeholder for future wallet-drop ROI tracking
+          roi: "0.00%"
       });
   }
-  return memeResults;
+  return tokenResults;
 }
 
 async function run() {
@@ -666,10 +682,16 @@ async function run() {
   try { if (fs.existsSync("data.json")) previousData = JSON.parse(fs.readFileSync("data.json", "utf8")); } catch(e) {}
 
   const markets = await loadMarketPrices();
-  const memeData = await loadMemePrices();
+  const memeData = await loadTokenListPrices(MEMES);
+  const stockData = await loadTokenListPrices(STOCKS);
   const sevenDaysAgo = Math.floor(Date.now() / 1000) - 7 * 24 * 3600;
   
-  const finalJson = { lastUpdated: new Date().toISOString(), projects: {}, memes: memeData };
+  const finalJson = { 
+    lastUpdated: new Date().toISOString(), 
+    projects: {}, 
+    memes: memeData, 
+    stocks: stockData 
+  };
 
   for (const [projectKey, conf] of Object.entries(PROJECTS)) {
       console.log(`\n--- Processing ${projectKey.toUpperCase()} ---`);
@@ -704,13 +726,13 @@ async function run() {
         activation: activationStats,
         ownership: ownershipStats,
         tiers: mappedTiers,
-        underConstruction: conf.underConstruction, // Added to pass flag to frontend
+        underConstruction: conf.underConstruction,
         config: { ticker: conf.ticker, unitValue: conf.unitValue, logo: conf.logo, nftCa: conf.nftCa }
       };
   }
 
   fs.writeFileSync("data.json", JSON.stringify(finalJson, null, 2));
-  console.log("\n✓ Dashboard payload generated successfully.");
+  console.log("\n✓ Dashboard payload generated successfully with Memes and Stocks.");
 }
 
 run().catch(err => { console.error(err); process.exit(1); });
