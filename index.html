@@ -75,6 +75,9 @@
                     <div onclick="selectProject('memes')" class="px-4 py-2 hover:bg-[#334155] cursor-pointer flex items-center gap-3 text-white font-semibold transition">
                         <div class="w-2 h-2 rounded-full bg-emerald-500"></div> Robinhood Tokens <span class="text-[9px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.2 rounded font-semibold ml-auto">Live</span>
                     </div>
+                    <div onclick="selectProject('stocks')" class="px-4 py-2 hover:bg-[#334155] cursor-pointer flex items-center gap-3 text-white font-semibold transition">
+                        <div class="w-2 h-2 rounded-full bg-blue-400"></div> Robinhood Stocks <span class="text-[9px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-1.5 py-0.2 rounded font-semibold ml-auto">Live</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -121,15 +124,15 @@
         </button>
     </div>
 
-    <!-- View: Tokens Spreadsheet Table -->
+    <!-- View: Tokens/Stocks Spreadsheet Table -->
     <main id="view-memes" class="max-w-6xl mx-auto card rounded-2xl border p-4 md:p-6 mb-8 shadow-xl hidden">
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div>
-                <h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2">
+                <h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2" id="tokens-view-title">
                     <svg class="w-5 h-5 text-emerald-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"></path></svg>
                     Robinhood Tokens Tracker
                 </h2>
-                <p class="text-xs md:text-sm text-slate-400 mt-1">Real-time liquidity, volume, and holder metrics for Robinhood Chain tokens</p>
+                <p class="text-xs md:text-sm text-slate-400 mt-1" id="tokens-view-desc">Real-time liquidity, volume, and holder metrics for Robinhood Chain tokens</p>
             </div>
         </div>
 
@@ -165,7 +168,7 @@
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
             <div>
                 <h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2">
-                    <svg class="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20"><path d="M3 12v3c0 1.657 3.134 3 7 3s7-1.343 7-3v-3c0 1.657-3.134 3-7 3s-7-1.343-7-3z"></path><path d="M3 7v3c0 1.657 3.134 3 7 3s7-1.343 7-3V7c0 1.657-3.134 3-7 3S3 8.657 3 7z"></path><path d="M17 5c0 1.657-3.134 3-7 3S3 6.657 3 5s3.134-3 7-3 7 1.343 7 3z"></path></svg>
+                    <svg class="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20"><path d="M3 12v3c0 1.657 3.134 3 7 3s7-1.343 7-3v-3c0 1.657-3.134 3-7 3s-7-1.343-7-3z"></path><path d="M3 7v3c0 1.657 3.134 3 7 3s7-1.343 7-3V7c0 1.657-3.134 3-7 3S3 8.657 3 5s3.134-3 7-3 7 1.343 7 3z"></path><path d="M17 5c0 1.657-3.134 3-7 3S3 6.657 3 5s3.134-3 7-3 7 1.343 7 3z"></path></svg>
                     Global Yield ROI Benchmarks
                 </h2>
                 <p class="text-xs md:text-sm text-slate-400 mt-1" id="last-sync">Last automated sync: Loading...</p>
@@ -555,16 +558,20 @@
             const ethPrice = masterData?.projects?.['stonk']?.market?.ethPriceUsd || 0;
             document.getElementById('eth-price').innerText = ethPrice ? formatCurrency(ethPrice) : '---';
 
-            if (projectKey === 'memes') {
+            if (projectKey === 'memes' || projectKey === 'stocks') {
+                const isStocks = projectKey === 'stocks';
                 document.getElementById('header-logo').src = 'Stonkbroker.png';
-                document.getElementById('project-title').innerText = 'Robinhood Tokens';
-                document.getElementById('dynamic-ticker-label').innerText = '$TOKENS';
+                document.getElementById('project-title').innerText = isStocks ? 'Robinhood Stock Tokens' : 'Robinhood Tokens';
+                document.getElementById('dynamic-ticker-label').innerText = isStocks ? '$STOCKS' : '$TOKENS';
                 
                 document.getElementById('token-price-box').classList.add('hidden');
                 document.getElementById('nft-floor-box').classList.add('hidden');
                 document.getElementById('standard-tabs').classList.add('hidden');
                 
-                renderMemesTable();
+                document.getElementById('tokens-view-title').innerText = isStocks ? 'Robinhood Stock Tokens Tracker' : 'Robinhood Tokens Tracker';
+                document.getElementById('tokens-view-desc').innerText = isStocks ? 'Real-time liquidity, volume, and holder metrics for Robinhood Chain stock tokens' : 'Real-time liquidity, volume, and holder metrics for Robinhood Chain tokens';
+
+                renderMemesTable(isStocks ? masterData.stocks : masterData.memes);
                 switchTab('memes');
                 return;
             }
@@ -714,10 +721,10 @@
             }
         }
 
-        function renderMemesTable() {
+        function renderMemesTable(customTokenList = null) {
             const tbody = document.getElementById('memes-body');
             tbody.innerHTML = '';
-            const memes = masterData.memes || [];
+            const memes = customTokenList || masterData.memes || [];
 
             memes.forEach((meme, index) => {
                 const roiColor = meme.priceChange24h >= 0 ? 'text-emerald-400' : 'text-rose-400';
@@ -729,7 +736,7 @@
                 
                 const totalSupply = 1000000000;
                 const burntPct = meme.burnt > 0 ? ((meme.burnt / totalSupply) * 100).toFixed(2) + '%' : '0.00%';
-                const burntFormatted = meme.burnt > 0 ? `${formatNumber(meme.burnt)} <span class="text-[10px] text-orange-300 font-normal">(${burntPct})</span>` : '0 <span class="text-[10px] text-slate-500 font-normal">(0.00%)</span>';
+                const burntFormatted = meme.burnt > 0 ? `<span class="text-[12px] text-orange-400 font-bold">${burntPct}</span>` : '<span class="text-[12px] text-slate-500 font-normal">0.00%</span>';
 
                 const tr = document.createElement('tr');
                 tr.className = 'cursor-pointer border-b border-[#334155]/50 hover:bg-[#334155]/20 transition-colors group';
@@ -751,7 +758,7 @@
                     <td class="py-4 text-purple-400 font-semibold">${formatNumber(meme.holders)}</td>
                     <td class="py-4 text-right pr-4 text-orange-400 font-semibold">
                         <div class="flex items-center justify-end gap-2">
-                            <span>${burntFormatted}</span>
+                            ${burntFormatted}
                             <svg id="meme-chevron-${index}" class="w-4 h-4 text-slate-500 transition-transform duration-200 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                         </div>
                     </td>
@@ -763,8 +770,8 @@
                 detailsTr.className = 'hidden bg-[#0f172a]/60 border-b border-[#334155]/50';
                 
                 const chartContent = meme.ca ? `
-                    <div class="relative w-full h-[450px] rounded-xl overflow-hidden border border-[#334155] shadow-inner">
-                        <iframe src="https://dexscreener.com/robinhood/${meme.ca}?embed=1&theme=dark&trades=0&info=0" class="w-full h-full border-0"></iframe>
+                    <div id="iframe-container-${index}" data-src="https://dexscreener.com/robinhood/${meme.ca}?embed=1&theme=dark&trades=0&info=0" class="relative w-full h-[450px] rounded-xl overflow-hidden border border-[#334155] shadow-inner">
+                        <!-- Iframe injects on click to prevent rate limits -->
                     </div>
                 ` : `
                     <div class="p-8 text-center text-slate-400 italic bg-[#1e293b]/40 rounded-xl border border-[#334155]">
@@ -779,7 +786,10 @@
                                 <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
                                 ${meme.name} Live Interactive Chart
                             </h4>
-                            <span class="text-xs text-slate-400">Toggle 24H / 7D / 30D inside chart controls</span>
+                            <button onclick="shareMemeToX('${meme.name}', '${meme.ca}')" class="bg-[#1da1f2] hover:bg-[#1a91da] text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition shadow-sm" data-html2canvas-ignore="true">
+                                <svg class="w-3 h-3 fill-current text-white" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 24.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                                Share
+                            </button>
                         </div>
                         ${chartContent}
                     </td>
@@ -797,6 +807,11 @@
             if (isHidden) {
                 detailsRow.classList.remove('hidden');
                 if (chevron) chevron.style.transform = 'rotate(180deg)';
+                
+                const iframeContainer = document.getElementById('iframe-container-' + index);
+                if (iframeContainer && iframeContainer.innerHTML.trim() === '') {
+                    iframeContainer.innerHTML = `<iframe src="${iframeContainer.getAttribute('data-src')}" class="w-full h-full border-0"></iframe>`;
+                }
             } else {
                 detailsRow.classList.add('hidden');
                 if (chevron) chevron.style.transform = 'rotate(0deg)';
@@ -1511,6 +1526,19 @@
             }
         }
 
+        const makeImagePromise = async (element) => {
+            const canvas = await html2canvas(element, { 
+                backgroundColor: '#0f172a', 
+                scale: window.devicePixelRatio || 2, 
+                useCORS: true,
+                allowTaint: false,
+                ignoreElements: (node) => node.tagName.toLowerCase() === 'iframe' || node.hasAttribute('data-html2canvas-ignore')
+            });
+            return new Promise((resolve, reject) => {
+                canvas.toBlob(b => b ? resolve(b) : reject(new Error("Canvas export failed")), 'image/png');
+            });
+        };
+
         async function executeShare(elementId, tweetText, fileName, btnId) {
             const elementToCapture = document.getElementById(elementId);
             const shareBtn = document.getElementById(btnId);
@@ -1521,68 +1549,49 @@
             elementToCapture.style.backgroundColor = '#0f172a';
 
             try {
-                // allowTaint must be false for toBlob to work
-                const canvas = await html2canvas(elementToCapture, { 
-                    backgroundColor: '#0f172a', 
-                    scale: window.devicePixelRatio || 2, 
-                    useCORS: true,
-                    allowTaint: false 
-                });
-                
-                const blob = await new Promise((resolve, reject) => {
-                    canvas.toBlob(b => b ? resolve(b) : reject(new Error("Canvas tainted or empty")), 'image/png');
-                });
+                // Try writing to Clipboard synchronously via Promise to maintain user gesture validity
+                const item = new ClipboardItem({ 'image/png': makeImagePromise(elementToCapture) });
+                await navigator.clipboard.write([item]);
 
                 elementToCapture.style.backgroundColor = originalBg;
-
-                // Strategy 1: Native Mobile Web Share (iOS/Android)
-                const file = new File([blob], fileName, { type: "image/png" });
-                if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                    shareBtn.innerText = "Sharing...";
-                    try {
-                        await navigator.share({
-                            text: tweetText,
-                            files: [file]
-                        });
-                        shareBtn.innerHTML = ogText;
-                        return;
-                    } catch(e) {
-                        console.log("Web Share aborted or failed", e);
-                    }
-                }
-
-                // Strategy 2: Clipboard API (Desktop Chrome/Edge)
-                try {
-                    const item = new ClipboardItem({ 'image/png': blob });
-                    await navigator.clipboard.write([item]);
-                    shareBtn.innerHTML = ogText;
-                    alert("✅ SCREENSHOT COPIED!\n\nJust hit Paste (Ctrl+V / Cmd+V) when X/Twitter opens to attach it!");
-                    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`, '_blank');
-                    return;
-                } catch(e) {
-                    console.log("Clipboard API failed", e);
-                }
-
-                // Strategy 3: Auto-Download Fallback (Fallback for Safari Desktop / strict browsers)
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = fileName;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                
                 shareBtn.innerHTML = ogText;
-                alert("✅ IMAGE DOWNLOADED!\n\nYour browser blocked auto-copying. The stats image has been saved to your device to attach on X!");
+                alert("✅ DASHBOARD SCREENSHOT COPIED!\n\nJust hit Paste (Ctrl+V / Cmd+V) when X/Twitter opens to attach it!");
                 window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`, '_blank');
 
             } catch (e) {
-                console.error("Capture Failed: ", e);
-                elementToCapture.style.backgroundColor = originalBg;
-                shareBtn.innerHTML = ogText;
-                alert("Screenshot generation failed. Opening X anyway!");
-                window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`, '_blank');
+                console.warn("Clipboard auto-copy failed/blocked. Trying download fallback...", e);
+                
+                try {
+                    const canvas = await html2canvas(elementToCapture, { 
+                        backgroundColor: '#0f172a', 
+                        scale: 2, 
+                        useCORS: true, 
+                        allowTaint: false,
+                        ignoreElements: (node) => node.tagName.toLowerCase() === 'iframe' || node.hasAttribute('data-html2canvas-ignore')
+                    });
+                    
+                    canvas.toBlob((blob) => {
+                        if (!blob) throw new Error("Blob null");
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = fileName;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                        
+                        elementToCapture.style.backgroundColor = originalBg;
+                        shareBtn.innerHTML = ogText;
+                        alert("✅ IMAGE DOWNLOADED!\n\nYour browser blocked auto-copying. The stats image has been saved to your device to attach on X!");
+                        window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`, '_blank');
+                    }, 'image/png');
+                } catch (fallbackErr) {
+                    console.error("Capture Failed completely: ", fallbackErr);
+                    elementToCapture.style.backgroundColor = originalBg;
+                    shareBtn.innerHTML = ogText;
+                    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`, '_blank');
+                }
             }
         }
 
@@ -1607,6 +1616,11 @@
             else if (currentProjectKey === 'mancer') tweetText = `Hoods up - @savicrypto\nhttps://savicrypto.xyz/`;
             
             await executeShare('lookup-results', tweetText, 'unit-analysis.png', 'unit-share-btn-text');
+        }
+
+        async function shareMemeToX(memeName, memeCa) {
+            const tweetText = `Tracking $${memeName} on @savicrypto\nCA: ${memeCa}\nhttps://savicrypto.xyz/`;
+            await executeShare('view-memes', tweetText, `${memeName}-stats.png`, 'share-btn-text');
         }
 
         initDashboard();
