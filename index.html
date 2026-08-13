@@ -870,7 +870,7 @@
                     }
                 }
 
-                // 2. Resolve Unique NFT Art (Direct RPC -> Blockscout Metadata -> Blockscout General)
+                // DIRECT IPFS / TOKENURI PARSER (Ensures unique NFT art is pulled)
                 let imageSources = [];
 
                 try {
@@ -936,7 +936,6 @@
                     }
                 }
 
-                // 3. Optimized Transaction Inspector
                 let lastSaleEth = 0;
                 let foundValidTx = false;
                 let totalTransfers = 0;
@@ -1160,9 +1159,9 @@
                                     <span class="text-xs uppercase text-slate-400 sm:block">Individual CoC ROI</span>
                                     <span class="bg-orange-900/20 text-orange-400 border border-orange-800/50 px-2.5 py-1 rounded text-[10px] font-bold shadow-sm uppercase tracking-wider">Awaiting Data</span>
                                 </div>
-                                <button onclick="shareUnitToX()" data-html2canvas-ignore="true" class="bg-[#1da1f2] hover:bg-[#1a91da] text-white px-4 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition shadow-sm w-full sm:w-auto">
+                                <button onclick="shareUnitToX()" id="unit-share-btn-text" data-html2canvas-ignore="true" class="bg-[#1da1f2] hover:bg-[#1a91da] text-white px-4 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition shadow-sm w-full sm:w-auto">
                                     <svg class="w-4 h-4 fill-current text-white" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 24.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-                                    <span id="unit-share-btn-text">Share to X</span>
+                                    Share to X
                                 </button>
                                 <button onclick="document.getElementById('lookup-results').classList.add('hidden')" data-html2canvas-ignore="true" class="bg-[#1e293b] hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-[#334155] px-3 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center transition shadow-sm" title="Close Analysis">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
@@ -1203,9 +1202,9 @@
                                     <span class="text-xs uppercase text-slate-400 sm:block">Individual CoC ROI</span>
                                     ${cocRoiHtml}
                                 </div>
-                                <button onclick="shareUnitToX()" data-html2canvas-ignore="true" class="bg-[#1da1f2] hover:bg-[#1a91da] text-white px-4 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition shadow-sm w-full sm:w-auto">
+                                <button onclick="shareUnitToX()" id="unit-share-btn-text" data-html2canvas-ignore="true" class="bg-[#1da1f2] hover:bg-[#1a91da] text-white px-4 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition shadow-sm w-full sm:w-auto">
                                     <svg class="w-4 h-4 fill-current text-white" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 24.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-                                    <span id="unit-share-btn-text">Share to X</span>
+                                    Share to X
                                 </button>
                                 <button onclick="document.getElementById('lookup-results').classList.add('hidden')" data-html2canvas-ignore="true" class="bg-[#1e293b] hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-[#334155] px-3 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center transition shadow-sm" title="Close Analysis">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
@@ -1512,22 +1511,85 @@
             }
         }
 
-        const makeImagePromise = async (element) => {
-            const canvas = await html2canvas(element, { backgroundColor: '#0f172a', scale: 2, useCORS: true });
-            return new Promise((resolve, reject) => {
-                canvas.toBlob((blob) => {
-                    if (blob) resolve(blob);
-                    else reject(new Error("Canvas export failed (likely tainted)."));
-                }, 'image/png');
-            });
-        };
+        async function executeShare(elementId, tweetText, fileName, btnId) {
+            const elementToCapture = document.getElementById(elementId);
+            const shareBtn = document.getElementById(btnId);
+            const ogText = shareBtn.innerHTML; 
+            shareBtn.innerText = "Capturing...";
+            
+            const originalBg = elementToCapture.style.backgroundColor;
+            elementToCapture.style.backgroundColor = '#0f172a';
+
+            try {
+                // allowTaint must be false for toBlob to work
+                const canvas = await html2canvas(elementToCapture, { 
+                    backgroundColor: '#0f172a', 
+                    scale: window.devicePixelRatio || 2, 
+                    useCORS: true,
+                    allowTaint: false 
+                });
+                
+                const blob = await new Promise((resolve, reject) => {
+                    canvas.toBlob(b => b ? resolve(b) : reject(new Error("Canvas tainted or empty")), 'image/png');
+                });
+
+                elementToCapture.style.backgroundColor = originalBg;
+
+                // Strategy 1: Native Mobile Web Share (iOS/Android)
+                const file = new File([blob], fileName, { type: "image/png" });
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    shareBtn.innerText = "Sharing...";
+                    try {
+                        await navigator.share({
+                            text: tweetText,
+                            files: [file]
+                        });
+                        shareBtn.innerHTML = ogText;
+                        return;
+                    } catch(e) {
+                        console.log("Web Share aborted or failed", e);
+                    }
+                }
+
+                // Strategy 2: Clipboard API (Desktop Chrome/Edge)
+                try {
+                    const item = new ClipboardItem({ 'image/png': blob });
+                    await navigator.clipboard.write([item]);
+                    shareBtn.innerHTML = ogText;
+                    alert("✅ SCREENSHOT COPIED!\n\nJust hit Paste (Ctrl+V / Cmd+V) when X/Twitter opens to attach it!");
+                    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`, '_blank');
+                    return;
+                } catch(e) {
+                    console.log("Clipboard API failed", e);
+                }
+
+                // Strategy 3: Auto-Download Fallback (Fallback for Safari Desktop / strict browsers)
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                shareBtn.innerHTML = ogText;
+                alert("✅ IMAGE DOWNLOADED!\n\nYour browser blocked auto-copying. The stats image has been saved to your device to attach on X!");
+                window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`, '_blank');
+
+            } catch (e) {
+                console.error("Capture Failed: ", e);
+                elementToCapture.style.backgroundColor = originalBg;
+                shareBtn.innerHTML = ogText;
+                alert("Screenshot generation failed. Opening X anyway!");
+                window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`, '_blank');
+            }
+        }
 
         async function shareToX() {
             let tweetText = `Tracked via @savicrypto\nhttps://savicrypto.xyz/`;
             if (currentProjectKey === 'stonk') tweetText = `Clock in - @savicrypto\nhttps://savicrypto.xyz/`;
             else if (currentProjectKey === 'mancer') tweetText = `Hoods up - @savicrypto\nhttps://savicrypto.xyz/`;
-            
-            const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
             
             let activeViewId = 'view-roi';
             ['view-roi', 'view-burn', 'view-activation', 'view-ownership', 'view-memes'].forEach(id => {
@@ -1536,48 +1598,7 @@
                 }
             });
 
-            const elementToCapture = document.getElementById(activeViewId);
-            const shareBtn = document.getElementById('share-btn-text');
-            const ogText = shareBtn.innerText;
-            shareBtn.innerText = "Capturing...";
-            
-            const originalBg = elementToCapture.style.backgroundColor;
-            elementToCapture.style.backgroundColor = '#0f172a';
-
-            try {
-                const item = new ClipboardItem({ 'image/png': makeImagePromise(elementToCapture) });
-                await navigator.clipboard.write([item]);
-                
-                elementToCapture.style.backgroundColor = originalBg;
-                shareBtn.innerText = ogText;
-                alert("✅ DASHBOARD SCREENSHOT COPIED!\n\nJust hit Paste (Ctrl+V / Cmd+V) when X/Twitter opens to attach it!");
-                window.open(twitterUrl, '_blank');
-            } catch (e) {
-                console.error("Clipboard copy failed, attempting download fallback: ", e);
-                try {
-                    const canvas = await html2canvas(elementToCapture, { backgroundColor: '#0f172a', scale: 2, useCORS: true });
-                    canvas.toBlob((blob) => {
-                        if (!blob) throw new Error("Blob null");
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = 'ecosystem-stats.png';
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                        URL.revokeObjectURL(url);
-                        
-                        elementToCapture.style.backgroundColor = originalBg;
-                        shareBtn.innerText = ogText;
-                        alert("✅ IMAGE DOWNLOADED!\n\nYour browser blocked auto-copying. The stats image has been saved to your device to attach on X!");
-                        window.open(twitterUrl, '_blank');
-                    }, 'image/png');
-                } catch (fallbackErr) {
-                    elementToCapture.style.backgroundColor = originalBg;
-                    shareBtn.innerText = ogText;
-                    window.open(twitterUrl, '_blank');
-                }
-            }
+            await executeShare(activeViewId, tweetText, 'ecosystem-stats.png', 'share-btn-text');
         }
         
         async function shareUnitToX() {
@@ -1585,50 +1606,7 @@
             if (currentProjectKey === 'stonk') tweetText = `Clock in - @savicrypto\nhttps://savicrypto.xyz/`;
             else if (currentProjectKey === 'mancer') tweetText = `Hoods up - @savicrypto\nhttps://savicrypto.xyz/`;
             
-            const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
-            
-            const elementToCapture = document.getElementById('lookup-results');
-            const shareBtn = document.getElementById('unit-share-btn-text');
-            const ogText = shareBtn.innerText;
-            shareBtn.innerText = "Capturing...";
-            
-            const originalBg = elementToCapture.style.backgroundColor;
-            elementToCapture.style.backgroundColor = '#0f172a';
-
-            try {
-                const item = new ClipboardItem({ 'image/png': makeImagePromise(elementToCapture) });
-                await navigator.clipboard.write([item]);
-                
-                elementToCapture.style.backgroundColor = originalBg;
-                shareBtn.innerText = ogText;
-                alert("✅ UNIT ANALYSIS COPIED!\n\nJust hit Paste (Ctrl+V / Cmd+V) when X/Twitter opens to attach it!");
-                window.open(twitterUrl, '_blank');
-            } catch (e) {
-                console.error("Clipboard copy failed, attempting download fallback: ", e);
-                try {
-                    const canvas = await html2canvas(elementToCapture, { backgroundColor: '#0f172a', scale: 2, useCORS: true });
-                    canvas.toBlob((blob) => {
-                        if (!blob) throw new Error("Blob null");
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = 'unit-analysis.png';
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                        URL.revokeObjectURL(url);
-                        
-                        elementToCapture.style.backgroundColor = originalBg;
-                        shareBtn.innerText = ogText;
-                        alert("✅ UNIT IMAGE DOWNLOADED!\n\nYour browser blocked auto-copying. The unit analysis image has been saved to your device to attach on X!");
-                        window.open(twitterUrl, '_blank');
-                    }, 'image/png');
-                } catch (fallbackErr) {
-                    elementToCapture.style.backgroundColor = originalBg;
-                    shareBtn.innerText = ogText;
-                    window.open(twitterUrl, '_blank');
-                }
-            }
+            await executeShare('lookup-results', tweetText, 'unit-analysis.png', 'unit-share-btn-text');
         }
 
         initDashboard();
