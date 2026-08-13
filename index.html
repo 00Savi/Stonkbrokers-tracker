@@ -858,7 +858,6 @@
 
                 let seatedSeats = 0;
 
-                // 1. Check PitMine (StonkBrokers only)
                 const pitTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error("RPC Timeout")), 4000));
                 if (isActivated && currentProjectKey === 'stonk') {
                     try {
@@ -1513,6 +1512,16 @@
             }
         }
 
+        const makeImagePromise = async (element) => {
+            const canvas = await html2canvas(element, { backgroundColor: '#0f172a', scale: 2, useCORS: true });
+            return new Promise((resolve, reject) => {
+                canvas.toBlob((blob) => {
+                    if (blob) resolve(blob);
+                    else reject(new Error("Canvas export failed (likely tainted)."));
+                }, 'image/png');
+            });
+        };
+
         async function shareToX() {
             let tweetText = `Tracked via @savicrypto\nhttps://savicrypto.xyz/`;
             if (currentProjectKey === 'stonk') tweetText = `Clock in - @savicrypto\nhttps://savicrypto.xyz/`;
@@ -1536,13 +1545,19 @@
             elementToCapture.style.backgroundColor = '#0f172a';
 
             try {
-                const canvas = await html2canvas(elementToCapture, { backgroundColor: '#0f172a', scale: 2, useCORS: true, allowTaint: true });
-                canvas.toBlob(async (blob) => {
-                    try {
-                        const item = new ClipboardItem({ 'image/png': blob });
-                        await navigator.clipboard.write([item]);
-                        alert("✅ DASHBOARD SCREENSHOT COPIED!\n\nJust hit Paste (Ctrl+V / Cmd+V) when X/Twitter opens to attach it!");
-                    } catch (clipErr) {
+                const item = new ClipboardItem({ 'image/png': makeImagePromise(elementToCapture) });
+                await navigator.clipboard.write([item]);
+                
+                elementToCapture.style.backgroundColor = originalBg;
+                shareBtn.innerText = ogText;
+                alert("✅ DASHBOARD SCREENSHOT COPIED!\n\nJust hit Paste (Ctrl+V / Cmd+V) when X/Twitter opens to attach it!");
+                window.open(twitterUrl, '_blank');
+            } catch (e) {
+                console.error("Clipboard copy failed, attempting download fallback: ", e);
+                try {
+                    const canvas = await html2canvas(elementToCapture, { backgroundColor: '#0f172a', scale: 2, useCORS: true });
+                    canvas.toBlob((blob) => {
+                        if (!blob) throw new Error("Blob null");
                         const url = URL.createObjectURL(blob);
                         const a = document.createElement('a');
                         a.href = url;
@@ -1551,17 +1566,17 @@
                         a.click();
                         document.body.removeChild(a);
                         URL.revokeObjectURL(url);
+                        
+                        elementToCapture.style.backgroundColor = originalBg;
+                        shareBtn.innerText = ogText;
                         alert("✅ IMAGE DOWNLOADED!\n\nYour browser blocked auto-copying. The stats image has been saved to your device to attach on X!");
-                    }
+                        window.open(twitterUrl, '_blank');
+                    }, 'image/png');
+                } catch (fallbackErr) {
                     elementToCapture.style.backgroundColor = originalBg;
                     shareBtn.innerText = ogText;
                     window.open(twitterUrl, '_blank');
-                }, 'image/png');
-            } catch (e) {
-                console.error("Image capture failed: ", e);
-                elementToCapture.style.backgroundColor = originalBg;
-                shareBtn.innerText = ogText;
-                window.open(twitterUrl, '_blank');
+                }
             }
         }
         
@@ -1581,13 +1596,19 @@
             elementToCapture.style.backgroundColor = '#0f172a';
 
             try {
-                const canvas = await html2canvas(elementToCapture, { backgroundColor: '#0f172a', scale: 2, useCORS: true, allowTaint: true });
-                canvas.toBlob(async (blob) => {
-                    try {
-                        const item = new ClipboardItem({ 'image/png': blob });
-                        await navigator.clipboard.write([item]);
-                        alert("✅ UNIT ANALYSIS COPIED!\n\nJust hit Paste (Ctrl+V / Cmd+V) when X/Twitter opens to attach it!");
-                    } catch (clipErr) {
+                const item = new ClipboardItem({ 'image/png': makeImagePromise(elementToCapture) });
+                await navigator.clipboard.write([item]);
+                
+                elementToCapture.style.backgroundColor = originalBg;
+                shareBtn.innerText = ogText;
+                alert("✅ UNIT ANALYSIS COPIED!\n\nJust hit Paste (Ctrl+V / Cmd+V) when X/Twitter opens to attach it!");
+                window.open(twitterUrl, '_blank');
+            } catch (e) {
+                console.error("Clipboard copy failed, attempting download fallback: ", e);
+                try {
+                    const canvas = await html2canvas(elementToCapture, { backgroundColor: '#0f172a', scale: 2, useCORS: true });
+                    canvas.toBlob((blob) => {
+                        if (!blob) throw new Error("Blob null");
                         const url = URL.createObjectURL(blob);
                         const a = document.createElement('a');
                         a.href = url;
@@ -1596,17 +1617,17 @@
                         a.click();
                         document.body.removeChild(a);
                         URL.revokeObjectURL(url);
+                        
+                        elementToCapture.style.backgroundColor = originalBg;
+                        shareBtn.innerText = ogText;
                         alert("✅ UNIT IMAGE DOWNLOADED!\n\nYour browser blocked auto-copying. The unit analysis image has been saved to your device to attach on X!");
-                    }
+                        window.open(twitterUrl, '_blank');
+                    }, 'image/png');
+                } catch (fallbackErr) {
                     elementToCapture.style.backgroundColor = originalBg;
                     shareBtn.innerText = ogText;
                     window.open(twitterUrl, '_blank');
-                }, 'image/png');
-            } catch (e) {
-                console.error("Image capture failed: ", e);
-                elementToCapture.style.backgroundColor = originalBg;
-                shareBtn.innerText = ogText;
-                window.open(twitterUrl, '_blank');
+                }
             }
         }
 
