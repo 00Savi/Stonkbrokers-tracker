@@ -634,7 +634,6 @@ async function loadTokenListPrices(tokenList) {
               priceChange24h: 0,
               fdv: 0,
               marketCap: 0,
-              holders: 0,
               burnt: 0,
               roi: "0.00%"
           });
@@ -647,8 +646,6 @@ async function loadTokenListPrices(tokenList) {
       const priceChange24h = pair?.priceChange?.h24 || 0;
       const fdv = pair?.fdv || 0;
       const marketCap = pair?.marketCap || fdv;
-      
-      const holders = await fetchTokenHoldersSafe(item.ca, false);
       
       let burntBalance = 0;
       try {
@@ -668,7 +665,6 @@ async function loadTokenListPrices(tokenList) {
           priceChange24h,
           fdv,
           marketCap,
-          holders,
           burnt: Math.round(burntBalance),
           roi: "0.00%"
       });
