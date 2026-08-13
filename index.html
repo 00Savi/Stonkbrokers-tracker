@@ -889,8 +889,15 @@
                             const httpUri = resolveIpfsUrl(tokenUri);
                             const metaRes = await fetchWithRetry(httpUri, {timeout: 4000});
                             if (metaRes.ok) {
-                                const meta = await metaRes.json();
-                                if (meta.image) imageSources.push(resolveIpfsUrl(meta.image));
+                                const text = await metaRes.text();
+                                try {
+                                    const meta = JSON.parse(text);
+                                    if (meta.image) imageSources.push(resolveIpfsUrl(meta.image));
+                                } catch (parseErr) {
+                                    // Custom Regex fallback for malformed JSON formatting on IPFS
+                                    const match = text.match(/"image"\s*:\s*"([^"]+)"/);
+                                    if (match && match[1]) imageSources.push(resolveIpfsUrl(match[1]));
+                                }
                             }
                         }
                     }
@@ -1507,8 +1514,11 @@
         }
 
         async function shareToX() {
-            const text = `@savicrypto\nhttps://savicrypto.xyz/`;
-            const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+            let tweetText = `Tracked via @savicrypto\nhttps://savicrypto.xyz/`;
+            if (currentProjectKey === 'stonk') tweetText = `Clock in - @savicrypto\nhttps://savicrypto.xyz/`;
+            else if (currentProjectKey === 'mancer') tweetText = `Hoods up - @savicrypto\nhttps://savicrypto.xyz/`;
+            
+            const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
             
             let activeViewId = 'view-roi';
             ['view-roi', 'view-burn', 'view-activation', 'view-ownership', 'view-memes'].forEach(id => {
@@ -1528,22 +1538,27 @@
             try {
                 const canvas = await html2canvas(elementToCapture, { backgroundColor: '#0f172a', scale: 2, useCORS: true, allowTaint: true });
                 canvas.toBlob(async (blob) => {
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'ecosystem-stats.png';
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                    
+                    try {
+                        const item = new ClipboardItem({ 'image/png': blob });
+                        await navigator.clipboard.write([item]);
+                        alert("✅ DASHBOARD SCREENSHOT COPIED!\n\nJust hit Paste (Ctrl+V / Cmd+V) when X/Twitter opens to attach it!");
+                    } catch (clipErr) {
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'ecosystem-stats.png';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                        alert("✅ IMAGE DOWNLOADED!\n\nYour browser blocked auto-copying. The stats image has been saved to your device to attach on X!");
+                    }
                     elementToCapture.style.backgroundColor = originalBg;
                     shareBtn.innerText = ogText;
-                    alert("✅ IMAGE DOWNLOADED!\n\nThe stats image has been saved to your device. Attach it to your post on X!");
                     window.open(twitterUrl, '_blank');
                 }, 'image/png');
             } catch (e) {
-                console.error("Image download failed: ", e);
+                console.error("Image capture failed: ", e);
                 elementToCapture.style.backgroundColor = originalBg;
                 shareBtn.innerText = ogText;
                 window.open(twitterUrl, '_blank');
@@ -1551,8 +1566,11 @@
         }
         
         async function shareUnitToX() {
-            const text = `@savicrypto\nhttps://savicrypto.xyz/`;
-            const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+            let tweetText = `Tracked via @savicrypto\nhttps://savicrypto.xyz/`;
+            if (currentProjectKey === 'stonk') tweetText = `Clock in - @savicrypto\nhttps://savicrypto.xyz/`;
+            else if (currentProjectKey === 'mancer') tweetText = `Hoods up - @savicrypto\nhttps://savicrypto.xyz/`;
+            
+            const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
             
             const elementToCapture = document.getElementById('lookup-results');
             const shareBtn = document.getElementById('unit-share-btn-text');
@@ -1565,22 +1583,27 @@
             try {
                 const canvas = await html2canvas(elementToCapture, { backgroundColor: '#0f172a', scale: 2, useCORS: true, allowTaint: true });
                 canvas.toBlob(async (blob) => {
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'unit-analysis.png';
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                    
+                    try {
+                        const item = new ClipboardItem({ 'image/png': blob });
+                        await navigator.clipboard.write([item]);
+                        alert("✅ UNIT ANALYSIS COPIED!\n\nJust hit Paste (Ctrl+V / Cmd+V) when X/Twitter opens to attach it!");
+                    } catch (clipErr) {
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'unit-analysis.png';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                        alert("✅ UNIT IMAGE DOWNLOADED!\n\nYour browser blocked auto-copying. The unit analysis image has been saved to your device to attach on X!");
+                    }
                     elementToCapture.style.backgroundColor = originalBg;
                     shareBtn.innerText = ogText;
-                    alert("✅ UNIT IMAGE DOWNLOADED!\n\nThe unit analysis image has been saved to your device. Attach it to your post on X!");
                     window.open(twitterUrl, '_blank');
                 }, 'image/png');
             } catch (e) {
-                console.error("Image download failed: ", e);
+                console.error("Image capture failed: ", e);
                 elementToCapture.style.backgroundColor = originalBg;
                 shareBtn.innerText = ogText;
                 window.open(twitterUrl, '_blank');
