@@ -31,8 +31,7 @@ const TOKEN_TICKERS = {
   "0x020bfc650a365f8bb26819deaabf3e21291018b4": "DEX", 
   "0x6245e67affa44a23077f0ea7f981a8dc743a0c47": "DEX", 
   "0x27efeae1817d90974623cb2ed455c424beffa5ab": "DEX",
-  "0xe3fa12da7fa026b21817f16622e8ae48fa785166": "YARD",
-  "0x193674b72b6aa1905fc47bdbc19b30a53b666666": "SLEUTH"
+  "0xe3fa12da7fa026b21817f16622e8ae48fa785166": "YARD"
 };
 
 const MEMES = [
@@ -51,8 +50,7 @@ const MEMES = [
   { name: "Frong", ca: "0x6245e67affA44a23077f0Ea7f981a8DC743a0c47" },
   { name: "Yolo", ca: "0x62C71cd34a52c30d894419CBcc55Db2aFA8032eA" },
   { name: "Wojak", ca: "0xaCE55FE98Bab14366dD49aB5AA5dF76aA11A3c6f" },
-  { name: "Juggernaut", ca: "0xD7321801CAae694090694Ff55A9323139F043B88" },
-  { name: "Sleuth", ca: "0x193674b72B6aA1905FC47BdbC19b30A53b666666" }
+  { name: "Juggernaut", ca: "0xD7321801CAae694090694Ff55A9323139F043B88" }
 ];
 
 const STOCKS = [
@@ -226,12 +224,8 @@ async function loadMarketPrices() {
         const r = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${conf.tokenCa}`);
         const j = await r.json();
         if (j?.pairs?.length) {
-          // STRICT chain validation to prevent cross-chain spoofing
-          const rhPairs = j.pairs.filter(p => p.chainId === 'robinhood' || (p.url && p.url.includes('robinhood')));
-          if (rhPairs.length > 0) {
-              const best = rhPairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
-              markets[key].tokenPriceUsd = parseFloat(best.priceUsd);
-          }
+          const best = j.pairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
+          markets[key].tokenPriceUsd = parseFloat(best.priceUsd);
         }
       } catch {}
       markets[key].nftFloorEth = +((conf.unitValue * markets[key].tokenPriceUsd * 1.10) / ethPriceUsd).toFixed(3);
@@ -622,14 +616,9 @@ async function loadTokenListPrices(tokenList) {
       const data = await res.json();
       if (data && data.pairs) {
           data.pairs.forEach(pair => {
-              // Strictly enforce Robinhood chain only!
-              if (pair.chainId !== 'robinhood' && !(pair.url && pair.url.includes('robinhood'))) return;
-              
               const tokenAddr = pair.baseToken?.address?.toLowerCase();
-              if (tokenAddr) {
-                  if (!pairsMap[tokenAddr] || (pair.liquidity?.usd || 0) > (pairsMap[tokenAddr].liquidity?.usd || 0)) {
-                      pairsMap[tokenAddr] = pair;
-                  }
+              if (tokenAddr && !pairsMap[tokenAddr]) {
+                  pairsMap[tokenAddr] = pair;
               }
           });
       }
@@ -646,7 +635,6 @@ async function loadTokenListPrices(tokenList) {
               fdv: 0,
               marketCap: 0,
               burnt: 0,
-              totalSupply: 1000000000,
               roi: "0.00%"
           });
           continue;
@@ -660,26 +648,14 @@ async function loadTokenListPrices(tokenList) {
       const marketCap = pair?.marketCap || fdv;
       
       let burntBalance = 0;
-      let totalSupplyRaw = 0;
-
       try {
           const burnRes = await secureFetch(`${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokenbalance&contractaddress=${item.ca}&address=0x000000000000000000000000000000000000dead&apikey=${API_KEY}`);
           if (burnRes && burnRes.result) {
               burntBalance = Number(burnRes.result) / 1e18;
           }
       } catch(e) {}
-      
-      await sleep(200);
-
-      try {
-          const supplyRes = await secureFetch(`${PRO_API}?chain_id=${CHAIN_ID}&module=stats&action=tokensupply&contractaddress=${item.ca}&apikey=${API_KEY}`);
-          if (supplyRes && supplyRes.result) {
-              totalSupplyRaw = Number(supplyRes.result) / 1e18;
-          }
-      } catch(e) {}
 
       await sleep(200);
-      let finalTotalSupply = totalSupplyRaw > 0 ? totalSupplyRaw : 1000000000;
 
       tokenResults.push({
           name: item.name,
@@ -690,7 +666,6 @@ async function loadTokenListPrices(tokenList) {
           fdv,
           marketCap,
           burnt: Math.round(burntBalance),
-          totalSupply: Math.round(finalTotalSupply),
           roi: "0.00%"
       });
   }
