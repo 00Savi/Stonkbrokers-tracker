@@ -637,6 +637,7 @@ async function loadTokenListPrices(tokenList) {
               fdv: 0,
               marketCap: 0,
               burnt: 0,
+              totalSupply: 1000000000,
               roi: "0.00%"
           });
           continue;
@@ -650,14 +651,26 @@ async function loadTokenListPrices(tokenList) {
       const marketCap = pair?.marketCap || fdv;
       
       let burntBalance = 0;
+      let totalSupplyRaw = 0;
+
       try {
           const burnRes = await secureFetch(`${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokenbalance&contractaddress=${item.ca}&address=0x000000000000000000000000000000000000dead&apikey=${API_KEY}`);
           if (burnRes && burnRes.result) {
               burntBalance = Number(burnRes.result) / 1e18;
           }
       } catch(e) {}
+      
+      await sleep(200);
+
+      try {
+          const supplyRes = await secureFetch(`${PRO_API}?chain_id=${CHAIN_ID}&module=stats&action=tokensupply&contractaddress=${item.ca}&apikey=${API_KEY}`);
+          if (supplyRes && supplyRes.result) {
+              totalSupplyRaw = Number(supplyRes.result) / 1e18;
+          }
+      } catch(e) {}
 
       await sleep(200);
+      let finalTotalSupply = totalSupplyRaw > 0 ? totalSupplyRaw : 1000000000;
 
       tokenResults.push({
           name: item.name,
@@ -668,6 +681,7 @@ async function loadTokenListPrices(tokenList) {
           fdv,
           marketCap,
           burnt: Math.round(burntBalance),
+          totalSupply: Math.round(finalTotalSupply),
           roi: "0.00%"
       });
   }
