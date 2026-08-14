@@ -129,7 +129,7 @@
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div>
                 <h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2" id="tokens-view-title">
-                    <svg class="w-5 h-5 text-emerald-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"></path></svg>
+                    <svg class="w-5 h-5 text-emerald-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"></path></svg>
                     Robinhood Tokens Tracker
                 </h2>
                 <p class="text-xs md:text-sm text-slate-400 mt-1" id="tokens-view-desc">Real-time liquidity, volume, and metrics for Robinhood Chain tokens</p>
@@ -534,8 +534,16 @@
                 const r = await fetch(`https://api.dexscreener.com/latest/dex/tokens/0x6543B7746ca744C4bb2198191E71f40FF04C41b9`);
                 const j = await r.json();
                 if (j?.pairs?.length) {
-                    const best = j.pairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
-                    liveDerpPriceUsd = parseFloat(best.priceUsd);
+                    const rhPairs = j.pairs.filter(p => p.chainId === 'robinhood' || (p.url && p.url.includes('robinhood')));
+                    if (rhPairs.length > 0) {
+                        const best = rhPairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
+                        let price = parseFloat(best.priceUsd || 0);
+                        if (best.quoteToken?.address?.toLowerCase() === "0x6543b7746ca744c4bb2198191e71f40ff04c41b9") {
+                            const priceNative = parseFloat(best.priceNative || 1);
+                            if (priceNative > 0) price = price / priceNative;
+                        }
+                        liveDerpPriceUsd = price;
+                    }
                 }
             } catch (e) {}
         }
@@ -580,7 +588,7 @@
             document.getElementById('standard-tabs').classList.remove('hidden');
             
             const data = masterData.projects[projectKey];
-            if (!data) return; // Prevent crash if data is missing
+            if (!data) return; // Prevent crashes if data is missing
 
             const m = data.market;
             const conf = data.config;
@@ -737,9 +745,8 @@
                     <button onclick="event.stopPropagation(); navigator.clipboard.writeText('${meme.ca}'); alert('Copied CA for ${meme.name}:\\n${meme.ca}');" class="text-[10px] bg-[#334155] hover:bg-slate-600 text-slate-200 px-2 py-0.5 rounded border border-slate-600 ml-2 transition" title="Copy Contract Address">Copy CA</button>
                 ` : `<span class="text-[10px] text-slate-500 ml-2">No CA</span>`;
                 
-                // Custom burn percentage calculations
-                const customSupplies = { "StonkBroker": 2962663704, "Mancer": 2500000000, "Yard": 1000000000, "Derp": 44440000000 };
-                const totalSupply = customSupplies[meme.name] || 1000000000;
+                // Uses dynamically fetched supply!
+                const totalSupply = meme.totalSupply || 1000000000;
                 
                 const burntPct = meme.burnt > 0 ? ((meme.burnt / totalSupply) * 100).toFixed(2) + '%' : '0.00%';
                 const burntFormatted = meme.burnt > 0 ? `<span class="text-[12px] text-orange-400 font-bold">${burntPct}</span>` : '<span class="text-[12px] text-slate-500 font-normal">0.00%</span>';
@@ -776,7 +783,7 @@
                 
                 const chartContent = meme.ca ? `
                     <div id="iframe-container-${index}" data-src="https://dexscreener.com/robinhood/${meme.ca}?embed=1&theme=dark&trades=0&info=0" class="relative w-full h-[450px] rounded-xl overflow-hidden border border-[#334155] shadow-inner">
-                        <!-- Chart loads on click -->
+                        <!-- Chart loads exactly here on click -->
                     </div>
                 ` : `
                     <div class="p-8 text-center text-slate-400 italic bg-[#1e293b]/40 rounded-xl border border-[#334155]">
@@ -791,7 +798,7 @@
                                 <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
                                 ${meme.name} Live Interactive Chart
                             </h4>
-                            <button onclick="shareMemeToX('${meme.name}', '${meme.ca}')" class="bg-[#1da1f2] hover:bg-[#1a91da] text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition shadow-sm" data-html2canvas-ignore="true">
+                            <button onclick="shareMemeToX('${meme.name}', '${meme.ca}', ${index})" id="share-btn-${index}" class="bg-[#1da1f2] hover:bg-[#1a91da] text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition shadow-sm" data-html2canvas-ignore="true">
                                 <svg class="w-3 h-3 fill-current text-white" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 24.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
                                 Share
                             </button>
@@ -913,6 +920,7 @@
                                     const meta = JSON.parse(text);
                                     if (meta.image) imageSources.push(resolveIpfsUrl(meta.image));
                                 } catch (parseErr) {
+                                    // Custom Regex fallback for malformed JSON formatting on IPFS
                                     const match = text.match(/"image"\s*:\s*"([^"]+)"/);
                                     if (match && match[1]) imageSources.push(resolveIpfsUrl(match[1]));
                                 }
@@ -935,7 +943,9 @@
                         if (imgData?.image_url) imageSources.push(resolveIpfsUrl(imgData.image_url));
                         if (imgData?.animation_url) imageSources.push(resolveIpfsUrl(imgData.animation_url));
                     }
-                } catch(e) {}
+                } catch(e) {
+                    console.warn("Blockscout image fetch failed", e);
+                }
 
                 let nftImageHtml = `
                     <div class="w-12 h-12 md:w-16 md:h-16 rounded-xl bg-[#1e293b] border border-[#334155] flex items-center justify-center flex-shrink-0">
@@ -972,7 +982,6 @@
                     }
                 }
 
-                // 3. Optimized Transaction Inspector
                 let lastSaleEth = 0;
                 let foundValidTx = false;
                 let totalTransfers = 0;
@@ -1480,9 +1489,10 @@
             if(!stats) return;
 
             ['T0', 'T1', 'T2', 'T3', 'T4'].forEach(tier => {
+                if(!stats[tier]) return; 
                 const elAct = document.getElementById(`${tier.toLowerCase()}-act`);
                 const elDeact = document.getElementById(`${tier.toLowerCase()}-deact`);
-                const tierData = stats[tier] && stats[tier][timeframe] ? stats[tier][timeframe] : { act: 0, deact: 0 };
+                const tierData = stats[tier][timeframe] ? stats[tier][timeframe] : { act: 0, deact: 0 };
                 if(elAct) elAct.innerText = formatNumber(tierData.act || 0);
                 if(elDeact) elDeact.innerText = formatNumber(tierData.deact || 0);
             });
@@ -1505,15 +1515,29 @@
             const totalBurn = dualBurn.totalBurnTokens || 0;
             const equivNfts = dualBurn.equivalentBrokersBurnt || 0;
             
-            document.getElementById('stat-total-burn').innerText = formatNumber(totalBurn) + ` ${conf.ticker}`;
-            document.getElementById('stat-equiv-nfts').innerText = formatNumber(equivNfts, 2) + " Units";
-            document.getElementById('stat-pct-activated').innerText = pctActivated.toFixed(2) + "%";
-            document.getElementById('stat-active-count').innerText = formatNumber(activeCount) + " Units";
+            const elTotalBurn = document.getElementById('stat-total-burn');
+            if (elTotalBurn) elTotalBurn.innerText = formatNumber(totalBurn) + ` ${conf.ticker}`;
+            
+            const elEquiv = document.getElementById('stat-equiv-nfts');
+            if (elEquiv) elEquiv.innerText = formatNumber(equivNfts, 2) + " Units";
+            
+            const elPctAct = document.getElementById('stat-pct-activated');
+            if (elPctAct) elPctAct.innerText = pctActivated.toFixed(2) + "%";
+            
+            const elActCount = document.getElementById('stat-active-count');
+            if (elActCount) elActCount.innerText = formatNumber(activeCount) + " Units";
 
-            document.getElementById('stat-max-supply').innerText = formatNumber(own.currentMaxSupply || 0, 2) + ' Units';
-            document.getElementById('stat-circ-supply').innerText = formatNumber(own.circulatingNftSupply || 0) + ' Units';
-            document.getElementById('stat-amm-vault').innerText = formatNumber(own.ammVaultNfts || 0) + ' Units';
-            document.getElementById('stat-burnt-nfts').innerText = formatNumber(own.burntNfts || 0, 2) + ' Units';
+            const elMaxSupply = document.getElementById('stat-max-supply');
+            if (elMaxSupply) elMaxSupply.innerText = formatNumber(own.currentMaxSupply || 0, 2) + ' Units';
+            
+            const elCircSupply = document.getElementById('stat-circ-supply');
+            if (elCircSupply) elCircSupply.innerText = formatNumber(own.circulatingNftSupply || 0) + ' Units';
+            
+            const elAmmVault = document.getElementById('stat-amm-vault');
+            if (elAmmVault) elAmmVault.innerText = formatNumber(own.ammVaultNfts || 0) + ' Units';
+            
+            const elBurntNfts = document.getElementById('stat-burnt-nfts');
+            if (elBurntNfts) elBurntNfts.innerText = formatNumber(own.burntNfts || 0, 2) + ' Units';
             
             const elNftHolders = document.getElementById('stat-nft-holders');
             if (elNftHolders) elNftHolders.innerText = formatNumber(own.nftHolders || 0) + ' Wallets';
@@ -1538,20 +1562,20 @@
             const grossArr = history.cumulativeGross && history.cumulativeGross.length > 0 ? history.cumulativeGross : history.cumulative;
             const maxGross = grossArr.length > 0 ? (grossArr[grossArr.length - 1] || 1) : 1;
             
-            window.fullBurnLabels = history.labels;
+            window.fullBurnLabels = history.labels || [];
             window.fullBurnData = grossArr.map(v => (v / maxGross) * totalBurn);
 
             window.activationChartData = {
-                historyLabels: history.labels,
-                historyValues: history.cumulative, 
-                dailyActs: history.dailyActivations,
-                dailyDeacts: history.dailyDeactivations,
+                historyLabels: history.labels || [],
+                historyValues: history.cumulative || [], 
+                dailyActs: history.dailyActivations || [],
+                dailyDeacts: history.dailyDeactivations || [],
                 breakdownObj: breakdown,
                 breakdownArr: [breakdown.T0 || 0, breakdown.T1 || 0, breakdown.T2 || 0, breakdown.T3 || 0, breakdown.T4 || 0],
                 tiers: data.tiers || []
             };
 
-            if (own.historicalGrowth) {
+            if (own.historicalGrowth && own.historicalGrowth.data && own.historicalGrowth.labels) {
                 const cleanHistData = own.historicalGrowth.data.map((v, i, arr) => v === 0 && i > 0 ? arr[i-1] : v);
                 window.ownershipChartData = { labels: own.historicalGrowth.labels, data: cleanHistData };
             }
@@ -1567,6 +1591,7 @@
             elementToCapture.style.backgroundColor = '#0f172a';
 
             try {
+                // Generate Canvas ONCE to avoid timeouts
                 const canvas = await html2canvas(elementToCapture, { 
                     backgroundColor: '#0f172a', 
                     scale: window.devicePixelRatio || 2, 
@@ -1581,7 +1606,7 @@
 
                 elementToCapture.style.backgroundColor = originalBg;
 
-                // 1. Native Mobile Web Share (iOS/Android)
+                // 1. Native Mobile Share (iOS/Android)
                 const file = new File([blob], fileName, { type: "image/png" });
                 if (navigator.canShare && navigator.canShare({ files: [file] })) {
                     shareBtn.innerText = "Sharing...";
@@ -1593,23 +1618,27 @@
                         shareBtn.innerHTML = ogText;
                         return;
                     } catch(e) {
-                        console.log("Web Share aborted or failed", e);
+                        console.log("Web Share aborted", e);
                     }
                 }
 
                 // 2. Clipboard API (Desktop Chrome/Edge)
+                let copied = false;
                 try {
-                    const item = new ClipboardItem({ 'image/png': blob });
-                    await navigator.clipboard.write([item]);
+                    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+                    copied = true;
+                } catch(e) {
+                    console.log("Clipboard API block detected", e);
+                }
+
+                if (copied) {
                     shareBtn.innerHTML = ogText;
                     alert("✅ SCREENSHOT COPIED!\n\nJust hit Paste (Ctrl+V / Cmd+V) when X/Twitter opens to attach it!");
                     window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`, '_blank');
                     return;
-                } catch(e) {
-                    console.log("Clipboard API failed", e);
                 }
 
-                // 3. Auto-Download Fallback (Fallback for Safari Desktop / strict browsers)
+                // 3. Instant Auto-Download Fallback (Bypasses double-rendering popup blocks!)
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
@@ -1655,9 +1684,9 @@
             await executeShare('lookup-results', tweetText, 'unit-analysis.png', 'unit-share-btn-text');
         }
 
-        async function shareMemeToX(memeName, memeCa) {
+        async function shareMemeToX(memeName, memeCa, index) {
             const tweetText = `Tracking $${memeName} on @savicrypto\nCA: ${memeCa}\nhttps://savicrypto.xyz/`;
-            await executeShare('view-memes', tweetText, `${memeName}-stats.png`, `share-btn-${memeName}`);
+            await executeShare('view-memes', tweetText, `${memeName}-stats.png`, `share-btn-${index}`);
         }
 
         initDashboard();
