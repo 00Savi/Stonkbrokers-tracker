@@ -226,11 +226,12 @@ async function loadMarketPrices() {
         const r = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${conf.tokenCa}`);
         const j = await r.json();
         if (j?.pairs?.length) {
-          // Force Robinhood Chain validation to prevent Cross-Chain Spoofing!
-          const rhPairs = j.pairs.filter(p => p.chainId?.toLowerCase() === 'robinhood');
-          const validPairs = rhPairs.length > 0 ? rhPairs : j.pairs; 
-          const best = validPairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
-          markets[key].tokenPriceUsd = parseFloat(best.priceUsd);
+          // STRICT chain validation to prevent cross-chain spoofing
+          const rhPairs = j.pairs.filter(p => p.chainId === 'robinhood' || (p.url && p.url.includes('robinhood')));
+          if (rhPairs.length > 0) {
+              const best = rhPairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
+              markets[key].tokenPriceUsd = parseFloat(best.priceUsd);
+          }
         }
       } catch {}
       markets[key].nftFloorEth = +((conf.unitValue * markets[key].tokenPriceUsd * 1.10) / ethPriceUsd).toFixed(3);
@@ -621,7 +622,9 @@ async function loadTokenListPrices(tokenList) {
       const data = await res.json();
       if (data && data.pairs) {
           data.pairs.forEach(pair => {
-              if (pair.chainId?.toLowerCase() !== 'robinhood') return; // Strict chain filter
+              // Strictly enforce Robinhood chain only!
+              if (pair.chainId !== 'robinhood' && !(pair.url && pair.url.includes('robinhood'))) return;
+              
               const tokenAddr = pair.baseToken?.address?.toLowerCase();
               if (tokenAddr) {
                   if (!pairsMap[tokenAddr] || (pair.liquidity?.usd || 0) > (pairsMap[tokenAddr].liquidity?.usd || 0)) {
