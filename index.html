@@ -580,7 +580,7 @@
             document.getElementById('standard-tabs').classList.remove('hidden');
             
             const data = masterData.projects[projectKey];
-            if (!data) return; // Prevent crash if data is missing
+            if (!data) return; // Prevent crashes if data is missing
 
             const m = data.market;
             const conf = data.config;
@@ -737,9 +737,8 @@
                     <button onclick="event.stopPropagation(); navigator.clipboard.writeText('${meme.ca}'); alert('Copied CA for ${meme.name}:\\n${meme.ca}');" class="text-[10px] bg-[#334155] hover:bg-slate-600 text-slate-200 px-2 py-0.5 rounded border border-slate-600 ml-2 transition" title="Copy Contract Address">Copy CA</button>
                 ` : `<span class="text-[10px] text-slate-500 ml-2">No CA</span>`;
                 
-                // Custom burn percentage calculations
-                const customSupplies = { "StonkBroker": 2962663704, "Mancer": 2500000000, "Yard": 1000000000, "Derp": 44440000000 };
-                const totalSupply = customSupplies[meme.name] || 1000000000;
+                // Uses dynamically fetched supply!
+                const totalSupply = meme.totalSupply || 1000000000;
                 
                 const burntPct = meme.burnt > 0 ? ((meme.burnt / totalSupply) * 100).toFixed(2) + '%' : '0.00%';
                 const burntFormatted = meme.burnt > 0 ? `<span class="text-[12px] text-orange-400 font-bold">${burntPct}</span>` : '<span class="text-[12px] text-slate-500 font-normal">0.00%</span>';
@@ -776,7 +775,7 @@
                 
                 const chartContent = meme.ca ? `
                     <div id="iframe-container-${index}" data-src="https://dexscreener.com/robinhood/${meme.ca}?embed=1&theme=dark&trades=0&info=0" class="relative w-full h-[450px] rounded-xl overflow-hidden border border-[#334155] shadow-inner">
-                        <!-- Chart loads on click -->
+                        <!-- Chart loads exactly here on click -->
                     </div>
                 ` : `
                     <div class="p-8 text-center text-slate-400 italic bg-[#1e293b]/40 rounded-xl border border-[#334155]">
@@ -913,6 +912,7 @@
                                     const meta = JSON.parse(text);
                                     if (meta.image) imageSources.push(resolveIpfsUrl(meta.image));
                                 } catch (parseErr) {
+                                    // Custom Regex fallback for malformed JSON formatting on IPFS
                                     const match = text.match(/"image"\s*:\s*"([^"]+)"/);
                                     if (match && match[1]) imageSources.push(resolveIpfsUrl(match[1]));
                                 }
@@ -935,7 +935,9 @@
                         if (imgData?.image_url) imageSources.push(resolveIpfsUrl(imgData.image_url));
                         if (imgData?.animation_url) imageSources.push(resolveIpfsUrl(imgData.animation_url));
                     }
-                } catch(e) {}
+                } catch(e) {
+                    console.warn("Blockscout image fetch failed", e);
+                }
 
                 let nftImageHtml = `
                     <div class="w-12 h-12 md:w-16 md:h-16 rounded-xl bg-[#1e293b] border border-[#334155] flex items-center justify-center flex-shrink-0">
@@ -1480,9 +1482,10 @@
             if(!stats) return;
 
             ['T0', 'T1', 'T2', 'T3', 'T4'].forEach(tier => {
+                if(!stats[tier]) return; 
                 const elAct = document.getElementById(`${tier.toLowerCase()}-act`);
                 const elDeact = document.getElementById(`${tier.toLowerCase()}-deact`);
-                const tierData = stats[tier] && stats[tier][timeframe] ? stats[tier][timeframe] : { act: 0, deact: 0 };
+                const tierData = stats[tier][timeframe] ? stats[tier][timeframe] : { act: 0, deact: 0 };
                 if(elAct) elAct.innerText = formatNumber(tierData.act || 0);
                 if(elDeact) elDeact.innerText = formatNumber(tierData.deact || 0);
             });
@@ -1538,24 +1541,37 @@
             const grossArr = history.cumulativeGross && history.cumulativeGross.length > 0 ? history.cumulativeGross : history.cumulative;
             const maxGross = grossArr.length > 0 ? (grossArr[grossArr.length - 1] || 1) : 1;
             
-            window.fullBurnLabels = history.labels;
+            window.fullBurnLabels = history.labels || [];
             window.fullBurnData = grossArr.map(v => (v / maxGross) * totalBurn);
 
             window.activationChartData = {
-                historyLabels: history.labels,
-                historyValues: history.cumulative, 
-                dailyActs: history.dailyActivations,
-                dailyDeacts: history.dailyDeactivations,
+                historyLabels: history.labels || [],
+                historyValues: history.cumulative || [], 
+                dailyActs: history.dailyActivations || [],
+                dailyDeacts: history.dailyDeactivations || [],
                 breakdownObj: breakdown,
                 breakdownArr: [breakdown.T0 || 0, breakdown.T1 || 0, breakdown.T2 || 0, breakdown.T3 || 0, breakdown.T4 || 0],
                 tiers: data.tiers || []
             };
 
-            if (own.historicalGrowth) {
+            if (own.historicalGrowth && own.historicalGrowth.data && own.historicalGrowth.labels) {
                 const cleanHistData = own.historicalGrowth.data.map((v, i, arr) => v === 0 && i > 0 ? arr[i-1] : v);
                 window.ownershipChartData = { labels: own.historicalGrowth.labels, data: cleanHistData };
             }
         }
+
+        const makeImagePromise = async (element) => {
+            const canvas = await html2canvas(element, { 
+                backgroundColor: '#0f172a', 
+                scale: window.devicePixelRatio || 2, 
+                useCORS: true,
+                allowTaint: false,
+                ignoreElements: (node) => node.tagName && node.tagName.toLowerCase() === 'iframe' || node.hasAttribute('data-html2canvas-ignore')
+            });
+            return new Promise((resolve, reject) => {
+                canvas.toBlob(b => b ? resolve(b) : reject(new Error("Canvas export failed")), 'image/png');
+            });
+        };
 
         async function executeShare(elementId, tweetText, fileName, btnId) {
             const elementToCapture = document.getElementById(elementId);
@@ -1567,68 +1583,48 @@
             elementToCapture.style.backgroundColor = '#0f172a';
 
             try {
-                const canvas = await html2canvas(elementToCapture, { 
-                    backgroundColor: '#0f172a', 
-                    scale: window.devicePixelRatio || 2, 
-                    useCORS: true,
-                    allowTaint: false,
-                    ignoreElements: (node) => node.tagName && node.tagName.toLowerCase() === 'iframe' || node.hasAttribute('data-html2canvas-ignore')
-                });
-                
-                const blob = await new Promise((resolve, reject) => {
-                    canvas.toBlob(b => b ? resolve(b) : reject(new Error("Canvas tainted or empty")), 'image/png');
-                });
+                const item = new ClipboardItem({ 'image/png': makeImagePromise(elementToCapture) });
+                await navigator.clipboard.write([item]);
 
                 elementToCapture.style.backgroundColor = originalBg;
-
-                // 1. Native Mobile Web Share (iOS/Android)
-                const file = new File([blob], fileName, { type: "image/png" });
-                if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                    shareBtn.innerText = "Sharing...";
-                    try {
-                        await navigator.share({
-                            text: tweetText,
-                            files: [file]
-                        });
-                        shareBtn.innerHTML = ogText;
-                        return;
-                    } catch(e) {
-                        console.log("Web Share aborted or failed", e);
-                    }
-                }
-
-                // 2. Clipboard API (Desktop Chrome/Edge)
-                try {
-                    const item = new ClipboardItem({ 'image/png': blob });
-                    await navigator.clipboard.write([item]);
-                    shareBtn.innerHTML = ogText;
-                    alert("✅ SCREENSHOT COPIED!\n\nJust hit Paste (Ctrl+V / Cmd+V) when X/Twitter opens to attach it!");
-                    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`, '_blank');
-                    return;
-                } catch(e) {
-                    console.log("Clipboard API failed", e);
-                }
-
-                // 3. Auto-Download Fallback (Fallback for Safari Desktop / strict browsers)
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = fileName;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                
                 shareBtn.innerHTML = ogText;
-                alert("✅ IMAGE DOWNLOADED!\n\nYour browser blocked auto-copying. The stats image has been saved to your device to attach on X!");
+                alert("✅ DASHBOARD SCREENSHOT COPIED!\n\nJust hit Paste (Ctrl+V / Cmd+V) when X/Twitter opens to attach it!");
                 window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`, '_blank');
 
             } catch (e) {
-                console.error("Capture Failed: ", e);
-                elementToCapture.style.backgroundColor = originalBg;
-                shareBtn.innerHTML = ogText;
-                alert("Screenshot generation failed. Opening X anyway!");
-                window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`, '_blank');
+                console.warn("Clipboard auto-copy failed/blocked. Trying download fallback...", e);
+                
+                try {
+                    const canvas = await html2canvas(elementToCapture, { 
+                        backgroundColor: '#0f172a', 
+                        scale: 2, 
+                        useCORS: true, 
+                        allowTaint: false,
+                        ignoreElements: (node) => node.tagName && node.tagName.toLowerCase() === 'iframe' || node.hasAttribute('data-html2canvas-ignore')
+                    });
+                    
+                    canvas.toBlob((blob) => {
+                        if (!blob) throw new Error("Blob null");
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = fileName;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                        
+                        elementToCapture.style.backgroundColor = originalBg;
+                        shareBtn.innerHTML = ogText;
+                        alert("✅ IMAGE DOWNLOADED!\n\nYour browser blocked auto-copying. The stats image has been saved to your device to attach on X!");
+                        window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`, '_blank');
+                    }, 'image/png');
+                } catch (fallbackErr) {
+                    console.error("Capture Failed completely: ", fallbackErr);
+                    elementToCapture.style.backgroundColor = originalBg;
+                    shareBtn.innerHTML = ogText;
+                    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`, '_blank');
+                }
             }
         }
 
