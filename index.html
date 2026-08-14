@@ -534,8 +534,11 @@
                 const r = await fetch(`https://api.dexscreener.com/latest/dex/tokens/0x6543B7746ca744C4bb2198191E71f40FF04C41b9`);
                 const j = await r.json();
                 if (j?.pairs?.length) {
-                    const best = j.pairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
-                    liveDerpPriceUsd = parseFloat(best.priceUsd);
+                    const rhPairs = j.pairs.filter(p => p.chainId === 'robinhood' || (p.url && p.url.includes('robinhood')));
+                    if (rhPairs.length > 0) {
+                        const best = rhPairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
+                        liveDerpPriceUsd = parseFloat(best.priceUsd);
+                    }
                 }
             } catch (e) {}
         }
@@ -737,7 +740,6 @@
                     <button onclick="event.stopPropagation(); navigator.clipboard.writeText('${meme.ca}'); alert('Copied CA for ${meme.name}:\\n${meme.ca}');" class="text-[10px] bg-[#334155] hover:bg-slate-600 text-slate-200 px-2 py-0.5 rounded border border-slate-600 ml-2 transition" title="Copy Contract Address">Copy CA</button>
                 ` : `<span class="text-[10px] text-slate-500 ml-2">No CA</span>`;
                 
-                // Uses dynamically fetched supply!
                 const totalSupply = meme.totalSupply || 1000000000;
                 
                 const burntPct = meme.burnt > 0 ? ((meme.burnt / totalSupply) * 100).toFixed(2) + '%' : '0.00%';
@@ -775,7 +777,6 @@
                 
                 const chartContent = meme.ca ? `
                     <div id="iframe-container-${index}" data-src="https://dexscreener.com/robinhood/${meme.ca}?embed=1&theme=dark&trades=0&info=0" class="relative w-full h-[450px] rounded-xl overflow-hidden border border-[#334155] shadow-inner">
-                        <!-- Chart loads exactly here on click -->
                     </div>
                 ` : `
                     <div class="p-8 text-center text-slate-400 italic bg-[#1e293b]/40 rounded-xl border border-[#334155]">
@@ -974,7 +975,6 @@
                     }
                 }
 
-                // 3. Optimized Transaction Inspector
                 let lastSaleEth = 0;
                 let foundValidTx = false;
                 let totalTransfers = 0;
@@ -1508,15 +1508,29 @@
             const totalBurn = dualBurn.totalBurnTokens || 0;
             const equivNfts = dualBurn.equivalentBrokersBurnt || 0;
             
-            document.getElementById('stat-total-burn').innerText = formatNumber(totalBurn) + ` ${conf.ticker}`;
-            document.getElementById('stat-equiv-nfts').innerText = formatNumber(equivNfts, 2) + " Units";
-            document.getElementById('stat-pct-activated').innerText = pctActivated.toFixed(2) + "%";
-            document.getElementById('stat-active-count').innerText = formatNumber(activeCount) + " Units";
+            const elTotalBurn = document.getElementById('stat-total-burn');
+            if (elTotalBurn) elTotalBurn.innerText = formatNumber(totalBurn) + ` ${conf.ticker}`;
+            
+            const elEquiv = document.getElementById('stat-equiv-nfts');
+            if (elEquiv) elEquiv.innerText = formatNumber(equivNfts, 2) + " Units";
+            
+            const elPctAct = document.getElementById('stat-pct-activated');
+            if (elPctAct) elPctAct.innerText = pctActivated.toFixed(2) + "%";
+            
+            const elActCount = document.getElementById('stat-active-count');
+            if (elActCount) elActCount.innerText = formatNumber(activeCount) + " Units";
 
-            document.getElementById('stat-max-supply').innerText = formatNumber(own.currentMaxSupply || 0, 2) + ' Units';
-            document.getElementById('stat-circ-supply').innerText = formatNumber(own.circulatingNftSupply || 0) + ' Units';
-            document.getElementById('stat-amm-vault').innerText = formatNumber(own.ammVaultNfts || 0) + ' Units';
-            document.getElementById('stat-burnt-nfts').innerText = formatNumber(own.burntNfts || 0, 2) + ' Units';
+            const elMaxSupply = document.getElementById('stat-max-supply');
+            if (elMaxSupply) elMaxSupply.innerText = formatNumber(own.currentMaxSupply || 0, 2) + ' Units';
+            
+            const elCircSupply = document.getElementById('stat-circ-supply');
+            if (elCircSupply) elCircSupply.innerText = formatNumber(own.circulatingNftSupply || 0) + ' Units';
+            
+            const elAmmVault = document.getElementById('stat-amm-vault');
+            if (elAmmVault) elAmmVault.innerText = formatNumber(own.ammVaultNfts || 0) + ' Units';
+            
+            const elBurntNfts = document.getElementById('stat-burnt-nfts');
+            if (elBurntNfts) elBurntNfts.innerText = formatNumber(own.burntNfts || 0, 2) + ' Units';
             
             const elNftHolders = document.getElementById('stat-nft-holders');
             if (elNftHolders) elNftHolders.innerText = formatNumber(own.nftHolders || 0) + ' Wallets';
