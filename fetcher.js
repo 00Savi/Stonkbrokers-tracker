@@ -226,7 +226,10 @@ async function loadMarketPrices() {
         const r = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${conf.tokenCa}`);
         const j = await r.json();
         if (j?.pairs?.length) {
-          const best = j.pairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
+          // Force Robinhood Chain validation to prevent Cross-Chain Spoofing!
+          const rhPairs = j.pairs.filter(p => p.chainId?.toLowerCase() === 'robinhood');
+          const validPairs = rhPairs.length > 0 ? rhPairs : j.pairs; 
+          const best = validPairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
           markets[key].tokenPriceUsd = parseFloat(best.priceUsd);
         }
       } catch {}
@@ -618,9 +621,12 @@ async function loadTokenListPrices(tokenList) {
       const data = await res.json();
       if (data && data.pairs) {
           data.pairs.forEach(pair => {
+              if (pair.chainId?.toLowerCase() !== 'robinhood') return; // Strict chain filter
               const tokenAddr = pair.baseToken?.address?.toLowerCase();
-              if (tokenAddr && !pairsMap[tokenAddr]) {
-                  pairsMap[tokenAddr] = pair;
+              if (tokenAddr) {
+                  if (!pairsMap[tokenAddr] || (pair.liquidity?.usd || 0) > (pairsMap[tokenAddr].liquidity?.usd || 0)) {
+                      pairsMap[tokenAddr] = pair;
+                  }
               }
           });
       }
