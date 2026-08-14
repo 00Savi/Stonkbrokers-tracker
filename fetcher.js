@@ -31,7 +31,8 @@ const TOKEN_TICKERS = {
   "0x020bfc650a365f8bb26819deaabf3e21291018b4": "DEX", 
   "0x6245e67affa44a23077f0ea7f981a8dc743a0c47": "DEX", 
   "0x27efeae1817d90974623cb2ed455c424beffa5ab": "DEX",
-  "0xe3fa12da7fa026b21817f16622e8ae48fa785166": "YARD"
+  "0xe3fa12da7fa026b21817f16622e8ae48fa785166": "YARD",
+  "0x193674b72b6aa1905fc47bdbc19b30a53b666666": "SLEUTH"
 };
 
 const MEMES = [
@@ -50,7 +51,8 @@ const MEMES = [
   { name: "Frong", ca: "0x6245e67affA44a23077f0Ea7f981a8DC743a0c47" },
   { name: "Yolo", ca: "0x62C71cd34a52c30d894419CBcc55Db2aFA8032eA" },
   { name: "Wojak", ca: "0xaCE55FE98Bab14366dD49aB5AA5dF76aA11A3c6f" },
-  { name: "Juggernaut", ca: "0xD7321801CAae694090694Ff55A9323139F043B88" }
+  { name: "Juggernaut", ca: "0xD7321801CAae694090694Ff55A9323139F043B88" },
+  { name: "Sleuth", ca: "0x193674b72B6aA1905FC47BdbC19b30A53b666666" }
 ];
 
 const STOCKS = [
