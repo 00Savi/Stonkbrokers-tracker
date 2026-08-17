@@ -1,22 +1,22 @@
 {
-  "lastUpdated": "2026-08-17T06:26:40.488Z",
+  "lastUpdated": "2026-08-17T07:41:51.551Z",
   "projects": {
     "stonk": {
       "market": {
-        "ethPriceUsd": 1898.56,
-        "tokenPriceUsd": 0.02166,
-        "nftFloorEth": 8.366
+        "ethPriceUsd": 1900.9,
+        "tokenPriceUsd": 0.02232,
+        "nftFloorEth": 8.611
       },
       "activation": {
-        "activeCount": 1749,
+        "activeCount": 1748,
         "breakdown": {
           "T0": 1416,
-          "T1": 141,
+          "T1": 140,
           "T2": 66,
           "T3": 61,
           "T4": 65
         },
-        "percentActivated": 39.36,
+        "percentActivated": 39.33,
         "totalSupply": 4444,
         "tierStats": {
           "T0": {
@@ -29,7 +29,7 @@
               "deact": 45
             },
             "30d": {
-              "act": 1847,
+              "act": 1734,
               "deact": 658
             },
             "allTime": {
@@ -40,19 +40,19 @@
           "T1": {
             "24h": {
               "act": 0,
-              "deact": 1
+              "deact": 2
             },
             "7d": {
               "act": 11,
-              "deact": 7
+              "deact": 8
             },
             "30d": {
-              "act": 216,
-              "deact": 50
+              "act": 207,
+              "deact": 51
             },
             "allTime": {
               "act": 231,
-              "deact": 50
+              "deact": 51
             }
           },
           "T2": {
@@ -65,7 +65,7 @@
               "deact": 3
             },
             "30d": {
-              "act": 106,
+              "act": 102,
               "deact": 24
             },
             "allTime": {
@@ -101,7 +101,7 @@
               "deact": 0
             },
             "30d": {
-              "act": 69,
+              "act": 68,
               "deact": 5
             },
             "allTime": {
@@ -208,7 +208,7 @@
             9,
             4,
             1,
-            0
+            1
           ],
           "cumulative": [
             1384,
@@ -241,7 +241,7 @@
             1957,
             1974,
             1982,
-            1987
+            1986
           ],
           "cumulativeGross": [
             1443,
@@ -6282,10 +6282,6 @@
             "t": "T0",
             "ts": 1784373631
           },
-          "3685": {
-            "t": "T1",
-            "ts": 1784388772
-          },
           "3686": {
             "t": "T0",
             "ts": 1784389830
@@ -7281,13 +7277,13 @@
         }
       },
       "ownership": {
-        "ammVaultNfts": 2259,
+        "ammVaultNfts": 2258,
         "burntNfts": 829.23,
         "currentMaxSupply": 3614.77,
-        "circulatingNftSupply": 2185,
-        "nftHolders": 627,
-        "stonkHolders": 21324,
-        "ownershipRatio": 28.7,
+        "circulatingNftSupply": 2186,
+        "nftHolders": 629,
+        "stonkHolders": 21339,
+        "ownershipRatio": 28.77,
         "historicalGrowth": {
           "labels": [
             "7/15",
@@ -7315,7 +7311,7 @@
             21228,
             21479,
             21348,
-            21324
+            21339
           ]
         }
       },
@@ -7326,7 +7322,7 @@
           "reqTokens": 66666,
           "multiplier": "1.00x",
           "weight": 100,
-          "trackedAnnualYieldUsd": 18812.329126371387,
+          "trackedAnnualYieldUsd": 18891.229168760263,
           "dailyDates": [
             "8/10",
             "8/11",
@@ -7337,13 +7333,13 @@
             "8/16"
           ],
           "dailyYields": [
-            16.671911404747565,
-            10.408377281095072,
-            21.26033874425656,
-            21.348480928561294,
-            268.53829352694044,
-            11.987186806724806,
-            10.589575603251308
+            16.714219483317446,
+            10.552460882318169,
+            21.246906027790523,
+            21.26141471405061,
+            268.9377704783137,
+            11.933461174235783,
+            11.671165950373902
           ]
         },
         {
@@ -7352,7 +7348,7 @@
           "reqTokens": 166666,
           "multiplier": "1.25x",
           "weight": 125,
-          "trackedAnnualYieldUsd": 23515.411407964235,
+          "trackedAnnualYieldUsd": 23614.036460950327,
           "dailyDates": [
             "8/10",
             "8/11",
@@ -7363,13 +7359,13 @@
             "8/16"
           ],
           "dailyYields": [
-            20.839889255934455,
-            13.010471601368842,
-            26.5754234303207,
-            26.68560116070162,
-            335.67286690867553,
-            14.983983508406006,
-            13.236969504064135
+            20.89277435414681,
+            13.19057610289771,
+            26.558632534738155,
+            26.57676839256326,
+            336.17221309789215,
+            14.916826467794728,
+            14.588957437967377
           ]
         },
         {
@@ -7378,7 +7374,7 @@
           "reqTokens": 366666,
           "multiplier": "1.60x",
           "weight": 160,
-          "trackedAnnualYieldUsd": 30099.72660219422,
+          "trackedAnnualYieldUsd": 30225.96667001642,
           "dailyDates": [
             "8/10",
             "8/11",
@@ -7389,13 +7385,13 @@
             "8/16"
           ],
           "dailyYields": [
-            26.675058247596102,
-            16.653403649752118,
-            34.016541990810495,
-            34.15756948569807,
-            429.6612696431047,
-            19.17949889075969,
-            16.943320965202094
+            26.742751173307916,
+            16.88393741170907,
+            33.99504964446484,
+            34.01826354248097,
+            430.30043276530193,
+            19.09353787877725,
+            18.67386552059824
           ]
         },
         {
@@ -7404,7 +7400,7 @@
           "reqTokens": 666666,
           "multiplier": "2.00x",
           "weight": 200,
-          "trackedAnnualYieldUsd": 37624.658252742774,
+          "trackedAnnualYieldUsd": 37782.458337520526,
           "dailyDates": [
             "8/10",
             "8/11",
@@ -7415,13 +7411,13 @@
             "8/16"
           ],
           "dailyYields": [
-            33.34382280949513,
-            20.816754562190145,
-            42.52067748851312,
-            42.69696185712259,
-            537.0765870538809,
-            23.97437361344961,
-            21.179151206502617
+            33.42843896663489,
+            21.104921764636337,
+            42.493812055581046,
+            42.52282942810122,
+            537.8755409566274,
+            23.866922348471565,
+            23.342331900747805
           ]
         },
         {
@@ -7430,7 +7426,7 @@
           "reqTokens": 1666666,
           "multiplier": "3.33x",
           "weight": 333,
-          "trackedAnnualYieldUsd": 62645.05599081672,
+          "trackedAnnualYieldUsd": 62907.79313197167,
           "dailyDates": [
             "8/10",
             "8/11",
@@ -7441,13 +7437,13 @@
             "8/16"
           ],
           "dailyYields": [
-            55.51746497780939,
-            34.659896346046594,
-            70.79692801837435,
-            71.09044149210911,
-            894.2325174447117,
-            39.9173320663936,
-            35.26328675882686
+            55.6583508794471,
+            35.1396947381195,
+            70.75219707254244,
+            70.80051099778852,
+            895.5627756927846,
+            39.738425710205156,
+            38.864982614745095
           ]
         }
       ],
@@ -7461,37 +7457,37 @@
     },
     "mancer": {
       "market": {
-        "ethPriceUsd": 1898.56,
-        "tokenPriceUsd": 0.002335,
-        "nftFloorEth": 0.676
+        "ethPriceUsd": 1900.9,
+        "tokenPriceUsd": 0.002218,
+        "nftFloorEth": 0.642
       },
       "activation": {
-        "activeCount": 1565,
+        "activeCount": 1566,
         "breakdown": {
-          "T0": 1182,
+          "T0": 1183,
           "T1": 163,
           "T2": 98,
           "T3": 65,
           "T4": 57
         },
-        "percentActivated": 31.3,
+        "percentActivated": 31.32,
         "totalSupply": 5000,
         "tierStats": {
           "T0": {
             "24h": {
-              "act": 128,
+              "act": 130,
               "deact": 0
             },
             "7d": {
-              "act": 396,
+              "act": 395,
               "deact": 0
             },
             "30d": {
-              "act": 1283,
+              "act": 1285,
               "deact": 0
             },
             "allTime": {
-              "act": 1283,
+              "act": 1285,
               "deact": 0
             }
           },
@@ -7501,7 +7497,7 @@
               "deact": 0
             },
             "7d": {
-              "act": 50,
+              "act": 48,
               "deact": 0
             },
             "30d": {
@@ -7595,7 +7591,7 @@
             49,
             60,
             119,
-            21
+            23
           ],
           "dailyDeactivations": [
             0,
@@ -7623,7 +7619,7 @@
             1502,
             1562,
             1681,
-            1702
+            1704
           ],
           "cumulativeGross": [
             0,
@@ -7637,12 +7633,12 @@
             1502,
             1562,
             1681,
-            1702
+            1704
           ]
         },
         "dualBurn": {
-          "totalBurnTokens": 241703750,
-          "equivalentBrokersBurnt": 483.41
+          "totalBurnTokens": 242012500,
+          "equivalentBrokersBurnt": 484.02
         },
         "activeTokenTiers": {
           "3": {
@@ -7699,7 +7695,7 @@
           },
           "19": {
             "t": "T0",
-            "ts": 1786107311
+            "ts": 1786949930
           },
           "20": {
             "t": "T0",
@@ -11573,6 +11569,10 @@
             "t": "T1",
             "ts": 1786071712
           },
+          "3746": {
+            "t": "T0",
+            "ts": 1786948926
+          },
           "3747": {
             "t": "T0",
             "ts": 1786069367
@@ -13908,13 +13908,13 @@
         }
       },
       "ownership": {
-        "ammVaultNfts": 2196,
-        "burntNfts": 483.41,
-        "currentMaxSupply": 4516.59,
-        "circulatingNftSupply": 2804,
+        "ammVaultNfts": 2195,
+        "burntNfts": 484.02,
+        "currentMaxSupply": 4515.98,
+        "circulatingNftSupply": 2805,
         "nftHolders": 1097,
-        "stonkHolders": 4433,
-        "ownershipRatio": 39.12,
+        "stonkHolders": 4437,
+        "ownershipRatio": 39.11,
         "historicalGrowth": {
           "labels": [
             "7/15",
@@ -13942,7 +13942,7 @@
             4296,
             4301,
             4432,
-            4433
+            4437
           ]
         }
       },
@@ -13953,7 +13953,7 @@
           "reqTokens": 50000,
           "multiplier": "1.00x",
           "weight": 100,
-          "trackedAnnualYieldUsd": 1395.5514757039498,
+          "trackedAnnualYieldUsd": 1323.747905330561,
           "dailyDates": [
             "8/10",
             "8/11",
@@ -13964,13 +13964,13 @@
             "8/16"
           ],
           "dailyYields": [
-            3.5812145117642116,
-            4.329568294871223,
-            4.066927315243904,
-            2.883437529929618,
-            3.5766225761083805,
-            3.9297952843407273,
-            4.397901992612328
+            3.5817149792074634,
+            4.092564799314683,
+            3.7056419482286933,
+            2.8600648280254095,
+            3.2785195970336294,
+            3.666699325926237,
+            4.203131793659573
           ]
         },
         {
@@ -13979,7 +13979,7 @@
           "reqTokens": 110000,
           "multiplier": "1.25x",
           "weight": 125,
-          "trackedAnnualYieldUsd": 1744.4393446299373,
+          "trackedAnnualYieldUsd": 1654.6848816632014,
           "dailyDates": [
             "8/10",
             "8/11",
@@ -13990,13 +13990,13 @@
             "8/16"
           ],
           "dailyYields": [
-            4.476518139705265,
-            5.411960368589028,
-            5.083659144054879,
-            3.6042969124120225,
-            4.470778220135475,
-            4.912244105425909,
-            5.497377490765411
+            4.47714372400933,
+            5.115705999143354,
+            4.632052435285867,
+            3.5750810350317623,
+            4.098149496292037,
+            4.583374157407796,
+            5.253914742074466
           ]
         },
         {
@@ -14005,7 +14005,7 @@
           "reqTokens": 225000,
           "multiplier": "1.60x",
           "weight": 160,
-          "trackedAnnualYieldUsd": 2232.8823611263197,
+          "trackedAnnualYieldUsd": 2117.996648528898,
           "dailyDates": [
             "8/10",
             "8/11",
@@ -14016,13 +14016,13 @@
             "8/16"
           ],
           "dailyYields": [
-            5.729943218822738,
-            6.927309271793956,
-            6.507083704390245,
-            4.613500047887388,
-            5.7225961217734085,
-            6.287672454945163,
-            7.036643188179726
+            5.730743966731941,
+            6.548103678903493,
+            5.9290271171659095,
+            4.576103724840656,
+            5.245631355253807,
+            5.866718921481979,
+            6.725010869855317
           ]
         },
         {
@@ -14031,7 +14031,7 @@
           "reqTokens": 450000,
           "multiplier": "2.00x",
           "weight": 200,
-          "trackedAnnualYieldUsd": 2791.1029514078996,
+          "trackedAnnualYieldUsd": 2647.495810661122,
           "dailyDates": [
             "8/10",
             "8/11",
@@ -14042,13 +14042,13 @@
             "8/16"
           ],
           "dailyYields": [
-            7.162429023528423,
-            8.659136589742445,
-            8.133854630487807,
-            5.766875059859236,
-            7.153245152216761,
-            7.859590568681455,
-            8.795803985224657
+            7.163429958414927,
+            8.185129598629366,
+            7.411283896457387,
+            5.720129656050819,
+            6.557039194067259,
+            7.333398651852474,
+            8.406263587319145
           ]
         },
         {
@@ -14057,7 +14057,7 @@
           "reqTokens": 1200000,
           "multiplier": "3.33x",
           "weight": 333,
-          "trackedAnnualYieldUsd": 4647.186414094153,
+          "trackedAnnualYieldUsd": 4408.080524750769,
           "dailyDates": [
             "8/10",
             "8/11",
@@ -14068,13 +14068,13 @@
             "8/16"
           ],
           "dailyYields": [
-            11.925444324174824,
-            14.417462421921172,
-            13.542867959762198,
-            9.601846974665628,
-            11.910153178440908,
-            13.086218296854621,
-            14.645013635399053
+            11.927110880760853,
+            13.628240781717896,
+            12.339787687601548,
+            9.524015877324615,
+            10.917470258121986,
+            12.21010875533437,
+            13.996428872886378
           ]
         }
       ],
@@ -14088,9 +14088,9 @@
     },
     "tickeryard": {
       "market": {
-        "ethPriceUsd": 1898.56,
-        "tokenPriceUsd": 0.002091,
-        "nftFloorEth": 0.363
+        "ethPriceUsd": 1900.9,
+        "tokenPriceUsd": 0.002145,
+        "nftFloorEth": 0.372
       },
       "activation": {
         "activeCount": 417,
@@ -14243,8 +14243,8 @@
           ]
         },
         "dualBurn": {
-          "totalBurnTokens": 59197570,
-          "equivalentBrokersBurnt": 197.31
+          "totalBurnTokens": 60052655,
+          "equivalentBrokersBurnt": 200.16
         },
         "activeTokenTiers": {
           "1": {
@@ -15919,11 +15919,11 @@
       },
       "ownership": {
         "ammVaultNfts": 2680,
-        "burntNfts": 197.31,
-        "currentMaxSupply": 3135.69,
+        "burntNfts": 200.16,
+        "currentMaxSupply": 3132.84,
         "circulatingNftSupply": 653,
         "nftHolders": 459,
-        "stonkHolders": 1683,
+        "stonkHolders": 1681,
         "ownershipRatio": 70.29,
         "historicalGrowth": {
           "labels": [
@@ -15950,7 +15950,7 @@
             1985,
             1807,
             1727,
-            1683
+            1681
           ]
         }
       },
@@ -15961,7 +15961,7 @@
           "reqTokens": 30003,
           "multiplier": "1.00x",
           "weight": 100,
-          "trackedAnnualYieldUsd": 2159.2815182799013,
+          "trackedAnnualYieldUsd": 2223.532993673797,
           "dailyDates": [
             "8/10",
             "8/11",
@@ -15973,12 +15973,12 @@
           ],
           "dailyYields": [
             0,
-            0.24298966162866786,
-            5.0430140696387005,
-            7.473828752383479,
-            11.008074714552631,
-            9.244802667911573,
-            8.400437780219853
+            0.35796897007404316,
+            5.13694752635207,
+            8.185513697749938,
+            11.22556352826614,
+            9.015676145017208,
+            8.723765377530865
           ]
         },
         {
@@ -15987,7 +15987,7 @@
           "reqTokens": 45004.5,
           "multiplier": "1.25x",
           "weight": 125,
-          "trackedAnnualYieldUsd": 2699.1018978498764,
+          "trackedAnnualYieldUsd": 2779.4162420922466,
           "dailyDates": [
             "8/10",
             "8/11",
@@ -15999,12 +15999,12 @@
           ],
           "dailyYields": [
             0,
-            0.30373707703583486,
-            6.303767587048376,
-            9.34228594047935,
-            13.760093393190788,
-            11.556003334889468,
-            10.500547225274817
+            0.44746121259255395,
+            6.421184407940087,
+            10.231892122187423,
+            14.031954410332675,
+            11.26959518127151,
+            10.90470672191358
           ]
         },
         {
@@ -16013,7 +16013,7 @@
           "reqTokens": 90009,
           "multiplier": "1.60x",
           "weight": 160,
-          "trackedAnnualYieldUsd": 3454.850429247842,
+          "trackedAnnualYieldUsd": 3557.6527898780755,
           "dailyDates": [
             "8/10",
             "8/11",
@@ -16025,12 +16025,12 @@
           ],
           "dailyYields": [
             0,
-            0.3887834586058686,
-            8.06882251142192,
-            11.958126003813568,
-            17.61291954328421,
-            14.791684268658518,
-            13.440700448351766
+            0.572750352118469,
+            8.21911604216331,
+            13.0968219163999,
+            17.960901645225825,
+            14.425081832027534,
+            13.958024604049385
           ]
         },
         {
@@ -16039,7 +16039,7 @@
           "reqTokens": 150015,
           "multiplier": "2.00x",
           "weight": 200,
-          "trackedAnnualYieldUsd": 4318.563036559803,
+          "trackedAnnualYieldUsd": 4447.065987347594,
           "dailyDates": [
             "8/10",
             "8/11",
@@ -16051,12 +16051,12 @@
           ],
           "dailyYields": [
             0,
-            0.4859793232573357,
-            10.086028139277401,
-            14.947657504766958,
-            22.016149429105262,
-            18.489605335823146,
-            16.800875560439707
+            0.7159379401480863,
+            10.27389505270414,
+            16.371027395499876,
+            22.45112705653228,
+            18.031352290034416,
+            17.44753075506173
           ]
         },
         {
@@ -16065,7 +16065,7 @@
           "reqTokens": 300030,
           "multiplier": "3.33x",
           "weight": 333,
-          "trackedAnnualYieldUsd": 7190.40745587207,
+          "trackedAnnualYieldUsd": 7404.364868933745,
           "dailyDates": [
             "8/10",
             "8/11",
@@ -16077,12 +16077,12 @@
           ],
           "dailyYields": [
             0,
-            0.809155573223464,
-            16.793236851896875,
-            24.887849745436988,
-            36.65688879946026,
-            30.78519288414554,
-            27.97345780813211
+            1.1920366703465637,
+            17.106035262752393,
+            27.257760613507294,
+            37.38112654912624,
+            30.022201562907302,
+            29.05013870717778
           ]
         }
       ],
@@ -16099,11 +16099,11 @@
     {
       "name": "StonkBroker",
       "ca": "0xe934e36a439c94017b64a3fece66af12099abf50",
-      "volume24h": 1039452.48,
-      "liquidity": 3375206.93,
-      "priceChange24h": -14.45,
-      "fdv": 52201516,
-      "marketCap": 52201516,
+      "volume24h": 1087469.47,
+      "liquidity": 3428026.14,
+      "priceChange24h": -12.69,
+      "fdv": 53790590,
+      "marketCap": 53790590,
       "burnt": 1188266,
       "totalSupply": 2411033467,
       "roi": "0.00%"
@@ -16111,35 +16111,35 @@
     {
       "name": "Yard",
       "ca": "0xE3FA12dA7fa026B21817f16622E8AE48fA785166",
-      "volume24h": 73781.84,
-      "liquidity": 713239.77,
-      "priceChange24h": -5.71,
-      "fdv": 1967442,
-      "marketCap": 1580370,
-      "burnt": 59197570,
+      "volume24h": 76003.81,
+      "liquidity": 731492.48,
+      "priceChange24h": -4.02,
+      "fdv": 2017942,
+      "marketCap": 2017942,
+      "burnt": 60052655,
       "totalSupply": 999999990,
       "roi": "0.00%"
     },
     {
       "name": "Mancer",
       "ca": "0xc72F232a6869e6CF34dC06129AfFD07F8a2a246A",
-      "volume24h": 238880.82,
-      "liquidity": 420443.37,
-      "priceChange24h": -7.19,
-      "fdv": 5276004,
-      "marketCap": 2128342,
-      "burnt": 241703750,
+      "volume24h": 250744.86,
+      "liquidity": 379284.63,
+      "priceChange24h": -14.33,
+      "fdv": 5009557,
+      "marketCap": 5009557,
+      "burnt": 241798750,
       "totalSupply": 2500000000,
       "roi": "0.00%"
     },
     {
       "name": "Derp",
       "ca": "0x6543B7746ca744C4bb2198191E71f40FF04C41b9",
-      "volume24h": 20318.07,
-      "liquidity": 55086.45,
-      "priceChange24h": -9.85,
-      "fdv": 1276282,
-      "marketCap": 144456,
+      "volume24h": 20235.89,
+      "liquidity": 55802.13,
+      "priceChange24h": -7.21,
+      "fdv": 1307761,
+      "marketCap": 266966,
       "burnt": 0,
       "totalSupply": 4444000000,
       "roi": "0.00%"
@@ -16147,23 +16147,23 @@
     {
       "name": "Cashcat",
       "ca": "0x020bfC650A365f8BB26819deAAbF3E21291018b4",
-      "volume24h": 3429440.78,
-      "liquidity": 3447835.54,
-      "priceChange24h": -11.34,
-      "fdv": 105731043,
-      "marketCap": 105731043,
-      "burnt": 11447144,
+      "volume24h": 3459635.64,
+      "liquidity": 3421147.34,
+      "priceChange24h": -11.72,
+      "fdv": 104087602,
+      "marketCap": 104087602,
+      "burnt": 11447154,
       "totalSupply": 1000000000,
       "roi": "0.00%"
     },
     {
       "name": "Tendies",
       "ca": "0x45242320DBB855EeA8Fd36804C6487E10E97FCF9",
-      "volume24h": 650250.27,
-      "liquidity": 529078.26,
-      "priceChange24h": 1.94,
-      "fdv": 11897410,
-      "marketCap": 11897410,
+      "volume24h": 549363.78,
+      "liquidity": 520138.75,
+      "priceChange24h": -8.63,
+      "fdv": 11614842,
+      "marketCap": 11614842,
       "burnt": 41125697,
       "totalSupply": 1000000000,
       "roi": "0.00%"
@@ -16171,11 +16171,11 @@
     {
       "name": "Index",
       "ca": "0x56910D4409F3a0C78C64DD8D0545FF0705389870",
-      "volume24h": 56126.47,
-      "liquidity": 341661.39,
-      "priceChange24h": 5.39,
-      "fdv": 6748707,
-      "marketCap": 6882641,
+      "volume24h": 55099.56,
+      "liquidity": 342585.25,
+      "priceChange24h": 6.92,
+      "fdv": 6767680,
+      "marketCap": 6901990,
       "burnt": 19459394,
       "totalSupply": 1000000000,
       "roi": "0.00%"
@@ -16183,11 +16183,11 @@
     {
       "name": "Pipedog",
       "ca": "0x5Cb6F181081301b44905F3ae15419112ecaBd8A6",
-      "volume24h": 3875199.1,
-      "liquidity": 8664742.21,
-      "priceChange24h": 0.45,
-      "fdv": 29059632,
-      "marketCap": 29059632,
+      "volume24h": 3958079.64,
+      "liquidity": 8669213.03,
+      "priceChange24h": 0.07,
+      "fdv": 29035182,
+      "marketCap": 29035182,
       "burnt": 15,
       "totalSupply": 12345678912,
       "roi": "0.00%"
@@ -16195,11 +16195,11 @@
     {
       "name": "Hmm",
       "ca": "0x7FE995a80075dF3Dc8Ae11A9b82c7FE4202CD87f",
-      "volume24h": 1770939.05,
-      "liquidity": 408460.57,
-      "priceChange24h": -26.27,
-      "fdv": 8216167,
-      "marketCap": 8216167,
+      "volume24h": 1762133.02,
+      "liquidity": 396191.64,
+      "priceChange24h": -31.26,
+      "fdv": 7668070,
+      "marketCap": 7668070,
       "burnt": 12293207,
       "totalSupply": 1000000000,
       "roi": "0.00%"
@@ -16219,11 +16219,11 @@
     {
       "name": "Up",
       "ca": "0x57C0E45cB534413D1C20A4240955d6bB250BB4F1",
-      "volume24h": 409145.93,
-      "liquidity": 788147.25,
-      "priceChange24h": -2.47,
-      "fdv": 96429571,
-      "marketCap": 3751894,
+      "volume24h": 414360.31,
+      "liquidity": 778962.22,
+      "priceChange24h": -4.97,
+      "fdv": 95017760,
+      "marketCap": 3696963,
       "burnt": 2,
       "totalSupply": 518524005,
       "roi": "0.00%"
@@ -16231,23 +16231,23 @@
     {
       "name": "Ai",
       "ca": "0x2E8c31162b855A2ffa90F6F8634643Ad6F111e18",
-      "volume24h": 416251.68,
-      "liquidity": 727150.65,
-      "priceChange24h": -28.32,
-      "fdv": 6152522,
-      "marketCap": 6207548,
+      "volume24h": 412446.15,
+      "liquidity": 735408.58,
+      "priceChange24h": -24.85,
+      "fdv": 6283531,
+      "marketCap": 6339784,
       "burnt": 2046710,
-      "totalSupply": 993021265,
+      "totalSupply": 993012677,
       "roi": "0.00%"
     },
     {
       "name": "Frong",
       "ca": "0x6245e67affA44a23077f0Ea7f981a8DC743a0c47",
-      "volume24h": 687873.21,
-      "liquidity": 484137.16,
-      "priceChange24h": 1.25,
-      "fdv": 4721553,
-      "marketCap": 4721553,
+      "volume24h": 679365.12,
+      "liquidity": 493497.67,
+      "priceChange24h": 5.8,
+      "fdv": 4899909,
+      "marketCap": 4899909,
       "burnt": 4001453,
       "totalSupply": 1000000000,
       "roi": "0.00%"
@@ -16255,11 +16255,11 @@
     {
       "name": "Yolo",
       "ca": "0x62C71cd34a52c30d894419CBcc55Db2aFA8032eA",
-      "volume24h": 283230.27,
-      "liquidity": 227687.36,
-      "priceChange24h": -20.22,
-      "fdv": 3272581,
-      "marketCap": 3272581,
+      "volume24h": 283590.4,
+      "liquidity": 222166.86,
+      "priceChange24h": -26.75,
+      "fdv": 3123240,
+      "marketCap": 3123240,
       "burnt": 30000002,
       "totalSupply": 1000000000,
       "roi": "0.00%"
@@ -16267,23 +16267,23 @@
     {
       "name": "Wojak",
       "ca": "0xaCE55FE98Bab14366dD49aB5AA5dF76aA11A3c6f",
-      "volume24h": 196930.25,
-      "liquidity": 233392.45,
-      "priceChange24h": 27.03,
-      "fdv": 4854840,
-      "marketCap": 5311414,
-      "burnt": 85960885,
+      "volume24h": 200649.67,
+      "liquidity": 228503.49,
+      "priceChange24h": 29.96,
+      "fdv": 4724616,
+      "marketCap": 5169930,
+      "burnt": 86135414,
       "totalSupply": 1000000000,
       "roi": "0.00%"
     },
     {
       "name": "Juggernaut",
       "ca": "0xD7321801CAae694090694Ff55A9323139F043B88",
-      "volume24h": 208574.71,
-      "liquidity": 289112.98,
-      "priceChange24h": -1.16,
-      "fdv": 2309929,
-      "marketCap": 2309929,
+      "volume24h": 190640.3,
+      "liquidity": 292267.53,
+      "priceChange24h": -3.26,
+      "fdv": 2352580,
+      "marketCap": 2352580,
       "burnt": 55417580,
       "totalSupply": 1000000000,
       "roi": "0.00%"
@@ -16305,11 +16305,11 @@
     {
       "name": "AAPL",
       "ca": "0xaf3d76f1834a1d425780943c99ea8a608f8a93f9",
-      "volume24h": 13452.07,
-      "liquidity": 275508.28,
-      "priceChange24h": 0.33,
-      "fdv": 1798262,
-      "marketCap": 1798262,
+      "volume24h": 13344.2,
+      "liquidity": 275522.76,
+      "priceChange24h": 0.32,
+      "fdv": 1798311,
+      "marketCap": 1798311,
       "burnt": 0,
       "totalSupply": 5856,
       "roi": "0.00%"
@@ -16341,23 +16341,23 @@
     {
       "name": "SLV",
       "ca": "0x411efb0e7f985935daec3d4c3ebaea0d0ad7d89f",
-      "volume24h": 8257.24,
-      "liquidity": 231423.57,
-      "priceChange24h": 0.68,
-      "fdv": 794511,
-      "marketCap": 794511,
+      "volume24h": 8180.23,
+      "liquidity": 231711.51,
+      "priceChange24h": 0.65,
+      "fdv": 818467,
+      "marketCap": 818467,
       "burnt": 0,
-      "totalSupply": 13391,
+      "totalSupply": 13795,
       "roi": "0.00%"
     },
     {
       "name": "MSFT",
       "ca": "0xe93237c50d904957cf27e7b1133b510c669c2e74",
-      "volume24h": 18152.5,
-      "liquidity": 193162.48,
-      "priceChange24h": -1.23,
-      "fdv": 828072,
-      "marketCap": 828072,
+      "volume24h": 10464.57,
+      "liquidity": 193088.63,
+      "priceChange24h": -0.99,
+      "fdv": 826445,
+      "marketCap": 826445,
       "burnt": 0,
       "totalSupply": 1672,
       "roi": "0.00%"
@@ -16365,13 +16365,13 @@
     {
       "name": "COST",
       "ca": "0x4ea005168d7f09a7a0ba9d1def21a479950e44c2",
-      "volume24h": 78377.23,
-      "liquidity": 202008.97,
-      "priceChange24h": 0.02,
-      "fdv": 245963,
-      "marketCap": 245963,
+      "volume24h": 79481.07,
+      "liquidity": 201936.56,
+      "priceChange24h": -0.06,
+      "fdv": 246804,
+      "marketCap": 246804,
       "burnt": 0,
-      "totalSupply": 255,
+      "totalSupply": 256,
       "roi": "0.00%"
     },
     {
@@ -16401,11 +16401,11 @@
     {
       "name": "GOOGL",
       "ca": "0x2e0847e8910a9732eb3fb1bb4b70a580adad4fe3",
-      "volume24h": 10169.49,
-      "liquidity": 245791.2,
-      "priceChange24h": 0.1,
-      "fdv": 1094398,
-      "marketCap": 1094398,
+      "volume24h": 10730.81,
+      "liquidity": 245717.98,
+      "priceChange24h": 0.25,
+      "fdv": 1093728,
+      "marketCap": 1093728,
       "burnt": 0,
       "totalSupply": 3137,
       "roi": "0.00%"
@@ -16413,11 +16413,11 @@
     {
       "name": "RDDT",
       "ca": "0x05b37fb53a299a1b874a619e1c4c404d52c36f4c",
-      "volume24h": 116987.54,
-      "liquidity": 153377.61,
-      "priceChange24h": 0.5,
-      "fdv": 293399,
-      "marketCap": 293399,
+      "volume24h": 118714.14,
+      "liquidity": 154133.22,
+      "priceChange24h": 0.57,
+      "fdv": 293641,
+      "marketCap": 293641,
       "burnt": 0,
       "totalSupply": 1641,
       "roi": "0.00%"
@@ -16425,11 +16425,11 @@
     {
       "name": "GME",
       "ca": "0x1b0e319c6a659f002271b69db8a7df2f911c153e",
-      "volume24h": 16743.36,
-      "liquidity": 461417.05,
-      "priceChange24h": -0.16,
-      "fdv": 1473556,
-      "marketCap": 1473556,
+      "volume24h": 16799.61,
+      "liquidity": 461639.24,
+      "priceChange24h": -0.14,
+      "fdv": 1474278,
+      "marketCap": 1474278,
       "burnt": 0,
       "totalSupply": 78953,
       "roi": "0.00%"
@@ -16437,11 +16437,11 @@
     {
       "name": "USO",
       "ca": "0xa30fa36db767ad9ed3f7a60fc79526fb4d56d344",
-      "volume24h": 267978.68,
-      "liquidity": 893655.26,
-      "priceChange24h": 0.07,
-      "fdv": 1833239,
-      "marketCap": 1833239,
+      "volume24h": 279683.03,
+      "liquidity": 893021.7,
+      "priceChange24h": -0.11,
+      "fdv": 1830534,
+      "marketCap": 1830534,
       "burnt": 0,
       "totalSupply": 14513,
       "roi": "0.00%"
