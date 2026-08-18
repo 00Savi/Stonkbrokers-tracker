@@ -126,7 +126,7 @@ const PROJECTS = {
     logo: "Yardkeepers.png", 
     yieldMode: "protocol_vault",
     oracleSource: "0xEf5f726990442bC3207d72D1F9DcF8677Cf02358".toLowerCase(), 
-    underConstruction: true, 
+    underConstruction: false, 
     tiers: [
       { id: "T0", name: "Groundskeeper", reqTokens: 30003, weight: 100 },
       { id: "T1", name: "Apprentice", reqTokens: 45004.5, weight: 125 },
@@ -229,8 +229,6 @@ async function loadMarketPrices() {
           const rhPairs = j.pairs.filter(p => p.chainId === 'robinhood' || (p.url && p.url.includes('robinhood')));
           if (rhPairs.length > 0) {
               const best = rhPairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
-              
-              // Base/Quote Math Bug Fix: Reverses the math if our token is treated as the Quote asset.
               let priceUsd = parseFloat(best.priceUsd || 0);
               if (best.quoteToken?.address?.toLowerCase() === conf.tokenCa.toLowerCase()) {
                   const priceNative = parseFloat(best.priceNative || 1);
@@ -247,7 +245,8 @@ async function loadMarketPrices() {
   return markets;
 }
 
-async function fetchAllLogs(address, genesisBlock, topic0 = null) {
+// OPTIMIZED CHECKPOINT CACHING
+async function fetchAllLogs(projectKey, address, genesisBlock, topic0 = null) {
   let latestBlock = 999999999;
   try {
     const br = await secureFetch(`${PRO_API}?chain_id=${CHAIN_ID}&module=block&action=eth_block_number&apikey=${API_KEY}`);
@@ -257,9 +256,31 @@ async function fetchAllLogs(address, genesisBlock, topic0 = null) {
     }
   } catch {}
 
-  let allLogs = [];
-  let fromBlock = genesisBlock; 
+  const cacheFile = `cache_${projectKey}_logs.json`;
+  let cachedLogs = [];
+  let lastProcessedBlock = genesisBlock;
+
+  try {
+      if (fs.existsSync(cacheFile)) {
+          cachedLogs = JSON.parse(fs.readFileSync(cacheFile, "utf8"));
+          if (cachedLogs.length > 0) {
+              const highestBlock = Math.max(...cachedLogs.map(l => {
+                  let b = l.blockNumber;
+                  return b ? (b.toString().startsWith("0x") ? parseInt(b, 16) : parseInt(b, 10)) : 0;
+              }));
+              if (highestBlock > lastProcessedBlock) {
+                  lastProcessedBlock = highestBlock;
+              }
+          }
+      }
+  } catch (e) {
+      console.warn(`Could not read ${cacheFile}, starting from genesis.`);
+  }
+
+  let allLogs = [...cachedLogs];
+  let fromBlock = lastProcessedBlock === genesisBlock ? genesisBlock : lastProcessedBlock + 1; 
   let step = 500000; 
+  let fetchedNewLogs = false;
 
   while (fromBlock <= latestBlock) {
     let toBlock = fromBlock + step;
@@ -273,7 +294,11 @@ async function fetchAllLogs(address, genesisBlock, topic0 = null) {
 
     if (logs.length >= 1000 && step > 1) { step = Math.floor(step / 2); continue; }
 
-    allLogs.push(...logs);
+    if (logs.length > 0) {
+        allLogs.push(...logs);
+        fetchedNewLogs = true;
+    }
+
     fromBlock = toBlock + 1;
     step = 500000; 
     await sleep(200); 
@@ -308,6 +333,10 @@ async function fetchAllLogs(address, genesisBlock, topic0 = null) {
     const logIdxB = parseNum(b.logIndex !== undefined ? b.logIndex : (b.log_index !== undefined ? b.log_index : a.index));
     return logIdxA - logIdxB;
   });
+
+  if (fetchedNewLogs || !fs.existsSync(cacheFile)) {
+      fs.writeFileSync(cacheFile, JSON.stringify(uniqueLogs));
+  }
 
   return uniqueLogs;
 }
@@ -391,8 +420,8 @@ async function getOwnershipStats(conf, equivBurnt, previousData) {
   };
 }
 
-async function fetchActivations(conf) {
-  const mergedLogs = await fetchAllLogs(conf.activationCa, conf.genesisBlock);
+async function fetchActivations(projectKey, conf) {
+  const mergedLogs = await fetchAllLogs(projectKey, conf.activationCa, conf.genesisBlock);
   const activeBrokers = new Map(); 
   const dailyData = {};
   const now = Math.floor(Date.now() / 1000);
@@ -671,7 +700,6 @@ async function loadTokenListPrices(tokenList) {
       if (pair) {
           priceUsd = parseFloat(pair.priceUsd || 0);
           
-          // Base/Quote Math Bug Fix
           if (pair.quoteToken?.address?.toLowerCase() === item.ca.toLowerCase()) {
               const pNative = parseFloat(pair.priceNative || 1);
               if (pNative > 0) priceUsd = priceUsd / pNative;
@@ -743,7 +771,7 @@ async function run() {
       console.log(`\n--- Processing ${projectKey.toUpperCase()} ---`);
       const prevProjData = previousData.projects ? previousData.projects[projectKey] : {};
       
-      const activationStats = await fetchActivations(conf);
+      const activationStats = await fetchActivations(projectKey, conf);
       const ownershipStats = await getOwnershipStats(conf, activationStats.dualBurn.equivalentBrokersBurnt, prevProjData);
       
       const yieldData = await getGlobalYield(conf, sevenDaysAgo, activationStats, markets[projectKey]);
