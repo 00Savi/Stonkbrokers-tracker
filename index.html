@@ -1014,8 +1014,25 @@
                                 totalUnits += bal;
                                 totalFloorUsd += (bal * floorUsd);
                                 
-                                const avgYieldPerUnit = (pData.tiers && pData.tiers[2]) ? pData.tiers[2].trackedAnnualYieldUsd : 0;
-                                totalYieldUsd += (bal * avgYieldPerUnit);
+                                let exactYieldUsd = 0;
+                                const activeMap = pData.activation?.activeTokenTiers || {};
+                                
+                                // Scan exact Token IDs to find precise tier multiplier
+                                for (let i = 0; i < bal; i++) {
+                                    try {
+                                        const tokenId = Number(await nftContract.tokenOfOwnerByIndex(wallet, i));
+                                        const tokenData = activeMap[tokenId];
+                                        const tierId = tokenData ? tokenData.t : 'T0'; 
+                                        const tierObj = pData.tiers.find(t => t.tier === tierId) || pData.tiers[0];
+                                        exactYieldUsd += tierObj.trackedAnnualYieldUsd;
+                                    } catch (e) {
+                                        // Fallback to T0 yield if RPC stutters
+                                        const fallbackYield = pData.tiers[0] ? pData.tiers[0].trackedAnnualYieldUsd : 0;
+                                        exactYieldUsd += fallbackYield;
+                                    }
+                                }
+
+                                totalYieldUsd += exactYieldUsd;
 
                                 const card = document.createElement('div');
                                 card.className = 'bg-[#0f172a] border border-[#334155] rounded-xl p-4 flex items-center justify-between shadow-inner';
@@ -1028,7 +1045,7 @@
                                         </div>
                                     </div>
                                     <div class="text-right">
-                                        <p class="text-sm font-bold text-emerald-400">+ ${formatCurrency(bal * avgYieldPerUnit)} /yr</p>
+                                        <p class="text-sm font-bold text-emerald-400">+ ${formatCurrency(exactYieldUsd)} /yr</p>
                                         <p class="text-[10px] text-slate-400">Floor: ${formatCurrency(bal * floorUsd)}</p>
                                     </div>
                                 `;
