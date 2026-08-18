@@ -32,6 +32,7 @@ const TOKEN_TICKERS = {
   "0x6245e67affa44a23077f0ea7f981a8dc743a0c47": "DEX", 
   "0x27efeae1817d90974623cb2ed455c424beffa5ab": "DEX",
   "0xe3fa12da7fa026b21817f16622e8ae48fa785166": "YARD",
+  "0xb03058b8a39f3967df08d833682c1c99b29821b1": "WALL",
   "0x193674b72b6aa1905fc47bdbc19b30a53b666666": "SLEUTH"
 };
 
@@ -39,6 +40,7 @@ const MEMES = [
   { name: "StonkBroker", ca: "0xe934e36a439c94017b64a3fece66af12099abf50" },
   { name: "Yard", ca: "0xE3FA12dA7fa026B21817f16622E8AE48fA785166" },
   { name: "Mancer", ca: "0xc72F232a6869e6CF34dC06129AfFD07F8a2a246A" },
+  { name: "Wall", ca: "0xb03058b8a39f3967df08d833682c1c99b29821b1" },
   { name: "Derp", ca: "0x6543B7746ca744C4bb2198191E71f40FF04C41b9" },
   { name: "Cashcat", ca: "0x020bfC650A365f8BB26819deAAbF3E21291018b4" },
   { name: "Tendies", ca: "0x45242320DBB855EeA8Fd36804C6487E10E97FCF9" },
@@ -73,18 +75,23 @@ const STOCKS = [
 const PROJECTS = {
   stonk: {
     genesisBlock: 12600000, 
-    tokenCa: "0xe934e36a439c94017b64a3fece66af12099abf50",
-    nftCa: "0x539cdd042c2f3d93ebc5be7dfff0c79f3b4fabf0",
-    activationCa: "0xacd5ae3c060c1137fe2ee86b0ab2ef697456f664",
-    ammCa: "0xe302733accf4800146e55fc45b46b4e4ffc032d2",
+    tokenCa: "0xe934e36a439c94017b64a3fece66af12099abf50".toLowerCase(),
+    nftCa: "0x539cdd042c2f3d93ebc5be7dfff0c79f3b4fabf0".toLowerCase(),
+    activationCa: "0xacd5ae3c060c1137fe2ee86b0ab2ef697456f664".toLowerCase(),
+    ammCa: "0xe302733accf4800146e55fc45b46b4e4ffc032d2".toLowerCase(),
     maxSupply: 4444,
     unitValue: 666666,
     ticker: "STONK",
     logo: "Stonkbroker.png",
     yieldMode: "oracle_wallet",
-    oracleSource: "0xe7207caa913b54aa4411e847a3a49eee0568cccf",
+    oracleSource: "0xe7207caa913b54aa4411e847a3a49eee0568cccf".toLowerCase(),
     oracleWeight: 333,
     underConstruction: false,
+    streams: {
+      amm: "0x1f12fe622c11947f93f53d63f68f7f46b6d081c9".toLowerCase(),
+      securityBox: "0x55642a3f10f1af5145d3d59021b1d6b03bb8692c".toLowerCase(),
+      launchpad: "0xEcA5726dae1e53365c37fFc02369d947A91d71f9".toLowerCase()
+    },
     tiers: [
       { id: "T0", name: "Floor Trader", reqTokens: 66666, weight: 100 },
       { id: "T1", name: "Analyst", reqTokens: 166666, weight: 125 },
@@ -106,6 +113,10 @@ const PROJECTS = {
     yieldMode: "protocol_vault",
     oracleSource: "0x47c2194cAacfC778c0Baa41E10008bb7D720Cd59".toLowerCase(), 
     underConstruction: false,
+    streams: {
+      dexCollector: "0x5f3b7E837f2d5b6C38E78eE4f45BD140A226656e".toLowerCase(),
+      vault: "0x47c2194cAacfC778c0Baa41E10008bb7D720Cd59".toLowerCase()
+    },
     tiers: [
       { id: "T0", name: "Apprentice", reqTokens: 50000, weight: 100 },
       { id: "T1", name: "Mage", reqTokens: 110000, weight: 125 },
@@ -126,7 +137,10 @@ const PROJECTS = {
     logo: "Yardkeepers.png", 
     yieldMode: "protocol_vault",
     oracleSource: "0xEf5f726990442bC3207d72D1F9DcF8677Cf02358".toLowerCase(), 
-    underConstruction: false, 
+    underConstruction: false, // Activated!
+    streams: {
+      vault: "0xEf5f726990442bC3207d72D1F9DcF8677Cf02358".toLowerCase()
+    },
     tiers: [
       { id: "T0", name: "Groundskeeper", reqTokens: 30003, weight: 100 },
       { id: "T1", name: "Apprentice", reqTokens: 45004.5, weight: 125 },
@@ -134,12 +148,35 @@ const PROJECTS = {
       { id: "T3", name: "Manager", reqTokens: 150015, weight: 200 },
       { id: "T4", name: "Master", reqTokens: 300030, weight: 333 }
     ]
+  },
+  cardwall: {
+    genesisBlock: 38000000, 
+    tokenCa: "0xb03058b8a39f3967df08d833682c1c99b29821b1".toLowerCase(),
+    nftCa: "0x890215157dbec26d67605324271b34ba05ee9e58".toLowerCase(),
+    activationCa: "0x0000000000000000000000000000000000000000",
+    ammCa: "0xdd59536f394c4b589e695f5921723b89ea479379".toLowerCase(),
+    maxSupply: 4444,
+    unitValue: 500000,
+    ticker: "WALL",
+    logo: "TheCardWall.png",
+    yieldMode: "protocol_vault",
+    oracleSource: "0xdd59536f394c4b589e695f5921723b89ea479379".toLowerCase(),
+    underConstruction: true,
+    streams: {},
+    tiers: [
+      { id: "T0", name: "1-Star Member (★)", reqTokens: 500000, weight: 100 },
+      { id: "T1", name: "2-Star Member (★★)", reqTokens: 500000, weight: 125 },
+      { id: "T2", name: "3-Star Member (★★★)", reqTokens: 500000, weight: 160 },
+      { id: "T3", name: "4-Star Member (★★★★)", reqTokens: 500000, weight: 200 },
+      { id: "T4", name: "5-Star Member (★★★★★)", reqTokens: 500000, weight: 333 }
+    ]
   }
 };
 
 const PROTOCOL_CONTRACTS = [
   "0x1f12fe622c11947f93f53d63f68f7f46b6d081c9", 
-  "0x55642a3f10f1af5145d3d59021b1d6b03bb8692c"  
+  "0x55642a3f10f1af5145d3d59021b1d6b03bb8692c",
+  "0xEcA5726dae1e53365c37fFc02369d947A91d71f9"
 ];
 
 const ACTIVATION_ABI = [
@@ -157,6 +194,7 @@ const iface = new ethers.Interface(ACTIVATION_ABI);
 
 let ethPriceUsd = 1917;
 let tokenPrices = {};
+let allDexPairs = [];
 
 async function secureFetch(url) {
   const headers = { "Accept": "application/json" };
@@ -164,7 +202,7 @@ async function secureFetch(url) {
     try {
       const res = await fetch(url, { headers });
       if (res.status === 402) {
-          console.error("\n[CRITICAL ERROR] HTTP 402: Payment Required. PRO API Key Out of Credits!");
+          console.error("\n[CRITICAL ERROR] HTTP 402: Payment Required. Key out of credits!");
           process.exit(1);
       }
       if (res.status === 429) { await sleep(3000); continue; }
@@ -184,7 +222,7 @@ async function secureFetch(url) {
 }
 
 async function fetchTokenHoldersSafe(contractAddress, isNft = false) {
-  if (!contractAddress) return 0;
+  if (!contractAddress || contractAddress === "0x0000000000000000000000000000000000000000") return 0;
   let page = 1;
   let activeHolders = 0;
   let hasData = false;
@@ -228,6 +266,7 @@ async function loadMarketPrices() {
         if (j?.pairs?.length) {
           const rhPairs = j.pairs.filter(p => p.chainId === 'robinhood' || (p.url && p.url.includes('robinhood')));
           if (rhPairs.length > 0) {
+              rhPairs.forEach(p => allDexPairs.push(p));
               const best = rhPairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
               let priceUsd = parseFloat(best.priceUsd || 0);
               if (best.quoteToken?.address?.toLowerCase() === conf.tokenCa.toLowerCase()) {
@@ -245,8 +284,10 @@ async function loadMarketPrices() {
   return markets;
 }
 
-// OPTIMIZED CHECKPOINT CACHING
+// CHECKPOINT CACHED LOG FETCHER (Optimized API Consumption)
 async function fetchAllLogs(projectKey, address, genesisBlock, topic0 = null) {
+  if (!address || address === "0x0000000000000000000000000000000000000000") return [];
+
   let latestBlock = 999999999;
   try {
     const br = await secureFetch(`${PRO_API}?chain_id=${CHAIN_ID}&module=block&action=eth_block_number&apikey=${API_KEY}`);
@@ -273,9 +314,7 @@ async function fetchAllLogs(projectKey, address, genesisBlock, topic0 = null) {
               }
           }
       }
-  } catch (e) {
-      console.warn(`Could not read ${cacheFile}, starting from genesis.`);
-  }
+  } catch (e) {}
 
   let allLogs = [...cachedLogs];
   let fromBlock = lastProcessedBlock === genesisBlock ? genesisBlock : lastProcessedBlock + 1; 
@@ -292,7 +331,11 @@ async function fetchAllLogs(projectKey, address, genesisBlock, topic0 = null) {
     let data = await secureFetch(url);
     const logs = (data && Array.isArray(data.result)) ? data.result : [];
 
-    if (logs.length >= 1000 && step > 1) { step = Math.floor(step / 2); continue; }
+    // SMART STEP RECOVERY: Prevent infinite API burns on dense blocks
+    if (logs.length >= 1000 && step > 1) { 
+        step = Math.floor(step / 2); 
+        continue; 
+    }
 
     if (logs.length > 0) {
         allLogs.push(...logs);
@@ -300,7 +343,11 @@ async function fetchAllLogs(projectKey, address, genesisBlock, topic0 = null) {
     }
 
     fromBlock = toBlock + 1;
-    step = 500000; 
+    
+    // Allow step to gradually recover instead of instantly jumping to 500k
+    if (logs.length < 500) {
+        step = Math.min(500000, Math.floor(step * 2));
+    }
     await sleep(200); 
   }
 
@@ -376,8 +423,10 @@ async function getTrueDeflationStats(conf) {
 
 async function getOwnershipStats(conf, equivBurnt, previousData) {
   let ammVaultNfts = 0;
-  let res = await secureFetch(`${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokenbalance&contractaddress=${conf.nftCa}&address=${conf.ammCa}&apikey=${API_KEY}`);
-  if (res && res.result) ammVaultNfts = parseInt(res.result, 10);
+  if (conf.nftCa && conf.ammCa) {
+    let res = await secureFetch(`${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokenbalance&contractaddress=${conf.nftCa}&address=${conf.ammCa}&apikey=${API_KEY}`);
+    if (res && res.result) ammVaultNfts = parseInt(res.result, 10);
+  }
 
   let rawNftHolders = await fetchTokenHoldersSafe(conf.nftCa, true);
   let trueUniqueNftHolders = rawNftHolders > 0 ? rawNftHolders : 0;
@@ -526,13 +575,24 @@ async function fetchActivations(projectKey, conf) {
   };
 }
 
-async function getGlobalYield(conf, sevenDaysAgo, activationStats, marketData) {
+// MULTI-STREAM REVENUE ENGINE
+async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, marketData) {
   const oneDay = 86400;
   const dailyUsdPerWeight = [0, 0, 0, 0, 0, 0, 0];
   const dailyDates = [];
   for (let i = 0; i < 7; i++) dailyDates.push(`${new Date((sevenDaysAgo + (i * oneDay)) * 1000).getMonth() + 1}/${new Date((sevenDaysAgo + (i * oneDay)) * 1000).getDate()}`);
 
   let totalSampleUsd = 0;
+  const revenueBreakdown = {
+    ammFeesUsd: 0,
+    securityBoxUsd: 0,
+    launchpadUsd: 0,
+    dexFeesUsd: 0,
+    dailyAmm: [0,0,0,0,0,0,0],
+    dailySecurityBox: [0,0,0,0,0,0,0],
+    dailyLaunchpad: [0,0,0,0,0,0,0],
+    dailyDex: [0,0,0,0,0,0,0]
+  };
 
   if (conf.yieldMode === "oracle_wallet") {
       const dailyEth = [0, 0, 0, 0, 0, 0, 0];
@@ -558,6 +618,18 @@ async function getGlobalYield(conf, sevenDaysAgo, activationStats, marketData) {
               if (eth > 0) {
                   const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
                   dailyEth[dayIdx] += eth;
+                  const usdVal = eth * ethPriceUsd;
+
+                  if (fromAddr === conf.streams?.amm) {
+                      revenueBreakdown.ammFeesUsd += usdVal;
+                      revenueBreakdown.dailyAmm[dayIdx] += usdVal;
+                  } else if (fromAddr === conf.streams?.securityBox) {
+                      revenueBreakdown.securityBoxUsd += usdVal;
+                      revenueBreakdown.dailySecurityBox[dayIdx] += usdVal;
+                  } else if (fromAddr === conf.streams?.launchpad) {
+                      revenueBreakdown.launchpadUsd += usdVal;
+                      revenueBreakdown.dailyLaunchpad[dayIdx] += usdVal;
+                  }
               }
             }
           }
@@ -590,6 +662,8 @@ async function getGlobalYield(conf, sevenDaysAgo, activationStats, marketData) {
                     const usdVal = amount * price;
                     const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
                     dailyErc20[dayIdx] += usdVal;
+                    revenueBreakdown.ammFeesUsd += usdVal;
+                    revenueBreakdown.dailyAmm[dayIdx] += usdVal;
                 }
               }
             }
@@ -610,7 +684,7 @@ async function getGlobalYield(conf, sevenDaysAgo, activationStats, marketData) {
       const usdPerWeightUnit = totalSampleUsd / conf.oracleWeight;
       const global7DayUsd = usdPerWeightUnit * totalNetworkWeight;
 
-      return { global7DayUsd, dailyDates, dailyUsdPerWeight };
+      return { global7DayUsd, dailyDates, dailyUsdPerWeight, revenueBreakdown };
   } 
   
   if (conf.yieldMode === "protocol_vault") {
@@ -636,14 +710,57 @@ async function getGlobalYield(conf, sevenDaysAgo, activationStats, marketData) {
                     
                     dailyUsdPerWeight[dayIdx] += (usdVal / activeWeightAtTime);
                     totalSampleUsd += usdVal;
+                    revenueBreakdown.ammFeesUsd += usdVal;
+                    revenueBreakdown.dailyAmm[dayIdx] += usdVal;
                 }
             }
           }
           if(reachedOlder || txs.length < 1000) break;
           page++; await sleep(200); 
       }
-      return { global7DayUsd: totalSampleUsd, dailyDates, dailyUsdPerWeight };
+      return { global7DayUsd: totalSampleUsd, dailyDates, dailyUsdPerWeight, revenueBreakdown };
   }
+  return { global7DayUsd: 0, dailyDates, dailyUsdPerWeight, revenueBreakdown };
+}
+
+// SCANNING $STONK IN ALL ECOSYSTEM LPS AT ZERO API COST
+function scanLockedStonkLiquidity(stonkCa, tokenPriceUsd) {
+  const uniqueLps = new Map();
+  let totalStonkLocked = 0;
+  let totalLpUsd = 0;
+
+  for (const pair of allDexPairs) {
+      if (pair.chainId !== 'robinhood' && !(pair.url && pair.url.includes('robinhood'))) continue;
+      const pairAddress = (pair.pairAddress || "").toLowerCase();
+      if (!pairAddress || uniqueLps.has(pairAddress)) continue;
+
+      const isBase = pair.baseToken?.address?.toLowerCase() === stonkCa;
+      const isQuote = pair.quoteToken?.address?.toLowerCase() === stonkCa;
+
+      if (isBase || isQuote) {
+          const pairLiquidityUsd = pair.liquidity?.usd || 0;
+          if (pairLiquidityUsd <= 0) continue;
+
+          const stonkSideUsd = pairLiquidityUsd / 2;
+          const stonkCount = tokenPriceUsd > 0 ? stonkSideUsd / tokenPriceUsd : 0;
+
+          totalStonkLocked += stonkCount;
+          totalLpUsd += pairLiquidityUsd;
+
+          uniqueLps.set(pairAddress, {
+              pairName: `${pair.baseToken?.symbol || '?'}/${pair.quoteToken?.symbol || '?'}`,
+              dex: pair.dexId || "DEX",
+              liquidityUsd: Math.round(pairLiquidityUsd),
+              stonkAmount: Math.round(stonkCount)
+          });
+      }
+  }
+
+  return {
+      totalStonkLocked: Math.round(totalStonkLocked),
+      totalLpUsd: Math.round(totalLpUsd),
+      pools: Array.from(uniqueLps.values()).sort((a, b) => b.liquidityUsd - a.liquidityUsd)
+  };
 }
 
 async function loadTokenListPrices(tokenList) {
@@ -658,7 +775,7 @@ async function loadTokenListPrices(tokenList) {
       if (data && data.pairs) {
           data.pairs.forEach(pair => {
               if (pair.chainId !== 'robinhood' && !(pair.url && pair.url.includes('robinhood'))) return;
-              
+              allDexPairs.push(pair);
               const b = pair.baseToken?.address?.toLowerCase();
               const q = pair.quoteToken?.address?.toLowerCase();
               
@@ -690,21 +807,14 @@ async function loadTokenListPrices(tokenList) {
       }
 
       const pair = pairsMap[item.ca.toLowerCase()];
-      let priceUsd = 0;
-      let volume24h = 0;
-      let liquidity = 0;
-      let priceChange24h = 0;
-      let fdv = 0;
-      let marketCap = 0;
+      let priceUsd = 0, volume24h = 0, liquidity = 0, priceChange24h = 0, fdv = 0, marketCap = 0;
 
       if (pair) {
           priceUsd = parseFloat(pair.priceUsd || 0);
-          
           if (pair.quoteToken?.address?.toLowerCase() === item.ca.toLowerCase()) {
               const pNative = parseFloat(pair.priceNative || 1);
               if (pNative > 0) priceUsd = priceUsd / pNative;
           }
-          
           volume24h = pair.volume?.h24 || 0;
           liquidity = pair.liquidity?.usd || 0;
           priceChange24h = pair.priceChange?.h24 || 0;
@@ -717,18 +827,14 @@ async function loadTokenListPrices(tokenList) {
 
       try {
           const burnRes = await secureFetch(`${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokenbalance&contractaddress=${item.ca}&address=0x000000000000000000000000000000000000dead&apikey=${API_KEY}`);
-          if (burnRes && burnRes.result) {
-              burntBalance = Number(burnRes.result) / 1e18;
-          }
+          if (burnRes && burnRes.result) burntBalance = Number(burnRes.result) / 1e18;
       } catch(e) {}
       
       await sleep(200);
 
       try {
           const supplyRes = await secureFetch(`${PRO_API}?chain_id=${CHAIN_ID}&module=stats&action=tokensupply&contractaddress=${item.ca}&apikey=${API_KEY}`);
-          if (supplyRes && supplyRes.result) {
-              totalSupplyRaw = Number(supplyRes.result) / 1e18;
-          }
+          if (supplyRes && supplyRes.result) totalSupplyRaw = Number(supplyRes.result) / 1e18;
       } catch(e) {}
 
       await sleep(200);
@@ -774,7 +880,7 @@ async function run() {
       const activationStats = await fetchActivations(projectKey, conf);
       const ownershipStats = await getOwnershipStats(conf, activationStats.dualBurn.equivalentBrokersBurnt, prevProjData);
       
-      const yieldData = await getGlobalYield(conf, sevenDaysAgo, activationStats, markets[projectKey]);
+      const yieldData = await getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, markets[projectKey]);
       const globalAnnualYield = yieldData.global7DayUsd * 52.14;
 
       let totalNetworkWeight = 0;
@@ -795,18 +901,25 @@ async function run() {
         });
       }
 
+      let lockedLpData = null;
+      if (projectKey === "stonk") {
+          lockedLpData = scanLockedStonkLiquidity(conf.tokenCa, markets[projectKey].tokenPriceUsd);
+      }
+
       finalJson.projects[projectKey] = {
         market: markets[projectKey],
         activation: activationStats,
         ownership: ownershipStats,
         tiers: mappedTiers,
+        revenue: yieldData.revenueBreakdown,
+        lockedLp: lockedLpData,
         underConstruction: conf.underConstruction,
         config: { ticker: conf.ticker, unitValue: conf.unitValue, logo: conf.logo, nftCa: conf.nftCa }
       };
   }
 
   fs.writeFileSync("data.json", JSON.stringify(finalJson, null, 2));
-  console.log("\n✓ Dashboard payload generated successfully with Memes and Stocks.");
+  console.log("\n✓ Complete dashboard payload generated successfully.");
 }
 
 run().catch(err => { console.error(err); process.exit(1); });
