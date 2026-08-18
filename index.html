@@ -58,25 +58,30 @@
                     </div>
                 </div>
                 
-                <div id="project-dropdown-menu" class="absolute left-0 top-[85%] mt-1 w-56 bg-[#1e293b] border border-[#334155] rounded-xl shadow-2xl py-2 z-50 hidden transition-all duration-200">
-                    <div onclick="selectProject('stonk')" class="px-4 py-2 hover:bg-[#334155] cursor-pointer flex items-center gap-3 text-white font-semibold transition">
+                <div id="project-dropdown-menu" class="absolute left-0 top-[85%] mt-1 w-64 bg-[#1e293b] border border-[#334155] rounded-xl shadow-2xl py-2 z-50 hidden transition-all duration-200">
+                    <div onclick="selectProject('stonk')" class="px-4 py-2.5 hover:bg-[#334155] cursor-pointer flex items-center gap-3 text-white font-semibold transition">
                         <div class="w-2 h-2 rounded-full bg-blue-500"></div> StonkBrokers
                     </div>
-                    <div onclick="selectProject('mancer')" class="px-4 py-2 hover:bg-[#334155] cursor-pointer flex items-center gap-3 text-white font-semibold transition">
+                    <div onclick="selectProject('mancer')" class="px-4 py-2.5 hover:bg-[#334155] cursor-pointer flex items-center gap-3 text-white font-semibold transition">
                         <div class="w-2 h-2 rounded-full bg-purple-500"></div> Mancer
                     </div>
-                    <div onclick="selectProject('tickeryard')" class="px-4 py-2 hover:bg-[#334155] cursor-pointer flex items-center gap-3 text-white font-semibold transition">
-                        <div class="w-2 h-2 rounded-full bg-cyan-400"></div> TickerYard <span class="text-[9px] bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 px-1.5 py-0.2 rounded font-semibold ml-auto">New</span>
+                    <div onclick="selectProject('tickeryard')" class="px-4 py-2.5 hover:bg-[#334155] cursor-pointer flex items-center gap-3 text-white font-semibold transition">
+                        <div class="w-2 h-2 rounded-full bg-cyan-400"></div> TickerYard <span class="text-[9px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.2 rounded font-semibold ml-auto">Live</span>
+                    </div>
+                    <div onclick="selectProject('cardwall')" class="px-4 py-2.5 hover:bg-[#334155] cursor-pointer flex items-center gap-3 text-white font-semibold transition">
+                        <div class="w-2 h-2 rounded-full bg-amber-400"></div> The Card Wall <span class="text-[9px] bg-amber-500/20 text-amber-400 border border-amber-500/30 px-1.5 py-0.2 rounded font-semibold ml-auto">New</span>
                     </div>
                     <div class="border-t border-[#334155] my-1"></div>
-                    <div class="px-4 py-2 flex items-center gap-3 text-slate-400 font-semibold cursor-not-allowed opacity-75">
-                        <div class="w-2 h-2 rounded-full bg-orange-500"></div> Pitboys / DERP <span class="text-[9px] bg-orange-500/20 text-orange-400 border border-orange-500/30 px-1.5 py-0.2 rounded font-semibold ml-auto">Soon</span>
+                    <div onclick="selectProject('portfolio')" class="px-4 py-2.5 hover:bg-[#334155] cursor-pointer flex items-center gap-3 text-emerald-300 font-bold transition">
+                        <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+                        Portfolio Tracker
                     </div>
-                    <div onclick="selectProject('memes')" class="px-4 py-2 hover:bg-[#334155] cursor-pointer flex items-center gap-3 text-white font-semibold transition">
-                        <div class="w-2 h-2 rounded-full bg-emerald-500"></div> Robinhood Tokens <span class="text-[9px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.2 rounded font-semibold ml-auto">Live</span>
+                    <div class="border-t border-[#334155] my-1"></div>
+                    <div onclick="selectProject('memes')" class="px-4 py-2.5 hover:bg-[#334155] cursor-pointer flex items-center gap-3 text-white font-semibold transition">
+                        <div class="w-2 h-2 rounded-full bg-emerald-500"></div> Robinhood Tokens
                     </div>
-                    <div onclick="selectProject('stocks')" class="px-4 py-2 hover:bg-[#334155] cursor-pointer flex items-center gap-3 text-white font-semibold transition">
-                        <div class="w-2 h-2 rounded-full bg-blue-400"></div> Robinhood Stocks <span class="text-[9px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-1.5 py-0.2 rounded font-semibold ml-auto">Live</span>
+                    <div onclick="selectProject('stocks')" class="px-4 py-2.5 hover:bg-[#334155] cursor-pointer flex items-center gap-3 text-white font-semibold transition">
+                        <div class="w-2 h-2 rounded-full bg-blue-400"></div> Robinhood Stocks
                     </div>
                 </div>
             </div>
@@ -99,22 +104,21 @@
     </header>
 
     <div class="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-        <div id="standard-tabs" class="flex flex-wrap gap-3 md:gap-4 w-full sm:w-auto">
-            <button id="tab-roi" onclick="switchTab('roi')" class="flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition shadow-lg shadow-blue-500/25">
-                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 0h8v12H6V4zm2 2v2h4V6H8zm0 4v2h4v-2H8zm0 4v2h4v-2H8z"></path></svg>
-                Tier ROI Benchmarks
+        <div id="standard-tabs" class="flex flex-wrap gap-2 md:gap-3 w-full sm:w-auto">
+            <button id="tab-roi" onclick="switchTab('roi')" class="flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm shadow-lg shadow-blue-500/25">
+                ROI Benchmarks
             </button>
-            <button id="tab-burn" onclick="switchTab('burn')" class="flex-1 sm:flex-none justify-center bg-transparent border border-[#334155] hover:bg-[#1e293b] text-slate-300 px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition">
-                <svg class="w-4 h-4 text-orange-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.214.33-.403.713-.57 1.116-.334.804-.603 1.768-.84 2.734a31.365 31.365 0 00-.613 3.58 2.64 2.64 0 01-.945-1.067c-.328-.68-.398-1.534-.398-2.654a1 1 0 00-1.788-.606 6.989 6.989 0 00-1.892 4.885 7 7 0 0012.38 4.352 1 1 0 00-1.03-1.594 5 5 0 01-8.35-3.08c0-1.127.243-2.046.688-2.73a5.617 5.617 0 011.082-1.226c.46-.388.94-.74 1.425-1.054.48-.31.964-.595 1.442-.861a1 1 0 00.385-1.45z" clip-rule="evenodd"></path></svg>
+            <button id="tab-revenue" onclick="switchTab('revenue')" class="flex-1 sm:flex-none justify-center bg-transparent border border-[#334155] hover:bg-[#1e293b] text-slate-300 px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm">
+                Revenue & LPs
+            </button>
+            <button id="tab-burn" onclick="switchTab('burn')" class="flex-1 sm:flex-none justify-center bg-transparent border border-[#334155] hover:bg-[#1e293b] text-slate-300 px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm">
                 Burn Tracker
             </button>
-            <button id="tab-activation" onclick="switchTab('activation')" class="flex-1 sm:flex-none justify-center bg-transparent border border-[#334155] hover:bg-[#1e293b] text-slate-300 px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition">
-                <svg class="w-4 h-4 text-blue-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg>
-                Ecosystem Activation
+            <button id="tab-activation" onclick="switchTab('activation')" class="flex-1 sm:flex-none justify-center bg-transparent border border-[#334155] hover:bg-[#1e293b] text-slate-300 px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm">
+                Activation
             </button>
-            <button id="tab-ownership" onclick="switchTab('ownership')" class="flex-1 sm:flex-none justify-center bg-transparent border border-[#334155] hover:bg-[#1e293b] text-slate-300 px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition">
-                <svg class="w-4 h-4 text-emerald-400" fill="currentColor" viewBox="0 0 20 20"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"></path></svg>
-                Ownership Stats
+            <button id="tab-ownership" onclick="switchTab('ownership')" class="flex-1 sm:flex-none justify-center bg-transparent border border-[#334155] hover:bg-[#1e293b] text-slate-300 px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm">
+                Ownership
             </button>
         </div>
         
@@ -129,17 +133,9 @@
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div>
                 <h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2" id="tokens-view-title">
-                    <svg class="w-5 h-5 text-emerald-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"></path></svg>
                     Robinhood Tokens Tracker
                 </h2>
                 <p class="text-xs md:text-sm text-slate-400 mt-1" id="tokens-view-desc">Real-time liquidity, volume, and metrics for Robinhood Chain tokens</p>
-            </div>
-        </div>
-
-        <div class="mb-6 p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-200/90 text-xs md:text-sm flex items-start gap-3">
-            <svg class="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-            <div>
-                <strong class="text-amber-300 font-bold">Disclaimer & Verification Notice:</strong> Not financial advice. DYOR (Do Your Own Research). Token metrics are aggregated via third-party APIs. <strong>Users are solely responsible for independently verifying all token contract addresses (CAs)</strong> and authenticity before interacting, trading, or holding.
             </div>
         </div>
 
@@ -159,6 +155,48 @@
                 </thead>
                 <tbody id="memes-body"></tbody>
             </table>
+        </div>
+    </main>
+
+    <!-- View: Portfolio Multi-Wallet Tracker -->
+    <main id="view-portfolio" class="max-w-6xl mx-auto card rounded-2xl border p-4 md:p-6 mb-8 shadow-xl hidden">
+        <div class="mb-6">
+            <h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2">
+                <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+                Multi-Wallet Ecosystem Portfolio Tracker
+            </h2>
+            <p class="text-xs text-slate-400 mt-1">Scan single or multiple comma-separated wallet addresses to track total active NFTs, net asset value, and combined annual cash-flow.</p>
+        </div>
+
+        <div class="flex flex-col sm:flex-row gap-3 mb-6" data-html2canvas-ignore="true">
+            <input type="text" id="portfolio-wallet-input" placeholder="Paste Wallet Address (e.g. 0x123..., 0x456...)" class="bg-[#0f172a] border border-[#334155] text-white px-4 py-2.5 rounded-lg text-sm flex-1 focus:outline-none focus:border-blue-500">
+            <button onclick="scanPortfolioWallets()" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-6 py-2.5 rounded-lg text-sm transition flex items-center justify-center gap-2 shadow-md">
+                Scan Portfolio
+            </button>
+        </div>
+
+        <div id="portfolio-results" class="hidden">
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
+                    <p class="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Total Floor Value</p>
+                    <p class="text-xl md:text-2xl font-extrabold text-white" id="port-total-floor">$0.00</p>
+                </div>
+                <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
+                    <p class="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Forecasted Annual Cash-Flow</p>
+                    <p class="text-xl md:text-2xl font-extrabold text-emerald-400" id="port-total-yield">$0.00 /yr</p>
+                </div>
+                <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
+                    <p class="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Combined Portfolio ROI</p>
+                    <p class="text-xl md:text-2xl font-extrabold text-blue-400" id="port-total-roi">0.00%</p>
+                </div>
+                <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
+                    <p class="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Total Active Units</p>
+                    <p class="text-xl md:text-2xl font-extrabold text-purple-400" id="port-total-units">0 Units</p>
+                </div>
+            </div>
+
+            <h3 class="text-sm font-bold text-white mb-4">Owned Asset Breakdown</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="portfolio-items-container"></div>
         </div>
     </main>
 
@@ -207,6 +245,70 @@
             </div>
 
             <div id="lookup-results" class="hidden bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner mt-4 relative"></div>
+        </div>
+    </main>
+
+    <!-- View: Revenue & LP Breakdown -->
+    <main id="view-revenue" class="max-w-6xl mx-auto card rounded-2xl border p-4 md:p-6 mb-8 shadow-xl hidden">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+            <div>
+                <h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2">
+                    <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    Protocol Revenue & Ecosystem Liquidity
+                </h2>
+                <p class="text-xs text-slate-400 mt-1">Multi-stream on-chain fee generation, launchpad revenue, and locked LP assets.</p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
+                <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">AMM & Swap Protocol Fees (7D)</p>
+                <p class="text-2xl font-extrabold text-emerald-400" id="rev-stat-amm">$0.00</p>
+            </div>
+            <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
+                <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Clock-In Security Box (7D)</p>
+                <p class="text-2xl font-extrabold text-blue-400" id="rev-stat-secbox">$0.00</p>
+            </div>
+            <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
+                <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Safe Launchpad Deployments (7D)</p>
+                <p class="text-2xl font-extrabold text-purple-400" id="rev-stat-launchpad">$0.00</p>
+            </div>
+        </div>
+
+        <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6 mb-6">
+            <h3 class="text-sm font-bold text-white mb-4">Daily Revenue Inflows by Stream (USD)</h3>
+            <div class="relative h-72 md:h-80 w-full">
+                <canvas id="revenueChart"></canvas>
+            </div>
+        </div>
+
+        <div id="locked-lp-section" class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6 mb-6 hidden">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-2">
+                <div>
+                    <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-orange-400"></span>
+                        "Black Hole" Liquidity: Ecosystem Tokens Locked in Pools
+                    </h3>
+                    <p class="text-xs text-slate-400 mt-0.5">Scanned from all active partner, meme, and launchpad trading pairs.</p>
+                </div>
+                <div class="text-right">
+                    <p class="text-base font-extrabold text-orange-400" id="stat-total-stonk-lp">0 Tokens</p>
+                    <p class="text-[10px] text-slate-400" id="stat-total-stonk-lp-usd">$0.00 Total Pool Reserves</p>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs border-collapse">
+                    <thead>
+                        <tr class="text-slate-400 border-b border-[#334155]">
+                            <th class="pb-2 pl-2">Trading Pair</th>
+                            <th class="pb-2">DEX Venue</th>
+                            <th class="pb-2 text-right">Tokens Locked</th>
+                            <th class="pb-2 text-right pr-2">Total Pool Liquidity</th>
+                        </tr>
+                    </thead>
+                    <tbody id="lp-pools-body"></tbody>
+                </table>
+            </div>
         </div>
     </main>
 
@@ -468,6 +570,7 @@
         let activationChartInstance = null;
         let tierPieChartInstance = null;
         let ownershipChartInstance = null;
+        let revenueChartInstance = null;
         let tierChartInstances = {};
 
         function toggleDropdown(e) {
@@ -492,40 +595,49 @@
 
         function switchTab(tab) {
             const btnRoi = document.getElementById('tab-roi');
+            const btnRev = document.getElementById('tab-revenue');
             const btnBurn = document.getElementById('tab-burn');
             const btnActivation = document.getElementById('tab-activation');
             const btnOwnership = document.getElementById('tab-ownership');
             
             const viewRoi = document.getElementById('view-roi');
+            const viewRev = document.getElementById('view-revenue');
             const viewBurn = document.getElementById('view-burn');
             const viewActivation = document.getElementById('view-activation');
             const viewOwnership = document.getElementById('view-ownership');
             const viewMemes = document.getElementById('view-memes');
+            const viewPortfolio = document.getElementById('view-portfolio');
 
-            [btnRoi, btnBurn, btnActivation, btnOwnership].forEach(b => {
-                if(b) b.className = "flex-1 sm:flex-none justify-center bg-transparent border border-[#334155] hover:bg-[#1e293b] text-slate-300 px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition";
+            [btnRoi, btnRev, btnBurn, btnActivation, btnOwnership].forEach(b => {
+                if(b) b.className = "flex-1 sm:flex-none justify-center bg-transparent border border-[#334155] hover:bg-[#1e293b] text-slate-300 px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm";
             });
             
-            [viewRoi, viewBurn, viewActivation, viewOwnership, viewMemes].forEach(v => { if(v) v.classList.add('hidden'); });
+            [viewRoi, viewRev, viewBurn, viewActivation, viewOwnership, viewMemes, viewPortfolio].forEach(v => { if(v) v.classList.add('hidden'); });
 
             if (tab === 'roi') {
-                if(btnRoi) btnRoi.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition shadow-lg shadow-blue-500/25";
+                if(btnRoi) btnRoi.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm shadow-lg shadow-blue-500/25";
                 if(viewRoi) viewRoi.classList.remove('hidden');
+            } else if (tab === 'revenue') {
+                if(btnRev) btnRev.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm shadow-lg shadow-blue-500/25";
+                if(viewRev) viewRev.classList.remove('hidden');
+                if (window.revenueData) renderRevenueChart(window.revenueData);
             } else if (tab === 'burn') {
-                if(btnBurn) btnBurn.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition shadow-lg shadow-blue-500/25";
+                if(btnBurn) btnBurn.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm shadow-lg shadow-blue-500/25";
                 if(viewBurn) viewBurn.classList.remove('hidden');
                 if (window.fullBurnData && window.fullBurnData.length) updateBurnChart('all');
             } else if (tab === 'activation') {
-                if(btnActivation) btnActivation.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition shadow-lg shadow-blue-500/25";
+                if(btnActivation) btnActivation.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm shadow-lg shadow-blue-500/25";
                 if(viewActivation) viewActivation.classList.remove('hidden');
                 if (window.tierActivationStats) updateTierStats('allTime');
                 if (window.activationChartData) renderActivationCharts(window.activationChartData);
             } else if (tab === 'ownership') {
-                if(btnOwnership) btnOwnership.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 transition shadow-lg shadow-blue-500/25";
+                if(btnOwnership) btnOwnership.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm shadow-lg shadow-blue-500/25";
                 if(viewOwnership) viewOwnership.classList.remove('hidden');
                 if (window.ownershipChartData) renderOwnershipChart(window.ownershipChartData);
             } else if (tab === 'memes') {
                 if(viewMemes) viewMemes.classList.remove('hidden');
+            } else if (tab === 'portfolio') {
+                if(viewPortfolio) viewPortfolio.classList.remove('hidden');
             }
         }
 
@@ -565,6 +677,16 @@
             const ethPrice = masterData?.projects?.['stonk']?.market?.ethPriceUsd || 0;
             document.getElementById('eth-price').innerText = ethPrice ? formatCurrency(ethPrice) : '---';
 
+            if (projectKey === 'portfolio') {
+                document.getElementById('header-logo').src = 'Stonkbroker.png';
+                document.getElementById('project-title').innerText = 'Portfolio Tracker';
+                document.getElementById('token-price-box').classList.add('hidden');
+                document.getElementById('nft-floor-box').classList.add('hidden');
+                document.getElementById('standard-tabs').classList.add('hidden');
+                switchTab('portfolio');
+                return;
+            }
+
             if (projectKey === 'memes' || projectKey === 'stocks') {
                 const isStocks = projectKey === 'stocks';
                 document.getElementById('header-logo').src = 'Stonkbroker.png';
@@ -588,7 +710,7 @@
             document.getElementById('standard-tabs').classList.remove('hidden');
             
             const data = masterData.projects[projectKey];
-            if (!data) return; // Prevent crashes if data is missing
+            if (!data) return;
 
             const m = data.market;
             const conf = data.config;
@@ -597,9 +719,17 @@
 
             let logoSrc = conf.logo || 'Stonkbroker.png';
             if (projectKey === 'tickeryard') logoSrc = 'Yardkeepers.png';
+            if (projectKey === 'cardwall') logoSrc = 'TheCardWall.png';
+
+            const projectNames = {
+                stonk: 'StonkBrokers Tracker',
+                mancer: 'Mancer Tracker',
+                tickeryard: 'TickerYard Tracker',
+                cardwall: 'The Card Wall Tracker'
+            };
 
             document.getElementById('header-logo').src = logoSrc;
-            document.getElementById('project-title').innerText = projectKey === 'stonk' ? 'StonkBrokers Tracker' : (projectKey === 'mancer' ? 'Mancer Tracker' : 'TickerYard Tracker');
+            document.getElementById('project-title').innerText = projectNames[projectKey] || 'Protocol Tracker';
             document.getElementById('dynamic-ticker-label').innerText = `$${conf.ticker}`;
             document.getElementById('token-price').innerText = formatPrice(m.tokenPriceUsd);
             document.getElementById('nft-floor').innerText = m.nftFloorEth.toFixed(3) + ' ETH';
@@ -680,825 +810,56 @@
                 });
             }
 
-            processMetricsData(data);
+            processMetricsData(data, projectKey);
             switchTab('roi');
         }
 
-        function toggleTierDetails(tierId) {
-            const detailsRow = document.getElementById('details-' + tierId);
-            if (!detailsRow) return;
-            const isHidden = detailsRow.classList.contains('hidden');
-            const chevron = document.getElementById('chevron-' + tierId);
-            
-            if (isHidden) {
-                detailsRow.classList.remove('hidden');
-                if (chevron) chevron.style.transform = 'rotate(180deg)';
-                
-                if (!tierChartInstances[tierId]) {
-                    const canvas = document.getElementById('chart-' + tierId);
-                    if (!canvas) return;
-                    const ctx = canvas.getContext('2d');
-                    const cData = window.tierChartData[tierId] || { labels: [], data: [] };
-                    tierChartInstances[tierId] = new Chart(ctx, {
-                        type: 'line',
-                        data: {
-                            labels: cData.labels,
-                            datasets: [{
-                                label: 'Daily Yield (USD)',
-                                data: cData.data,
-                                borderColor: '#3b82f6',
-                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                                borderWidth: 2,
-                                fill: true,
-                                tension: 0.4,
-                                pointRadius: 3,
-                                pointBackgroundColor: '#3b82f6'
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => formatCurrency(ctx.raw) } } },
-                            scales: {
-                                x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
-                                y: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: (v) => '$' + v } }
-                            }
-                        }
-                    });
-                }
-            } else {
-                detailsRow.classList.add('hidden');
-                if (chevron) chevron.style.transform = 'rotate(0deg)';
-            }
-        }
-
-        function renderMemesTable(customTokenList = null) {
-            const tbody = document.getElementById('memes-body');
-            tbody.innerHTML = '';
-            const memes = customTokenList || masterData.memes || [];
-
-            memes.forEach((meme, index) => {
-                const roiColor = meme.priceChange24h >= 0 ? 'text-emerald-400' : 'text-rose-400';
-                const roiSign = meme.priceChange24h >= 0 ? '+' : '';
-                
-                const copyBtn = meme.ca ? `
-                    <button onclick="event.stopPropagation(); navigator.clipboard.writeText('${meme.ca}'); alert('Copied CA for ${meme.name}:\\n${meme.ca}');" class="text-[10px] bg-[#334155] hover:bg-slate-600 text-slate-200 px-2 py-0.5 rounded border border-slate-600 ml-2 transition" title="Copy Contract Address">Copy CA</button>
-                ` : `<span class="text-[10px] text-slate-500 ml-2">No CA</span>`;
-                
-                // Uses dynamically fetched supply!
-                const totalSupply = meme.totalSupply || 1000000000;
-                
-                const burntPct = meme.burnt > 0 ? ((meme.burnt / totalSupply) * 100).toFixed(2) + '%' : '0.00%';
-                const burntFormatted = meme.burnt > 0 ? `<span class="text-[12px] text-orange-400 font-bold">${burntPct}</span>` : '<span class="text-[12px] text-slate-500 font-normal">0.00%</span>';
-
-                const tr = document.createElement('tr');
-                tr.className = 'cursor-pointer border-b border-[#334155]/50 hover:bg-[#334155]/20 transition-colors group';
-                tr.onclick = () => toggleMemeDetails(index);
-                tr.innerHTML = `
-                    <td class="py-4 pl-2 font-bold text-white flex items-center justify-between pr-4">
-                        <div class="flex items-center gap-2">
-                            <div class="w-2.5 h-2.5 rounded-full bg-emerald-400"></div>
-                            ${meme.name}
-                        </div>
-                        ${copyBtn}
-                    </td>
-                    <td class="py-4 text-slate-200">${formatCurrency(meme.volume24h)}</td>
-                    <td class="py-4 text-slate-200">${formatCurrency(meme.liquidity)}</td>
-                    <td class="py-4 font-bold ${roiColor}">${roiSign}${meme.priceChange24h.toFixed(2)}%</td>
-                    <td class="py-4 text-emerald-400 font-semibold">${meme.roi || '0.00%'}</td>
-                    <td class="py-4 text-slate-200">${formatCurrency(meme.fdv)}</td>
-                    <td class="py-4 text-slate-200">${formatCurrency(meme.marketCap)}</td>
-                    <td class="py-4 text-right pr-4 text-orange-400 font-semibold">
-                        <div class="flex items-center justify-end gap-2">
-                            ${burntFormatted}
-                            <svg id="meme-chevron-${index}" class="w-4 h-4 text-slate-500 transition-transform duration-200 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                        </div>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-
-                const detailsTr = document.createElement('tr');
-                detailsTr.id = `meme-details-${index}`;
-                detailsTr.className = 'hidden bg-[#0f172a]/60 border-b border-[#334155]/50';
-                
-                const chartContent = meme.ca ? `
-                    <div id="iframe-container-${index}" data-src="https://dexscreener.com/robinhood/${meme.ca}?embed=1&theme=dark&trades=0&info=0" class="relative w-full h-[450px] rounded-xl overflow-hidden border border-[#334155] shadow-inner">
-                        <!-- Chart loads exactly here on click -->
-                    </div>
-                ` : `
-                    <div class="p-8 text-center text-slate-400 italic bg-[#1e293b]/40 rounded-xl border border-[#334155]">
-                        Interactive chart unavailable (Contract Address pending launch).
-                    </div>
-                `;
-
-                detailsTr.innerHTML = `
-                    <td colspan="8" class="p-4 md:p-6">
-                        <div class="flex justify-between items-center mb-3">
-                            <h4 class="text-sm font-bold text-white flex items-center gap-2">
-                                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-                                ${meme.name} Live Interactive Chart
-                            </h4>
-                            <button onclick="shareMemeToX('${meme.name}', '${meme.ca}', ${index})" id="share-btn-${index}" class="bg-[#1da1f2] hover:bg-[#1a91da] text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition shadow-sm" data-html2canvas-ignore="true">
-                                <svg class="w-3 h-3 fill-current text-white" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 24.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-                                Share
-                            </button>
-                        </div>
-                        ${chartContent}
-                    </td>
-                `;
-                tbody.appendChild(detailsTr);
-            });
-        }
-
-        function toggleMemeDetails(index) {
-            const detailsRow = document.getElementById('meme-details-' + index);
-            if (!detailsRow) return;
-            const isHidden = detailsRow.classList.contains('hidden');
-            const chevron = document.getElementById('meme-chevron-' + index);
-            
-            if (isHidden) {
-                detailsRow.classList.remove('hidden');
-                if (chevron) chevron.style.transform = 'rotate(180deg)';
-                
-                const iframeContainer = document.getElementById('iframe-container-' + index);
-                if (iframeContainer && !iframeContainer.querySelector('iframe')) {
-                    iframeContainer.innerHTML = `<iframe src="${iframeContainer.getAttribute('data-src')}" class="w-full h-full border-0"></iframe>`;
-                }
-            } else {
-                detailsRow.classList.add('hidden');
-                if (chevron) chevron.style.transform = 'rotate(0deg)';
-            }
-        }
-
-        let memeSortDirections = {};
-        function sortMemesTable(colIndex, isNumeric) {
-            const tbody = document.getElementById('memes-body');
-            const rows = Array.from(tbody.querySelectorAll('tr')).filter(row => !row.id.startsWith('meme-details-'));
-            
-            memeSortDirections[colIndex] = !memeSortDirections[colIndex];
-            const asc = memeSortDirections[colIndex];
-
-            rows.sort((a, b) => {
-                let cellA = a.cells[colIndex].innerText.trim();
-                let cellB = b.cells[colIndex].innerText.trim();
-
-                if (isNumeric) {
-                    let valA = parseFloat(cellA.replace(/[^0-9.-]+/g,"")) || 0;
-                    let valB = parseFloat(cellB.replace(/[^0-9.-]+/g,"")) || 0;
-                    return asc ? valA - valB : valB - valA;
-                } else {
-                    return asc ? cellA.localeCompare(cellB) : cellB.localeCompare(cellA);
-                }
-            });
-
-            rows.forEach(row => {
-                tbody.appendChild(row);
-                const detailId = row.getAttribute('onclick')?.match(/\d+/)?.[0];
-                if (detailId !== undefined) {
-                    const detailRow = document.getElementById('meme-details-' + detailId);
-                    if (detailRow) tbody.appendChild(detailRow);
-                }
-            });
-        }
-
-        // =====================================
-        // INDIVIDUAL UNIT ROI LOOKUP (Optimized)
-        // =====================================
-        async function lookupUnitRoi() {
-            const inputVal = document.getElementById('lookup-id-input').value.trim();
-            const resultsDiv = document.getElementById('lookup-results');
-            if (!inputVal) return;
-
-            resultsDiv.classList.remove('hidden');
-            resultsDiv.innerHTML = '<p class="text-xs text-slate-400 animate-pulse font-semibold">Scanning blockchain ledger for Token #' + inputVal + '...</p>';
-
-            try {
-                const proj = masterData.projects[currentProjectKey];
-                const conf = proj.config;
-                const m = proj.market;
-                const activeMap = proj.activation.activeTokenTiers || {};
-                
-                const tokenData = activeMap[inputVal];
-                const isActivated = tokenData !== undefined;
-                const tierId = isActivated ? tokenData.t : 'T0';
-                const tierData = proj.tiers.find(t => t.tier === tierId) || proj.tiers[0];
-
-                let seatedSeats = 0;
-
-                const pitTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error("RPC Timeout")), 4000));
-                if (isActivated && currentProjectKey === 'stonk') {
-                    try {
-                        const provider = new ethers.JsonRpcProvider("https://rpc.mainnet.chain.robinhood.com");
-                        const pitMineContract = new ethers.Contract("0x2d0da469115232aD00159757f9d25f81D498206D", ["function activeSlotCount(uint256 tokenId) view returns (uint256)"], provider);
-                        const count = await Promise.race([pitMineContract.activeSlotCount(inputVal), pitTimeout]);
-                        seatedSeats = Number(count);
-                    } catch (e) {
-                        console.warn("PitMine lookup timeout/fail - skipping", e);
-                    }
-                }
-
-                // DIRECT IPFS / TOKENURI PARSER (Ensures unique NFT art is pulled)
-                let imageSources = [];
-
-                try {
-                    const provider = new ethers.JsonRpcProvider("https://rpc.mainnet.chain.robinhood.com");
-                    const nftContract = new ethers.Contract(conf.nftCa, ["function tokenURI(uint256) view returns (string)"], provider);
-                    const uriTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error("RPC Timeout")), 5000));
-                    
-                    let tokenUri = await Promise.race([nftContract.tokenURI(inputVal), uriTimeout]);
-                    if (tokenUri) {
-                        if (tokenUri.startsWith("data:application/json;base64,")) {
-                            const jsonStr = atob(tokenUri.split(",")[1]);
-                            const meta = JSON.parse(jsonStr);
-                            if (meta.image) imageSources.push(resolveIpfsUrl(meta.image));
-                        } else {
-                            const httpUri = resolveIpfsUrl(tokenUri);
-                            const metaRes = await fetchWithRetry(httpUri, {timeout: 4000});
-                            if (metaRes.ok) {
-                                const text = await metaRes.text();
-                                try {
-                                    const meta = JSON.parse(text);
-                                    if (meta.image) imageSources.push(resolveIpfsUrl(meta.image));
-                                } catch (parseErr) {
-                                    // Custom Regex fallback for malformed JSON formatting on IPFS
-                                    const match = text.match(/"image"\s*:\s*"([^"]+)"/);
-                                    if (match && match[1]) imageSources.push(resolveIpfsUrl(match[1]));
-                                }
-                            }
-                        }
-                    }
-                } catch (e) {
-                    console.warn("Direct RPC tokenURI failed, falling back to Blockscout...", e);
-                }
-
-                try {
-                    const imgRes = await fetchWithRetry(`https://robinhoodchain.blockscout.com/api/v2/tokens/${conf.nftCa}/instances/${inputVal}`, {timeout: 4000});
-                    if (imgRes.ok) {
-                        const imgData = await imgRes.json();
-                        let meta = imgData?.metadata;
-                        if (typeof meta === 'string') { try { meta = JSON.parse(meta); } catch(e) {} }
-                        
-                        if (meta?.image) imageSources.push(resolveIpfsUrl(meta.image));
-                        if (meta?.image_url) imageSources.push(resolveIpfsUrl(meta.image_url));
-                        if (imgData?.image_url) imageSources.push(resolveIpfsUrl(imgData.image_url));
-                        if (imgData?.animation_url) imageSources.push(resolveIpfsUrl(imgData.animation_url));
-                    }
-                } catch(e) {
-                    console.warn("Blockscout image fetch failed", e);
-                }
-
-                let nftImageHtml = `
-                    <div class="w-12 h-12 md:w-16 md:h-16 rounded-xl bg-[#1e293b] border border-[#334155] flex items-center justify-center flex-shrink-0">
-                        <svg class="w-6 h-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                    </div>
-                `;
-
-                // Convert image to BASE64 so it NEVER triggers Canvas Tainting!
-                let finalImageSrc = null;
-                if (imageSources.length > 0) {
-                    const uniqueSources = [...new Set(imageSources.filter(s => s && s.trim() !== ''))];
-                    if (uniqueSources.length > 0) {
-                        const primary = uniqueSources[0];
-                        try {
-                            const b64Res = await fetchWithRetry(primary, {timeout: 4000});
-                            if (b64Res.ok) {
-                                const blob = await b64Res.blob();
-                                finalImageSrc = await new Promise((r) => {
-                                    const reader = new FileReader();
-                                    reader.onloadend = () => r(reader.result);
-                                    reader.readAsDataURL(blob);
-                                });
-                            }
-                        } catch(e) {}
-                        
-                        if (!finalImageSrc) {
-                            const pinata = primary.replace('cloudflare-ipfs.com', 'gateway.pinata.cloud');
-                            const dweb = primary.replace('cloudflare-ipfs.com', 'dweb.link');
-                            finalImageSrc = primary; // Fallback to raw URL
-                            nftImageHtml = `<img src="${finalImageSrc}" onerror="this.onerror=null; this.src='${pinata}'; this.onerror=function(){this.onerror=null; this.src='${dweb}';};" alt="Unit #${inputVal}" crossorigin="anonymous" class="w-12 h-12 md:w-16 md:h-16 rounded-xl border border-[#334155] object-cover bg-[#0f172a] flex-shrink-0 shadow-md">`;
-                        } else {
-                            nftImageHtml = `<img src="${finalImageSrc}" alt="Unit #${inputVal}" class="w-12 h-12 md:w-16 md:h-16 rounded-xl border border-[#334155] object-cover bg-[#0f172a] flex-shrink-0 shadow-md">`;
-                        }
-                    }
-                }
-
-                let lastSaleEth = 0;
-                let foundValidTx = false;
-                let totalTransfers = 0;
-                let purchaseTs = null;
-                let txApiFailed = false;
-
-                try {
-                    const txsRes = await fetchWithRetry(`https://robinhoodchain.blockscout.com/api/v2/tokens/${conf.nftCa}/instances/${inputVal}/transfers`, {timeout: 6000});
-                    if (txsRes.ok) {
-                        const txsData = await txsRes.json();
-                        const items = txsData.items || [];
-                        totalTransfers = items.length;
-                        
-                        const itemsToCheck = items.slice(0, 2);
-                        
-                        for (const transfer of itemsToCheck) {
-                            const txHash = transfer.transaction_hash || transfer.tx_hash || transfer.hash;
-                            if (!txHash) continue;
-                            
-                            if (itemsToCheck.length > 1 && itemsToCheck.indexOf(transfer) > 0) {
-                                await sleep(500); 
-                            }
-
-                            try {
-                                const txRes = await fetchWithRetry(`https://robinhoodchain.blockscout.com/api/v2/transactions/${txHash}`, {timeout: 6000});
-                                if (txRes.ok) {
-                                    const txData = await txRes.json();
-                                    let val = parseFloat(txData.value || "0") / 1e18;
-                                    
-                                    if (val === 0) {
-                                        let tokenTransfers = txData.token_transfers || [];
-                                        if (tokenTransfers.length > 0) {
-                                            let maxWethTransfer = 0;
-                                            for (const tt of tokenTransfers) {
-                                                const sym = (tt.token?.symbol || "").toUpperCase();
-                                                const dec = parseInt(tt.token?.decimals || "0", 10);
-                                                if (dec >= 18 && !sym.includes(conf.ticker) && !sym.includes("STONK") && !sym.includes("MANCER")) {
-                                                    const rawVal = tt.total?.value || tt.value || "0";
-                                                    const amt = parseFloat(rawVal) / Math.pow(10, dec);
-                                                    if (amt > maxWethTransfer && amt < 50000) maxWethTransfer = amt; 
-                                                }
-                                            }
-                                            val = maxWethTransfer;
-                                        }
-                                    }
-
-                                    if (val > 0) {
-                                        lastSaleEth = val;
-                                        foundValidTx = true;
-                                        if (txData.timestamp) purchaseTs = new Date(txData.timestamp).getTime() / 1000;
-                                        break; 
-                                    }
-                                }
-                            } catch (e) {
-                                txApiFailed = true;
-                                break; 
-                            }
-                        }
-
-                        if (!foundValidTx && totalTransfers > 0 && !txApiFailed) {
-                            const mintTx = items[items.length - 1];
-                            if (mintTx && mintTx.timestamp) purchaseTs = new Date(mintTx.timestamp).getTime() / 1000;
-                        }
-                    } else {
-                        txApiFailed = true;
-                    }
-                } catch (e) {
-                    txApiFailed = true;
-                }
-
-                function getHistoricalTokenPriceFallback(ticker, ts, currentSpot) {
-                    if (!ts) return currentSpot;
-                    const date = new Date(ts * 1000);
-                    if (ticker === 'STONK') {
-                        if (date < new Date('2026-07-20')) return 0.004;
-                        if (date < new Date('2026-07-25')) return 0.008;
-                        if (date < new Date('2026-08-01')) return 0.015;
-                        if (date < new Date('2026-08-05')) return 0.022;
-                        if (date < new Date('2026-08-08')) return 0.028;
-                        if (date < new Date('2026-08-11')) return 0.031;
-                    }
-                    if (ticker === 'MANCER') {
-                        if (date < new Date('2026-08-06')) return 0.0022;
-                        if (date < new Date('2026-08-09')) return 0.0025;
-                        if (date < new Date('2026-08-15')) return 0.0028;
-                    }
-                    return currentSpot;
-                }
-
-                const actTs = isActivated ? tokenData.ts : null;
-                const effectiveTs = (purchaseTs && actTs) ? Math.min(purchaseTs, actTs) : (purchaseTs || actTs);
-                const historicalTokenPrice = getHistoricalTokenPriceFallback(conf.ticker, effectiveTs, m.tokenPriceUsd);
-                
-                const activationCostUsd = tierData.reqTokens * historicalTokenPrice;
-                const annualYieldUsd = tierData.trackedAnnualYieldUsd;
-                const weeklyYieldUsd = (tierData.dailyYields || []).reduce((a, b) => a + b, 0);
-                
-                const purchaseCostUsd = lastSaleEth * m.ethPriceUsd;
-                
-                let totalBasisUsd = activationCostUsd;
-                if (!txApiFailed && foundValidTx) {
-                    totalBasisUsd += purchaseCostUsd;
-                }
-                
-                const cocRoi = totalBasisUsd > 0 ? ((annualYieldUsd / totalBasisUsd) * 100) : 0;
-
-                let basisHtml = '';
-                let cocRoiHtml = '';
-
-                if (txApiFailed) {
-                    basisHtml = `
-                        <div class="bg-amber-900/20 p-3 rounded-lg border border-amber-800/50">
-                            <p class="text-[10px] uppercase text-amber-400 mb-0.5">Last Sale Basis</p>
-                            <p class="text-xs font-bold text-amber-300">API Timeout</p>
-                            <p class="text-[10px] text-amber-400/80">Using base activation cost</p>
-                        </div>
-                    `;
-                    const baseRoi = activationCostUsd > 0 ? ((annualYieldUsd / activationCostUsd) * 100) : 0;
-                    cocRoiHtml = `
-                        <div class="flex flex-col items-end">
-                            <span class="bg-amber-900/20 text-amber-400 border border-amber-800/50 px-3 py-1 rounded text-sm font-bold">${baseRoi.toFixed(2)}%*</span>
-                            <span class="text-[9px] text-amber-500/70 mt-1">*Base ROI (No Sale Data)</span>
-                        </div>
-                    `;
-                } else if (!foundValidTx && totalTransfers > 0) {
-                    basisHtml = `
-                        <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
-                            <p class="text-[10px] uppercase text-slate-400 mb-0.5">Last Sale Basis</p>
-                            <p class="text-base font-bold text-emerald-400">$0.00</p>
-                            <p class="text-[10px] text-emerald-500/80">Minted (Free)</p>
-                        </div>
-                    `;
-                    cocRoiHtml = `<span class="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-3 py-1 rounded text-sm font-bold">${cocRoi.toFixed(2)}%</span>`;
-                } else {
-                    basisHtml = `
-                        <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
-                            <p class="text-[10px] uppercase text-slate-400 mb-0.5">Last Sale Basis</p>
-                            <p class="text-base font-bold text-white">${formatCurrency(purchaseCostUsd)}</p>
-                            <p class="text-[10px] text-slate-500">${lastSaleEth.toFixed(3)} ETH</p>
-                        </div>
-                    `;
-                    cocRoiHtml = `<span class="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-3 py-1 rounded text-sm font-bold">${cocRoi.toFixed(2)}%</span>`;
-                }
-
-                const tokenBasisLabel = effectiveTs ? 'Est. Token Basis' : 'Current Token Basis';
-                const priceRef = effectiveTs ? formatPrice(historicalTokenPrice) : '(Spot)';
-                const tokenBasisHtml = `
-                    <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
-                        <p class="text-[10px] uppercase text-slate-400 mb-0.5">${tokenBasisLabel}</p>
-                        <p class="text-base font-bold text-white">${formatCurrency(activationCostUsd)}</p>
-                        <p class="text-[10px] text-slate-500">${formatNumber(tierData.reqTokens)} ${conf.ticker} at ${priceRef}</p>
-                    </div>
-                `;
-
-                let derpMiningHtml = '';
-                if (isActivated && currentProjectKey === 'stonk' && liveDerpPriceUsd > 0) {
-                    const dailyDerpPerSeat = MINING_CONFIG.avgDerpPerShiftOrange * MINING_CONFIG.shiftsPerDay;
-                    const netDailyProfitPerSeat = (dailyDerpPerSeat * liveDerpPriceUsd) - (MINING_CONFIG.ethGasPerShift * liveEthPriceUsd * MINING_CONFIG.shiftsPerDay);
-                    const netAnnualPerSeatUsd = netDailyProfitPerSeat > 0 ? (netDailyProfitPerSeat * 365) : 0;
-                    const maxAnnual16SeatsUsd = netAnnualPerSeatUsd * MINING_CONFIG.maxSeatsPerBroker;
-                    const currentActiveSeats = seatedSeats > 0 ? seatedSeats : 1;
-                    const currentAnnualNetUsd = netAnnualPerSeatUsd * currentActiveSeats;
-
-                    if (netAnnualPerSeatUsd > 0) {
-                        if (seatedSeats > 0) {
-                            derpMiningHtml = `
-                                <div class="col-span-2 lg:col-span-4 mt-2">
-                                    <div class="mining-card p-4 rounded-xl relative overflow-hidden group">
-                                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center relative z-10 gap-4">
-                                            <div>
-                                                <h4 class="text-base font-bold text-white">$DERP Mining Yield <span class="bg-emerald-500 text-white text-[9px] px-2 py-0.5 rounded font-bold uppercase">Active: ${seatedSeats}/16 Seats</span></h4>
-                                                <p class="text-xs text-orange-200/70">Estimated Net Profit (After Gas & Fees)</p>
-                                            </div>
-                                            <div class="text-right">
-                                                <p class="text-xl font-black text-emerald-400">+ ${formatCurrency(currentAnnualNetUsd)} <span class="text-xs">/yr</span></p>
-                                                <p class="text-[10px] text-slate-400">Max 16-Seat Cap: ${formatCurrency(maxAnnual16SeatsUsd)}/yr</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            `;
-                        } else {
-                            derpMiningHtml = `
-                                <div class="col-span-2 lg:col-span-4 mt-2">
-                                    <div class="p-4 rounded-xl border border-dashed border-[#334155] bg-[#1e293b]/60">
-                                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                                            <div>
-                                                <h4 class="text-base font-bold text-slate-300">Potential $DERP Yield <span class="bg-slate-700 text-slate-300 text-[9px] px-2 py-0.5 rounded font-bold uppercase">Unseated</span></h4>
-                                                <p class="text-xs text-slate-500">Projected Net Profit if seated in the Pit</p>
-                                            </div>
-                                            <div class="text-right">
-                                                <p class="text-lg font-bold text-orange-400">+ ${formatCurrency(netAnnualPerSeatUsd)} <span class="text-xs">/yr (1 Seat)</span></p>
-                                                <p class="text-xs text-orange-300 font-semibold">Max 16-Seat Capacity: + ${formatCurrency(maxAnnual16SeatsUsd)} /yr</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            `;
-                        }
-                    }
-                }
-
-                if (proj.underConstruction) {
-                    resultsDiv.innerHTML = `
-                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[#334155] pb-4 mb-4">
-                            <div class="flex items-center gap-4">
-                                ${nftImageHtml}
-                                <div>
-                                    <div class="flex items-center gap-2 mb-1">
-                                        <span class="text-xs uppercase font-bold text-blue-400 bg-blue-900/30 px-2 py-0.5 rounded border border-blue-800/50">${tierData.tier}: ${tierData.name}</span>
-                                        <span class="text-xs font-semibold ${isActivated ? 'text-emerald-400 bg-emerald-900/20' : 'text-slate-400 bg-slate-800'} px-2 py-0.5 rounded border border-[#334155]">
-                                            ${isActivated ? 'Active Unit' : 'Unactivated'}
-                                        </span>
-                                    </div>
-                                    <h4 class="text-lg font-bold text-white">Unit #${inputVal} Analysis</h4>
-                                </div>
-                            </div>
-                            
-                            <div class="flex flex-col sm:flex-row gap-3 w-full md:w-auto items-stretch sm:items-center">
-                                <div class="bg-[#1e293b] px-5 py-2.5 rounded-lg border border-[#334155] text-right w-full sm:w-auto flex justify-between sm:block items-center">
-                                    <span class="text-xs uppercase text-slate-400 sm:block">Individual CoC ROI</span>
-                                    <span class="bg-orange-900/20 text-orange-400 border border-orange-800/50 px-2.5 py-1 rounded text-[10px] font-bold shadow-sm uppercase tracking-wider">Awaiting Data</span>
-                                </div>
-                                <button onclick="shareUnitToX()" id="unit-share-btn-text" data-html2canvas-ignore="true" class="bg-[#1da1f2] hover:bg-[#1a91da] text-white px-4 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition shadow-sm w-full sm:w-auto">
-                                    <svg class="w-4 h-4 fill-current text-white" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 24.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-                                    Share to X
-                                </button>
-                                <button onclick="document.getElementById('lookup-results').classList.add('hidden')" data-html2canvas-ignore="true" class="bg-[#1e293b] hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-[#334155] px-3 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center transition shadow-sm" title="Close Analysis">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                                </button>
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                            ${basisHtml}
-                            ${tokenBasisHtml}
-                            <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60 opacity-50">
-                                <p class="text-[10px] uppercase text-slate-400 mb-0.5">Trailing 7-Day Revenue</p>
-                                <p class="text-base font-bold text-slate-400 italic">Initializing...</p>
-                            </div>
-                            <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60 opacity-50">
-                                <p class="text-[10px] uppercase text-slate-400 mb-0.5">Forecasted Annual Yield</p>
-                                <p class="text-base font-bold text-slate-400 italic">Awaiting 7D Epoch</p>
-                            </div>
-                        </div>
-                    `;
-                } else {
-                    resultsDiv.innerHTML = `
-                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[#334155] pb-4 mb-4">
-                            <div class="flex items-center gap-4">
-                                ${nftImageHtml}
-                                <div>
-                                    <div class="flex items-center gap-2 mb-1">
-                                        <span class="text-xs uppercase font-bold text-blue-400 bg-blue-900/30 px-2 py-0.5 rounded border border-blue-800/50">${tierData.tier}: ${tierData.name}</span>
-                                        <span class="text-xs font-semibold ${isActivated ? 'text-emerald-400 bg-emerald-900/20' : 'text-slate-400 bg-slate-800'} px-2 py-0.5 rounded border border-[#334155]">
-                                            ${isActivated ? 'Active Unit' : 'Unactivated'}
-                                        </span>
-                                    </div>
-                                    <h4 class="text-lg font-bold text-white">Unit #${inputVal} Analysis</h4>
-                                </div>
-                            </div>
-                            
-                            <div class="flex flex-col sm:flex-row gap-3 w-full md:w-auto items-stretch sm:items-center">
-                                <div class="bg-[#1e293b] px-5 py-2.5 rounded-lg border border-[#334155] text-right w-full sm:w-auto flex justify-between sm:block items-center">
-                                    <span class="text-xs uppercase text-slate-400 sm:block">Individual CoC ROI</span>
-                                    ${cocRoiHtml}
-                                </div>
-                                <button onclick="shareUnitToX()" id="unit-share-btn-text" data-html2canvas-ignore="true" class="bg-[#1da1f2] hover:bg-[#1a91da] text-white px-4 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition shadow-sm w-full sm:w-auto">
-                                    <svg class="w-4 h-4 fill-current text-white" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 24.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-                                    Share to X
-                                </button>
-                                <button onclick="document.getElementById('lookup-results').classList.add('hidden')" data-html2canvas-ignore="true" class="bg-[#1e293b] hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-[#334155] px-3 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center transition shadow-sm" title="Close Analysis">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                                </button>
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                            ${basisHtml}
-                            ${tokenBasisHtml}
-                            <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
-                                <p class="text-[10px] uppercase text-slate-400 mb-0.5">Trailing 7-Day Revenue</p>
-                                <p class="text-base font-bold text-emerald-400">${formatCurrency(weeklyYieldUsd)}</p>
-                                <p class="text-[10px] text-slate-500">Realized Inflows</p>
-                            </div>
-                            <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
-                                <p class="text-[10px] uppercase text-slate-400 mb-0.5">Forecasted Annual Yield</p>
-                                <p class="text-base font-bold text-emerald-400">${formatCurrency(annualYieldUsd)} /yr</p>
-                                <p class="text-[10px] text-slate-500">Weight: <span class="text-yellow-400 font-bold">${tierData.weight}x</span></p>
-                            </div>
-                            ${derpMiningHtml}
-                        </div>
-                    `;
-                }
-
-            } catch (globalErr) {
-                console.error(globalErr);
-                resultsDiv.innerHTML = `<p class="text-rose-400 font-bold p-4 text-center">Network Error: Could not connect to the Robinhood Chain RPC. Please try again in a moment.</p>`;
-            }
-        }
-
-        function updateBurnChart(timeframe) {
-            ['7d', '30d', 'all'].forEach(tf => {
-                const btn = document.getElementById(`btn-burn-${tf}`);
-                if (btn) {
-                    if (tf === timeframe) {
-                        btn.className = "px-4 py-1.5 text-xs font-bold rounded-md bg-[#334155] text-white transition shadow-sm w-1/3 sm:w-auto";
-                    } else {
-                        btn.className = "px-4 py-1.5 text-xs font-bold rounded-md text-slate-400 hover:text-white transition w-1/3 sm:w-auto";
-                    }
-                }
-            });
-
-            if (!window.fullBurnLabels || !window.fullBurnData) return;
-
-            let sliceCount = window.fullBurnLabels.length;
-            if (timeframe === '7d') sliceCount = 7;
-            if (timeframe === '30d') sliceCount = 30;
-
-            const slicedLabels = window.fullBurnLabels.slice(-sliceCount);
-            const slicedData = window.fullBurnData.slice(-sliceCount);
-
-            const canvas = document.getElementById('burnChart');
+        function renderRevenueChart(revData) {
+            const canvas = document.getElementById('revenueChart');
             if (!canvas) return;
             const ctx = canvas.getContext('2d');
-            if (burnChartInstance) burnChartInstance.destroy();
+            if (revenueChartInstance) revenueChartInstance.destroy();
 
-            burnChartInstance = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: slicedLabels,
-                    datasets: [{
-                        label: 'Cumulative Burnt',
-                        data: slicedData,
-                        borderColor: '#fb923c',
-                        backgroundColor: 'rgba(251, 146, 60, 0.1)',
-                        borderWidth: 3,
-                        fill: true,
-                        tension: 0.3,
-                        pointRadius: 4,
-                        pointBackgroundColor: '#fb923c'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => formatNumber(ctx.raw) + ' Units' } } },
-                    scales: {
-                        x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
-                        y: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: (v) => (v >= 1000000 ? (v / 1000000).toFixed(1) + 'M' : v) } }
-                    }
-                }
-            });
-        }
-
-        function renderActivationCharts({ historyLabels, historyValues, dailyActs, dailyDeacts, breakdownObj, breakdownArr, tiers }) {
-            const canvasLine = document.getElementById('activationChart');
-            if (!canvasLine) return;
-            const ctxLine = canvasLine.getContext('2d');
-            if (activationChartInstance) activationChartInstance.destroy();
-
-            activationChartInstance = new Chart(ctxLine, {
+            revenueChartInstance = new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: historyLabels,
+                    labels: revData.dates || ["Day 1", "Day 2", "Day 3", "Day 4", "Day 5", "Day 6", "Day 7"],
                     datasets: [
                         {
-                            type: 'line',
-                            label: 'Net Active Units',
-                            data: historyValues,
-                            borderColor: '#3b82f6',
-                            backgroundColor: 'rgba(59, 130, 246, 0.05)',
-                            borderWidth: 3,
-                            fill: true,
-                            tension: 0.3,
-                            pointRadius: 0,
-                            yAxisID: 'y'
-                        },
-                        {
-                            type: 'bar',
-                            label: 'Daily Activations',
-                            data: dailyActs,
+                            label: 'AMM & Swaps',
+                            data: revData.dailyAmm || [0,0,0,0,0,0,0],
                             backgroundColor: '#34d399',
-                            borderRadius: 4,
-                            yAxisID: 'y1'
+                            borderRadius: 4
                         },
                         {
-                            type: 'bar',
-                            label: 'Daily Deactivations',
-                            data: dailyDeacts,
-                            backgroundColor: '#f43f5e',
-                            borderRadius: 4,
-                            yAxisID: 'y1'
+                            label: 'Clock-In Box',
+                            data: revData.dailySecurityBox || [0,0,0,0,0,0,0],
+                            backgroundColor: '#60a5fa',
+                            borderRadius: 4
+                        },
+                        {
+                            label: 'Safe Launchpad',
+                            data: revData.dailyLaunchpad || [0,0,0,0,0,0,0],
+                            backgroundColor: '#a78bfa',
+                            borderRadius: 4
                         }
                     ]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    interaction: { mode: 'index', intersect: false },
-                    plugins: { legend: { display: true, position: 'top', labels: { color: '#94a3b8', boxWidth: 12 } } },
                     scales: {
-                        x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8', maxTicksLimit: 14 } },
-                        y: { type: 'linear', display: true, position: 'left', grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
-                        y1: { type: 'linear', display: false, position: 'right', grid: { drawOnChartArea: false }, min: 0 }
-                    }
-                }
-            });
-
-            const legendList = document.getElementById('tier-legend-list');
-            if (legendList) {
-                legendList.innerHTML = `
-                    <div class="flex justify-between items-center bg-[#1e293b] p-3 rounded-lg border border-[#334155]">
-                        <div class="flex items-center gap-3"><div class="w-4 h-4 rounded-md bg-[#60a5fa]"></div><span class="text-sm font-bold text-slate-300">T0: ${tiers[0].name}</span></div>
-                        <span class="text-white font-bold tracking-wide">${formatNumber(breakdownObj.T0 || 0)}</span>
-                    </div>
-                    <div class="flex justify-between items-center bg-[#1e293b] p-3 rounded-lg border border-[#334155]">
-                        <div class="flex items-center gap-3"><div class="w-4 h-4 rounded-md bg-[#34d399]"></div><span class="text-sm font-bold text-slate-300">T1: ${tiers[1].name}</span></div>
-                        <span class="text-white font-bold tracking-wide">${formatNumber(breakdownObj.T1 || 0)}</span>
-                    </div>
-                    <div class="flex justify-between items-center bg-[#1e293b] p-3 rounded-lg border border-[#334155]">
-                        <div class="flex items-center gap-3"><div class="w-4 h-4 rounded-md bg-[#f472b6]"></div><span class="text-sm font-bold text-slate-300">T2: ${tiers[2].name}</span></div>
-                        <span class="text-white font-bold tracking-wide">${formatNumber(breakdownObj.T2 || 0)}</span>
-                    </div>
-                    <div class="flex justify-between items-center bg-[#1e293b] p-3 rounded-lg border border-[#334155]">
-                        <div class="flex items-center gap-3"><div class="w-4 h-4 rounded-md bg-[#fbbf24]"></div><span class="text-sm font-bold text-slate-300">T3: ${tiers[3].name}</span></div>
-                        <span class="text-white font-bold tracking-wide">${formatNumber(breakdownObj.T3 || 0)}</span>
-                    </div>
-                    <div class="flex justify-between items-center bg-[#1e293b] p-3 rounded-lg border border-[#334155]">
-                        <div class="flex items-center gap-3"><div class="w-4 h-4 rounded-md bg-[#a78bfa]"></div><span class="text-sm font-bold text-slate-300">T4: ${tiers[4].name}</span></div>
-                        <span class="text-white font-bold tracking-wide">${formatNumber(breakdownObj.T4 || 0)}</span>
-                    </div>
-                `;
-            }
-
-            const canvasPie = document.getElementById('tierPieChart');
-            if (!canvasPie) return;
-            const ctxPie = canvasPie.getContext('2d');
-            if (tierPieChartInstance) tierPieChartInstance.destroy();
-
-            tierPieChartInstance = new Chart(ctxPie, {
-                type: 'doughnut',
-                data: {
-                    labels: [tiers[0].name, tiers[1].name, tiers[2].name, tiers[3].name, tiers[4].name],
-                    datasets: [{
-                        data: breakdownArr,
-                        backgroundColor: ['#60a5fa', '#34d399', '#f472b6', '#fbbf24', '#a78bfa'],
-                        borderWidth: 0,
-                        hoverOffset: 4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    cutout: '65%',
-                    plugins: { legend: { display: false } }
-                }
-            });
-        }
-
-        function renderOwnershipChart({ labels, data }) {
-            const canvas = document.getElementById('ownershipChart');
-            if (!canvas) return;
-            const ctx = canvas.getContext('2d');
-            if (ownershipChartInstance) ownershipChartInstance.destroy();
-
-            ownershipChartInstance = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Active Holders',
-                        data: data,
-                        borderColor: '#a855f7',
-                        backgroundColor: 'rgba(168, 85, 247, 0.1)',
-                        borderWidth: 3,
-                        fill: true,
-                        stepped: true,
-                        pointRadius: 0
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
-                        y: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }
+                        x: { stacked: true, grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
+                        y: { stacked: true, grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: v => '$' + v } }
+                    },
+                    plugins: {
+                        legend: { display: true, position: 'top', labels: { color: '#cbd5e1' } }
                     }
                 }
             });
         }
 
-        function updateTierStats(timeframe) {
-            ['24h', '7d', '30d', 'allTime'].forEach(tf => {
-                const btn = document.getElementById(`btn-tier-${tf}`);
-                if (btn) {
-                    if (tf === timeframe) {
-                        btn.className = "flex-1 sm:flex-none px-4 py-1.5 text-xs font-bold rounded-md bg-[#334155] text-white transition shadow-sm";
-                    } else {
-                        btn.className = "flex-1 sm:flex-none px-4 py-1.5 text-xs font-bold rounded-md text-slate-400 hover:text-white transition";
-                    }
-                }
-            });
-
-            const stats = window.tierActivationStats;
-            if(!stats) return;
-
-            ['T0', 'T1', 'T2', 'T3', 'T4'].forEach(tier => {
-                if(!stats[tier]) return; 
-                const elAct = document.getElementById(`${tier.toLowerCase()}-act`);
-                const elDeact = document.getElementById(`${tier.toLowerCase()}-deact`);
-                const tierData = stats[tier][timeframe] ? stats[tier][timeframe] : { act: 0, deact: 0 };
-                if(elAct) elAct.innerText = formatNumber(tierData.act || 0);
-                if(elDeact) elDeact.innerText = formatNumber(tierData.deact || 0);
-            });
-        }
-
-        function processMetricsData(data) {
+        function processMetricsData(data, projectKey) {
             const act = data.activation || {};
             const own = data.ownership || {};
             const activeCount = act.activeCount || 0;
@@ -1579,7 +940,133 @@
                 const cleanHistData = own.historicalGrowth.data.map((v, i, arr) => v === 0 && i > 0 ? arr[i-1] : v);
                 window.ownershipChartData = { labels: own.historicalGrowth.labels, data: cleanHistData };
             }
+
+            // Revenue Data
+            const rev = data.revenue || {};
+            document.getElementById('rev-stat-amm').innerText = formatCurrency(rev.ammFeesUsd || 0);
+            document.getElementById('rev-stat-secbox').innerText = formatCurrency(rev.securityBoxUsd || 0);
+            document.getElementById('rev-stat-launchpad').innerText = formatCurrency(rev.launchpadUsd || 0);
+
+            window.revenueData = {
+                dates: (data.tiers && data.tiers[0]?.dailyDates) ? data.tiers[0].dailyDates : [],
+                dailyAmm: rev.dailyAmm || [],
+                dailySecurityBox: rev.dailySecurityBox || [],
+                dailyLaunchpad: rev.dailyLaunchpad || []
+            };
+
+            // Locked LP Data
+            const lpSec = document.getElementById('locked-lp-section');
+            if (projectKey === 'stonk' && data.lockedLp) {
+                lpSec.classList.remove('hidden');
+                document.getElementById('stat-total-stonk-lp').innerText = `${formatNumber(data.lockedLp.totalStonkLocked)} STONK`;
+                document.getElementById('stat-total-stonk-lp-usd').innerText = `${formatCurrency(data.lockedLp.totalLpUsd)} Total Pool Reserves`;
+                
+                const lpTbody = document.getElementById('lp-pools-body');
+                lpTbody.innerHTML = '';
+                data.lockedLp.pools.forEach(p => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'border-b border-[#334155]/40 hover:bg-[#334155]/20';
+                    tr.innerHTML = `
+                        <td class="py-2.5 pl-2 font-bold text-white">${p.pairName}</td>
+                        <td class="py-2.5 text-slate-400">${p.dex}</td>
+                        <td class="py-2.5 text-right font-bold text-orange-400">${formatNumber(p.stonkAmount)}</td>
+                        <td class="py-2.5 text-right pr-2 text-slate-200">${formatCurrency(p.liquidityUsd)}</td>
+                    `;
+                    lpTbody.appendChild(tr);
+                });
+            } else {
+                lpSec.classList.add('hidden');
+            }
         }
+
+        // ==============================================
+        // PORTFOLIO SCANNER (Direct RPC / 0 Credits)
+        // ==============================================
+        async function scanPortfolioWallets() {
+            const input = document.getElementById('portfolio-wallet-input').value.trim();
+            if (!input) return;
+            const wallets = input.split(',').map(w => w.trim()).filter(w => ethers.isAddress(w));
+            if (wallets.length === 0) { alert('Please enter at least one valid EVM wallet address.'); return; }
+
+            const resDiv = document.getElementById('portfolio-results');
+            resDiv.classList.remove('hidden');
+            const itemsCont = document.getElementById('portfolio-items-container');
+            itemsCont.innerHTML = '<p class="text-xs text-slate-400 animate-pulse col-span-2">Scanning blockchain for owned ecosystem assets...</p>';
+
+            try {
+                const provider = new ethers.JsonRpcProvider("https://rpc.mainnet.chain.robinhood.com");
+                const erc721Abi = ["function balanceOf(address) view returns (uint256)", "function tokenOfOwnerByIndex(address, uint256) view returns (uint256)"];
+
+                let totalFloorUsd = 0;
+                let totalYieldUsd = 0;
+                let totalUnits = 0;
+                itemsCont.innerHTML = '';
+
+                for (const [pKey, pData] of Object.entries(masterData.projects)) {
+                    if (!pData.config?.nftCa) continue;
+                    const nftContract = new ethers.Contract(pData.config.nftCa, erc721Abi, provider);
+                    const floorUsd = (pData.market.nftFloorEth || 0) * (pData.market.ethPriceUsd || 0);
+
+                    for (const wallet of wallets) {
+                        try {
+                            const bal = Number(await nftContract.balanceOf(wallet));
+                            if (bal > 0) {
+                                totalUnits += bal;
+                                totalFloorUsd += (bal * floorUsd);
+                                
+                                const avgYieldPerUnit = (pData.tiers && pData.tiers[2]) ? pData.tiers[2].trackedAnnualYieldUsd : 0;
+                                totalYieldUsd += (bal * avgYieldPerUnit);
+
+                                const card = document.createElement('div');
+                                card.className = 'bg-[#0f172a] border border-[#334155] rounded-xl p-4 flex items-center justify-between shadow-inner';
+                                card.innerHTML = `
+                                    <div class="flex items-center gap-3">
+                                        <img src="${pData.config.logo || 'Stonkbroker.png'}" class="w-10 h-10 rounded-lg object-cover border border-[#334155]">
+                                        <div>
+                                            <h4 class="text-sm font-bold text-white">${pData.config.ticker} Units (${bal} Owned)</h4>
+                                            <p class="text-[10px] text-slate-400">${wallet.slice(0,6)}...${wallet.slice(-4)}</p>
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <p class="text-sm font-bold text-emerald-400">+ ${formatCurrency(bal * avgYieldPerUnit)} /yr</p>
+                                        <p class="text-[10px] text-slate-400">Floor: ${formatCurrency(bal * floorUsd)}</p>
+                                    </div>
+                                `;
+                                itemsCont.appendChild(card);
+                            }
+                        } catch (e) {}
+                    }
+                }
+
+                document.getElementById('port-total-floor').innerText = formatCurrency(totalFloorUsd);
+                document.getElementById('port-total-yield').innerText = `${formatCurrency(totalYieldUsd)} /yr`;
+                document.getElementById('port-total-units').innerText = `${totalUnits} Units`;
+                const combinedRoi = totalFloorUsd > 0 ? (totalYieldUsd / totalFloorUsd) * 100 : 0;
+                document.getElementById('port-total-roi').innerText = `${combinedRoi.toFixed(2)}%`;
+
+                if (totalUnits === 0) {
+                    itemsCont.innerHTML = '<p class="text-xs text-slate-400 col-span-2">No ecosystem NFTs found in the provided wallet(s).</p>';
+                }
+
+            } catch (err) {
+                console.error(err);
+                itemsCont.innerHTML = '<p class="text-xs text-rose-400 col-span-2">RPC timeout scanning wallets. Please retry.</p>';
+            }
+        }
+
+        // EXECUTE SCREENSHOT SHARE
+        const makeImagePromise = async (element) => {
+            const canvas = await html2canvas(element, { 
+                backgroundColor: '#0f172a', 
+                scale: window.devicePixelRatio || 2, 
+                useCORS: true,
+                allowTaint: false,
+                ignoreElements: (node) => node.tagName && node.tagName.toLowerCase() === 'iframe' || node.hasAttribute('data-html2canvas-ignore')
+            });
+            return new Promise((resolve, reject) => {
+                canvas.toBlob(b => b ? resolve(b) : reject(new Error("Canvas export failed")), 'image/png');
+            });
+        };
 
         async function executeShare(elementId, tweetText, fileName, btnId) {
             const elementToCapture = document.getElementById(elementId);
@@ -1591,7 +1078,6 @@
             elementToCapture.style.backgroundColor = '#0f172a';
 
             try {
-                // Generate Canvas ONCE to avoid timeouts
                 const canvas = await html2canvas(elementToCapture, { 
                     backgroundColor: '#0f172a', 
                     scale: window.devicePixelRatio || 2, 
@@ -1601,44 +1087,28 @@
                 });
                 
                 const blob = await new Promise((resolve, reject) => {
-                    canvas.toBlob(b => b ? resolve(b) : reject(new Error("Canvas tainted or empty")), 'image/png');
+                    canvas.toBlob(b => b ? resolve(b) : reject(new Error("Canvas failed")), 'image/png');
                 });
 
                 elementToCapture.style.backgroundColor = originalBg;
 
-                // 1. Native Mobile Share (iOS/Android)
                 const file = new File([blob], fileName, { type: "image/png" });
                 if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                    shareBtn.innerText = "Sharing...";
                     try {
-                        await navigator.share({
-                            text: tweetText,
-                            files: [file]
-                        });
+                        await navigator.share({ text: tweetText, files: [file] });
                         shareBtn.innerHTML = ogText;
                         return;
-                    } catch(e) {
-                        console.log("Web Share aborted", e);
-                    }
+                    } catch(e) {}
                 }
 
-                // 2. Clipboard API (Desktop Chrome/Edge)
-                let copied = false;
                 try {
                     await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-                    copied = true;
-                } catch(e) {
-                    console.log("Clipboard API block detected", e);
-                }
-
-                if (copied) {
                     shareBtn.innerHTML = ogText;
                     alert("✅ SCREENSHOT COPIED!\n\nJust hit Paste (Ctrl+V / Cmd+V) when X/Twitter opens to attach it!");
                     window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`, '_blank');
                     return;
-                }
+                } catch(e) {}
 
-                // 3. Instant Auto-Download Fallback (Bypasses double-rendering popup blocks!)
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
@@ -1653,10 +1123,8 @@
                 window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`, '_blank');
 
             } catch (e) {
-                console.error("Capture Failed: ", e);
                 elementToCapture.style.backgroundColor = originalBg;
                 shareBtn.innerHTML = ogText;
-                alert("Screenshot generation failed. Opening X anyway!");
                 window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`, '_blank');
             }
         }
@@ -1667,26 +1135,13 @@
             else if (currentProjectKey === 'mancer') tweetText = `Hoods up - @savicrypto\nhttps://savicrypto.xyz/`;
             
             let activeViewId = 'view-roi';
-            ['view-roi', 'view-burn', 'view-activation', 'view-ownership', 'view-memes'].forEach(id => {
+            ['view-roi', 'view-revenue', 'view-burn', 'view-activation', 'view-ownership', 'view-memes', 'view-portfolio'].forEach(id => {
                 if (!document.getElementById(id).classList.contains('hidden')) {
                     activeViewId = id;
                 }
             });
 
             await executeShare(activeViewId, tweetText, 'ecosystem-stats.png', 'share-btn-text');
-        }
-        
-        async function shareUnitToX() {
-            let tweetText = `Tracked via @savicrypto\nhttps://savicrypto.xyz/`;
-            if (currentProjectKey === 'stonk') tweetText = `Clock in - @savicrypto\nhttps://savicrypto.xyz/`;
-            else if (currentProjectKey === 'mancer') tweetText = `Hoods up - @savicrypto\nhttps://savicrypto.xyz/`;
-            
-            await executeShare('lookup-results', tweetText, 'unit-analysis.png', 'unit-share-btn-text');
-        }
-
-        async function shareMemeToX(memeName, memeCa, index) {
-            const tweetText = `Tracking $${memeName} on @savicrypto\nCA: ${memeCa}\nhttps://savicrypto.xyz/`;
-            await executeShare('view-memes', tweetText, `${memeName}-stats.png`, `share-btn-${index}`);
         }
 
         initDashboard();
