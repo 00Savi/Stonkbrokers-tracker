@@ -261,17 +261,17 @@
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
-                <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">AMM & Swap Protocol Fees (7D)</p>
-                <p class="text-2xl font-extrabold text-emerald-400" id="rev-stat-amm">$0.00</p>
+            <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner" id="rev-card-1">
+                <p class="text-xs uppercase tracking-wider text-slate-400 mb-1" id="rev-label-1">Stream 1</p>
+                <p class="text-2xl font-extrabold text-emerald-400" id="rev-stat-1">$0.00</p>
             </div>
-            <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
-                <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Clock-In Security Box (7D)</p>
-                <p class="text-2xl font-extrabold text-blue-400" id="rev-stat-secbox">$0.00</p>
+            <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner" id="rev-card-2">
+                <p class="text-xs uppercase tracking-wider text-slate-400 mb-1" id="rev-label-2">Stream 2</p>
+                <p class="text-2xl font-extrabold text-blue-400" id="rev-stat-2">$0.00</p>
             </div>
-            <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
-                <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Safe Launchpad Deployments (7D)</p>
-                <p class="text-2xl font-extrabold text-purple-400" id="rev-stat-launchpad">$0.00</p>
+            <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner" id="rev-card-3">
+                <p class="text-xs uppercase tracking-wider text-slate-400 mb-1" id="rev-label-3">Stream 3</p>
+                <p class="text-2xl font-extrabold text-purple-400" id="rev-stat-3">$0.00</p>
             </div>
         </div>
 
@@ -525,6 +525,29 @@
             maxSeatsPerBroker: 16
         };
 
+        const PROJECT_REVENUE_CONFIG = {
+            stonk: {
+                stream1: { label: "AMM & Swap Protocol Fees (7D)", key: "ammFeesUsd", dailyKey: "dailyAmm", color: "#34d399", name: "AMM & Swaps" },
+                stream2: { label: "Clock-In Security Box (7D)", key: "securityBoxUsd", dailyKey: "dailySecurityBox", color: "#60a5fa", name: "Clock-In Box" },
+                stream3: { label: "Safe Launchpad Deployments (7D)", key: "launchpadUsd", dailyKey: "dailyLaunchpad", color: "#a78bfa", name: "Safe Launchpad" }
+            },
+            mancer: {
+                stream1: { label: "DEX Swap Routing Fees (7D)", key: "dexFeesUsd", dailyKey: "dailyDex", color: "#34d399", name: "DEX Swap Fees" },
+                stream2: { label: "Soft-Staking Vault Inflows (7D)", key: "ammFeesUsd", dailyKey: "dailyAmm", color: "#a855f7", name: "Vault Inflows" },
+                stream3: { label: "Order Execution Layer (7D)", key: "securityBoxUsd", dailyKey: "dailySecurityBox", color: "#60a5fa", name: "Order Layer" }
+            },
+            tickeryard: {
+                stream1: { label: "Protocol Vault Inflows (7D)", key: "ammFeesUsd", dailyKey: "dailyAmm", color: "#22d3ee", name: "Vault Distributions" },
+                stream2: { label: "Yard AMM Protocol Fees (7D)", key: "dexFeesUsd", dailyKey: "dailyDex", color: "#34d399", name: "Yard AMM Fees" },
+                stream3: { label: "Ecosystem Inflows (7D)", key: "launchpadUsd", dailyKey: "dailyLaunchpad", color: "#f59e0b", name: "Ecosystem Fees" }
+            },
+            cardwall: {
+                stream1: { label: "Gacha Marketing Pool (7D)", key: "ammFeesUsd", dailyKey: "dailyAmm", color: "#fbbf24", name: "Gacha Pool (33%)" },
+                stream2: { label: "PSA 10 Slabs / Physical (7D)", key: "dexFeesUsd", dailyKey: "dailyDex", color: "#34d399", name: "Physical Commerce" },
+                stream3: { label: "Anvil Market Fees (7D)", key: "launchpadUsd", dailyKey: "dailyLaunchpad", color: "#a78bfa", name: "Anvil Trades" }
+            }
+        };
+
         const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
         const formatNumber = (val, decimals = 0) => new Intl.NumberFormat('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val);
         
@@ -620,7 +643,7 @@
             } else if (tab === 'revenue') {
                 if(btnRev) btnRev.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm shadow-lg shadow-blue-500/25";
                 if(viewRev) viewRev.classList.remove('hidden');
-                if (window.revenueData) renderRevenueChart(window.revenueData);
+                if (window.revenueData) renderRevenueChart(window.revenueData, currentProjectKey);
             } else if (tab === 'burn') {
                 if(btnBurn) btnBurn.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm shadow-lg shadow-blue-500/25";
                 if(viewBurn) viewBurn.classList.remove('hidden');
@@ -814,11 +837,61 @@
             switchTab('roi');
         }
 
-        function renderRevenueChart(revData) {
+        function toggleTierDetails(tierId) {
+            const detailsRow = document.getElementById('details-' + tierId);
+            if (!detailsRow) return;
+            const isHidden = detailsRow.classList.contains('hidden');
+            const chevron = document.getElementById('chevron-' + tierId);
+            
+            if (isHidden) {
+                detailsRow.classList.remove('hidden');
+                if (chevron) chevron.style.transform = 'rotate(180deg)';
+                
+                if (!tierChartInstances[tierId]) {
+                    const canvas = document.getElementById('chart-' + tierId);
+                    if (!canvas) return;
+                    const ctx = canvas.getContext('2d');
+                    const cData = window.tierChartData[tierId] || { labels: [], data: [] };
+                    tierChartInstances[tierId] = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: cData.labels,
+                            datasets: [{
+                                label: 'Daily Yield (USD)',
+                                data: cData.data,
+                                borderColor: '#3b82f6',
+                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                borderWidth: 2,
+                                fill: true,
+                                tension: 0.4,
+                                pointRadius: 3,
+                                pointBackgroundColor: '#3b82f6'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => formatCurrency(ctx.raw) } } },
+                            scales: {
+                                x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
+                                y: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: (v) => '$' + v } }
+                            }
+                        }
+                    });
+                }
+            } else {
+                detailsRow.classList.add('hidden');
+                if (chevron) chevron.style.transform = 'rotate(0deg)';
+            }
+        }
+
+        function renderRevenueChart(revData, projectKey = 'stonk') {
             const canvas = document.getElementById('revenueChart');
             if (!canvas) return;
             const ctx = canvas.getContext('2d');
             if (revenueChartInstance) revenueChartInstance.destroy();
+
+            const pCfg = PROJECT_REVENUE_CONFIG[projectKey] || PROJECT_REVENUE_CONFIG.stonk;
 
             revenueChartInstance = new Chart(ctx, {
                 type: 'bar',
@@ -826,21 +899,21 @@
                     labels: revData.dates || ["Day 1", "Day 2", "Day 3", "Day 4", "Day 5", "Day 6", "Day 7"],
                     datasets: [
                         {
-                            label: 'AMM & Swaps',
-                            data: revData.dailyAmm || [0,0,0,0,0,0,0],
-                            backgroundColor: '#34d399',
+                            label: pCfg.stream1.name,
+                            data: revData[pCfg.stream1.dailyKey] || [0,0,0,0,0,0,0],
+                            backgroundColor: pCfg.stream1.color,
                             borderRadius: 4
                         },
                         {
-                            label: 'Clock-In Box',
-                            data: revData.dailySecurityBox || [0,0,0,0,0,0,0],
-                            backgroundColor: '#60a5fa',
+                            label: pCfg.stream2.name,
+                            data: revData[pCfg.stream2.dailyKey] || [0,0,0,0,0,0,0],
+                            backgroundColor: pCfg.stream2.color,
                             borderRadius: 4
                         },
                         {
-                            label: 'Safe Launchpad',
-                            data: revData.dailyLaunchpad || [0,0,0,0,0,0,0],
-                            backgroundColor: '#a78bfa',
+                            label: pCfg.stream3.name,
+                            data: revData[pCfg.stream3.dailyKey] || [0,0,0,0,0,0,0],
+                            backgroundColor: pCfg.stream3.color,
                             borderRadius: 4
                         }
                     ]
@@ -941,17 +1014,25 @@
                 window.ownershipChartData = { labels: own.historicalGrowth.labels, data: cleanHistData };
             }
 
-            // Revenue Data
+            // Dynamic Revenue Streams
             const rev = data.revenue || {};
-            document.getElementById('rev-stat-amm').innerText = formatCurrency(rev.ammFeesUsd || 0);
-            document.getElementById('rev-stat-secbox').innerText = formatCurrency(rev.securityBoxUsd || 0);
-            document.getElementById('rev-stat-launchpad').innerText = formatCurrency(rev.launchpadUsd || 0);
+            const pCfg = PROJECT_REVENUE_CONFIG[projectKey] || PROJECT_REVENUE_CONFIG.stonk;
+
+            document.getElementById('rev-label-1').innerText = pCfg.stream1.label;
+            document.getElementById('rev-stat-1').innerText = formatCurrency(rev[pCfg.stream1.key] || 0);
+
+            document.getElementById('rev-label-2').innerText = pCfg.stream2.label;
+            document.getElementById('rev-stat-2').innerText = formatCurrency(rev[pCfg.stream2.key] || 0);
+
+            document.getElementById('rev-label-3').innerText = pCfg.stream3.label;
+            document.getElementById('rev-stat-3').innerText = formatCurrency(rev[pCfg.stream3.key] || 0);
 
             window.revenueData = {
                 dates: (data.tiers && data.tiers[0]?.dailyDates) ? data.tiers[0].dailyDates : [],
                 dailyAmm: rev.dailyAmm || [],
                 dailySecurityBox: rev.dailySecurityBox || [],
-                dailyLaunchpad: rev.dailyLaunchpad || []
+                dailyLaunchpad: rev.dailyLaunchpad || [],
+                dailyDex: rev.dailyDex || []
             };
 
             // Locked LP Data
@@ -1017,7 +1098,6 @@
                                 let exactYieldUsd = 0;
                                 const activeMap = pData.activation?.activeTokenTiers || {};
                                 
-                                // Scan exact Token IDs to find precise tier multiplier
                                 for (let i = 0; i < bal; i++) {
                                     try {
                                         const tokenId = Number(await nftContract.tokenOfOwnerByIndex(wallet, i));
@@ -1026,7 +1106,6 @@
                                         const tierObj = pData.tiers.find(t => t.tier === tierId) || pData.tiers[0];
                                         exactYieldUsd += tierObj.trackedAnnualYieldUsd;
                                     } catch (e) {
-                                        // Fallback to T0 yield if RPC stutters
                                         const fallbackYield = pData.tiers[0] ? pData.tiers[0].trackedAnnualYieldUsd : 0;
                                         exactYieldUsd += fallbackYield;
                                     }
@@ -1071,7 +1150,763 @@
             }
         }
 
-        // EXECUTE SCREENSHOT SHARE
+        // ==============================================
+        // RESTORED: MEME TABLE & INDIVIDUAL LOOKUP
+        // ==============================================
+
+        function renderMemesTable(customTokenList = null) {
+            const tbody = document.getElementById('memes-body');
+            tbody.innerHTML = '';
+            const memes = customTokenList || masterData.memes || [];
+
+            memes.forEach((meme, index) => {
+                const roiColor = meme.priceChange24h >= 0 ? 'text-emerald-400' : 'text-rose-400';
+                const roiSign = meme.priceChange24h >= 0 ? '+' : '';
+                
+                const copyBtn = meme.ca ? `
+                    <button onclick="event.stopPropagation(); navigator.clipboard.writeText('${meme.ca}'); alert('Copied CA for ${meme.name}:\\n${meme.ca}');" class="text-[10px] bg-[#334155] hover:bg-slate-600 text-slate-200 px-2 py-0.5 rounded border border-slate-600 ml-2 transition" title="Copy Contract Address">Copy CA</button>
+                ` : `<span class="text-[10px] text-slate-500 ml-2">No CA</span>`;
+                
+                const totalSupply = meme.totalSupply || 1000000000;
+                const burntPct = meme.burnt > 0 ? ((meme.burnt / totalSupply) * 100).toFixed(2) + '%' : '0.00%';
+                const burntFormatted = meme.burnt > 0 ? `<span class="text-[12px] text-orange-400 font-bold">${burntPct}</span>` : '<span class="text-[12px] text-slate-500 font-normal">0.00%</span>';
+
+                const tr = document.createElement('tr');
+                tr.className = 'cursor-pointer border-b border-[#334155]/50 hover:bg-[#334155]/20 transition-colors group';
+                tr.onclick = () => toggleMemeDetails(index);
+                tr.innerHTML = `
+                    <td class="py-4 pl-2 font-bold text-white flex items-center justify-between pr-4">
+                        <div class="flex items-center gap-2">
+                            <div class="w-2.5 h-2.5 rounded-full bg-emerald-400"></div>
+                            ${meme.name}
+                        </div>
+                        ${copyBtn}
+                    </td>
+                    <td class="py-4 text-slate-200">${formatCurrency(meme.volume24h)}</td>
+                    <td class="py-4 text-slate-200">${formatCurrency(meme.liquidity)}</td>
+                    <td class="py-4 font-bold ${roiColor}">${roiSign}${meme.priceChange24h.toFixed(2)}%</td>
+                    <td class="py-4 text-emerald-400 font-semibold">${meme.roi || '0.00%'}</td>
+                    <td class="py-4 text-slate-200">${formatCurrency(meme.fdv)}</td>
+                    <td class="py-4 text-slate-200">${formatCurrency(meme.marketCap)}</td>
+                    <td class="py-4 text-right pr-4 text-orange-400 font-semibold">
+                        <div class="flex items-center justify-end gap-2">
+                            ${burntFormatted}
+                            <svg id="meme-chevron-${index}" class="w-4 h-4 text-slate-500 transition-transform duration-200 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+
+                const detailsTr = document.createElement('tr');
+                detailsTr.id = `meme-details-${index}`;
+                detailsTr.className = 'hidden bg-[#0f172a]/60 border-b border-[#334155]/50';
+                
+                const chartContent = meme.ca ? `
+                    <div id="iframe-container-${index}" data-src="https://dexscreener.com/robinhood/${meme.ca}?embed=1&theme=dark&trades=0&info=0" class="relative w-full h-[450px] rounded-xl overflow-hidden border border-[#334155] shadow-inner">
+                    </div>
+                ` : `
+                    <div class="p-8 text-center text-slate-400 italic bg-[#1e293b]/40 rounded-xl border border-[#334155]">
+                        Interactive chart unavailable (Contract Address pending launch).
+                    </div>
+                `;
+
+                detailsTr.innerHTML = `
+                    <td colspan="8" class="p-4 md:p-6">
+                        <div class="flex justify-between items-center mb-3">
+                            <h4 class="text-sm font-bold text-white flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                                ${meme.name} Live Interactive Chart
+                            </h4>
+                            <button onclick="shareMemeToX('${meme.name}', '${meme.ca}', ${index})" id="share-btn-${index}" class="bg-[#1da1f2] hover:bg-[#1a91da] text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition shadow-sm" data-html2canvas-ignore="true">
+                                <svg class="w-3 h-3 fill-current text-white" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 24.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                                Share
+                            </button>
+                        </div>
+                        ${chartContent}
+                    </td>
+                `;
+                tbody.appendChild(detailsTr);
+            });
+        }
+
+        function toggleMemeDetails(index) {
+            const detailsRow = document.getElementById('meme-details-' + index);
+            if (!detailsRow) return;
+            const isHidden = detailsRow.classList.contains('hidden');
+            const chevron = document.getElementById('meme-chevron-' + index);
+            
+            if (isHidden) {
+                detailsRow.classList.remove('hidden');
+                if (chevron) chevron.style.transform = 'rotate(180deg)';
+                const iframeContainer = document.getElementById('iframe-container-' + index);
+                if (iframeContainer && !iframeContainer.querySelector('iframe')) {
+                    iframeContainer.innerHTML = `<iframe src="${iframeContainer.getAttribute('data-src')}" class="w-full h-full border-0"></iframe>`;
+                }
+            } else {
+                detailsRow.classList.add('hidden');
+                if (chevron) chevron.style.transform = 'rotate(0deg)';
+            }
+        }
+
+        let memeSortDirections = {};
+        function sortMemesTable(colIndex, isNumeric) {
+            const tbody = document.getElementById('memes-body');
+            const rows = Array.from(tbody.querySelectorAll('tr')).filter(row => !row.id.startsWith('meme-details-'));
+            
+            memeSortDirections[colIndex] = !memeSortDirections[colIndex];
+            const asc = memeSortDirections[colIndex];
+
+            rows.sort((a, b) => {
+                let cellA = a.cells[colIndex].innerText.trim();
+                let cellB = b.cells[colIndex].innerText.trim();
+
+                if (isNumeric) {
+                    let valA = parseFloat(cellA.replace(/[^0-9.-]+/g,"")) || 0;
+                    let valB = parseFloat(cellB.replace(/[^0-9.-]+/g,"")) || 0;
+                    return asc ? valA - valB : valB - valA;
+                } else {
+                    return asc ? cellA.localeCompare(cellB) : cellB.localeCompare(cellA);
+                }
+            });
+
+            rows.forEach(row => {
+                tbody.appendChild(row);
+                const detailId = row.getAttribute('onclick')?.match(/\d+/)?.[0];
+                if (detailId !== undefined) {
+                    const detailRow = document.getElementById('meme-details-' + detailId);
+                    if (detailRow) tbody.appendChild(detailRow);
+                }
+            });
+        }
+
+        async function lookupUnitRoi() {
+            const inputVal = document.getElementById('lookup-id-input').value.trim();
+            const resultsDiv = document.getElementById('lookup-results');
+            if (!inputVal) return;
+
+            resultsDiv.classList.remove('hidden');
+            resultsDiv.innerHTML = '<p class="text-xs text-slate-400 animate-pulse font-semibold">Scanning blockchain ledger for Token #' + inputVal + '...</p>';
+
+            try {
+                const proj = masterData.projects[currentProjectKey];
+                const conf = proj.config;
+                const m = proj.market;
+                const activeMap = proj.activation.activeTokenTiers || {};
+                
+                const tokenData = activeMap[inputVal];
+                const isActivated = tokenData !== undefined;
+                const tierId = isActivated ? tokenData.t : 'T0';
+                const tierData = proj.tiers.find(t => t.tier === tierId) || proj.tiers[0];
+
+                let seatedSeats = 0;
+                const pitTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error("RPC Timeout")), 4000));
+                
+                if (isActivated && currentProjectKey === 'stonk') {
+                    try {
+                        const provider = new ethers.JsonRpcProvider("https://rpc.mainnet.chain.robinhood.com");
+                        const pitMineContract = new ethers.Contract("0x2d0da469115232aD00159757f9d25f81D498206D", ["function activeSlotCount(uint256 tokenId) view returns (uint256)"], provider);
+                        const count = await Promise.race([pitMineContract.activeSlotCount(inputVal), pitTimeout]);
+                        seatedSeats = Number(count);
+                    } catch (e) {}
+                }
+
+                let imageSources = [];
+                try {
+                    const provider = new ethers.JsonRpcProvider("https://rpc.mainnet.chain.robinhood.com");
+                    const nftContract = new ethers.Contract(conf.nftCa, ["function tokenURI(uint256) view returns (string)"], provider);
+                    const uriTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error("RPC Timeout")), 5000));
+                    
+                    let tokenUri = await Promise.race([nftContract.tokenURI(inputVal), uriTimeout]);
+                    if (tokenUri) {
+                        if (tokenUri.startsWith("data:application/json;base64,")) {
+                            const jsonStr = atob(tokenUri.split(",")[1]);
+                            const meta = JSON.parse(jsonStr);
+                            if (meta.image) imageSources.push(resolveIpfsUrl(meta.image));
+                        } else {
+                            const httpUri = resolveIpfsUrl(tokenUri);
+                            const metaRes = await fetchWithRetry(httpUri, {timeout: 4000});
+                            if (metaRes.ok) {
+                                const text = await metaRes.text();
+                                try {
+                                    const meta = JSON.parse(text);
+                                    if (meta.image) imageSources.push(resolveIpfsUrl(meta.image));
+                                } catch (parseErr) {
+                                    const match = text.match(/"image"\s*:\s*"([^"]+)"/);
+                                    if (match && match[1]) imageSources.push(resolveIpfsUrl(match[1]));
+                                }
+                            }
+                        }
+                    }
+                } catch (e) {}
+
+                try {
+                    const imgRes = await fetchWithRetry(`https://robinhoodchain.blockscout.com/api/v2/tokens/${conf.nftCa}/instances/${inputVal}`, {timeout: 4000});
+                    if (imgRes.ok) {
+                        const imgData = await imgRes.json();
+                        let meta = imgData?.metadata;
+                        if (typeof meta === 'string') { try { meta = JSON.parse(meta); } catch(e) {} }
+                        
+                        if (meta?.image) imageSources.push(resolveIpfsUrl(meta.image));
+                        if (meta?.image_url) imageSources.push(resolveIpfsUrl(meta.image_url));
+                        if (imgData?.image_url) imageSources.push(resolveIpfsUrl(imgData.image_url));
+                        if (imgData?.animation_url) imageSources.push(resolveIpfsUrl(imgData.animation_url));
+                    }
+                } catch(e) {}
+
+                let nftImageHtml = `
+                    <div class="w-12 h-12 md:w-16 md:h-16 rounded-xl bg-[#1e293b] border border-[#334155] flex items-center justify-center flex-shrink-0">
+                        <svg class="w-6 h-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    </div>
+                `;
+
+                let finalImageSrc = null;
+                if (imageSources.length > 0) {
+                    const uniqueSources = [...new Set(imageSources.filter(s => s && s.trim() !== ''))];
+                    if (uniqueSources.length > 0) {
+                        const primary = uniqueSources[0];
+                        try {
+                            const b64Res = await fetchWithRetry(primary, {timeout: 4000});
+                            if (b64Res.ok) {
+                                const blob = await b64Res.blob();
+                                finalImageSrc = await new Promise((r) => {
+                                    const reader = new FileReader();
+                                    reader.onloadend = () => r(reader.result);
+                                    reader.readAsDataURL(blob);
+                                });
+                            }
+                        } catch(e) {}
+                        
+                        if (!finalImageSrc) {
+                            const pinata = primary.replace('cloudflare-ipfs.com', 'gateway.pinata.cloud');
+                            const dweb = primary.replace('cloudflare-ipfs.com', 'dweb.link');
+                            finalImageSrc = primary;
+                            nftImageHtml = `<img src="${finalImageSrc}" onerror="this.onerror=null; this.src='${pinata}'; this.onerror=function(){this.onerror=null; this.src='${dweb}';};" alt="Unit #${inputVal}" crossorigin="anonymous" class="w-12 h-12 md:w-16 md:h-16 rounded-xl border border-[#334155] object-cover bg-[#0f172a] flex-shrink-0 shadow-md">`;
+                        } else {
+                            nftImageHtml = `<img src="${finalImageSrc}" alt="Unit #${inputVal}" class="w-12 h-12 md:w-16 md:h-16 rounded-xl border border-[#334155] object-cover bg-[#0f172a] flex-shrink-0 shadow-md">`;
+                        }
+                    }
+                }
+
+                let lastSaleEth = 0;
+                let foundValidTx = false;
+                let totalTransfers = 0;
+                let purchaseTs = null;
+                let txApiFailed = false;
+
+                try {
+                    const txsRes = await fetchWithRetry(`https://robinhoodchain.blockscout.com/api/v2/tokens/${conf.nftCa}/instances/${inputVal}/transfers`, {timeout: 6000});
+                    if (txsRes.ok) {
+                        const txsData = await txsRes.json();
+                        const items = txsData.items || [];
+                        totalTransfers = items.length;
+                        
+                        const itemsToCheck = items.slice(0, 2);
+                        
+                        for (const transfer of itemsToCheck) {
+                            const txHash = transfer.transaction_hash || transfer.tx_hash || transfer.hash;
+                            if (!txHash) continue;
+                            if (itemsToCheck.length > 1 && itemsToCheck.indexOf(transfer) > 0) { await sleep(500); }
+
+                            try {
+                                const txRes = await fetchWithRetry(`https://robinhoodchain.blockscout.com/api/v2/transactions/${txHash}`, {timeout: 6000});
+                                if (txRes.ok) {
+                                    const txData = await txRes.json();
+                                    let val = parseFloat(txData.value || "0") / 1e18;
+                                    
+                                    if (val === 0) {
+                                        let tokenTransfers = txData.token_transfers || [];
+                                        if (tokenTransfers.length > 0) {
+                                            let maxWethTransfer = 0;
+                                            for (const tt of tokenTransfers) {
+                                                const sym = (tt.token?.symbol || "").toUpperCase();
+                                                const dec = parseInt(tt.token?.decimals || "0", 10);
+                                                if (dec >= 18 && !sym.includes(conf.ticker) && !sym.includes("STONK") && !sym.includes("MANCER")) {
+                                                    const rawVal = tt.total?.value || tt.value || "0";
+                                                    const amt = parseFloat(rawVal) / Math.pow(10, dec);
+                                                    if (amt > maxWethTransfer && amt < 50000) maxWethTransfer = amt; 
+                                                }
+                                            }
+                                            val = maxWethTransfer;
+                                        }
+                                    }
+
+                                    if (val > 0) {
+                                        lastSaleEth = val;
+                                        foundValidTx = true;
+                                        if (txData.timestamp) purchaseTs = new Date(txData.timestamp).getTime() / 1000;
+                                        break; 
+                                    }
+                                }
+                            } catch (e) {
+                                txApiFailed = true;
+                                break; 
+                            }
+                        }
+
+                        if (!foundValidTx && totalTransfers > 0 && !txApiFailed) {
+                            const mintTx = items[items.length - 1];
+                            if (mintTx && mintTx.timestamp) purchaseTs = new Date(mintTx.timestamp).getTime() / 1000;
+                        }
+                    } else {
+                        txApiFailed = true;
+                    }
+                } catch (e) {
+                    txApiFailed = true;
+                }
+
+                function getHistoricalTokenPriceFallback(ticker, ts, currentSpot) {
+                    if (!ts) return currentSpot;
+                    const date = new Date(ts * 1000);
+                    if (ticker === 'STONK') {
+                        if (date < new Date('2026-07-20')) return 0.004;
+                        if (date < new Date('2026-07-25')) return 0.008;
+                        if (date < new Date('2026-08-01')) return 0.015;
+                        if (date < new Date('2026-08-05')) return 0.022;
+                        if (date < new Date('2026-08-08')) return 0.028;
+                        if (date < new Date('2026-08-11')) return 0.031;
+                    }
+                    if (ticker === 'MANCER') {
+                        if (date < new Date('2026-08-06')) return 0.0022;
+                        if (date < new Date('2026-08-09')) return 0.0025;
+                        if (date < new Date('2026-08-15')) return 0.0028;
+                    }
+                    return currentSpot;
+                }
+
+                const actTs = isActivated ? tokenData.ts : null;
+                const effectiveTs = (purchaseTs && actTs) ? Math.min(purchaseTs, actTs) : (purchaseTs || actTs);
+                const historicalTokenPrice = getHistoricalTokenPriceFallback(conf.ticker, effectiveTs, m.tokenPriceUsd);
+                
+                const activationCostUsd = tierData.reqTokens * historicalTokenPrice;
+                const annualYieldUsd = tierData.trackedAnnualYieldUsd;
+                const weeklyYieldUsd = (tierData.dailyYields || []).reduce((a, b) => a + b, 0);
+                
+                const purchaseCostUsd = lastSaleEth * m.ethPriceUsd;
+                
+                let totalBasisUsd = activationCostUsd;
+                if (!txApiFailed && foundValidTx) {
+                    totalBasisUsd += purchaseCostUsd;
+                }
+                
+                const cocRoi = totalBasisUsd > 0 ? ((annualYieldUsd / totalBasisUsd) * 100) : 0;
+
+                let basisHtml = '';
+                let cocRoiHtml = '';
+
+                if (txApiFailed) {
+                    basisHtml = `
+                        <div class="bg-amber-900/20 p-3 rounded-lg border border-amber-800/50">
+                            <p class="text-[10px] uppercase text-amber-400 mb-0.5">Last Sale Basis</p>
+                            <p class="text-xs font-bold text-amber-300">API Timeout</p>
+                            <p class="text-[10px] text-amber-400/80">Using base activation cost</p>
+                        </div>
+                    `;
+                    const baseRoi = activationCostUsd > 0 ? ((annualYieldUsd / activationCostUsd) * 100) : 0;
+                    cocRoiHtml = `
+                        <div class="flex flex-col items-end">
+                            <span class="bg-amber-900/20 text-amber-400 border border-amber-800/50 px-3 py-1 rounded text-sm font-bold">${baseRoi.toFixed(2)}%*</span>
+                            <span class="text-[9px] text-amber-500/70 mt-1">*Base ROI (No Sale Data)</span>
+                        </div>
+                    `;
+                } else if (!foundValidTx && totalTransfers > 0) {
+                    basisHtml = `
+                        <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
+                            <p class="text-[10px] uppercase text-slate-400 mb-0.5">Last Sale Basis</p>
+                            <p class="text-base font-bold text-emerald-400">$0.00</p>
+                            <p class="text-[10px] text-emerald-500/80">Minted (Free)</p>
+                        </div>
+                    `;
+                    cocRoiHtml = `<span class="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-3 py-1 rounded text-sm font-bold">${cocRoi.toFixed(2)}%</span>`;
+                } else {
+                    basisHtml = `
+                        <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
+                            <p class="text-[10px] uppercase text-slate-400 mb-0.5">Last Sale Basis</p>
+                            <p class="text-base font-bold text-white">${formatCurrency(purchaseCostUsd)}</p>
+                            <p class="text-[10px] text-slate-500">${lastSaleEth.toFixed(3)} ETH</p>
+                        </div>
+                    `;
+                    cocRoiHtml = `<span class="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-3 py-1 rounded text-sm font-bold">${cocRoi.toFixed(2)}%</span>`;
+                }
+
+                const tokenBasisLabel = effectiveTs ? 'Est. Token Basis' : 'Current Token Basis';
+                const priceRef = effectiveTs ? formatPrice(historicalTokenPrice) : '(Spot)';
+                const tokenBasisHtml = `
+                    <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
+                        <p class="text-[10px] uppercase text-slate-400 mb-0.5">${tokenBasisLabel}</p>
+                        <p class="text-base font-bold text-white">${formatCurrency(activationCostUsd)}</p>
+                        <p class="text-[10px] text-slate-500">${formatNumber(tierData.reqTokens)} ${conf.ticker} at ${priceRef}</p>
+                    </div>
+                `;
+
+                let derpMiningHtml = '';
+                if (isActivated && currentProjectKey === 'stonk' && liveDerpPriceUsd > 0) {
+                    const dailyDerpPerSeat = MINING_CONFIG.avgDerpPerShiftOrange * MINING_CONFIG.shiftsPerDay;
+                    const netDailyProfitPerSeat = (dailyDerpPerSeat * liveDerpPriceUsd) - (MINING_CONFIG.ethGasPerShift * liveEthPriceUsd * MINING_CONFIG.shiftsPerDay);
+                    const netAnnualPerSeatUsd = netDailyProfitPerSeat > 0 ? (netDailyProfitPerSeat * 365) : 0;
+                    const maxAnnual16SeatsUsd = netAnnualPerSeatUsd * MINING_CONFIG.maxSeatsPerBroker;
+                    const currentActiveSeats = seatedSeats > 0 ? seatedSeats : 1;
+                    const currentAnnualNetUsd = netAnnualPerSeatUsd * currentActiveSeats;
+
+                    if (netAnnualPerSeatUsd > 0) {
+                        if (seatedSeats > 0) {
+                            derpMiningHtml = `
+                                <div class="col-span-2 lg:col-span-4 mt-2">
+                                    <div class="mining-card p-4 rounded-xl relative overflow-hidden group">
+                                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center relative z-10 gap-4">
+                                            <div>
+                                                <h4 class="text-base font-bold text-white">$DERP Mining Yield <span class="bg-emerald-500 text-white text-[9px] px-2 py-0.5 rounded font-bold uppercase">Active: ${seatedSeats}/16 Seats</span></h4>
+                                                <p class="text-xs text-orange-200/70">Estimated Net Profit (After Gas & Fees)</p>
+                                            </div>
+                                            <div class="text-right">
+                                                <p class="text-xl font-black text-emerald-400">+ ${formatCurrency(currentAnnualNetUsd)} <span class="text-xs">/yr</span></p>
+                                                <p class="text-[10px] text-slate-400">Max 16-Seat Cap: ${formatCurrency(maxAnnual16SeatsUsd)}/yr</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        } else {
+                            derpMiningHtml = `
+                                <div class="col-span-2 lg:col-span-4 mt-2">
+                                    <div class="p-4 rounded-xl border border-dashed border-[#334155] bg-[#1e293b]/60">
+                                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                                            <div>
+                                                <h4 class="text-base font-bold text-slate-300">Potential $DERP Yield <span class="bg-slate-700 text-slate-300 text-[9px] px-2 py-0.5 rounded font-bold uppercase">Unseated</span></h4>
+                                                <p class="text-xs text-slate-500">Projected Net Profit if seated in the Pit</p>
+                                            </div>
+                                            <div class="text-right">
+                                                <p class="text-lg font-bold text-orange-400">+ ${formatCurrency(netAnnualPerSeatUsd)} <span class="text-xs">/yr (1 Seat)</span></p>
+                                                <p class="text-xs text-orange-300 font-semibold">Max 16-Seat Capacity: + ${formatCurrency(maxAnnual16SeatsUsd)} /yr</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    }
+                }
+
+                if (proj.underConstruction) {
+                    resultsDiv.innerHTML = `
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[#334155] pb-4 mb-4">
+                            <div class="flex items-center gap-4">
+                                ${nftImageHtml}
+                                <div>
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="text-xs uppercase font-bold text-blue-400 bg-blue-900/30 px-2 py-0.5 rounded border border-blue-800/50">${tierData.tier}: ${tierData.name}</span>
+                                        <span class="text-xs font-semibold ${isActivated ? 'text-emerald-400 bg-emerald-900/20' : 'text-slate-400 bg-slate-800'} px-2 py-0.5 rounded border border-[#334155]">
+                                            ${isActivated ? 'Active Unit' : 'Unactivated'}
+                                        </span>
+                                    </div>
+                                    <h4 class="text-lg font-bold text-white">Unit #${inputVal} Analysis</h4>
+                                </div>
+                            </div>
+                            
+                            <div class="flex flex-col sm:flex-row gap-3 w-full md:w-auto items-stretch sm:items-center">
+                                <div class="bg-[#1e293b] px-5 py-2.5 rounded-lg border border-[#334155] text-right w-full sm:w-auto flex justify-between sm:block items-center">
+                                    <span class="text-xs uppercase text-slate-400 sm:block">Individual CoC ROI</span>
+                                    <span class="bg-orange-900/20 text-orange-400 border border-orange-800/50 px-2.5 py-1 rounded text-[10px] font-bold shadow-sm uppercase tracking-wider">Awaiting Data</span>
+                                </div>
+                                <button onclick="shareUnitToX()" id="unit-share-btn-text" data-html2canvas-ignore="true" class="bg-[#1da1f2] hover:bg-[#1a91da] text-white px-4 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition shadow-sm w-full sm:w-auto">
+                                    <svg class="w-4 h-4 fill-current text-white" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 24.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                                    Share to X
+                                </button>
+                                <button onclick="document.getElementById('lookup-results').classList.add('hidden')" data-html2canvas-ignore="true" class="bg-[#1e293b] hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-[#334155] px-3 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center transition shadow-sm" title="Close Analysis">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                            ${basisHtml}
+                            ${tokenBasisHtml}
+                            <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60 opacity-50">
+                                <p class="text-[10px] uppercase text-slate-400 mb-0.5">Trailing 7-Day Revenue</p>
+                                <p class="text-base font-bold text-slate-400 italic">Initializing...</p>
+                            </div>
+                            <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60 opacity-50">
+                                <p class="text-[10px] uppercase text-slate-400 mb-0.5">Forecasted Annual Yield</p>
+                                <p class="text-base font-bold text-slate-400 italic">Awaiting 7D Epoch</p>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    resultsDiv.innerHTML = `
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[#334155] pb-4 mb-4">
+                            <div class="flex items-center gap-4">
+                                ${nftImageHtml}
+                                <div>
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="text-xs uppercase font-bold text-blue-400 bg-blue-900/30 px-2 py-0.5 rounded border border-blue-800/50">${tierData.tier}: ${tierData.name}</span>
+                                        <span class="text-xs font-semibold ${isActivated ? 'text-emerald-400 bg-emerald-900/20' : 'text-slate-400 bg-slate-800'} px-2 py-0.5 rounded border border-[#334155]">
+                                            ${isActivated ? 'Active Unit' : 'Unactivated'}
+                                        </span>
+                                    </div>
+                                    <h4 class="text-lg font-bold text-white">Unit #${inputVal} Analysis</h4>
+                                </div>
+                            </div>
+                            
+                            <div class="flex flex-col sm:flex-row gap-3 w-full md:w-auto items-stretch sm:items-center">
+                                <div class="bg-[#1e293b] px-5 py-2.5 rounded-lg border border-[#334155] text-right w-full sm:w-auto flex justify-between sm:block items-center">
+                                    <span class="text-xs uppercase text-slate-400 sm:block">Individual CoC ROI</span>
+                                    ${cocRoiHtml}
+                                </div>
+                                <button onclick="shareUnitToX()" id="unit-share-btn-text" data-html2canvas-ignore="true" class="bg-[#1da1f2] hover:bg-[#1a91da] text-white px-4 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition shadow-sm w-full sm:w-auto">
+                                    <svg class="w-4 h-4 fill-current text-white" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 24.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                                    Share to X
+                                </button>
+                                <button onclick="document.getElementById('lookup-results').classList.add('hidden')" data-html2canvas-ignore="true" class="bg-[#1e293b] hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-[#334155] px-3 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center transition shadow-sm" title="Close Analysis">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                            ${basisHtml}
+                            ${tokenBasisHtml}
+                            <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
+                                <p class="text-[10px] uppercase text-slate-400 mb-0.5">Trailing 7-Day Revenue</p>
+                                <p class="text-base font-bold text-emerald-400">${formatCurrency(weeklyYieldUsd)}</p>
+                                <p class="text-[10px] text-slate-500">Realized Inflows</p>
+                            </div>
+                            <div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60">
+                                <p class="text-[10px] uppercase text-slate-400 mb-0.5">Forecasted Annual Yield</p>
+                                <p class="text-base font-bold text-emerald-400">${formatCurrency(annualYieldUsd)} /yr</p>
+                                <p class="text-[10px] text-slate-500">Weight: <span class="text-yellow-400 font-bold">${tierData.weight}x</span></p>
+                            </div>
+                            ${derpMiningHtml}
+                        </div>
+                    `;
+                }
+
+            } catch (globalErr) {
+                console.error(globalErr);
+                resultsDiv.innerHTML = `<p class="text-rose-400 font-bold p-4 text-center">Network Error: Could not connect to the Robinhood Chain RPC. Please try again in a moment.</p>`;
+            }
+        }
+
+        // ==============================================
+        // RESTORED: CHARTS & METRICS RENDERING
+        // ==============================================
+
+        function updateBurnChart(timeframe) {
+            ['7d', '30d', 'all'].forEach(tf => {
+                const btn = document.getElementById(`btn-burn-${tf}`);
+                if (btn) {
+                    if (tf === timeframe) {
+                        btn.className = "px-4 py-1.5 text-xs font-bold rounded-md bg-[#334155] text-white transition shadow-sm w-1/3 sm:w-auto";
+                    } else {
+                        btn.className = "px-4 py-1.5 text-xs font-bold rounded-md text-slate-400 hover:text-white transition w-1/3 sm:w-auto";
+                    }
+                }
+            });
+
+            if (!window.fullBurnLabels || !window.fullBurnData) return;
+
+            let sliceCount = window.fullBurnLabels.length;
+            if (timeframe === '7d') sliceCount = 7;
+            if (timeframe === '30d') sliceCount = 30;
+
+            const slicedLabels = window.fullBurnLabels.slice(-sliceCount);
+            const slicedData = window.fullBurnData.slice(-sliceCount);
+
+            const canvas = document.getElementById('burnChart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (burnChartInstance) burnChartInstance.destroy();
+
+            burnChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: slicedLabels,
+                    datasets: [{
+                        label: 'Cumulative Burnt',
+                        data: slicedData,
+                        borderColor: '#fb923c',
+                        backgroundColor: 'rgba(251, 146, 60, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 4,
+                        pointBackgroundColor: '#fb923c'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => formatNumber(ctx.raw) + ' Units' } } },
+                    scales: {
+                        x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
+                        y: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: (v) => (v >= 1000000 ? (v / 1000000).toFixed(1) + 'M' : v) } }
+                    }
+                }
+            });
+        }
+
+        function renderActivationCharts({ historyLabels, historyValues, dailyActs, dailyDeacts, breakdownObj, breakdownArr, tiers }) {
+            const canvasLine = document.getElementById('activationChart');
+            if (!canvasLine) return;
+            const ctxLine = canvasLine.getContext('2d');
+            if (activationChartInstance) activationChartInstance.destroy();
+
+            activationChartInstance = new Chart(ctxLine, {
+                type: 'bar',
+                data: {
+                    labels: historyLabels,
+                    datasets: [
+                        {
+                            type: 'line',
+                            label: 'Net Active Units',
+                            data: historyValues,
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.05)',
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.3,
+                            pointRadius: 0,
+                            yAxisID: 'y'
+                        },
+                        {
+                            type: 'bar',
+                            label: 'Daily Activations',
+                            data: dailyActs,
+                            backgroundColor: '#34d399',
+                            borderRadius: 4,
+                            yAxisID: 'y1'
+                        },
+                        {
+                            type: 'bar',
+                            label: 'Daily Deactivations',
+                            data: dailyDeacts,
+                            backgroundColor: '#f43f5e',
+                            borderRadius: 4,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: { legend: { display: true, position: 'top', labels: { color: '#94a3b8', boxWidth: 12 } } },
+                    scales: {
+                        x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8', maxTicksLimit: 14 } },
+                        y: { type: 'linear', display: true, position: 'left', grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
+                        y1: { type: 'linear', display: false, position: 'right', grid: { drawOnChartArea: false }, min: 0 }
+                    }
+                }
+            });
+
+            const legendList = document.getElementById('tier-legend-list');
+            if (legendList) {
+                legendList.innerHTML = `
+                    <div class="flex justify-between items-center bg-[#1e293b] p-3 rounded-lg border border-[#334155]">
+                        <div class="flex items-center gap-3"><div class="w-4 h-4 rounded-md bg-[#60a5fa]"></div><span class="text-sm font-bold text-slate-300">T0: ${tiers[0].name}</span></div>
+                        <span class="text-white font-bold tracking-wide">${formatNumber(breakdownObj.T0 || 0)}</span>
+                    </div>
+                    <div class="flex justify-between items-center bg-[#1e293b] p-3 rounded-lg border border-[#334155]">
+                        <div class="flex items-center gap-3"><div class="w-4 h-4 rounded-md bg-[#34d399]"></div><span class="text-sm font-bold text-slate-300">T1: ${tiers[1].name}</span></div>
+                        <span class="text-white font-bold tracking-wide">${formatNumber(breakdownObj.T1 || 0)}</span>
+                    </div>
+                    <div class="flex justify-between items-center bg-[#1e293b] p-3 rounded-lg border border-[#334155]">
+                        <div class="flex items-center gap-3"><div class="w-4 h-4 rounded-md bg-[#f472b6]"></div><span class="text-sm font-bold text-slate-300">T2: ${tiers[2].name}</span></div>
+                        <span class="text-white font-bold tracking-wide">${formatNumber(breakdownObj.T2 || 0)}</span>
+                    </div>
+                    <div class="flex justify-between items-center bg-[#1e293b] p-3 rounded-lg border border-[#334155]">
+                        <div class="flex items-center gap-3"><div class="w-4 h-4 rounded-md bg-[#fbbf24]"></div><span class="text-sm font-bold text-slate-300">T3: ${tiers[3].name}</span></div>
+                        <span class="text-white font-bold tracking-wide">${formatNumber(breakdownObj.T3 || 0)}</span>
+                    </div>
+                    <div class="flex justify-between items-center bg-[#1e293b] p-3 rounded-lg border border-[#334155]">
+                        <div class="flex items-center gap-3"><div class="w-4 h-4 rounded-md bg-[#a78bfa]"></div><span class="text-sm font-bold text-slate-300">T4: ${tiers[4].name}</span></div>
+                        <span class="text-white font-bold tracking-wide">${formatNumber(breakdownObj.T4 || 0)}</span>
+                    </div>
+                `;
+            }
+
+            const canvasPie = document.getElementById('tierPieChart');
+            if (!canvasPie) return;
+            const ctxPie = canvasPie.getContext('2d');
+            if (tierPieChartInstance) tierPieChartInstance.destroy();
+
+            tierPieChartInstance = new Chart(ctxPie, {
+                type: 'doughnut',
+                data: {
+                    labels: [tiers[0].name, tiers[1].name, tiers[2].name, tiers[3].name, tiers[4].name],
+                    datasets: [{
+                        data: breakdownArr,
+                        backgroundColor: ['#60a5fa', '#34d399', '#f472b6', '#fbbf24', '#a78bfa'],
+                        borderWidth: 0,
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '65%',
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        function renderOwnershipChart({ labels, data }) {
+            const canvas = document.getElementById('ownershipChart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (ownershipChartInstance) ownershipChartInstance.destroy();
+
+            ownershipChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Active Holders',
+                        data: data,
+                        borderColor: '#a855f7',
+                        backgroundColor: 'rgba(168, 85, 247, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        stepped: true,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
+                        y: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }
+                    }
+                }
+            });
+        }
+
+        function updateTierStats(timeframe) {
+            ['24h', '7d', '30d', 'allTime'].forEach(tf => {
+                const btn = document.getElementById(`btn-tier-${tf}`);
+                if (btn) {
+                    if (tf === timeframe) {
+                        btn.className = "flex-1 sm:flex-none px-4 py-1.5 text-xs font-bold rounded-md bg-[#334155] text-white transition shadow-sm";
+                    } else {
+                        btn.className = "flex-1 sm:flex-none px-4 py-1.5 text-xs font-bold rounded-md text-slate-400 hover:text-white transition";
+                    }
+                }
+            });
+
+            const stats = window.tierActivationStats;
+            if(!stats) return;
+
+            ['T0', 'T1', 'T2', 'T3', 'T4'].forEach(tier => {
+                if(!stats[tier]) return; 
+                const elAct = document.getElementById(`${tier.toLowerCase()}-act`);
+                const elDeact = document.getElementById(`${tier.toLowerCase()}-deact`);
+                const tierData = stats[tier][timeframe] ? stats[tier][timeframe] : { act: 0, deact: 0 };
+                if(elAct) elAct.innerText = formatNumber(tierData.act || 0);
+                if(elDeact) elDeact.innerText = formatNumber(tierData.deact || 0);
+            });
+        }
+
+        // ==============================================
+        // SCREENSHOT SHARE
+        // ==============================================
         const makeImagePromise = async (element) => {
             const canvas = await html2canvas(element, { 
                 backgroundColor: '#0f172a', 
@@ -1161,6 +1996,9 @@
             await executeShare(activeViewId, tweetText, 'ecosystem-stats.png', 'share-btn-text');
         }
 
+        // ==============================================
+        // INITIALIZATION
+        // ==============================================
         initDashboard();
     </script>
 </body>
