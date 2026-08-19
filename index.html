@@ -1074,7 +1074,7 @@
         }
 
         // ==============================================
-        // PORTFOLIO SCANNER (Direct RPC / 0 Credits)
+        // PORTFOLIO SCANNER (Strict Data Enforcement)
         // ==============================================
         async function scanPortfolioWallets() {
             const input = document.getElementById('portfolio-wallet-input').value.trim();
@@ -1085,52 +1085,79 @@
             const resDiv = document.getElementById('portfolio-results');
             resDiv.classList.remove('hidden');
             const itemsCont = document.getElementById('portfolio-items-container');
-            itemsCont.innerHTML = '<p class="text-xs text-slate-400 animate-pulse col-span-2">Scanning blockchain for owned ecosystem assets...</p>';
+            itemsCont.innerHTML = '<p class="text-xs text-slate-400 animate-pulse col-span-2">Scanning blockchain for exact owned Token IDs...</p>';
 
             try {
+                const provider = new ethers.JsonRpcProvider("https://rpc.mainnet.chain.robinhood.com");
+                const erc721Abi = ["function balanceOf(address) view returns (uint256)", "function tokenOfOwnerByIndex(address, uint256) view returns (uint256)"];
+
                 let totalFloorUsd = 0;
                 let totalYieldUsd = 0;
                 let totalUnits = 0;
+                let portfolioHasErrors = false;
                 itemsCont.innerHTML = '';
 
                 for (const [pKey, pData] of Object.entries(masterData.projects)) {
                     if (!pData.config?.nftCa) continue;
+                    const nftContract = new ethers.Contract(pData.config.nftCa, erc721Abi, provider);
                     const floorUsd = (pData.market.nftFloorEth || 0) * (pData.market.ethPriceUsd || 0);
 
                     for (const wallet of wallets) {
                         try {
-                            const url = `https://robinhoodchain.blockscout.com/api/v2/addresses/${wallet}/token-balances`;
-                            const res = await fetch(url);
-                            const json = await res.json();
-                            const items = json.items || [];
-                            
-                            let ownedTokenIds = [];
-                            items.forEach(item => {
-                                if (item.token?.address?.toLowerCase() === pData.config.nftCa.toLowerCase()) {
-                                    if (item.token_instances && Array.isArray(item.token_instances)) {
-                                        item.token_instances.forEach(inst => ownedTokenIds.push(inst.id || inst.token_id));
-                                    } else if (item.token_id) {
-                                        ownedTokenIds.push(item.token_id);
-                                    }
-                                }
-                            });
-
-                            const bal = ownedTokenIds.length;
+                            const bal = Number(await nftContract.balanceOf(wallet));
                             if (bal > 0) {
                                 totalUnits += bal;
                                 totalFloorUsd += (bal * floorUsd);
                                 
                                 let exactYieldUsd = 0;
-                                const activeMap = pData.activation?.activeTokenTiers || {};
-                                
-                                for (const tokenId of ownedTokenIds) {
-                                    const tokenData = activeMap[tokenId];
-                                    const tierId = tokenData ? tokenData.t : 'T0'; 
-                                    const tierObj = pData.tiers.find(t => t.tier === tierId) || pData.tiers[0];
-                                    exactYieldUsd += tierObj.trackedAnnualYieldUsd;
+                                let ownedTokenIds = [];
+                                let fetchError = false;
+
+                                // Try RPC Enumerable First (Works for Mancer, Yard)
+                                try {
+                                    for (let i = 0; i < bal; i++) {
+                                        const tId = await nftContract.tokenOfOwnerByIndex(wallet, i);
+                                        ownedTokenIds.push(Number(tId));
+                                    }
+                                } catch (rpcErr) {
+                                    // Fallback to Blockscout API for Non-Enumerable (StonkBrokers)
+                                    ownedTokenIds = [];
+                                    try {
+                                        const url = `https://robinhoodchain.blockscout.com/api/v2/addresses/${wallet}/token-balances`;
+                                        const res = await fetch(url);
+                                        const json = await res.json();
+                                        const items = json.items || [];
+                                        items.forEach(item => {
+                                            if (item.token?.address?.toLowerCase() === pData.config.nftCa.toLowerCase()) {
+                                                if (item.token_instances && Array.isArray(item.token_instances)) {
+                                                    item.token_instances.forEach(inst => ownedTokenIds.push(inst.id || inst.token_id));
+                                                } else if (item.token_id) {
+                                                    ownedTokenIds.push(item.token_id);
+                                                }
+                                            }
+                                        });
+                                    } catch (apiErr) {
+                                        fetchError = true;
+                                    }
                                 }
 
-                                totalYieldUsd += exactYieldUsd;
+                                let yieldHtml = "";
+
+                                // STRICT DATA CHECK: No fake data. If we don't have exact IDs matching balance, ZERO it out.
+                                if (fetchError || ownedTokenIds.length === 0) {
+                                    portfolioHasErrors = true;
+                                    yieldHtml = `<span class="text-rose-400 border border-rose-500/50 bg-rose-900/20 px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider">ID Sync Error - Yield 0.00</span>`;
+                                } else {
+                                    const activeMap = pData.activation?.activeTokenTiers || {};
+                                    for (const tokenId of ownedTokenIds) {
+                                        const tokenData = activeMap[tokenId];
+                                        const tierId = tokenData ? tokenData.t : 'T0'; 
+                                        const tierObj = pData.tiers.find(t => t.tier === tierId) || pData.tiers[0];
+                                        exactYieldUsd += tierObj.trackedAnnualYieldUsd;
+                                    }
+                                    totalYieldUsd += exactYieldUsd;
+                                    yieldHtml = `<span class="text-emerald-400">+ ${formatCurrency(exactYieldUsd)} /yr</span>`;
+                                }
 
                                 const card = document.createElement('div');
                                 card.className = 'bg-[#0f172a] border border-[#334155] rounded-xl p-4 flex items-center justify-between shadow-inner';
@@ -1143,8 +1170,8 @@
                                         </div>
                                     </div>
                                     <div class="text-right">
-                                        <p class="text-sm font-bold text-emerald-400">+ ${formatCurrency(exactYieldUsd)} /yr</p>
-                                        <p class="text-[10px] text-slate-400">Floor: ${formatCurrency(bal * floorUsd)}</p>
+                                        <p class="text-sm font-bold">${yieldHtml}</p>
+                                        <p class="text-[10px] text-slate-400 mt-1">Floor: ${formatCurrency(bal * floorUsd)}</p>
                                     </div>
                                 `;
                                 itemsCont.appendChild(card);
@@ -1154,10 +1181,22 @@
                 }
 
                 document.getElementById('port-total-floor').innerText = formatCurrency(totalFloorUsd);
-                document.getElementById('port-total-yield').innerText = `${formatCurrency(totalYieldUsd)} /yr`;
+                
+                // If any error occurred, flag the top level macro metrics
+                if (portfolioHasErrors) {
+                    document.getElementById('port-total-yield').innerText = 'ERROR';
+                    document.getElementById('port-total-roi').innerText = 'ERROR';
+                    document.getElementById('port-total-roi').className = 'text-xl md:text-2xl font-extrabold text-rose-400';
+                    document.getElementById('port-total-yield').className = 'text-xl md:text-2xl font-extrabold text-rose-400';
+                } else {
+                    document.getElementById('port-total-yield').innerText = `${formatCurrency(totalYieldUsd)} /yr`;
+                    const combinedRoi = totalFloorUsd > 0 ? (totalYieldUsd / totalFloorUsd) * 100 : 0;
+                    document.getElementById('port-total-roi').innerText = `${combinedRoi.toFixed(2)}%`;
+                    document.getElementById('port-total-roi').className = 'text-xl md:text-2xl font-extrabold text-blue-400';
+                    document.getElementById('port-total-yield').className = 'text-xl md:text-2xl font-extrabold text-emerald-400';
+                }
+
                 document.getElementById('port-total-units').innerText = `${totalUnits} Units`;
-                const combinedRoi = totalFloorUsd > 0 ? (totalYieldUsd / totalFloorUsd) * 100 : 0;
-                document.getElementById('port-total-roi').innerText = `${combinedRoi.toFixed(2)}%`;
 
                 if (totalUnits === 0) {
                     itemsCont.innerHTML = '<p class="text-xs text-slate-400 col-span-2">No ecosystem NFTs found in the provided wallet(s).</p>';
@@ -1165,7 +1204,7 @@
 
             } catch (err) {
                 console.error(err);
-                itemsCont.innerHTML = '<p class="text-xs text-rose-400 col-span-2">API error scanning wallets. Please retry.</p>';
+                itemsCont.innerHTML = '<p class="text-xs text-rose-400 col-span-2">Error scanning wallets. Please retry.</p>';
             }
         }
 
