@@ -291,12 +291,13 @@
                     </h3>
                     <p class="text-xs text-slate-400 mt-0.5">Scanned from all active partner, meme, and launchpad trading pairs.</p>
                 </div>
-                <div class="text-right">
+                <div class="text-right flex flex-col items-end">
                     <p class="text-base font-extrabold text-orange-400" id="stat-total-stonk-lp">0 Tokens</p>
                     <p class="text-[10px] text-slate-400" id="stat-total-stonk-lp-usd">$0.00 Total Pool Reserves</p>
+                    <button onclick="toggleLpTable()" id="lp-toggle-btn" class="mt-2 text-[10px] bg-[#1e293b] border border-[#334155] text-slate-300 px-3 py-1 rounded hover:text-white transition shadow-sm" data-html2canvas-ignore="true">Hide Pools ▲</button>
                 </div>
             </div>
-            <div class="overflow-x-auto">
+            <div class="overflow-x-auto transition-all duration-300" id="lp-table-container">
                 <table class="w-full text-left text-xs border-collapse">
                     <thead>
                         <tr class="text-slate-400 border-b border-[#334155]">
@@ -602,6 +603,18 @@
             if (menu) menu.classList.toggle('hidden');
         }
 
+        function toggleLpTable() {
+            const cont = document.getElementById('lp-table-container');
+            const btn = document.getElementById('lp-toggle-btn');
+            if (cont.classList.contains('hidden')) {
+                cont.classList.remove('hidden');
+                btn.innerText = 'Hide Pools ▲';
+            } else {
+                cont.classList.add('hidden');
+                btn.innerText = 'Show All Pools ▼';
+            }
+        }
+
         function selectProject(key) {
             const menu = document.getElementById('project-dropdown-menu');
             if (menu) menu.classList.add('hidden');
@@ -742,7 +755,7 @@
 
             let logoSrc = conf.logo || 'Stonkbroker.png';
             if (projectKey === 'tickeryard') logoSrc = 'Yardkeepers.png';
-            if (projectKey === 'cardwall') logoSrc = 'TheCardWall.png';
+            if (projectKey === 'cardwall') logoSrc = 'wall.png';
 
             const projectNames = {
                 stonk: 'StonkBrokers Tracker',
@@ -1075,9 +1088,6 @@
             itemsCont.innerHTML = '<p class="text-xs text-slate-400 animate-pulse col-span-2">Scanning blockchain for owned ecosystem assets...</p>';
 
             try {
-                const provider = new ethers.JsonRpcProvider("https://rpc.mainnet.chain.robinhood.com");
-                const erc721Abi = ["function balanceOf(address) view returns (uint256)", "function tokenOfOwnerByIndex(address, uint256) view returns (uint256)"];
-
                 let totalFloorUsd = 0;
                 let totalYieldUsd = 0;
                 let totalUnits = 0;
@@ -1085,12 +1095,23 @@
 
                 for (const [pKey, pData] of Object.entries(masterData.projects)) {
                     if (!pData.config?.nftCa) continue;
-                    const nftContract = new ethers.Contract(pData.config.nftCa, erc721Abi, provider);
                     const floorUsd = (pData.market.nftFloorEth || 0) * (pData.market.ethPriceUsd || 0);
 
                     for (const wallet of wallets) {
                         try {
-                            const bal = Number(await nftContract.balanceOf(wallet));
+                            const url = `https://robinhoodchain.blockscout.com/api/v2/addresses/${wallet}/nft?type=ERC-721`;
+                            const res = await fetch(url);
+                            const json = await res.json();
+                            const items = json.items || [];
+                            
+                            let ownedTokenIds = [];
+                            items.forEach(item => {
+                                if (item.token?.address?.toLowerCase() === pData.config.nftCa.toLowerCase()) {
+                                    ownedTokenIds.push(item.id);
+                                }
+                            });
+
+                            const bal = ownedTokenIds.length;
                             if (bal > 0) {
                                 totalUnits += bal;
                                 totalFloorUsd += (bal * floorUsd);
@@ -1098,17 +1119,11 @@
                                 let exactYieldUsd = 0;
                                 const activeMap = pData.activation?.activeTokenTiers || {};
                                 
-                                for (let i = 0; i < bal; i++) {
-                                    try {
-                                        const tokenId = Number(await nftContract.tokenOfOwnerByIndex(wallet, i));
-                                        const tokenData = activeMap[tokenId];
-                                        const tierId = tokenData ? tokenData.t : 'T0'; 
-                                        const tierObj = pData.tiers.find(t => t.tier === tierId) || pData.tiers[0];
-                                        exactYieldUsd += tierObj.trackedAnnualYieldUsd;
-                                    } catch (e) {
-                                        const fallbackYield = pData.tiers[0] ? pData.tiers[0].trackedAnnualYieldUsd : 0;
-                                        exactYieldUsd += fallbackYield;
-                                    }
+                                for (const tokenId of ownedTokenIds) {
+                                    const tokenData = activeMap[tokenId];
+                                    const tierId = tokenData ? tokenData.t : 'T0'; 
+                                    const tierObj = pData.tiers.find(t => t.tier === tierId) || pData.tiers[0];
+                                    exactYieldUsd += tierObj.trackedAnnualYieldUsd;
                                 }
 
                                 totalYieldUsd += exactYieldUsd;
@@ -1146,7 +1161,7 @@
 
             } catch (err) {
                 console.error(err);
-                itemsCont.innerHTML = '<p class="text-xs text-rose-400 col-span-2">RPC timeout scanning wallets. Please retry.</p>';
+                itemsCont.innerHTML = '<p class="text-xs text-rose-400 col-span-2">Error scanning wallets. Please retry.</p>';
             }
         }
 
