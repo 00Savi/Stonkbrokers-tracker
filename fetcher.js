@@ -569,7 +569,7 @@ async function fetchActivations(projectKey, conf) {
   };
 }
 
-// MULTI-STREAM REVENUE ENGINE (BUG FIXES APPLIED)
+// MULTI-STREAM REVENUE ENGINE
 async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, marketData) {
   const oneDay = 86400;
   const dailyDates = [];
@@ -581,48 +581,6 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
     ammFeesUsd: 0, securityBoxUsd: 0, launchpadUsd: 0, dexFeesUsd: 0,
     dailyAmm: [0,0,0,0,0,0,0], dailySecurityBox: [0,0,0,0,0,0,0], dailyLaunchpad: [0,0,0,0,0,0,0], dailyDex: [0,0,0,0,0,0,0]
   };
-
-  async function fetchDirectEthInflows(address, key, dailyKey) {
-      let page = 1;
-      while(true) {
-          let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=txlist&address=${address}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`;
-          let data = await secureFetch(url);
-          const txs = (data && Array.isArray(data.result)) ? data.result : [];
-          if(txs.length === 0) break;
-          let reachedOlder = false;
-          for (const tx of txs) {
-              const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
-              if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
-              if (tx.isError === "1" || tx.isError === 1) continue;
-              
-              if ((tx.to || "").toLowerCase() === address) {
-                  let usdVal = 0;
-
-                  // 100% BULLETPROOF LAUNCHPAD CALCULATION:
-                  // A successful call to the SafeLaunchpad is a 0.1 ETH fee, regardless of routing.
-                  if (key === "launchpadUsd") {
-                      usdVal = 0.1 * marketData.ethPriceUsd;
-                  } else {
-                      const eth = Number(tx.value || 0) / 1e18;
-                      if (eth > 0) usdVal = eth * marketData.ethPriceUsd;
-                  }
-
-                  if (usdVal > 0) {
-                      const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
-                      revenueBreakdown[key] += usdVal;
-                      revenueBreakdown[dailyKey][dayIdx] += usdVal;
-                      totalSampleUsd += usdVal;
-                      
-                      if (conf.oracleWeight) {
-                          dailyUsdPerWeight[dayIdx] += (usdVal / conf.oracleWeight);
-                      }
-                  }
-              }
-          }
-          if(reachedOlder || txs.length < 1000) break;
-          page++; await sleep(200); 
-      }
-  }
 
   if (conf.yieldMode === "oracle_wallet") {
       let pageEth = 1;
@@ -646,12 +604,14 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
                   const usdVal = eth * marketData.ethPriceUsd;
                   const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
                   
+                  // Add directly to the Oracle payout
                   totalSampleUsd += usdVal;
                   if (conf.oracleWeight) dailyUsdPerWeight[dayIdx] += (usdVal / conf.oracleWeight);
 
-                  if (fromAddr === conf.streams?.amm) {
-                      revenueBreakdown.ammFeesUsd += usdVal;
-                      revenueBreakdown.dailyAmm[dayIdx] += usdVal;
+                  // Segregate by the contract that routed it into the Booster
+                  if (fromAddr === conf.streams?.launchpad) {
+                      revenueBreakdown.launchpadUsd += usdVal;
+                      revenueBreakdown.dailyLaunchpad[dayIdx] += usdVal;
                   } else if (fromAddr === conf.streams?.securityBox) {
                       revenueBreakdown.securityBoxUsd += usdVal;
                       revenueBreakdown.dailySecurityBox[dayIdx] += usdVal;
@@ -666,6 +626,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
           pageEth++; await sleep(200); 
       }
 
+      // Check ERC-20 routing into the oracle wallet
       for (const tokenAddr of Object.keys(TOKEN_TICKERS)) {
         const price = tokenPrices[tokenAddr.toLowerCase()] || 0;
         if (price <= 0) continue;
@@ -702,43 +663,43 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
             pageTok++; await sleep(200); 
         }
       }
-
-      // Explicitly scan the Launchpad and Security Box for direct user payments
-      if (projectKey === "stonk" && conf.streams?.securityBox) await fetchDirectEthInflows(conf.streams.securityBox, "securityBoxUsd", "dailySecurityBox");
-      if (projectKey === "stonk" && conf.streams?.launchpad) await fetchDirectEthInflows(conf.streams.launchpad, "launchpadUsd", "dailyLaunchpad");
   } 
   else if (conf.yieldMode === "protocol_vault") {
-      let page = 1;
-      while(true) {
-          let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokentx&address=${conf.oracleSource}&contractaddress=${conf.tokenCa}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`;
-          let data = await secureFetch(url);
-          const txs = (data && Array.isArray(data.result)) ? data.result : [];
-          if(txs.length === 0) break;
-          let reachedOlder = false;
-          for (const tx of txs) {
-            const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
-            if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
-            if ((tx.from || "").toLowerCase() === conf.oracleSource.toLowerCase()) {
-                const amount = Number(tx.value || 0) / Math.pow(10, parseInt(tx.tokenDecimal || 18, 10));
-                if (amount > 0) {
-                    const usdVal = amount * marketData.tokenPriceUsd;
-                    const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
-                    
-                    let activeWeightAtTime = 0;
-                    for (const t of conf.tiers) activeWeightAtTime += ((activationStats.breakdown[t.id] || 0) * t.weight);
-                    if (activeWeightAtTime === 0) activeWeightAtTime = 1;
-                    
-                    dailyUsdPerWeight[dayIdx] += (usdVal / activeWeightAtTime);
-                    totalSampleUsd += usdVal;
-                    revenueBreakdown.ammFeesUsd += usdVal; 
-                    revenueBreakdown.dailyAmm[dayIdx] += usdVal;
+      // 1. For TickerYard or other vault projects (Mancer uses DEX swap router only)
+      if (projectKey !== "mancer") {
+          let page = 1;
+          while(true) {
+              let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokentx&address=${conf.oracleSource}&contractaddress=${conf.tokenCa}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`;
+              let data = await secureFetch(url);
+              const txs = (data && Array.isArray(data.result)) ? data.result : [];
+              if(txs.length === 0) break;
+              let reachedOlder = false;
+              for (const tx of txs) {
+                const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
+                if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
+                if ((tx.from || "").toLowerCase() === conf.oracleSource.toLowerCase()) {
+                    const amount = Number(tx.value || 0) / Math.pow(10, parseInt(tx.tokenDecimal || 18, 10));
+                    if (amount > 0) {
+                        const usdVal = amount * marketData.tokenPriceUsd;
+                        const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
+                        
+                        let activeWeightAtTime = 0;
+                        for (const t of conf.tiers) activeWeightAtTime += ((activationStats.breakdown[t.id] || 0) * t.weight);
+                        if (activeWeightAtTime === 0) activeWeightAtTime = 1;
+                        
+                        dailyUsdPerWeight[dayIdx] += (usdVal / activeWeightAtTime);
+                        totalSampleUsd += usdVal;
+                        revenueBreakdown.ammFeesUsd += usdVal; 
+                        revenueBreakdown.dailyAmm[dayIdx] += usdVal;
+                    }
                 }
-            }
+              }
+              if(reachedOlder || txs.length < 1000) break;
+              page++; await sleep(200); 
           }
-          if(reachedOlder || txs.length < 1000) break;
-          page++; await sleep(200); 
       }
 
+      // 2. Mancer DEX Routing Fees (WETH to Collector)
       if (projectKey === "mancer" && conf.streams?.dexCollector) {
           let pageDex = 1;
           while(true) {
@@ -756,7 +717,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
                       const amount = Number(tx.value || 0) / Math.pow(10, dec);
                       const sym = (tx.tokenSymbol || "").toUpperCase();
                       
-                      // ANTI-SPAM FILTER: WETH Only, and no single fee larger than 5 WETH (~$9.5M swap)
+                      // Filter for WETH/ETH fee transfers
                       if (amount > 0 && amount < 5 && (sym === "WETH" || sym === "ETH")) {
                           const usdVal = amount * marketData.ethPriceUsd;
                           if (usdVal > 0) {
@@ -794,7 +755,6 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
   };
 }
 
-// SCANNING $STONK IN ALL ECOSYSTEM LPS AT ZERO API COST
 function scanLockedStonkLiquidity(stonkCa, tokenPriceUsd) {
   const uniqueLps = new Map();
   let totalStonkLocked = 0;
