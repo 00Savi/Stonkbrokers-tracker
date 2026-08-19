@@ -158,7 +158,7 @@ const PROJECTS = {
     maxSupply: 4444,
     unitValue: 500000,
     ticker: "WALL",
-    logo: "TheCardWall.png",
+    logo: "wall.png",
     yieldMode: "protocol_vault",
     oracleSource: "0xdd59536f394c4b589e695f5921723b89ea479379".toLowerCase(),
     underConstruction: true,
@@ -583,7 +583,6 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
     dailyAmm: [0,0,0,0,0,0,0], dailySecurityBox: [0,0,0,0,0,0,0], dailyLaunchpad: [0,0,0,0,0,0,0], dailyDex: [0,0,0,0,0,0,0]
   };
 
-  // Helper to fetch direct incoming ETH transactions for Launchpad & Security Box
   async function fetchDirectEthInflows(address, key, dailyKey) {
       let page = 1;
       while(true) {
@@ -606,7 +605,6 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
                       revenueBreakdown[dailyKey][dayIdx] += usdVal;
                       totalSampleUsd += usdVal;
                       
-                      // For stonk's yield tracking, we sum it to the network weight pool
                       if (conf.oracleWeight) {
                           dailyUsdPerWeight[dayIdx] += (usdVal / conf.oracleWeight);
                       }
@@ -651,7 +649,6 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
           pageEth++; await sleep(200); 
       }
 
-      // Scan ERC20s hitting oracle wallet
       for (const tokenAddr of Object.keys(TOKEN_TICKERS)) {
         const price = tokenPrices[tokenAddr.toLowerCase()] || 0;
         if (price <= 0) continue;
@@ -689,12 +686,10 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
         }
       }
 
-      // Add the direct ETH inflows for StonkBrokers
       if (projectKey === "stonk" && conf.streams?.securityBox) await fetchDirectEthInflows(conf.streams.securityBox, "securityBoxUsd", "dailySecurityBox");
       if (projectKey === "stonk" && conf.streams?.launchpad) await fetchDirectEthInflows(conf.streams.launchpad, "launchpadUsd", "dailyLaunchpad");
   } 
   else if (conf.yieldMode === "protocol_vault") {
-      // 1. Fetch Standard Protocol Vault Outflows (Soft-Staking Rewards)
       let page = 1;
       while(true) {
           let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokentx&address=${conf.oracleSource}&contractaddress=${conf.tokenCa}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`;
@@ -717,7 +712,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
                     
                     dailyUsdPerWeight[dayIdx] += (usdVal / activeWeightAtTime);
                     totalSampleUsd += usdVal;
-                    revenueBreakdown.ammFeesUsd += usdVal; // Represents Vault Inflows for Mancer
+                    revenueBreakdown.ammFeesUsd += usdVal; 
                     revenueBreakdown.dailyAmm[dayIdx] += usdVal;
                 }
             }
@@ -726,7 +721,6 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
           page++; await sleep(200); 
       }
 
-      // 2. Fetch Mancer DEX Routing Fees (WETH to Collector)
       if (projectKey === "mancer" && conf.streams?.dexCollector) {
           let pageDex = 1;
           while(true) {
@@ -758,7 +752,6 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
                               revenueBreakdown.dailyDex[dayIdx] += usdVal;
                               totalSampleUsd += usdVal;
 
-                              // Distribute this value across active Mancer Network Weight
                               let activeWeightAtTime = 0;
                               for (const t of conf.tiers) activeWeightAtTime += ((activationStats.breakdown[t.id] || 0) * t.weight);
                               if (activeWeightAtTime === 0) activeWeightAtTime = 1;
@@ -776,7 +769,6 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
   let totalNetworkWeight = 0;
   for (const t of conf.tiers) totalNetworkWeight += ((activationStats.breakdown[t.id] || 0) * t.weight);
   
-  // Stonk relies on conf.oracleWeight. Vaults rely on live active weight.
   const yieldPerWeightUnitAnnual = conf.yieldMode === "oracle_wallet" 
       ? (totalSampleUsd / conf.oracleWeight) * 52.14 * totalNetworkWeight
       : totalSampleUsd * 52.14;
