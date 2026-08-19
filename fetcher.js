@@ -198,7 +198,7 @@ async function secureFetch(url) {
       const res = await fetch(url, { headers });
       if (res.status === 402) {
           console.error("\n[CRITICAL ERROR] HTTP 402: Payment Required. Key out of credits!");
-          process.exit(1); // Only exit on strict 402 out-of-credits
+          process.exit(1); 
       }
       if (res.status === 429) { await sleep(3000); continue; }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -213,7 +213,7 @@ async function secureFetch(url) {
       await sleep(1500 * (i + 1));
     }
   }
-  return { result: [] }; // Prevent hard crashes on generic API timeouts
+  return { result: [] };
 }
 
 async function fetchTokenHoldersSafe(contractAddress, isNft = false) {
@@ -423,7 +423,6 @@ async function getOwnershipStats(conf, equivBurnt, previousData) {
   const rawStonkHolders = await fetchTokenHoldersSafe(conf.tokenCa, false);
   const trueUniqueStonkHolders = rawStonkHolders > (conf.teamWallets || 0) ? rawStonkHolders - (conf.teamWallets || 0) : 0;
 
-  // Accurately deducts both AMM and Burn units
   const circulatingNftSupply = Math.max(0, conf.maxSupply - ammVaultNfts - Math.floor(equivBurnt)); 
   const currentMaxSupply = Math.max(0, conf.maxSupply - Math.floor(equivBurnt));
   const ownershipRatio = circulatingNftSupply > 0 ? (trueUniqueNftHolders / circulatingNftSupply) * 100 : 0;
@@ -562,7 +561,7 @@ async function fetchActivations(projectKey, conf) {
   };
 }
 
-// MULTI-STREAM REVENUE ENGINE
+// MULTI-STREAM REVENUE ENGINE (FIXED STONK ROI & MANCER CHART)
 async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, marketData) {
   const oneDay = 86400;
   const dailyDates = [];
@@ -590,8 +589,8 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
               
               if ((tx.to || "").toLowerCase() === address) {
                   let usdVal = 0;
-
-                  // 100% BULLETPROOF LAUNCHPAD CALCULATION:
+                  
+                  // ONLY count exact 0.1 ETH transactions for the Launchpad to exclude trading volume
                   if (key === "launchpadUsd") {
                       const eth = Number(tx.value || 0) / 1e18;
                       if (eth >= 0.099 && eth <= 0.101) {
@@ -606,11 +605,9 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
                       const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
                       revenueBreakdown[key] += usdVal;
                       revenueBreakdown[dailyKey][dayIdx] += usdVal;
-                      totalSampleUsd += usdVal;
                       
-                      if (conf.oracleWeight) {
-                          dailyUsdPerWeight[dayIdx] += (usdVal / conf.oracleWeight);
-                      }
+                      // NOTE: We intentionally DO NOT add this to totalSampleUsd. 
+                      // ROI Yield relies strictly on Oracle internal routing.
                   }
               }
           }
@@ -641,16 +638,11 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
                   const usdVal = eth * marketData.ethPriceUsd;
                   const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
                   
+                  // This builds the true, accurate ROI calculation
                   totalSampleUsd += usdVal;
                   if (conf.oracleWeight) dailyUsdPerWeight[dayIdx] += (usdVal / conf.oracleWeight);
 
                   if (fromAddr === conf.streams?.amm) {
-                      revenueBreakdown.ammFeesUsd += usdVal;
-                      revenueBreakdown.dailyAmm[dayIdx] += usdVal;
-                  } else if (fromAddr === conf.streams?.securityBox) {
-                      revenueBreakdown.securityBoxUsd += usdVal;
-                      revenueBreakdown.dailySecurityBox[dayIdx] += usdVal;
-                  } else {
                       revenueBreakdown.ammFeesUsd += usdVal;
                       revenueBreakdown.dailyAmm[dayIdx] += usdVal;
                   }
@@ -686,10 +678,11 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
                     const usdVal = amount * price;
                     const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
                     
-                    revenueBreakdown.ammFeesUsd += usdVal;
-                    revenueBreakdown.dailyAmm[dayIdx] += usdVal;
                     totalSampleUsd += usdVal;
                     if (conf.oracleWeight) dailyUsdPerWeight[dayIdx] += (usdVal / conf.oracleWeight);
+                    
+                    revenueBreakdown.ammFeesUsd += usdVal;
+                    revenueBreakdown.dailyAmm[dayIdx] += usdVal;
                 }
               }
             }
@@ -702,8 +695,6 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
       if (projectKey === "stonk" && conf.streams?.launchpad) await fetchDirectEthInflows(conf.streams.launchpad, "launchpadUsd", "dailyLaunchpad");
   } 
   else if (conf.yieldMode === "protocol_vault") {
-      
-      // Fetch Protocol Vault Outflows for ANY vault project (Including Mancer Soft-Staking Distributions)
       let page = 1;
       while(true) {
           let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokentx&address=${conf.oracleSource}&contractaddress=${conf.tokenCa}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`;
