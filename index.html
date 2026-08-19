@@ -534,18 +534,18 @@
             },
             mancer: {
                 stream1: { label: "DEX Swap Routing Fees (7D)", key: "dexFeesUsd", dailyKey: "dailyDex", color: "#34d399", name: "DEX Swap Fees" },
-                stream2: { label: "Soft-Staking Vault Inflows (7D)", key: "ammFeesUsd", dailyKey: "dailyAmm", color: "#a855f7", name: "Vault Inflows" },
-                stream3: { label: "Order Execution Layer (7D)", key: "securityBoxUsd", dailyKey: "dailySecurityBox", color: "#60a5fa", name: "Order Layer" }
+                stream2: { label: "Soft-Staking Vault Inflows (7D)", key: "ammFeesUsd", dailyKey: "dailyAmm", color: "#60a5fa", name: "Vault Inflows" },
+                stream3: { label: "Order Execution Layer (7D)", key: "securityBoxUsd", dailyKey: "dailySecurityBox", color: "#a855f7", name: "Order Layer" }
             },
             tickeryard: {
-                stream1: { label: "Protocol Vault Inflows (7D)", key: "ammFeesUsd", dailyKey: "dailyAmm", color: "#22d3ee", name: "Vault Distributions" },
-                stream2: { label: "Yard AMM Protocol Fees (7D)", key: "dexFeesUsd", dailyKey: "dailyDex", color: "#34d399", name: "Yard AMM Fees" },
-                stream3: { label: "Ecosystem Inflows (7D)", key: "launchpadUsd", dailyKey: "dailyLaunchpad", color: "#f59e0b", name: "Ecosystem Fees" }
+                stream1: { label: "Protocol Vault Inflows (7D)", key: "ammFeesUsd", dailyKey: "dailyAmm", color: "#34d399", name: "Vault Distributions" },
+                stream2: { label: "Yard AMM Protocol Fees (7D)", key: "dexFeesUsd", dailyKey: "dailyDex", color: "#60a5fa", name: "Yard AMM Fees" },
+                stream3: { label: "Ecosystem Inflows (7D)", key: "launchpadUsd", dailyKey: "dailyLaunchpad", color: "#a855f7", name: "Ecosystem Fees" }
             },
             cardwall: {
-                stream1: { label: "Gacha Marketing Pool (7D)", key: "ammFeesUsd", dailyKey: "dailyAmm", color: "#fbbf24", name: "Gacha Pool (33%)" },
-                stream2: { label: "PSA 10 Slabs / Physical (7D)", key: "dexFeesUsd", dailyKey: "dailyDex", color: "#34d399", name: "Physical Commerce" },
-                stream3: { label: "Anvil Market Fees (7D)", key: "launchpadUsd", dailyKey: "dailyLaunchpad", color: "#a78bfa", name: "Anvil Trades" }
+                stream1: { label: "Gacha Marketing Pool (7D)", key: "ammFeesUsd", dailyKey: "dailyAmm", color: "#34d399", name: "Gacha Pool (33%)" },
+                stream2: { label: "PSA 10 Slabs / Physical (7D)", key: "dexFeesUsd", dailyKey: "dailyDex", color: "#60a5fa", name: "Physical Commerce" },
+                stream3: { label: "Anvil Market Fees (7D)", key: "launchpadUsd", dailyKey: "dailyLaunchpad", color: "#a855f7", name: "Anvil Trades" }
             }
         };
 
@@ -700,7 +700,7 @@
             try {
                 const res = await fetch('data.json?v=' + new Date().getTime());
                 masterData = await res.json();
-                await fetchLiveDerpPrice();
+                fetchLiveDerpPrice();
                 loadProject('stonk');
             } catch (e) {
                 console.error("Dashboard Sync Failed: ", e);
@@ -1121,7 +1121,7 @@
                                     }
                                 } catch (rpcErr) {
                                     
-                                    // ATTEMPT 2: Blockscout Classic API (Transfer Replay Engine)
+                                    // ATTEMPT 2: Blockscout Classic API Transfer Replay Engine
                                     try {
                                         let page = 1;
                                         while(true) {
