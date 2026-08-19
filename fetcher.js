@@ -8,7 +8,6 @@ const CHAIN_ID = 4663;
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 const TOKEN_TICKERS = {
-  "0x0bd7d308f8e1639fab988df18a8011f41eacad73": null,      
   "0xe934e36a439c94017b64a3fece66af12099abf50": "STONK", 
   "0xaf3d76f1834a1d425780943c99ea8a608f8a93f9": "AAPL",
   "0x12f190a9f9d7d37a250758b26824b97ce941bf54": "AMZN",
@@ -22,15 +21,7 @@ const TOKEN_TICKERS = {
   "0x05b37fb53a299a1b874a619e1c4c404d52c36f4c": "RDDT",
   "0x1b0e319c6a659f002271b69db8a7df2f911c153e": "GME",
   "0xa30fa36db767ad9ed3f7a60fc79526fb4d56d344": "USO",
-  "0x5fc5360d0400a0fd4f2af552add042d716f1d168": null,      
-  "0x1383b43aed527485f191b60060f5b5471f71b1ca": null,
-  "0xc72f232a6869e6cf34dc06129affd07f8a2a246a": "DEX", 
-  "0xf33b89c958b12b0c8be77c6d65a59e3130031558": "DEX", 
-  "0xd7fcd16a55742bcce96c90484551b077d715195f": "DEX", 
-  "0x5d111f5083c89589009d1d64eadd84dc615836b4": "DEX", 
-  "0x020bfc650a365f8bb26819deaabf3e21291018b4": "DEX", 
-  "0x6245e67affa44a23077f0ea7f981a8dc743a0c47": "DEX", 
-  "0x27efeae1817d90974623cb2ed455c424beffa5ab": "DEX",
+  "0xc72f232a6869e6cf34dc06129affd07f8a2a246a": "MANCER", 
   "0xe3fa12da7fa026b21817f16622e8ae48fa785166": "YARD",
   "0xb03058b8a39f3967df08d833682c1c99b29821b1": "WALL",
   "0x193674b72b6aa1905fc47bdbc19b30a53b666666": "SLEUTH"
@@ -87,6 +78,7 @@ const PROJECTS = {
     oracleSource: "0xe7207caa913b54aa4411e847a3a49eee0568cccf".toLowerCase(),
     oracleWeight: 333,
     underConstruction: false,
+    teamWallets: 3,
     streams: {
       amm: "0x1f12fe622c11947f93f53d63f68f7f46b6d081c9".toLowerCase(),
       securityBox: "0x55642a3f10f1af5145d3d59021b1d6b03bb8692c".toLowerCase(),
@@ -113,6 +105,7 @@ const PROJECTS = {
     yieldMode: "protocol_vault",
     oracleSource: "0x47c2194cAacfC778c0Baa41E10008bb7D720Cd59".toLowerCase(), 
     underConstruction: false,
+    teamWallets: 2,
     streams: {
       dexCollector: "0x5f3b7E837f2d5b6C38E78eE4f45BD140A226656e".toLowerCase(),
       vault: "0x47c2194cAacfC778c0Baa41E10008bb7D720Cd59".toLowerCase()
@@ -138,6 +131,7 @@ const PROJECTS = {
     yieldMode: "protocol_vault",
     oracleSource: "0xEf5f726990442bC3207d72D1F9DcF8677Cf02358".toLowerCase(), 
     underConstruction: false, 
+    teamWallets: 0,
     streams: {
       vault: "0xEf5f726990442bC3207d72D1F9DcF8677Cf02358".toLowerCase()
     },
@@ -162,6 +156,7 @@ const PROJECTS = {
     yieldMode: "protocol_vault",
     oracleSource: "0xdd59536f394c4b589e695f5921723b89ea479379".toLowerCase(),
     underConstruction: true,
+    teamWallets: 0,
     streams: {},
     tiers: [
       { id: "T0", name: "1-Star Member (★)", reqTokens: 500000, weight: 100 },
@@ -203,7 +198,7 @@ async function secureFetch(url) {
       const res = await fetch(url, { headers });
       if (res.status === 402) {
           console.error("\n[CRITICAL ERROR] HTTP 402: Payment Required. Key out of credits!");
-          process.exit(1);
+          process.exit(1); // Only exit on strict 402 out-of-credits
       }
       if (res.status === 429) { await sleep(3000); continue; }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -218,7 +213,7 @@ async function secureFetch(url) {
       await sleep(1500 * (i + 1));
     }
   }
-  process.exit(1); 
+  return { result: [] }; // Prevent hard crashes on generic API timeouts
 }
 
 async function fetchTokenHoldersSafe(contractAddress, isNft = false) {
@@ -423,16 +418,14 @@ async function getOwnershipStats(conf, equivBurnt, previousData) {
   }
 
   let rawNftHolders = await fetchTokenHoldersSafe(conf.nftCa, true);
-  let trueUniqueNftHolders = rawNftHolders > 0 ? rawNftHolders : 0;
-  
-  if (conf.ticker === "STONK" && trueUniqueNftHolders > 3) trueUniqueNftHolders -= 3; 
-  if (conf.ticker === "MANCER" && trueUniqueNftHolders > 2) trueUniqueNftHolders -= 2; 
+  let trueUniqueNftHolders = rawNftHolders > (conf.teamWallets || 0) ? rawNftHolders - (conf.teamWallets || 0) : 0;
 
   const rawStonkHolders = await fetchTokenHoldersSafe(conf.tokenCa, false);
-  const trueUniqueStonkHolders = rawStonkHolders > 3 ? rawStonkHolders - 3 : 0;
+  const trueUniqueStonkHolders = rawStonkHolders > (conf.teamWallets || 0) ? rawStonkHolders - (conf.teamWallets || 0) : 0;
 
-  const circulatingNftSupply = conf.maxSupply - ammVaultNfts; 
-  const currentMaxSupply = conf.maxSupply - equivBurnt;
+  // Accurately deducts both AMM and Burn units
+  const circulatingNftSupply = Math.max(0, conf.maxSupply - ammVaultNfts - Math.floor(equivBurnt)); 
+  const currentMaxSupply = Math.max(0, conf.maxSupply - Math.floor(equivBurnt));
   const ownershipRatio = circulatingNftSupply > 0 ? (trueUniqueNftHolders / circulatingNftSupply) * 100 : 0;
 
   let histLabels = previousData?.ownership?.historicalGrowth?.labels || [];
@@ -582,6 +575,50 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
     dailyAmm: [0,0,0,0,0,0,0], dailySecurityBox: [0,0,0,0,0,0,0], dailyLaunchpad: [0,0,0,0,0,0,0], dailyDex: [0,0,0,0,0,0,0]
   };
 
+  async function fetchDirectEthInflows(address, key, dailyKey) {
+      let page = 1;
+      while(true) {
+          let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=txlist&address=${address}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`;
+          let data = await secureFetch(url);
+          const txs = (data && Array.isArray(data.result)) ? data.result : [];
+          if(txs.length === 0) break;
+          let reachedOlder = false;
+          for (const tx of txs) {
+              const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
+              if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
+              if (tx.isError === "1" || tx.isError === 1) continue;
+              
+              if ((tx.to || "").toLowerCase() === address) {
+                  let usdVal = 0;
+
+                  // 100% BULLETPROOF LAUNCHPAD CALCULATION:
+                  if (key === "launchpadUsd") {
+                      const eth = Number(tx.value || 0) / 1e18;
+                      if (eth >= 0.099 && eth <= 0.101) {
+                          usdVal = 0.1 * marketData.ethPriceUsd;
+                      }
+                  } else {
+                      const eth = Number(tx.value || 0) / 1e18;
+                      if (eth > 0) usdVal = eth * marketData.ethPriceUsd;
+                  }
+
+                  if (usdVal > 0) {
+                      const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
+                      revenueBreakdown[key] += usdVal;
+                      revenueBreakdown[dailyKey][dayIdx] += usdVal;
+                      totalSampleUsd += usdVal;
+                      
+                      if (conf.oracleWeight) {
+                          dailyUsdPerWeight[dayIdx] += (usdVal / conf.oracleWeight);
+                      }
+                  }
+              }
+          }
+          if(reachedOlder || txs.length < 1000) break;
+          page++; await sleep(200); 
+      }
+  }
+
   if (conf.yieldMode === "oracle_wallet") {
       let pageEth = 1;
       while(true) {
@@ -604,14 +641,12 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
                   const usdVal = eth * marketData.ethPriceUsd;
                   const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
                   
-                  // Add directly to the Oracle payout
                   totalSampleUsd += usdVal;
                   if (conf.oracleWeight) dailyUsdPerWeight[dayIdx] += (usdVal / conf.oracleWeight);
 
-                  // Segregate by the contract that routed it into the Booster
-                  if (fromAddr === conf.streams?.launchpad) {
-                      revenueBreakdown.launchpadUsd += usdVal;
-                      revenueBreakdown.dailyLaunchpad[dayIdx] += usdVal;
+                  if (fromAddr === conf.streams?.amm) {
+                      revenueBreakdown.ammFeesUsd += usdVal;
+                      revenueBreakdown.dailyAmm[dayIdx] += usdVal;
                   } else if (fromAddr === conf.streams?.securityBox) {
                       revenueBreakdown.securityBoxUsd += usdVal;
                       revenueBreakdown.dailySecurityBox[dayIdx] += usdVal;
@@ -626,7 +661,6 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
           pageEth++; await sleep(200); 
       }
 
-      // Check ERC-20 routing into the oracle wallet
       for (const tokenAddr of Object.keys(TOKEN_TICKERS)) {
         const price = tokenPrices[tokenAddr.toLowerCase()] || 0;
         if (price <= 0) continue;
@@ -663,43 +697,44 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
             pageTok++; await sleep(200); 
         }
       }
+
+      if (projectKey === "stonk" && conf.streams?.securityBox) await fetchDirectEthInflows(conf.streams.securityBox, "securityBoxUsd", "dailySecurityBox");
+      if (projectKey === "stonk" && conf.streams?.launchpad) await fetchDirectEthInflows(conf.streams.launchpad, "launchpadUsd", "dailyLaunchpad");
   } 
   else if (conf.yieldMode === "protocol_vault") {
-      // 1. For TickerYard or other vault projects (Mancer uses DEX swap router only)
-      if (projectKey !== "mancer") {
-          let page = 1;
-          while(true) {
-              let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokentx&address=${conf.oracleSource}&contractaddress=${conf.tokenCa}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`;
-              let data = await secureFetch(url);
-              const txs = (data && Array.isArray(data.result)) ? data.result : [];
-              if(txs.length === 0) break;
-              let reachedOlder = false;
-              for (const tx of txs) {
-                const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
-                if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
-                if ((tx.from || "").toLowerCase() === conf.oracleSource.toLowerCase()) {
-                    const amount = Number(tx.value || 0) / Math.pow(10, parseInt(tx.tokenDecimal || 18, 10));
-                    if (amount > 0) {
-                        const usdVal = amount * marketData.tokenPriceUsd;
-                        const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
-                        
-                        let activeWeightAtTime = 0;
-                        for (const t of conf.tiers) activeWeightAtTime += ((activationStats.breakdown[t.id] || 0) * t.weight);
-                        if (activeWeightAtTime === 0) activeWeightAtTime = 1;
-                        
-                        dailyUsdPerWeight[dayIdx] += (usdVal / activeWeightAtTime);
-                        totalSampleUsd += usdVal;
-                        revenueBreakdown.ammFeesUsd += usdVal; 
-                        revenueBreakdown.dailyAmm[dayIdx] += usdVal;
-                    }
+      
+      // Fetch Protocol Vault Outflows for ANY vault project (Including Mancer Soft-Staking Distributions)
+      let page = 1;
+      while(true) {
+          let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokentx&address=${conf.oracleSource}&contractaddress=${conf.tokenCa}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`;
+          let data = await secureFetch(url);
+          const txs = (data && Array.isArray(data.result)) ? data.result : [];
+          if(txs.length === 0) break;
+          let reachedOlder = false;
+          for (const tx of txs) {
+            const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
+            if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
+            if ((tx.from || "").toLowerCase() === conf.oracleSource.toLowerCase()) {
+                const amount = Number(tx.value || 0) / Math.pow(10, parseInt(tx.tokenDecimal || 18, 10));
+                if (amount > 0) {
+                    const usdVal = amount * marketData.tokenPriceUsd;
+                    const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
+                    
+                    let activeWeightAtTime = 0;
+                    for (const t of conf.tiers) activeWeightAtTime += ((activationStats.breakdown[t.id] || 0) * t.weight);
+                    if (activeWeightAtTime === 0) activeWeightAtTime = 1;
+                    
+                    dailyUsdPerWeight[dayIdx] += (usdVal / activeWeightAtTime);
+                    totalSampleUsd += usdVal;
+                    revenueBreakdown.ammFeesUsd += usdVal; 
+                    revenueBreakdown.dailyAmm[dayIdx] += usdVal;
                 }
-              }
-              if(reachedOlder || txs.length < 1000) break;
-              page++; await sleep(200); 
+            }
           }
+          if(reachedOlder || txs.length < 1000) break;
+          page++; await sleep(200); 
       }
 
-      // 2. Mancer DEX Routing Fees (WETH to Collector)
       if (projectKey === "mancer" && conf.streams?.dexCollector) {
           let pageDex = 1;
           while(true) {
@@ -717,7 +752,6 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
                       const amount = Number(tx.value || 0) / Math.pow(10, dec);
                       const sym = (tx.tokenSymbol || "").toUpperCase();
                       
-                      // Filter for WETH/ETH fee transfers
                       if (amount > 0 && amount < 5 && (sym === "WETH" || sym === "ETH")) {
                           const usdVal = amount * marketData.ethPriceUsd;
                           if (usdVal > 0) {
