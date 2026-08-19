@@ -198,7 +198,7 @@ async function secureFetch(url) {
       const res = await fetch(url, { headers });
       if (res.status === 402) {
           console.error("\n[CRITICAL ERROR] HTTP 402: Payment Required. Key out of credits!");
-          process.exit(1); 
+          return { result: [] }; 
       }
       if (res.status === 429) { await sleep(3000); continue; }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -630,7 +630,6 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
               if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
               if (tx.isError === "1" || tx.isError === 1) continue;
               
-              // Count all ETH distributed outwards from Security Box
               if ((tx.from || "").toLowerCase() === address) {
                   const eth = Number(tx.value || 0) / 1e18;
                   if (eth > 0) {
@@ -730,7 +729,6 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
           revenueBreakdown.dailyAmm[i] = dailyOracleAmmSample[i] * scaleMultiplier;
       }
 
-      // Track individual contracts for other streams
       if (projectKey === "stonk" && conf.streams?.securityBox) await fetchSecurityBoxOutflows(conf.streams.securityBox);
       if (projectKey === "stonk" && conf.streams?.launchpad) await fetchDirectEthInflows(conf.streams.launchpad, "launchpadUsd", "dailyLaunchpad");
   } 
@@ -786,6 +784,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
                               revenueBreakdown.dexFeesUsd += usdVal;
                               revenueBreakdown.dailyDex[dayIdx] += usdVal;
                               totalSampleUsd += usdVal;
+
                               dailyUsdPerWeight[dayIdx] += (usdVal / totalNetworkWeight);
                           }
                       }
@@ -991,6 +990,31 @@ async function run() {
           lockedLpData = scanLockedStonkLiquidity(conf.tokenCa, markets[projectKey].tokenPriceUsd);
       }
 
+      // DAILY DIARY LOGGER FOR HISTORICAL CHARTS
+      let dailySnapshots = prevProjData.dailySnapshots || [];
+      const todayStr = new Date().toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
+      const floorCostUsd = markets[projectKey].nftFloorEth * markets[projectKey].ethPriceUsd;
+
+      const currentSnapshot = {
+          date: todayStr,
+          timestamp: Date.now(),
+          tokenPriceUsd: markets[projectKey].tokenPriceUsd,
+          totalBurn: (activationStats.dualBurn || {}).totalBurnTokens || 0,
+          tiers: mappedTiers.map(t => {
+              const actCost = t.reqTokens * markets[projectKey].tokenPriceUsd;
+              const totalCost = floorCostUsd + actCost;
+              const roi = totalCost > 0 ? (t.trackedAnnualYieldUsd / totalCost) * 100 : 0;
+              return { tier: t.tier, roi: roi, yieldUsd: t.trackedAnnualYieldUsd };
+          })
+      };
+
+      if (dailySnapshots.length > 0 && dailySnapshots[dailySnapshots.length - 1].date === todayStr) {
+          dailySnapshots[dailySnapshots.length - 1] = currentSnapshot;
+      } else {
+          dailySnapshots.push(currentSnapshot);
+      }
+      if (dailySnapshots.length > 90) dailySnapshots.shift();
+
       finalJson.projects[projectKey] = {
         market: markets[projectKey],
         activation: activationStats,
@@ -999,6 +1023,7 @@ async function run() {
         revenue: yieldData.revenueBreakdown,
         lockedLp: lockedLpData,
         underConstruction: conf.underConstruction,
+        dailySnapshots: dailySnapshots,
         config: { ticker: conf.ticker, unitValue: conf.unitValue, logo: conf.logo, nftCa: conf.nftCa }
       };
   }
