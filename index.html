@@ -103,7 +103,7 @@
         </div>
     </header>
 
-    <!-- NEW: Macro Protocol Matrix -->
+    <!-- Macro Protocol Matrix -->
     <div id="macro-matrix" class="max-w-6xl mx-auto grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6 hidden" data-html2canvas-ignore="true">
         <!-- JS populates this -->
     </div>
@@ -232,7 +232,7 @@
 
     <!-- View 1: Tier ROI Benchmarks -->
     <main id="view-roi" class="max-w-6xl mx-auto card rounded-2xl border p-4 md:p-6 mb-8 shadow-xl overflow-hidden">
-        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
             <div>
                 <h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2">
                     <svg class="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20"><path d="M3 12v3c0 1.657 3.134 3 7 3s7-1.343 7-3v-3c0 1.657-3.134 3-7 3s-7-1.343-7-3z"></path><path d="M3 7v3c0 1.657 3.134 3 7 3s7-1.343 7-3V7c0 1.657-3.134 3-7 3S3 8.657 3 7z"></path><path d="M17 5c0 1.657-3.134 3-7 3S3 6.657 3 5s3.134-3 7-3 7 1.343 7 3z"></path></svg>
@@ -479,7 +479,7 @@
                     <p class="text-[10px] uppercase tracking-wider text-slate-300 font-bold truncate" id="t4-name">T4</p>
                 </div>
                 <div class="flex justify-between items-end">
-                    <div><p class="text-lg font-bold text-emerald-400" id="t4-act">0</p><p class="text-[9px] text-slate-500 uppercase">Deact</p></div>
+                    <div><p class="text-lg font-bold text-emerald-400" id="t4-act">0</p><p class="text-[9px] text-slate-500 uppercase">Act</p></div>
                     <div class="text-right"><p class="text-lg font-bold text-rose-400" id="t4-deact">0</p><p class="text-[9px] text-slate-500 uppercase">Deact</p></div>
                 </div>
             </div>
@@ -596,14 +596,14 @@
                 stream3: { label: "Order Execution Layer (7D)", key: "securityBoxUsd", dailyKey: "dailySecurityBox", color: "#60a5fa", name: "Order Layer" }
             },
             tickeryard: {
-                stream1: { label: "Protocol Vault Inflows (7D)", key: "ammFeesUsd", dailyKey: "dailyAmm", color: "#34d399", name: "Vault Distributions" },
-                stream2: { label: "Yard AMM Protocol Fees (7D)", key: "dexFeesUsd", dailyKey: "dailyDex", color: "#60a5fa", name: "Yard AMM Fees" },
-                stream3: { label: "Ecosystem Inflows (7D)", key: "launchpadUsd", dailyKey: "dailyLaunchpad", color: "#a855f7", name: "Ecosystem Fees" }
+                stream1: { label: "Protocol Vault Inflows (7D)", key: "ammFeesUsd", dailyKey: "dailyAmm", color: "#22d3ee", name: "Vault Distributions" },
+                stream2: { label: "Yard AMM Protocol Fees (7D)", key: "dexFeesUsd", dailyKey: "dailyDex", color: "#34d399", name: "Yard AMM Fees" },
+                stream3: { label: "Ecosystem Inflows (7D)", key: "launchpadUsd", dailyKey: "dailyLaunchpad", color: "#f59e0b", name: "Ecosystem Fees" }
             },
             cardwall: {
-                stream1: { label: "Gacha Marketing Pool (7D)", key: "ammFeesUsd", dailyKey: "dailyAmm", color: "#34d399", name: "Gacha Pool (33%)" },
-                stream2: { label: "PSA 10 Slabs / Physical (7D)", key: "dexFeesUsd", dailyKey: "dailyDex", color: "#60a5fa", name: "Physical Commerce" },
-                stream3: { label: "Anvil Market Fees (7D)", key: "launchpadUsd", dailyKey: "dailyLaunchpad", color: "#a855f7", name: "Anvil Trades" }
+                stream1: { label: "Gacha Marketing Pool (7D)", key: "ammFeesUsd", dailyKey: "dailyAmm", color: "#fbbf24", name: "Gacha Pool (33%)" },
+                stream2: { label: "PSA 10 Slabs / Physical (7D)", key: "dexFeesUsd", dailyKey: "dailyDex", color: "#34d399", name: "Physical Commerce" },
+                stream3: { label: "Anvil Market Fees (7D)", key: "launchpadUsd", dailyKey: "dailyLaunchpad", color: "#a78bfa", name: "Anvil Trades" }
             }
         };
 
@@ -1369,8 +1369,39 @@
         }
 
         // ==============================================
-        // PORTFOLIO SCANNER (Strict Data Enforcement)
+        // PORTFOLIO SCANNER (Dynamic Personal Image Fetch)
         // ==============================================
+        async function fetchAndSetNftImage(nftCa, tokenId, imgId) {
+            try {
+                const imgRes = await fetchWithRetry(`https://robinhoodchain.blockscout.com/api/v2/tokens/${nftCa}/instances/${tokenId}`, {timeout: 4000});
+                if (imgRes.ok) {
+                    const imgData = await imgRes.json();
+                    let meta = imgData?.metadata;
+                    if (typeof meta === 'string') { try { meta = JSON.parse(meta); } catch(e) {} }
+                    
+                    let imgSrc = null;
+                    if (meta?.image) imgSrc = resolveIpfsUrl(meta.image);
+                    else if (meta?.image_url) imgSrc = resolveIpfsUrl(meta.image_url);
+                    else if (imgData?.image_url) imgSrc = resolveIpfsUrl(imgData.image_url);
+                    else if (imgData?.animation_url) imgSrc = resolveIpfsUrl(imgData.animation_url);
+                    
+                    if (imgSrc) {
+                        const imgEl = document.getElementById(imgId);
+                        if (imgEl) {
+                            const pinata = imgSrc.replace('cloudflare-ipfs.com', 'gateway.pinata.cloud');
+                            const dweb = imgSrc.replace('cloudflare-ipfs.com', 'dweb.link');
+                            imgEl.onerror = function() {
+                                if (this.src === imgSrc) this.src = pinata;
+                                else if (this.src === pinata) this.src = dweb;
+                                else this.onerror = null;
+                            };
+                            imgEl.src = imgSrc;
+                        }
+                    }
+                }
+            } catch(e) {}
+        }
+
         async function scanPortfolioWallets() {
             const input = document.getElementById('portfolio-wallet-input').value.trim();
             if (!input) return;
@@ -1455,11 +1486,12 @@
                                     yieldHtml = `<span class="text-emerald-400">+ ${formatCurrency(exactYieldUsd)} /yr</span>`;
                                 }
 
+                                const imgId = `port-img-${pKey}-${wallet}`;
                                 const card = document.createElement('div');
                                 card.className = 'bg-[#0f172a] border border-[#334155] rounded-xl p-4 flex items-center justify-between shadow-inner';
                                 card.innerHTML = `
                                     <div class="flex items-center gap-3">
-                                        <img src="${pData.config.logo || 'Stonkbroker.png'}" class="w-10 h-10 rounded-lg object-cover border border-[#334155]">
+                                        <img id="${imgId}" src="${pData.config.logo || 'Stonkbroker.png'}" class="w-10 h-10 rounded-lg object-cover border border-[#334155]">
                                         <div>
                                             <h4 class="text-sm font-bold text-white">${pData.config.ticker} Units (${bal} Owned)</h4>
                                             <p class="text-[10px] text-slate-400">${wallet.slice(0,6)}...${wallet.slice(-4)}</p>
@@ -1471,6 +1503,12 @@
                                     </div>
                                 `;
                                 itemsCont.appendChild(card);
+
+                                // Async swap to actual NFT image if available
+                                if (ownedTokenIds.size > 0 && !fetchError) {
+                                    const firstTokenId = Array.from(ownedTokenIds)[0];
+                                    fetchAndSetNftImage(pData.config.nftCa, firstTokenId, imgId);
+                                }
                             }
                         } catch (e) {}
                     }
