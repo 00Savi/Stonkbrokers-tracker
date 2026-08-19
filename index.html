@@ -700,7 +700,7 @@
             try {
                 const res = await fetch('data.json?v=' + new Date().getTime());
                 masterData = await res.json();
-                fetchLiveDerpPrice();
+                await fetchLiveDerpPrice();
                 loadProject('stonk');
             } catch (e) {
                 console.error("Dashboard Sync Failed: ", e);
@@ -1122,19 +1122,24 @@
                                 } catch (rpcErr) {
                                     
                                     // ATTEMPT 2: Blockscout Classic API (Transfer Replay Engine)
-                                    // This bypasses the buggy Token-Balances endpoint completely.
                                     try {
-                                        const url = `https://robinhoodchain.blockscout.com/api?module=account&action=tokennfttx&contractaddress=${pData.config.nftCa}&address=${wallet}&sort=asc`;
-                                        const res = await fetch(url);
-                                        const json = await res.json();
-                                        
-                                        if (json.status === "1" && json.result) {
-                                            json.result.forEach(tx => {
-                                                if (tx.to.toLowerCase() === wallet.toLowerCase()) ownedTokenIds.add(Number(tx.tokenID));
-                                                if (tx.from.toLowerCase() === wallet.toLowerCase()) ownedTokenIds.delete(Number(tx.tokenID));
-                                            });
-                                        } else {
-                                            fetchError = true;
+                                        let page = 1;
+                                        while(true) {
+                                            const url = `https://robinhoodchain.blockscout.com/api?module=account&action=tokennfttx&contractaddress=${pData.config.nftCa}&address=${wallet}&page=${page}&offset=1000&sort=asc`;
+                                            const res = await fetch(url);
+                                            const json = await res.json();
+                                            
+                                            if (json.status === "1" && Array.isArray(json.result)) {
+                                                json.result.forEach(tx => {
+                                                    if (tx.to && tx.to.toLowerCase() === wallet.toLowerCase()) ownedTokenIds.add(Number(tx.tokenID));
+                                                    if (tx.from && tx.from.toLowerCase() === wallet.toLowerCase()) ownedTokenIds.delete(Number(tx.tokenID));
+                                                });
+                                                if (json.result.length < 1000) break;
+                                                page++;
+                                            } else {
+                                                fetchError = true;
+                                                break;
+                                            }
                                         }
                                     } catch (apiErr) {
                                         fetchError = true;
@@ -1210,6 +1215,17 @@
         // ==============================================
         // RESTORED: MEME TABLE & INDIVIDUAL LOOKUP
         // ==============================================
+
+        async function shareMemeToX(name, ca, index) {
+            const tweetText = `Tracking $${name} on Robinhood Chain via @savicrypto\nhttps://savicrypto.xyz/`;
+            await executeShare(`meme-details-${index}`, tweetText, `${name}-stats.png`, `share-btn-${index}`);
+        }
+
+        async function shareUnitToX() {
+            const inputVal = document.getElementById('lookup-id-input').value.trim();
+            const tweetText = `My ${currentProjectKey.toUpperCase()} Unit #${inputVal} ROI Analysis via @savicrypto\nhttps://savicrypto.xyz/`;
+            await executeShare('lookup-results', tweetText, `unit-${inputVal}-roi.png`, 'unit-share-btn-text');
+        }
 
         function renderMemesTable(customTokenList = null) {
             const tbody = document.getElementById('memes-body');
