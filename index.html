@@ -421,7 +421,7 @@
                     <p class="text-[10px] uppercase tracking-wider text-slate-300 font-bold truncate" id="t4-name">T4</p>
                 </div>
                 <div class="flex justify-between items-end">
-                    <div><p class="text-lg font-bold text-emerald-400" id="t4-act">0</p><p class="text-[9px] text-slate-500 uppercase">Act</p></div>
+                    <div><p class="text-lg font-bold text-emerald-400" id="t4-act">0</p><p class="text-[9px] text-slate-500 uppercase">Deact</p></div>
                     <div class="text-right"><p class="text-lg font-bold text-rose-400" id="t4-deact">0</p><p class="text-[9px] text-slate-500 uppercase">Deact</p></div>
                 </div>
             </div>
@@ -700,7 +700,7 @@
             try {
                 const res = await fetch('data.json?v=' + new Date().getTime());
                 masterData = await res.json();
-                fetchLiveDerpPrice();
+                await fetchLiveDerpPrice();
                 loadProject('stonk');
             } catch (e) {
                 console.error("Dashboard Sync Failed: ", e);
@@ -1121,35 +1121,46 @@
                                     }
                                 } catch (rpcErr) {
                                     
-                                    // ATTEMPT 2: Blockscout Classic API Transfer Replay Engine
+                                    // ATTEMPT 2: Blockscout Dedicated NFT Instances Endpoint
                                     try {
-                                        let page = 1;
-                                        while(true) {
-                                            const url = `https://robinhoodchain.blockscout.com/api?module=account&action=tokennfttx&contractaddress=${pData.config.nftCa}&address=${wallet}&page=${page}&offset=1000&sort=asc`;
-                                            const res = await fetch(url);
-                                            const json = await res.json();
-                                            
-                                            if (json.status === "1" && Array.isArray(json.result)) {
-                                                json.result.forEach(tx => {
-                                                    if (tx.to && tx.to.toLowerCase() === wallet.toLowerCase()) ownedTokenIds.add(Number(tx.tokenID));
-                                                    if (tx.from && tx.from.toLowerCase() === wallet.toLowerCase()) ownedTokenIds.delete(Number(tx.tokenID));
-                                                });
-                                                if (json.result.length < 1000) break;
-                                                page++;
-                                            } else {
-                                                fetchError = true;
-                                                break;
-                                            }
+                                        const instUrl = `https://robinhoodchain.blockscout.com/api/v2/tokens/${pData.config.nftCa}/instances?holder_address_hash=${wallet}`;
+                                        const resInst = await fetch(instUrl);
+                                        const jsonInst = await resInst.json();
+                                        if (jsonInst.items && Array.isArray(jsonInst.items) && jsonInst.items.length > 0) {
+                                            jsonInst.items.forEach(it => ownedTokenIds.add(Number(it.id)));
                                         }
-                                    } catch (apiErr) {
-                                        fetchError = true;
+                                    } catch (e) {}
+
+                                    // ATTEMPT 3: Blockscout Classic Transfer Replay Engine
+                                    if (ownedTokenIds.size !== bal) {
+                                        try {
+                                            let page = 1;
+                                            while(true) {
+                                                const url = `https://robinhoodchain.blockscout.com/api?module=account&action=tokennfttx&contractaddress=${pData.config.nftCa}&address=${wallet}&page=${page}&offset=1000&sort=asc`;
+                                                const res = await fetch(url);
+                                                const json = await res.json();
+                                                
+                                                if (json.status === "1" && Array.isArray(json.result)) {
+                                                    json.result.forEach(tx => {
+                                                        if (tx.to && tx.to.toLowerCase() === wallet.toLowerCase()) ownedTokenIds.add(Number(tx.tokenID));
+                                                        if (tx.from && tx.from.toLowerCase() === wallet.toLowerCase()) ownedTokenIds.delete(Number(tx.tokenID));
+                                                    });
+                                                    if (json.result.length < 1000) break;
+                                                    page++;
+                                                } else {
+                                                    break;
+                                                }
+                                            }
+                                        } catch (apiErr) {
+                                            fetchError = true;
+                                        }
                                     }
                                 }
 
                                 let yieldHtml = "";
 
-                                // STRICT ENFORCEMENT: Only calculate yield if exact IDs are verified
-                                if (fetchError || ownedTokenIds.size !== bal) {
+                                // STRICT ENFORCEMENT
+                                if (ownedTokenIds.size !== bal) {
                                     portfolioHasErrors = true;
                                     yieldHtml = `<span class="text-rose-400 border border-rose-500/50 bg-rose-900/20 px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider">ID Sync Error - Yield 0.00</span>`;
                                 } else {
