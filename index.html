@@ -282,7 +282,7 @@
             </div>
         </div>
 
-        <div id="locked-lp-section" class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6 mb-6 hidden">
+        <div id="locked-lp-section" class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6 mb-6">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-2">
                 <div>
                     <h3 class="text-sm font-bold text-white flex items-center gap-2">
@@ -291,10 +291,10 @@
                     </h3>
                     <p class="text-xs text-slate-400 mt-0.5">Scanned from all active partner, meme, and launchpad trading pairs.</p>
                 </div>
-                <div class="text-right flex flex-col items-end">
+                <div class="text-right flex flex-col items-end w-full md:w-auto">
                     <p class="text-base font-extrabold text-orange-400" id="stat-total-stonk-lp">0 Tokens</p>
                     <p class="text-[10px] text-slate-400" id="stat-total-stonk-lp-usd">$0.00 Total Pool Reserves</p>
-                    <button onclick="toggleLpTable()" id="lp-toggle-btn" class="mt-2 text-[10px] bg-[#1e293b] border border-[#334155] text-slate-300 px-3 py-1 rounded hover:text-white transition shadow-sm" data-html2canvas-ignore="true">Hide Pools ▲</button>
+                    <button onclick="toggleLpTable()" id="lp-toggle-btn" class="mt-2 text-[10px] bg-[#1e293b] border border-[#334155] text-slate-300 px-3 py-1 rounded hover:text-white transition shadow-sm w-full md:w-auto" data-html2canvas-ignore="true">Hide Pools ▲</button>
                 </div>
             </div>
             <div class="overflow-x-auto transition-all duration-300" id="lp-table-container">
@@ -1099,7 +1099,7 @@
 
                     for (const wallet of wallets) {
                         try {
-                            const url = `https://robinhoodchain.blockscout.com/api/v2/addresses/${wallet}/nft?type=ERC-721`;
+                            const url = `https://robinhoodchain.blockscout.com/api/v2/addresses/${wallet}/token-balances`;
                             const res = await fetch(url);
                             const json = await res.json();
                             const items = json.items || [];
@@ -1107,7 +1107,11 @@
                             let ownedTokenIds = [];
                             items.forEach(item => {
                                 if (item.token?.address?.toLowerCase() === pData.config.nftCa.toLowerCase()) {
-                                    ownedTokenIds.push(item.id);
+                                    if (item.token_instances && Array.isArray(item.token_instances)) {
+                                        item.token_instances.forEach(inst => ownedTokenIds.push(inst.id || inst.token_id));
+                                    } else if (item.token_id) {
+                                        ownedTokenIds.push(item.token_id);
+                                    }
                                 }
                             });
 
@@ -1161,7 +1165,7 @@
 
             } catch (err) {
                 console.error(err);
-                itemsCont.innerHTML = '<p class="text-xs text-rose-400 col-span-2">Error scanning wallets. Please retry.</p>';
+                itemsCont.innerHTML = '<p class="text-xs text-rose-400 col-span-2">API error scanning wallets. Please retry.</p>';
             }
         }
 
