@@ -561,7 +561,7 @@ async function fetchActivations(projectKey, conf) {
   };
 }
 
-// MULTI-STREAM REVENUE ENGINE (FIXED STONK ROI & MANCER CHART)
+// MULTI-STREAM REVENUE ENGINE
 async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, marketData) {
   const oneDay = 86400;
   const dailyDates = [];
@@ -573,6 +573,10 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
     ammFeesUsd: 0, securityBoxUsd: 0, launchpadUsd: 0, dexFeesUsd: 0,
     dailyAmm: [0,0,0,0,0,0,0], dailySecurityBox: [0,0,0,0,0,0,0], dailyLaunchpad: [0,0,0,0,0,0,0], dailyDex: [0,0,0,0,0,0,0]
   };
+
+  let totalNetworkWeight = 0;
+  for (const t of conf.tiers) totalNetworkWeight += ((activationStats.breakdown[t.id] || 0) * t.weight);
+  if (totalNetworkWeight === 0) totalNetworkWeight = 1;
 
   async function fetchDirectEthInflows(address, key, dailyKey) {
       let page = 1;
@@ -590,7 +594,6 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
               if ((tx.to || "").toLowerCase() === address) {
                   let usdVal = 0;
                   
-                  // ONLY count exact 0.1 ETH transactions for the Launchpad to exclude trading volume
                   if (key === "launchpadUsd") {
                       const eth = Number(tx.value || 0) / 1e18;
                       if (eth >= 0.099 && eth <= 0.101) {
@@ -605,9 +608,36 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
                       const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
                       revenueBreakdown[key] += usdVal;
                       revenueBreakdown[dailyKey][dayIdx] += usdVal;
-                      
-                      // NOTE: We intentionally DO NOT add this to totalSampleUsd. 
-                      // ROI Yield relies strictly on Oracle internal routing.
+                  }
+              }
+          }
+          if(reachedOlder || txs.length < 1000) break;
+          page++; await sleep(200); 
+      }
+  }
+
+  // Scan Security Box Contract Outflows (Rewards paid directly to clock-in users)
+  async function fetchSecurityBoxOutflows(address) {
+      let page = 1;
+      while(true) {
+          let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=txlist&address=${address}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`;
+          let data = await secureFetch(url);
+          const txs = (data && Array.isArray(data.result)) ? data.result : [];
+          if(txs.length === 0) break;
+          let reachedOlder = false;
+          for (const tx of txs) {
+              const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
+              if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
+              if (tx.isError === "1" || tx.isError === 1) continue;
+              
+              // Count all ETH distributed outwards from Security Box
+              if ((tx.from || "").toLowerCase() === address) {
+                  const eth = Number(tx.value || 0) / 1e18;
+                  if (eth > 0) {
+                      const usdVal = eth * marketData.ethPriceUsd;
+                      const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
+                      revenueBreakdown.securityBoxUsd += usdVal;
+                      revenueBreakdown.dailySecurityBox[dayIdx] += usdVal;
                   }
               }
           }
@@ -617,6 +647,9 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
   }
 
   if (conf.yieldMode === "oracle_wallet") {
+      let oracleAmmSampleUsd = 0;
+      let dailyOracleAmmSample = [0,0,0,0,0,0,0];
+
       let pageEth = 1;
       while(true) {
           let urlEth = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=txlistinternal&address=${conf.oracleSource}&page=${pageEth}&offset=1000&sort=desc&apikey=${API_KEY}`;
@@ -638,13 +671,12 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
                   const usdVal = eth * marketData.ethPriceUsd;
                   const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
                   
-                  // This builds the true, accurate ROI calculation
                   totalSampleUsd += usdVal;
                   if (conf.oracleWeight) dailyUsdPerWeight[dayIdx] += (usdVal / conf.oracleWeight);
 
                   if (fromAddr === conf.streams?.amm) {
-                      revenueBreakdown.ammFeesUsd += usdVal;
-                      revenueBreakdown.dailyAmm[dayIdx] += usdVal;
+                      oracleAmmSampleUsd += usdVal;
+                      dailyOracleAmmSample[dayIdx] += usdVal;
                   }
               }
             }
@@ -681,8 +713,8 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
                     totalSampleUsd += usdVal;
                     if (conf.oracleWeight) dailyUsdPerWeight[dayIdx] += (usdVal / conf.oracleWeight);
                     
-                    revenueBreakdown.ammFeesUsd += usdVal;
-                    revenueBreakdown.dailyAmm[dayIdx] += usdVal;
+                    oracleAmmSampleUsd += usdVal;
+                    dailyOracleAmmSample[dayIdx] += usdVal;
                 }
               }
             }
@@ -691,7 +723,15 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
         }
       }
 
-      if (projectKey === "stonk" && conf.streams?.securityBox) await fetchDirectEthInflows(conf.streams.securityBox, "securityBoxUsd", "dailySecurityBox");
+      // SCALE AMM PROTOCOL REVENUE TO GLOBAL LEVEL
+      const scaleMultiplier = totalNetworkWeight / conf.oracleWeight;
+      revenueBreakdown.ammFeesUsd = oracleAmmSampleUsd * scaleMultiplier;
+      for (let i = 0; i < 7; i++) {
+          revenueBreakdown.dailyAmm[i] = dailyOracleAmmSample[i] * scaleMultiplier;
+      }
+
+      // Track individual contracts for other streams
+      if (projectKey === "stonk" && conf.streams?.securityBox) await fetchSecurityBoxOutflows(conf.streams.securityBox);
       if (projectKey === "stonk" && conf.streams?.launchpad) await fetchDirectEthInflows(conf.streams.launchpad, "launchpadUsd", "dailyLaunchpad");
   } 
   else if (conf.yieldMode === "protocol_vault") {
@@ -711,11 +751,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
                     const usdVal = amount * marketData.tokenPriceUsd;
                     const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
                     
-                    let activeWeightAtTime = 0;
-                    for (const t of conf.tiers) activeWeightAtTime += ((activationStats.breakdown[t.id] || 0) * t.weight);
-                    if (activeWeightAtTime === 0) activeWeightAtTime = 1;
-                    
-                    dailyUsdPerWeight[dayIdx] += (usdVal / activeWeightAtTime);
+                    dailyUsdPerWeight[dayIdx] += (usdVal / totalNetworkWeight);
                     totalSampleUsd += usdVal;
                     revenueBreakdown.ammFeesUsd += usdVal; 
                     revenueBreakdown.dailyAmm[dayIdx] += usdVal;
@@ -750,11 +786,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
                               revenueBreakdown.dexFeesUsd += usdVal;
                               revenueBreakdown.dailyDex[dayIdx] += usdVal;
                               totalSampleUsd += usdVal;
-
-                              let activeWeightAtTime = 0;
-                              for (const t of conf.tiers) activeWeightAtTime += ((activationStats.breakdown[t.id] || 0) * t.weight);
-                              if (activeWeightAtTime === 0) activeWeightAtTime = 1;
-                              dailyUsdPerWeight[dayIdx] += (usdVal / activeWeightAtTime);
+                              dailyUsdPerWeight[dayIdx] += (usdVal / totalNetworkWeight);
                           }
                       }
                   }
@@ -765,9 +797,6 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
       }
   }
 
-  let totalNetworkWeight = 0;
-  for (const t of conf.tiers) totalNetworkWeight += ((activationStats.breakdown[t.id] || 0) * t.weight);
-  
   const yieldPerWeightUnitAnnual = conf.yieldMode === "oracle_wallet" 
       ? (totalSampleUsd / conf.oracleWeight) * 52.14 * totalNetworkWeight
       : totalSampleUsd * 52.14;
