@@ -1110,32 +1110,32 @@
                                 totalFloorUsd += (bal * floorUsd);
                                 
                                 let exactYieldUsd = 0;
-                                let ownedTokenIds = [];
+                                let ownedTokenIds = new Set();
                                 let fetchError = false;
 
-                                // Try RPC Enumerable First (Works for Mancer, Yard)
+                                // ATTEMPT 1: RPC Enumerable
                                 try {
                                     for (let i = 0; i < bal; i++) {
                                         const tId = await nftContract.tokenOfOwnerByIndex(wallet, i);
-                                        ownedTokenIds.push(Number(tId));
+                                        ownedTokenIds.add(Number(tId));
                                     }
                                 } catch (rpcErr) {
-                                    // Fallback to Blockscout API for Non-Enumerable (StonkBrokers)
-                                    ownedTokenIds = [];
+                                    
+                                    // ATTEMPT 2: Blockscout Classic API (Transfer Replay Engine)
+                                    // This bypasses the buggy Token-Balances endpoint completely.
                                     try {
-                                        const url = `https://robinhoodchain.blockscout.com/api/v2/addresses/${wallet}/token-balances`;
+                                        const url = `https://robinhoodchain.blockscout.com/api?module=account&action=tokennfttx&contractaddress=${pData.config.nftCa}&address=${wallet}&sort=asc`;
                                         const res = await fetch(url);
                                         const json = await res.json();
-                                        const items = json.items || [];
-                                        items.forEach(item => {
-                                            if (item.token?.address?.toLowerCase() === pData.config.nftCa.toLowerCase()) {
-                                                if (item.token_instances && Array.isArray(item.token_instances)) {
-                                                    item.token_instances.forEach(inst => ownedTokenIds.push(inst.id || inst.token_id));
-                                                } else if (item.token_id) {
-                                                    ownedTokenIds.push(item.token_id);
-                                                }
-                                            }
-                                        });
+                                        
+                                        if (json.status === "1" && json.result) {
+                                            json.result.forEach(tx => {
+                                                if (tx.to.toLowerCase() === wallet.toLowerCase()) ownedTokenIds.add(Number(tx.tokenID));
+                                                if (tx.from.toLowerCase() === wallet.toLowerCase()) ownedTokenIds.delete(Number(tx.tokenID));
+                                            });
+                                        } else {
+                                            fetchError = true;
+                                        }
                                     } catch (apiErr) {
                                         fetchError = true;
                                     }
@@ -1143,18 +1143,18 @@
 
                                 let yieldHtml = "";
 
-                                // STRICT DATA CHECK: No fake data. If we don't have exact IDs matching balance, ZERO it out.
-                                if (fetchError || ownedTokenIds.length === 0) {
+                                // STRICT ENFORCEMENT: Only calculate yield if exact IDs are verified
+                                if (fetchError || ownedTokenIds.size !== bal) {
                                     portfolioHasErrors = true;
                                     yieldHtml = `<span class="text-rose-400 border border-rose-500/50 bg-rose-900/20 px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider">ID Sync Error - Yield 0.00</span>`;
                                 } else {
                                     const activeMap = pData.activation?.activeTokenTiers || {};
-                                    for (const tokenId of ownedTokenIds) {
+                                    ownedTokenIds.forEach(tokenId => {
                                         const tokenData = activeMap[tokenId];
                                         const tierId = tokenData ? tokenData.t : 'T0'; 
                                         const tierObj = pData.tiers.find(t => t.tier === tierId) || pData.tiers[0];
                                         exactYieldUsd += tierObj.trackedAnnualYieldUsd;
-                                    }
+                                    });
                                     totalYieldUsd += exactYieldUsd;
                                     yieldHtml = `<span class="text-emerald-400">+ ${formatCurrency(exactYieldUsd)} /yr</span>`;
                                 }
@@ -1182,7 +1182,6 @@
 
                 document.getElementById('port-total-floor').innerText = formatCurrency(totalFloorUsd);
                 
-                // If any error occurred, flag the top level macro metrics
                 if (portfolioHasErrors) {
                     document.getElementById('port-total-yield').innerText = 'ERROR';
                     document.getElementById('port-total-roi').innerText = 'ERROR';
