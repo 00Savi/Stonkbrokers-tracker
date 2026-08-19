@@ -284,7 +284,6 @@ async function loadMarketPrices() {
   return markets;
 }
 
-// CHECKPOINT CACHED LOG FETCHER
 async function fetchAllLogs(projectKey, address, genesisBlock, topic0 = null) {
   if (!address || address === "0x0000000000000000000000000000000000000000") return [];
 
@@ -570,7 +569,7 @@ async function fetchActivations(projectKey, conf) {
   };
 }
 
-// MULTI-STREAM REVENUE ENGINE
+// MULTI-STREAM REVENUE ENGINE (BUG FIX APPLIED)
 async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, marketData) {
   const oneDay = 86400;
   const dailyDates = [];
@@ -582,39 +581,6 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
     ammFeesUsd: 0, securityBoxUsd: 0, launchpadUsd: 0, dexFeesUsd: 0,
     dailyAmm: [0,0,0,0,0,0,0], dailySecurityBox: [0,0,0,0,0,0,0], dailyLaunchpad: [0,0,0,0,0,0,0], dailyDex: [0,0,0,0,0,0,0]
   };
-
-  async function fetchDirectEthInflows(address, key, dailyKey) {
-      let page = 1;
-      while(true) {
-          let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=txlist&address=${address}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`;
-          let data = await secureFetch(url);
-          const txs = (data && Array.isArray(data.result)) ? data.result : [];
-          if(txs.length === 0) break;
-          let reachedOlder = false;
-          for (const tx of txs) {
-              const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
-              if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
-              if (tx.isError === "1" || tx.isError === 1) continue;
-              
-              if ((tx.to || "").toLowerCase() === address) {
-                  const eth = Number(tx.value || 0) / 1e18;
-                  if (eth > 0) {
-                      const usdVal = eth * marketData.ethPriceUsd;
-                      const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
-                      revenueBreakdown[key] += usdVal;
-                      revenueBreakdown[dailyKey][dayIdx] += usdVal;
-                      totalSampleUsd += usdVal;
-                      
-                      if (conf.oracleWeight) {
-                          dailyUsdPerWeight[dayIdx] += (usdVal / conf.oracleWeight);
-                      }
-                  }
-              }
-          }
-          if(reachedOlder || txs.length < 1000) break;
-          page++; await sleep(200); 
-      }
-  }
 
   if (conf.yieldMode === "oracle_wallet") {
       let pageEth = 1;
@@ -638,10 +604,25 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
                   const usdVal = eth * marketData.ethPriceUsd;
                   const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
                   
-                  revenueBreakdown.ammFeesUsd += usdVal;
-                  revenueBreakdown.dailyAmm[dayIdx] += usdVal;
+                  // ONLY count internal txs that successfully land inside the Booster/Oracle for true yield
                   totalSampleUsd += usdVal;
-                  dailyUsdPerWeight[dayIdx] += (usdVal / conf.oracleWeight);
+                  if (conf.oracleWeight) dailyUsdPerWeight[dayIdx] += (usdVal / conf.oracleWeight);
+
+                  // Distribute to revenue breakdown cleanly
+                  if (fromAddr === conf.streams?.amm) {
+                      revenueBreakdown.ammFeesUsd += usdVal;
+                      revenueBreakdown.dailyAmm[dayIdx] += usdVal;
+                  } else if (fromAddr === conf.streams?.securityBox) {
+                      revenueBreakdown.securityBoxUsd += usdVal;
+                      revenueBreakdown.dailySecurityBox[dayIdx] += usdVal;
+                  } else if (fromAddr === conf.streams?.launchpad) {
+                      revenueBreakdown.launchpadUsd += usdVal;
+                      revenueBreakdown.dailyLaunchpad[dayIdx] += usdVal;
+                  } else {
+                      // Fallback if it comes from an unknown protocol contract
+                      revenueBreakdown.ammFeesUsd += usdVal;
+                      revenueBreakdown.dailyAmm[dayIdx] += usdVal;
+                  }
               }
             }
           }
@@ -677,7 +658,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
                     revenueBreakdown.ammFeesUsd += usdVal;
                     revenueBreakdown.dailyAmm[dayIdx] += usdVal;
                     totalSampleUsd += usdVal;
-                    dailyUsdPerWeight[dayIdx] += (usdVal / conf.oracleWeight);
+                    if (conf.oracleWeight) dailyUsdPerWeight[dayIdx] += (usdVal / conf.oracleWeight);
                 }
               }
             }
@@ -685,9 +666,6 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
             pageTok++; await sleep(200); 
         }
       }
-
-      if (projectKey === "stonk" && conf.streams?.securityBox) await fetchDirectEthInflows(conf.streams.securityBox, "securityBoxUsd", "dailySecurityBox");
-      if (projectKey === "stonk" && conf.streams?.launchpad) await fetchDirectEthInflows(conf.streams.launchpad, "launchpadUsd", "dailyLaunchpad");
   } 
   else if (conf.yieldMode === "protocol_vault") {
       let page = 1;
@@ -736,16 +714,11 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
                   if ((tx.to || "").toLowerCase() === conf.streams.dexCollector) {
                       const dec = parseInt(tx.tokenDecimal || 18, 10);
                       const amount = Number(tx.value || 0) / Math.pow(10, dec);
-                      if (amount > 0) {
-                          let usdVal = 0;
-                          const sym = (tx.tokenSymbol || "").toUpperCase();
-                          if (sym === "WETH" || sym === "ETH") {
-                              usdVal = amount * marketData.ethPriceUsd;
-                          } else {
-                              const p = tokenPrices[(tx.contractAddress || "").toLowerCase()] || 0;
-                              usdVal = amount * p;
-                          }
-
+                      const sym = (tx.tokenSymbol || "").toUpperCase();
+                      
+                      // RESTRICTED TO ETH/WETH TO PREVENT SPAM TOKEN SPIKES
+                      if (amount > 0 && (sym === "WETH" || sym === "ETH")) {
+                          const usdVal = amount * marketData.ethPriceUsd;
                           if (usdVal > 0) {
                               const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
                               revenueBreakdown.dexFeesUsd += usdVal;
