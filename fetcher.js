@@ -1134,19 +1134,38 @@ async function run() {
       
       const yieldPerWeightUnitAnnual = totalNetworkWeight > 0 ? (yieldData.globalAnnualYield / totalNetworkWeight) : 0;
       
+      // Tier yields ride on the yield SAMPLE, not on revenueBreakdown, so
+      // restoring the breakdown above is not enough on its own. When a stream
+      // fails, its contribution is simply missing from the sample, and the
+      // tier yield -- and the ROI the dashboard derives from it -- silently
+      // collapses. Reading stonk's ETH inflows as unavailable dropped T0 ROI
+      // from 278.82% to 2.32% while every revenue number beside it still read
+      // correctly, which is worse than either a stale number or a blank one.
+      //
+      // So a degraded run carries the tier yields forward too, from the same
+      // payload the breakdown came from.
+      const yieldDegraded = yieldData.revenueBreakdown.degraded.length > 0;
+      const prevTiers = new Map((prevProjData?.tiers || []).map(t => [t.tier, t]));
+
       const mappedTiers = [];
       for (const t of conf.tiers) {
+        const carry = yieldDegraded ? prevTiers.get(t.id) : null;
+        const usable = carry && typeof carry.trackedAnnualYieldUsd === "number";
         mappedTiers.push({
           tier: t.id,
           name: t.name,
           reqTokens: t.reqTokens,
-          multiplier: `${(t.weight/100).toFixed(2)}x`, 
+          multiplier: `${(t.weight/100).toFixed(2)}x`,
           weight: t.weight,
-          trackedAnnualYieldUsd: t.weight * yieldPerWeightUnitAnnual,
+          trackedAnnualYieldUsd: usable ? carry.trackedAnnualYieldUsd : t.weight * yieldPerWeightUnitAnnual,
           dailyDates: yieldData.dailyDates,
-          dailyYields: yieldData.dailyUsdPerWeight.map(val => val * t.weight)
+          dailyYields: usable && Array.isArray(carry.dailyYields)
+            ? carry.dailyYields
+            : yieldData.dailyUsdPerWeight.map(val => val * t.weight)
         });
       }
+      if (yieldDegraded && prevTiers.size)
+        console.log(`  [degraded] ${projectKey} tier yields carried forward (ROI would otherwise collapse)`);
 
       let lockedLpData = null;
       if (projectKey === "stonk") {
