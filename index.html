@@ -103,11 +103,6 @@
         </div>
     </header>
 
-    <!-- Macro Protocol Matrix -->
-    <div id="macro-matrix" class="max-w-6xl mx-auto grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6 hidden" data-html2canvas-ignore="true">
-        <!-- JS populates this -->
-    </div>
-
     <div class="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <div id="standard-tabs" class="flex flex-wrap gap-2 md:gap-3 w-full sm:w-auto">
             <button id="tab-roi" onclick="switchTab('roi')" class="flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm shadow-lg shadow-blue-500/25">
@@ -208,7 +203,7 @@
         </div>
     </main>
 
-    <!-- NEW: View Historical Yield -->
+    <!-- View: Historical Yield -->
     <main id="view-historical" class="max-w-6xl mx-auto card rounded-2xl border p-4 md:p-6 mb-8 shadow-xl hidden">
         <div class="mb-6">
             <h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2">
@@ -246,7 +241,7 @@
             </div>
         </div>
 
-        <!-- NEW: What-If Volume Simulator -->
+        <!-- What-If Volume Simulator -->
         <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6 mb-6" id="what-if-container" data-html2canvas-ignore="true">
             <div class="flex justify-between items-center mb-2">
                 <h3 class="text-sm font-bold text-white flex items-center gap-2">
@@ -375,7 +370,7 @@
             </div>
         </div>
         
-        <!-- Old Cumulative Burn Chart -->
+        <!-- Cumulative Burn Chart -->
         <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6 mb-6">
             <div class="flex justify-between items-center mb-6" data-html2canvas-ignore="true">
                 <h3 class="text-sm font-bold text-white hidden sm:block">Cumulative Token Burn Over Time</h3>
@@ -390,7 +385,7 @@
             </div>
         </div>
 
-        <!-- NEW Flywheel Chart -->
+        <!-- Flywheel Chart -->
         <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6">
             <div class="flex justify-between items-center mb-4">
                 <div>
@@ -768,54 +763,10 @@
                 const res = await fetch('data.json?v=' + new Date().getTime());
                 masterData = await res.json();
                 await fetchLiveDerpPrice();
-                renderMacroMatrix();
                 loadProject('stonk');
             } catch (e) {
                 console.error("Dashboard Sync Failed: ", e);
             }
-        }
-
-        function renderMacroMatrix() {
-            const matrixCont = document.getElementById('macro-matrix');
-            if(!matrixCont) return;
-            matrixCont.innerHTML = '';
-            matrixCont.classList.remove('hidden');
-
-            const order = ['stonk', 'mancer', 'tickeryard', 'cardwall'];
-            order.forEach(key => {
-                const proj = masterData.projects[key];
-                if(!proj) return;
-                
-                const topTier = proj.tiers[proj.tiers.length - 1];
-                let topRoi = 0;
-                if (!proj.underConstruction && topTier) {
-                    const floorCost = proj.market.nftFloorEth * proj.market.ethPriceUsd;
-                    const actCost = topTier.reqTokens * proj.market.tokenPriceUsd;
-                    topRoi = (floorCost + actCost) > 0 ? (topTier.trackedAnnualYieldUsd / (floorCost + actCost)) * 100 : 0;
-                }
-
-                let pctLocked = 0;
-                if(proj.ownership && proj.config.maxSupply > 0) {
-                    pctLocked = ((proj.config.maxSupply - proj.ownership.circulatingNftSupply) / proj.config.maxSupply) * 100;
-                }
-                
-                matrixCont.innerHTML += `
-                    <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-4 cursor-pointer hover:border-blue-500 hover:shadow-[0_0_15px_rgba(59,130,246,0.15)] transition" onclick="selectProject('${key}')">
-                        <div class="flex items-center gap-2 mb-3">
-                            <img src="${proj.config.logo}" class="w-6 h-6 rounded-md">
-                            <span class="font-bold text-white text-sm">${proj.config.ticker}</span>
-                        </div>
-                        <div class="flex justify-between items-end mb-2">
-                            <span class="text-[10px] text-slate-400 uppercase">Max Yield</span>
-                            <span class="text-emerald-400 font-bold">${proj.underConstruction ? 'TBD' : topRoi.toFixed(2) + '%'}</span>
-                        </div>
-                        <div class="flex justify-between items-end">
-                            <span class="text-[10px] text-slate-400 uppercase">Supply Locked</span>
-                            <span class="text-blue-400 font-bold">${pctLocked.toFixed(1)}%</span>
-                        </div>
-                    </div>
-                `;
-            });
         }
 
         function loadProject(projectKey) {
@@ -863,8 +814,32 @@
             document.getElementById('nft-floor-box').classList.remove('hidden');
             document.getElementById('standard-tabs').classList.remove('hidden');
             
-            const data = masterData.projects[projectKey];
-            if (!data) return;
+            const data = masterData?.projects?.[projectKey];
+            
+            // DATA REBUILDING FAILSAFE: Catch corrupt/empty data.json seamlessly
+            if (!data || !data.market || !data.tiers || data.tiers.length === 0) {
+                const loadingElements = [
+                    'eth-price', 'token-price', 'nft-floor', 'floor-cost',
+                    'stat-total-burn', 'stat-equiv-nfts', 'stat-pct-activated',
+                    'stat-active-count', 'stat-max-supply', 'stat-circ-supply',
+                    'stat-amm-vault', 'stat-burnt-nfts', 'stat-nft-holders',
+                    'stat-stonk-holders', 'stat-own-ratio'
+                ];
+                loadingElements.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.innerHTML = '<span class="text-amber-400 text-[10px] uppercase font-bold border border-amber-500/50 bg-amber-900/20 px-2 py-0.5 rounded">Data Syncing</span>';
+                });
+                
+                const tbody = document.getElementById('tiers-body');
+                if (tbody) {
+                    tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-amber-400 font-bold bg-amber-900/10 border border-amber-500/30 rounded-lg">API Limit Reached - Data is currently rebuilding from blockchain. Please check back shortly.</td></tr>`;
+                }
+                
+                const whatIf = document.getElementById('what-if-container');
+                if (whatIf) whatIf.classList.add('hidden');
+                
+                return;
+            }
 
             if (data.underConstruction) {
                 document.getElementById('what-if-container').classList.add('hidden');
@@ -1548,7 +1523,7 @@
         }
 
         // ==============================================
-        // RESTORED: MEME TABLE & INDIVIDUAL LOOKUP
+        // SHARE & LOOKUP FUNCTIONS
         // ==============================================
 
         async function shareMemeToX(name, ca, index) {
@@ -2092,7 +2067,7 @@
         }
 
         // ==============================================
-        // RESTORED: CHARTS & METRICS RENDERING
+        // CHARTS & METRICS RENDERING
         // ==============================================
 
         function updateBurnChart(timeframe) {
