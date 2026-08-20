@@ -191,7 +191,6 @@ let ethPriceUsd = 1917;
 let tokenPrices = {};
 let allDexPairs = [];
 
-// HARDENED SECURE FETCH: Throws on fatal errors to protect data.json from overwrites
 async function secureFetch(url) {
   const headers = { "Accept": "application/json" };
   for (let i = 0; i < 5; i++) {
@@ -239,7 +238,7 @@ async function fetchTokenHoldersSafe(contractAddress, isNft = false) {
         }
         if (data.result.length < 1000) break; 
         page++;
-        if (page > 50) break; // SAFEGUARD: Prevent infinite loops
+        if (page > 50) break; 
         await sleep(200); 
     } else {
         break; 
@@ -248,33 +247,66 @@ async function fetchTokenHoldersSafe(contractAddress, isNft = false) {
   return hasData ? activeHolders : 0;
 }
 
-async function loadMarketPrices() {
+// HARDENED PRICE FETCHER
+async function loadMarketPrices(previousData) {
   try {
     const r = await fetch("https://api.exchange.coinbase.com/products/ETH-USD/ticker");
     const j = await r.json();
     if (j?.price) ethPriceUsd = parseFloat(j.price);
   } catch {}
 
+  const trustedQuotes = ["WETH", "ETH", "USDC", "USDT"];
   const markets = {};
+
   for (const [key, conf] of Object.entries(PROJECTS)) {
-      markets[key] = { ethPriceUsd, tokenPriceUsd: 0.03, nftFloorEth: 0 };
+      let prevPrice = previousData?.projects?.[key]?.market?.tokenPriceUsd || 0.01;
+      markets[key] = { ethPriceUsd, tokenPriceUsd: prevPrice, nftFloorEth: 0 };
+      
       try {
         const r = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${conf.tokenCa}`);
         const j = await r.json();
+        
         if (j?.pairs?.length) {
           const rhPairs = j.pairs.filter(p => p.chainId === 'robinhood' || (p.url && p.url.includes('robinhood')));
+          
           if (rhPairs.length > 0) {
               rhPairs.forEach(p => allDexPairs.push(p));
-              const best = rhPairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
+              
+              // STRICT ANTI-SPOOFING FILTER
+              let safePairs = rhPairs.filter(p => {
+                  const bSym = (p.baseToken?.symbol || "").toUpperCase();
+                  const qSym = (p.quoteToken?.symbol || "").toUpperCase();
+                  const liq = p.liquidity?.usd || 0;
+                  return (trustedQuotes.includes(bSym) || trustedQuotes.includes(qSym)) && liq > 5000;
+              });
+
+              if (safePairs.length === 0) safePairs = rhPairs.filter(p => (p.liquidity?.usd || 0) > 100);
+              if (safePairs.length === 0) safePairs = rhPairs;
+
+              const best = safePairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
+              
               let priceUsd = parseFloat(best.priceUsd || 0);
+              
+              // BASE/QUOTE INVERSION ENGINE (Fixes the $7.41 bug)
               if (best.quoteToken?.address?.toLowerCase() === conf.tokenCa.toLowerCase()) {
                   const priceNative = parseFloat(best.priceNative || 1);
                   if (priceNative > 0) priceUsd = priceUsd / priceNative;
               }
+
+              // SANITY CLAMP
+              if (priceUsd > 1.0) {
+                  console.log(`\n[WARN] ${conf.ticker} price ($${priceUsd}) anomalous. Clamping to previous known good data ($${prevPrice}).`);
+                  priceUsd = prevPrice;
+              }
+
               markets[key].tokenPriceUsd = priceUsd;
+              console.log(`[PRICE] ${conf.ticker}: $${priceUsd.toFixed(5)} | Pair: ${best.pairAddress} (${best.baseToken?.symbol}/${best.quoteToken?.symbol}) | Liq: $${best.liquidity?.usd}`);
           }
         }
-      } catch {}
+      } catch (e) {
+          console.log(`[ERROR] Failed to fetch price for ${conf.ticker}, using fallback.`);
+      }
+      
       markets[key].nftFloorEth = +((conf.unitValue * markets[key].tokenPriceUsd * 1.10) / ethPriceUsd).toFixed(3);
       tokenPrices[conf.tokenCa.toLowerCase()] = markets[key].tokenPriceUsd;
       await sleep(250);
@@ -318,7 +350,6 @@ async function fetchAllLogs(projectKey, address, genesisBlock, topic0 = null) {
   let step = 500000; 
   let fetchedNewLogs = false;
 
-  // SAFEGUARD: Using strict page iteration inside the block window to prevent micro-stepping 30k API calls
   while (fromBlock <= latestBlock) {
     let toBlock = fromBlock + step;
     if (toBlock > latestBlock) toBlock = latestBlock;
@@ -338,7 +369,7 @@ async function fetchAllLogs(projectKey, address, genesisBlock, topic0 = null) {
 
         if (logs.length < 1000) break; 
         page++;
-        if (page > 50) break; // Safety net
+        if (page > 50) break; 
         await sleep(200);
     }
 
@@ -579,6 +610,10 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
     dailyAmm: [0,0,0,0,0,0,0], dailySecurityBox: [0,0,0,0,0,0,0], dailyLaunchpad: [0,0,0,0,0,0,0], dailyDex: [0,0,0,0,0,0,0]
   };
 
+  let totalNetworkWeight = 0;
+  for (const t of conf.tiers) totalNetworkWeight += ((activationStats.breakdown[t.id] || 0) * t.weight);
+  if (totalNetworkWeight === 0) totalNetworkWeight = 1;
+
   async function fetchDirectEthInflows(address, key, dailyKey) {
       let page = 1;
       while(true) {
@@ -594,7 +629,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
               
               if ((tx.to || "").toLowerCase() === address) {
                   let usdVal = 0;
-
+                  
                   if (key === "launchpadUsd") {
                       const eth = Number(tx.value || 0) / 1e18;
                       if (eth >= 0.099 && eth <= 0.101) {
@@ -613,7 +648,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
               }
           }
           if(reachedOlder || txs.length < 1000) break;
-          page++;
+          page++; 
           if (page > 50) break;
           await sleep(200); 
       }
@@ -730,10 +765,6 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
         }
       }
 
-      let totalNetworkWeight = 0;
-      for (const t of conf.tiers) totalNetworkWeight += ((activationStats.breakdown[t.id] || 0) * t.weight);
-      if (totalNetworkWeight === 0) totalNetworkWeight = 1;
-
       const scaleMultiplier = totalNetworkWeight / conf.oracleWeight;
       revenueBreakdown.ammFeesUsd = oracleAmmSampleUsd * scaleMultiplier;
       for (let i = 0; i < 7; i++) {
@@ -744,10 +775,6 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
       if (projectKey === "stonk" && conf.streams?.launchpad) await fetchDirectEthInflows(conf.streams.launchpad, "launchpadUsd", "dailyLaunchpad");
   } 
   else if (conf.yieldMode === "protocol_vault") {
-      let totalNetworkWeight = 0;
-      for (const t of conf.tiers) totalNetworkWeight += ((activationStats.breakdown[t.id] || 0) * t.weight);
-      if (totalNetworkWeight === 0) totalNetworkWeight = 1;
-
       let page = 1;
       while(true) {
           let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokentx&address=${conf.oracleSource}&contractaddress=${conf.tokenCa}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`;
@@ -967,7 +994,7 @@ async function run() {
   let previousData = {};
   try { if (fs.existsSync("data.json")) previousData = JSON.parse(fs.readFileSync("data.json", "utf8")); } catch(e) {}
 
-  const markets = await loadMarketPrices();
+  const markets = await loadMarketPrices(previousData);
   const memeData = await loadTokenListPrices(MEMES);
   const stockData = await loadTokenListPrices(STOCKS);
   const sevenDaysAgo = Math.floor(Date.now() / 1000) - 7 * 24 * 3600;
