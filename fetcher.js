@@ -24,7 +24,8 @@ const TOKEN_TICKERS = {
   "0xc72f232a6869e6cf34dc06129affd07f8a2a246a": "MANCER", 
   "0xe3fa12da7fa026b21817f16622e8ae48fa785166": "YARD",
   "0xb03058b8a39f3967df08d833682c1c99b29821b1": "WALL",
-  "0x193674b72b6aa1905fc47bdbc19b30a53b666666": "SLEUTH"
+  "0x193674b72b6aa1905fc47bdbc19b30a53b666666": "SLEUTH",
+  "0x6543b7746ca744c4bb2198191e71f40ff04c41b9": "DERP"
 };
 
 const MEMES = [
@@ -220,8 +221,7 @@ async function secureFetch(url) {
 async function fetchTokenHoldersSafe(contractAddress, isNft = false) {
   if (!contractAddress || contractAddress === "0x0000000000000000000000000000000000000000") return 0;
   let page = 1;
-  let activeHolders = 0;
-  let hasData = false;
+  const uniqueHolders = new Set();
   const dustThreshold = isNft ? 1n : 1000000000000000000n; 
 
   while (true) {
@@ -229,14 +229,19 @@ async function fetchTokenHoldersSafe(contractAddress, isNft = false) {
     let data = await secureFetch(url);
 
     if (data && data.result && Array.isArray(data.result) && data.result.length > 0) {
-        hasData = true;
+        let newEntries = 0;
         for (const holder of data.result) {
             try {
                 const bal = BigInt(holder.value || 0);
-                if (bal >= dustThreshold) activeHolders++;
+                if (bal >= dustThreshold) {
+                    if (!uniqueHolders.has(holder.address)) {
+                        uniqueHolders.add(holder.address);
+                        newEntries++;
+                    }
+                }
             } catch(e) {}
         }
-        if (data.result.length < 1000) break; 
+        if (newEntries === 0 || data.result.length < 1000) break; 
         page++;
         if (page > 50) break; 
         await sleep(200); 
@@ -244,7 +249,7 @@ async function fetchTokenHoldersSafe(contractAddress, isNft = false) {
         break; 
     }
   }
-  return hasData ? activeHolders : 0;
+  return uniqueHolders.size;
 }
 
 // HARDENED PRICE FETCHER
@@ -272,7 +277,6 @@ async function loadMarketPrices(previousData) {
           if (rhPairs.length > 0) {
               rhPairs.forEach(p => allDexPairs.push(p));
               
-              // STRICT ANTI-SPOOFING FILTER
               let safePairs = rhPairs.filter(p => {
                   const bSym = (p.baseToken?.symbol || "").toUpperCase();
                   const qSym = (p.quoteToken?.symbol || "").toUpperCase();
@@ -287,13 +291,11 @@ async function loadMarketPrices(previousData) {
               
               let priceUsd = parseFloat(best.priceUsd || 0);
               
-              // BASE/QUOTE INVERSION ENGINE (Fixes the $7.41 bug)
               if (best.quoteToken?.address?.toLowerCase() === conf.tokenCa.toLowerCase()) {
                   const priceNative = parseFloat(best.priceNative || 1);
                   if (priceNative > 0) priceUsd = priceUsd / priceNative;
               }
 
-              // SANITY CLAMP
               if (priceUsd > 1.0) {
                   console.log(`\n[WARN] ${conf.ticker} price ($${priceUsd}) anomalous. Clamping to previous known good data ($${prevPrice}).`);
                   priceUsd = prevPrice;
@@ -314,6 +316,7 @@ async function loadMarketPrices(previousData) {
   return markets;
 }
 
+// ADAPTIVE LOG FETCHER RESTORED
 async function fetchAllLogs(projectKey, address, genesisBlock, topic0 = null) {
   if (!address || address === "0x0000000000000000000000000000000000000000") return [];
 
@@ -354,26 +357,24 @@ async function fetchAllLogs(projectKey, address, genesisBlock, topic0 = null) {
     let toBlock = fromBlock + step;
     if (toBlock > latestBlock) toBlock = latestBlock;
 
-    let page = 1;
-    while (true) {
-        let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=logs&action=getLogs&address=${address}&fromBlock=${fromBlock}&toBlock=${toBlock}&page=${page}&offset=1000&apikey=${API_KEY}`;
-        if (topic0) url += `&topic0=${topic0}`;
+    let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=logs&action=getLogs&address=${address}&fromBlock=${fromBlock}&toBlock=${toBlock}&apikey=${API_KEY}`;
+    if (topic0) url += `&topic0=${topic0}`;
 
-        let data = await secureFetch(url);
-        const logs = (data && Array.isArray(data.result)) ? data.result : [];
+    let data = await secureFetch(url);
+    const logs = (data && Array.isArray(data.result)) ? data.result : [];
 
-        if (logs.length > 0) {
-            allLogs.push(...logs);
-            fetchedNewLogs = true;
-        }
+    if (logs.length >= 1000 && step > 1) { 
+        step = Math.floor(step / 2); 
+        continue; 
+    }
 
-        if (logs.length < 1000) break; 
-        page++;
-        if (page > 50) break; 
-        await sleep(200);
+    if (logs.length > 0) {
+        allLogs.push(...logs);
+        fetchedNewLogs = true;
     }
 
     fromBlock = toBlock + 1;
+    if (logs.length < 500) { step = Math.min(500000, Math.floor(step * 2)); }
     await sleep(200); 
   }
 
@@ -616,13 +617,20 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
 
   async function fetchDirectEthInflows(address, key, dailyKey) {
       let page = 1;
+      const seenHashes = new Set();
       while(true) {
           let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=txlist&address=${address}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`;
           let data = await secureFetch(url);
           const txs = (data && Array.isArray(data.result)) ? data.result : [];
           if(txs.length === 0) break;
+          
           let reachedOlder = false;
+          let newEntries = 0;
           for (const tx of txs) {
+              if (seenHashes.has(tx.hash)) continue;
+              seenHashes.add(tx.hash);
+              newEntries++;
+
               const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
               if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
               if (tx.isError === "1" || tx.isError === 1) continue;
@@ -647,38 +655,8 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
                   }
               }
           }
-          if(reachedOlder || txs.length < 1000) break;
+          if(reachedOlder || newEntries === 0 || txs.length < 1000) break;
           page++; 
-          if (page > 50) break;
-          await sleep(200); 
-      }
-  }
-
-  async function fetchSecurityBoxOutflows(address) {
-      let page = 1;
-      while(true) {
-          let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=txlist&address=${address}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`;
-          let data = await secureFetch(url);
-          const txs = (data && Array.isArray(data.result)) ? data.result : [];
-          if(txs.length === 0) break;
-          let reachedOlder = false;
-          for (const tx of txs) {
-              const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
-              if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
-              if (tx.isError === "1" || tx.isError === 1) continue;
-              
-              if ((tx.from || "").toLowerCase() === address) {
-                  const eth = Number(tx.value || 0) / 1e18;
-                  if (eth > 0) {
-                      const usdVal = eth * marketData.ethPriceUsd;
-                      const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
-                      revenueBreakdown.securityBoxUsd += usdVal;
-                      revenueBreakdown.dailySecurityBox[dayIdx] += usdVal;
-                  }
-              }
-          }
-          if(reachedOlder || txs.length < 1000) break;
-          page++;
           if (page > 50) break;
           await sleep(200); 
       }
@@ -689,13 +667,20 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
       let dailyOracleAmmSample = [0,0,0,0,0,0,0];
 
       let pageEth = 1;
+      const seenEthHashes = new Set();
       while(true) {
           let urlEth = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=txlistinternal&address=${conf.oracleSource}&page=${pageEth}&offset=1000&sort=desc&apikey=${API_KEY}`;
           let dataEth = await secureFetch(urlEth);
           const txs = (dataEth && Array.isArray(dataEth.result)) ? dataEth.result : [];
           if(txs.length === 0) break;
+
           let reachedOlder = false;
+          let newEntries = 0;
           for (const tx of txs) {
+            if (seenEthHashes.has(tx.hash)) continue;
+            seenEthHashes.add(tx.hash);
+            newEntries++;
+
             const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
             if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
             if (tx.isError === "1" || tx.isError === 1) continue;
@@ -719,7 +704,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
               }
             }
           }
-          if(reachedOlder || txs.length < 1000) break;
+          if(reachedOlder || newEntries === 0 || txs.length < 1000) break;
           pageEth++; 
           if (pageEth > 50) break;
           await sleep(200); 
@@ -730,6 +715,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
         if (price <= 0) continue;
         
         let pageTok = 1;
+        const seenTokHashes = new Set();
         while(true) {
             let urlTok = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokentx&address=${conf.oracleSource}&contractaddress=${tokenAddr}&page=${pageTok}&offset=1000&sort=desc&apikey=${API_KEY}`;
             let dataTok = await secureFetch(urlTok);
@@ -737,7 +723,12 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
             if(txs.length === 0) break;
 
             let reachedOlder = false;
+            let newEntries = 0;
             for (const tx of txs) {
+              if (seenTokHashes.has(tx.hash)) continue;
+              seenTokHashes.add(tx.hash);
+              newEntries++;
+
               const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
               if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
               if (tx.isError === "1" || tx.isError === 1) continue;
@@ -758,7 +749,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
                 }
               }
             }
-            if(reachedOlder || txs.length < 1000) break;
+            if(reachedOlder || newEntries === 0 || txs.length < 1000) break;
             pageTok++; 
             if (pageTok > 50) break;
             await sleep(200); 
@@ -771,18 +762,26 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
           revenueBreakdown.dailyAmm[i] = dailyOracleAmmSample[i] * scaleMultiplier;
       }
 
-      if (projectKey === "stonk" && conf.streams?.securityBox) await fetchSecurityBoxOutflows(conf.streams.securityBox);
+      // Restored Security Box to track Direct Inflows as Revenue
+      if (projectKey === "stonk" && conf.streams?.securityBox) await fetchDirectEthInflows(conf.streams.securityBox, "securityBoxUsd", "dailySecurityBox");
       if (projectKey === "stonk" && conf.streams?.launchpad) await fetchDirectEthInflows(conf.streams.launchpad, "launchpadUsd", "dailyLaunchpad");
   } 
   else if (conf.yieldMode === "protocol_vault") {
       let page = 1;
+      const seenVaultHashes = new Set();
       while(true) {
           let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokentx&address=${conf.oracleSource}&contractaddress=${conf.tokenCa}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`;
           let data = await secureFetch(url);
           const txs = (data && Array.isArray(data.result)) ? data.result : [];
           if(txs.length === 0) break;
+          
           let reachedOlder = false;
+          let newEntries = 0;
           for (const tx of txs) {
+            if (seenVaultHashes.has(tx.hash)) continue;
+            seenVaultHashes.add(tx.hash);
+            newEntries++;
+
             const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
             if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
             if ((tx.from || "").toLowerCase() === conf.oracleSource.toLowerCase()) {
@@ -791,14 +790,18 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
                     const usdVal = amount * marketData.tokenPriceUsd;
                     const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
                     
-                    dailyUsdPerWeight[dayIdx] += (usdVal / totalNetworkWeight);
+                    let activeWeightAtTime = 0;
+                    for (const t of conf.tiers) activeWeightAtTime += ((activationStats.breakdown[t.id] || 0) * t.weight);
+                    if (activeWeightAtTime === 0) activeWeightAtTime = 1;
+                    
+                    dailyUsdPerWeight[dayIdx] += (usdVal / activeWeightAtTime);
                     totalSampleUsd += usdVal;
                     revenueBreakdown.ammFeesUsd += usdVal; 
                     revenueBreakdown.dailyAmm[dayIdx] += usdVal;
                 }
             }
           }
-          if(reachedOlder || txs.length < 1000) break;
+          if(reachedOlder || newEntries === 0 || txs.length < 1000) break;
           page++; 
           if (page > 50) break;
           await sleep(200); 
@@ -806,13 +809,20 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
 
       if (projectKey === "mancer" && conf.streams?.dexCollector) {
           let pageDex = 1;
+          const seenDexHashes = new Set();
           while(true) {
               let urlDex = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokentx&address=${conf.streams.dexCollector}&page=${pageDex}&offset=1000&sort=desc&apikey=${API_KEY}`;
               let dataDex = await secureFetch(urlDex);
               const txs = (dataDex && Array.isArray(dataDex.result)) ? dataDex.result : [];
               if(txs.length === 0) break;
+              
               let reachedOlder = false;
+              let newEntries = 0;
               for (const tx of txs) {
+                  if (seenDexHashes.has(tx.hash)) continue;
+                  seenDexHashes.add(tx.hash);
+                  newEntries++;
+
                   const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
                   if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
                   
@@ -828,12 +838,16 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
                               revenueBreakdown.dexFeesUsd += usdVal;
                               revenueBreakdown.dailyDex[dayIdx] += usdVal;
                               totalSampleUsd += usdVal;
-                              dailyUsdPerWeight[dayIdx] += (usdVal / totalNetworkWeight);
+
+                              let activeWeightAtTime = 0;
+                              for (const t of conf.tiers) activeWeightAtTime += ((activationStats.breakdown[t.id] || 0) * t.weight);
+                              if (activeWeightAtTime === 0) activeWeightAtTime = 1;
+                              dailyUsdPerWeight[dayIdx] += (usdVal / activeWeightAtTime);
                           }
                       }
                   }
               }
-              if(reachedOlder || txs.length < 1000) break;
+              if(reachedOlder || newEntries === 0 || txs.length < 1000) break;
               pageDex++; 
               if (pageDex > 50) break;
               await sleep(200); 
