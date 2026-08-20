@@ -267,16 +267,17 @@ async function loadMarketPrices() {
               if (validPairs.length === 0) validPairs = rhPairs;
               
               const best = validPairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
-              let priceUsd = parseFloat(best.priceUsd || 0);
+              let priceUsd = 0;
               
-              if (best.quoteToken?.address?.toLowerCase() === conf.tokenCa.toLowerCase()) {
-                  if (best.liquidity && best.liquidity.usd > 0 && best.liquidity.quote > 0) {
-                      priceUsd = (best.liquidity.usd / 2) / best.liquidity.quote;
-                  } else {
-                      const priceNative = parseFloat(best.priceNative || 1);
-                      if (priceNative > 0) priceUsd = priceUsd / priceNative;
+              if (best.liquidity && best.liquidity.usd > 0) {
+                  const isBase = best.baseToken?.address?.toLowerCase() === conf.tokenCa.toLowerCase();
+                  const tokenAmount = isBase ? best.liquidity.base : best.liquidity.quote;
+                  if (tokenAmount > 0) {
+                      priceUsd = (best.liquidity.usd / 2) / tokenAmount;
                   }
               }
+              
+              if (priceUsd === 0) priceUsd = parseFloat(best.priceUsd || 0);
               markets[key].tokenPriceUsd = priceUsd;
           }
         }
@@ -628,7 +629,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
   async function fetchSecurityBoxOutflows(address) {
       let page = 1;
       while(true) {
-          let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=txlist&address=${address}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`;
+          let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=txlistinternal&address=${address}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`;
           let data = await secureFetch(url);
           const txs = (data && Array.isArray(data.result)) ? data.result : [];
           if(txs.length === 0) break;
@@ -908,16 +909,18 @@ async function loadTokenListPrices(tokenList) {
       let priceUsd = 0, volume24h = 0, liquidity = 0, priceChange24h = 0, fdv = 0, marketCap = 0;
 
       if (pair) {
-          priceUsd = parseFloat(pair.priceUsd || 0);
-          
-          if (pair.quoteToken?.address?.toLowerCase() === item.ca.toLowerCase()) {
-              if (pair.liquidity && pair.liquidity.usd > 0 && pair.liquidity.quote > 0) {
-                  priceUsd = (pair.liquidity.usd / 2) / pair.liquidity.quote;
-              } else {
-                  const pNative = parseFloat(pair.priceNative || 1);
-                  if (pNative > 0) priceUsd = priceUsd / pNative;
+          if (pair.liquidity && pair.liquidity.usd > 0) {
+              const isBase = pair.baseToken?.address?.toLowerCase() === item.ca.toLowerCase();
+              const tokenAmount = isBase ? pair.liquidity.base : pair.liquidity.quote;
+              if (tokenAmount > 0) {
+                  priceUsd = (pair.liquidity.usd / 2) / tokenAmount;
               }
-              priceChange24h = pair.priceChange?.h24 !== undefined ? -(pair.priceChange.h24) : 0;
+          }
+          if (priceUsd === 0) priceUsd = parseFloat(pair.priceUsd || 0);
+          
+          const isBase = pair.baseToken?.address?.toLowerCase() === item.ca.toLowerCase();
+          if (!isBase && pair.priceChange?.h24 !== undefined) {
+              priceChange24h = -(pair.priceChange.h24);
           } else {
               priceChange24h = pair.priceChange?.h24 || 0;
           }
