@@ -24,8 +24,7 @@ const TOKEN_TICKERS = {
   "0xc72f232a6869e6cf34dc06129affd07f8a2a246a": "MANCER", 
   "0xe3fa12da7fa026b21817f16622e8ae48fa785166": "YARD",
   "0xb03058b8a39f3967df08d833682c1c99b29821b1": "WALL",
-  "0x193674b72b6aa1905fc47bdbc19b30a53b666666": "SLEUTH",
-  "0x6543b7746ca744c4bb2198191e71f40ff04c41b9": "DERP"
+  "0x193674b72b6aa1905fc47bdbc19b30a53b666666": "SLEUTH"
 };
 
 const MEMES = [
@@ -198,8 +197,8 @@ async function secureFetch(url) {
     try {
       const res = await fetch(url, { headers });
       if (res.status === 402) {
-          console.error("\n[FATAL API ERROR] HTTP 402: Payment Required. Key out of credits!");
-          throw new Error("API_CREDITS_EXHAUSTED");
+          console.error("\n[CRITICAL ERROR] HTTP 402: Payment Required. Key out of credits!");
+          return { result: [] }; 
       }
       if (res.status === 429) { await sleep(3000); continue; }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -211,17 +210,17 @@ async function secureFetch(url) {
       }
       return data;
     } catch (e) {
-      if (e.message === "API_CREDITS_EXHAUSTED") throw e;
       await sleep(1500 * (i + 1));
     }
   }
-  throw new Error(`[FATAL API ERROR] Failed to fetch after 5 retries: ${url}`);
+  return { result: [] };
 }
 
 async function fetchTokenHoldersSafe(contractAddress, isNft = false) {
   if (!contractAddress || contractAddress === "0x0000000000000000000000000000000000000000") return 0;
   let page = 1;
-  const uniqueHolders = new Set();
+  let activeHolders = 0;
+  let hasData = false;
   const dustThreshold = isNft ? 1n : 1000000000000000000n; 
 
   while (true) {
@@ -229,96 +228,50 @@ async function fetchTokenHoldersSafe(contractAddress, isNft = false) {
     let data = await secureFetch(url);
 
     if (data && data.result && Array.isArray(data.result) && data.result.length > 0) {
-        let newEntries = 0;
+        hasData = true;
         for (const holder of data.result) {
             try {
                 const bal = BigInt(holder.value || 0);
-                if (bal >= dustThreshold) {
-                    if (!uniqueHolders.has(holder.address)) {
-                        uniqueHolders.add(holder.address);
-                        newEntries++;
-                    }
-                }
+                if (bal >= dustThreshold) activeHolders++;
             } catch(e) {}
         }
-        if (newEntries === 0 || data.result.length < 1000) break; 
+        if (data.result.length < 1000) break; 
         page++;
-        if (page > 50) break; 
         await sleep(200); 
     } else {
         break; 
     }
   }
-  return uniqueHolders.size;
+  return hasData ? activeHolders : 0;
 }
 
-// HARDENED MARKET FETCHER
-async function loadMarketPrices(previousData) {
+async function loadMarketPrices() {
   try {
     const r = await fetch("https://api.exchange.coinbase.com/products/ETH-USD/ticker");
     const j = await r.json();
     if (j?.price) ethPriceUsd = parseFloat(j.price);
   } catch {}
 
-  const trustedQuotes = ["WETH", "ETH", "USDC", "USDT"];
   const markets = {};
-
   for (const [key, conf] of Object.entries(PROJECTS)) {
-      let prevPrice = previousData?.projects?.[key]?.market?.tokenPriceUsd || 0.01;
-      markets[key] = { ethPriceUsd, tokenPriceUsd: prevPrice, nftFloorEth: 0 };
-      
+      markets[key] = { ethPriceUsd, tokenPriceUsd: 0.03, nftFloorEth: 0 };
       try {
         const r = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${conf.tokenCa}`);
         const j = await r.json();
-        
         if (j?.pairs?.length) {
           const rhPairs = j.pairs.filter(p => p.chainId === 'robinhood' || (p.url && p.url.includes('robinhood')));
-          
           if (rhPairs.length > 0) {
               rhPairs.forEach(p => allDexPairs.push(p));
-              
-              let safePairs = rhPairs.filter(p => {
-                  const bSym = (p.baseToken?.symbol || "").toUpperCase();
-                  const qSym = (p.quoteToken?.symbol || "").toUpperCase();
-                  const liq = p.liquidity?.usd || 0;
-                  return (trustedQuotes.includes(bSym) || trustedQuotes.includes(qSym)) && liq > 5000;
-              });
-
-              if (safePairs.length === 0) safePairs = rhPairs.filter(p => (p.liquidity?.usd || 0) > 100);
-              if (safePairs.length === 0) safePairs = rhPairs;
-
-              const best = safePairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
-              
+              const best = rhPairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
               let priceUsd = parseFloat(best.priceUsd || 0);
-              
-              // BASE/QUOTE INVERSION ENGINE
               if (best.quoteToken?.address?.toLowerCase() === conf.tokenCa.toLowerCase()) {
                   const priceNative = parseFloat(best.priceNative || 1);
                   if (priceNative > 0) priceUsd = priceUsd / priceNative;
               }
-
-              // SANITY CLAMP
-              let maxPrice = 0.50;
-              if (conf.ticker === "STONK") maxPrice = 0.20;
-              if (conf.ticker === "MANCER") maxPrice = 0.05;
-
-              if (priceUsd > maxPrice) {
-                  console.log(`\n[WARN] ${conf.ticker} price ($${priceUsd}) anomalous. Clamping...`);
-                  if (prevPrice > maxPrice || prevPrice === 0) {
-                      priceUsd = conf.ticker === "STONK" ? 0.022 : (conf.ticker === "MANCER" ? 0.0014 : 0.01);
-                  } else {
-                      priceUsd = prevPrice;
-                  }
-              }
-
               markets[key].tokenPriceUsd = priceUsd;
-              console.log(`[PRICE] ${conf.ticker}: $${priceUsd.toFixed(5)} | Pair: ${best.pairAddress} (${best.baseToken?.symbol}/${best.quoteToken?.symbol}) | Liq: $${best.liquidity?.usd}`);
           }
         }
-      } catch (e) {
-          console.log(`[ERROR] Failed to fetch price for ${conf.ticker}, using fallback.`);
-      }
-      
+      } catch {}
       markets[key].nftFloorEth = +((conf.unitValue * markets[key].tokenPriceUsd * 1.10) / ethPriceUsd).toFixed(3);
       tokenPrices[conf.tokenCa.toLowerCase()] = markets[key].tokenPriceUsd;
       await sleep(250);
@@ -326,7 +279,6 @@ async function loadMarketPrices(previousData) {
   return markets;
 }
 
-// ADAPTIVE LOG FETCHER
 async function fetchAllLogs(projectKey, address, genesisBlock, topic0 = null) {
   if (!address || address === "0x0000000000000000000000000000000000000000") return [];
 
@@ -609,6 +561,7 @@ async function fetchActivations(projectKey, conf) {
   };
 }
 
+// MULTI-STREAM REVENUE ENGINE
 async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, marketData) {
   const oneDay = 86400;
   const dailyDates = [];
@@ -627,25 +580,18 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
 
   async function fetchDirectEthInflows(address, key, dailyKey) {
       let page = 1;
-      const seenHashes = new Set();
       while(true) {
           let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=txlist&address=${address}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`;
           let data = await secureFetch(url);
           const txs = (data && Array.isArray(data.result)) ? data.result : [];
           if(txs.length === 0) break;
-          
           let reachedOlder = false;
-          let newEntries = 0;
           for (const tx of txs) {
-              if (seenHashes.has(tx.hash)) continue;
-              seenHashes.add(tx.hash);
-              newEntries++;
-
               const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
               if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
               if (tx.isError === "1" || tx.isError === 1) continue;
               
-              if ((tx.to || "").toLowerCase() === address.toLowerCase()) {
+              if ((tx.to || "").toLowerCase() === address) {
                   let usdVal = 0;
                   
                   if (key === "launchpadUsd") {
@@ -665,101 +611,37 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
                   }
               }
           }
-          if(reachedOlder || newEntries === 0 || txs.length < 1000) break;
-          page++; 
-          if (page > 50) break;
-          await sleep(200); 
+          if(reachedOlder || txs.length < 1000) break;
+          page++; await sleep(200); 
       }
   }
 
-  // DYNAMIC SECURITY BOX ALL INFLOWS
-  async function fetchSecurityBoxAllInflows(address) {
+  // Scan Security Box Contract Outflows (Rewards paid directly to clock-in users)
+  async function fetchSecurityBoxOutflows(address) {
       let page = 1;
-      const seenHashes = new Set();
-      const rawTxs = [];
-      const unknownContracts = new Set();
-
       while(true) {
-          let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokentx&address=${address}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`;
+          let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=txlist&address=${address}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`;
           let data = await secureFetch(url);
           const txs = (data && Array.isArray(data.result)) ? data.result : [];
           if(txs.length === 0) break;
-          
           let reachedOlder = false;
-          let newEntries = 0;
           for (const tx of txs) {
-              if (seenHashes.has(tx.hash)) continue;
-              seenHashes.add(tx.hash);
-              newEntries++;
-
               const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
               if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
+              if (tx.isError === "1" || tx.isError === 1) continue;
               
-              if ((tx.to || "").toLowerCase() === address.toLowerCase()) {
-                  rawTxs.push(tx);
-                  const ca = (tx.contractAddress || "").toLowerCase();
-                  if (ca && !tokenPrices[ca]) {
-                      unknownContracts.add(ca);
+              if ((tx.from || "").toLowerCase() === address) {
+                  const eth = Number(tx.value || 0) / 1e18;
+                  if (eth > 0) {
+                      const usdVal = eth * marketData.ethPriceUsd;
+                      const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
+                      revenueBreakdown.securityBoxUsd += usdVal;
+                      revenueBreakdown.dailySecurityBox[dayIdx] += usdVal;
                   }
               }
           }
-          if(reachedOlder || newEntries === 0 || txs.length < 1000) break;
-          page++;
-          if (page > 50) break;
-          await sleep(200);
-      }
-
-      const unknownArr = Array.from(unknownContracts);
-      for (let i = 0; i < unknownArr.length; i += 30) {
-          const chunk = unknownArr.slice(i, i + 30).join(",");
-          try {
-              const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${chunk}`);
-              const data = await res.json();
-              if (data && data.pairs) {
-                  data.pairs.forEach(pair => {
-                      if (pair.chainId !== 'robinhood' && !(pair.url && pair.url.includes('robinhood'))) return;
-                      
-                      if ((pair.liquidity?.usd || 0) >= 100) {
-                          const baseAddr = pair.baseToken?.address?.toLowerCase();
-                          const quoteAddr = pair.quoteToken?.address?.toLowerCase();
-                          
-                          [baseAddr, quoteAddr].forEach(addr => {
-                              if (!addr || !unknownContracts.has(addr)) return;
-                              
-                              let priceUsd = parseFloat(pair.priceUsd || 0);
-                              if (pair.quoteToken?.address?.toLowerCase() === addr) {
-                                  const pNative = parseFloat(pair.priceNative || 1);
-                                  if (pNative > 0) priceUsd = priceUsd / pNative;
-                              }
-                              
-                              if (!tokenPrices[addr] || (pair.liquidity.usd > (tokenPrices[addr + "_liq"] || 0))) {
-                                  tokenPrices[addr] = priceUsd;
-                                  tokenPrices[addr + "_liq"] = pair.liquidity.usd;
-                              }
-                          });
-                      }
-                  });
-              }
-          } catch(e) {}
-          await sleep(250);
-      }
-
-      for (const tx of rawTxs) {
-          const ca = (tx.contractAddress || "").toLowerCase();
-          const price = tokenPrices[ca] || 0;
-          
-          if (price > 0) {
-              const decimals = parseInt(tx.tokenDecimal || 18, 10);
-              const amount = Number(tx.value || 0) / Math.pow(10, decimals);
-              const usdVal = amount * price;
-
-              if (usdVal > 0) {
-                  const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
-                  const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
-                  revenueBreakdown.securityBoxUsd += usdVal;
-                  revenueBreakdown.dailySecurityBox[dayIdx] += usdVal;
-              }
-          }
+          if(reachedOlder || txs.length < 1000) break;
+          page++; await sleep(200); 
       }
   }
 
@@ -768,20 +650,13 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
       let dailyOracleAmmSample = [0,0,0,0,0,0,0];
 
       let pageEth = 1;
-      const seenEthHashes = new Set();
       while(true) {
           let urlEth = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=txlistinternal&address=${conf.oracleSource}&page=${pageEth}&offset=1000&sort=desc&apikey=${API_KEY}`;
           let dataEth = await secureFetch(urlEth);
           const txs = (dataEth && Array.isArray(dataEth.result)) ? dataEth.result : [];
           if(txs.length === 0) break;
-
           let reachedOlder = false;
-          let newEntries = 0;
           for (const tx of txs) {
-            if (seenEthHashes.has(tx.hash)) continue;
-            seenEthHashes.add(tx.hash);
-            newEntries++;
-
             const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
             if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
             if (tx.isError === "1" || tx.isError === 1) continue;
@@ -805,10 +680,8 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
               }
             }
           }
-          if(reachedOlder || newEntries === 0 || txs.length < 1000) break;
-          pageEth++; 
-          if (pageEth > 50) break;
-          await sleep(200); 
+          if(reachedOlder || txs.length < 1000) break;
+          pageEth++; await sleep(200); 
       }
 
       for (const tokenAddr of Object.keys(TOKEN_TICKERS)) {
@@ -816,7 +689,6 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
         if (price <= 0) continue;
         
         let pageTok = 1;
-        const seenTokHashes = new Set();
         while(true) {
             let urlTok = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokentx&address=${conf.oracleSource}&contractaddress=${tokenAddr}&page=${pageTok}&offset=1000&sort=desc&apikey=${API_KEY}`;
             let dataTok = await secureFetch(urlTok);
@@ -824,12 +696,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
             if(txs.length === 0) break;
 
             let reachedOlder = false;
-            let newEntries = 0;
             for (const tx of txs) {
-              if (seenTokHashes.has(tx.hash)) continue;
-              seenTokHashes.add(tx.hash);
-              newEntries++;
-
               const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
               if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
               if (tx.isError === "1" || tx.isError === 1) continue;
@@ -850,43 +717,30 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
                 }
               }
             }
-            if(reachedOlder || newEntries === 0 || txs.length < 1000) break;
-            pageTok++; 
-            if (pageTok > 50) break;
-            await sleep(200); 
+            if(reachedOlder || txs.length < 1000) break;
+            pageTok++; await sleep(200); 
         }
       }
 
+      // SCALE AMM PROTOCOL REVENUE TO GLOBAL LEVEL
       const scaleMultiplier = totalNetworkWeight / conf.oracleWeight;
       revenueBreakdown.ammFeesUsd = oracleAmmSampleUsd * scaleMultiplier;
       for (let i = 0; i < 7; i++) {
           revenueBreakdown.dailyAmm[i] = dailyOracleAmmSample[i] * scaleMultiplier;
       }
 
-      if (projectKey === "stonk" && conf.streams?.securityBox) {
-          await fetchDirectEthInflows(conf.streams.securityBox, "securityBoxUsd", "dailySecurityBox");
-          await fetchSecurityBoxAllInflows(conf.streams.securityBox);
-      }
-      if (projectKey === "stonk" && conf.streams?.launchpad) {
-          await fetchDirectEthInflows(conf.streams.launchpad, "launchpadUsd", "dailyLaunchpad");
-      }
+      if (projectKey === "stonk" && conf.streams?.securityBox) await fetchSecurityBoxOutflows(conf.streams.securityBox);
+      if (projectKey === "stonk" && conf.streams?.launchpad) await fetchDirectEthInflows(conf.streams.launchpad, "launchpadUsd", "dailyLaunchpad");
   } 
   else if (conf.yieldMode === "protocol_vault") {
       let page = 1;
-      const seenVaultHashes = new Set();
       while(true) {
           let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokentx&address=${conf.oracleSource}&contractaddress=${conf.tokenCa}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`;
           let data = await secureFetch(url);
           const txs = (data && Array.isArray(data.result)) ? data.result : [];
           if(txs.length === 0) break;
-          
           let reachedOlder = false;
-          let newEntries = 0;
           for (const tx of txs) {
-            if (seenVaultHashes.has(tx.hash)) continue;
-            seenVaultHashes.add(tx.hash);
-            newEntries++;
-
             const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
             if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
             if ((tx.from || "").toLowerCase() === conf.oracleSource.toLowerCase()) {
@@ -902,28 +756,19 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
                 }
             }
           }
-          if(reachedOlder || newEntries === 0 || txs.length < 1000) break;
-          page++; 
-          if (page > 50) break;
-          await sleep(200); 
+          if(reachedOlder || txs.length < 1000) break;
+          page++; await sleep(200); 
       }
 
       if (projectKey === "mancer" && conf.streams?.dexCollector) {
           let pageDex = 1;
-          const seenDexHashes = new Set();
           while(true) {
               let urlDex = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokentx&address=${conf.streams.dexCollector}&page=${pageDex}&offset=1000&sort=desc&apikey=${API_KEY}`;
               let dataDex = await secureFetch(urlDex);
               const txs = (dataDex && Array.isArray(dataDex.result)) ? dataDex.result : [];
               if(txs.length === 0) break;
-              
               let reachedOlder = false;
-              let newEntries = 0;
               for (const tx of txs) {
-                  if (seenDexHashes.has(tx.hash)) continue;
-                  seenDexHashes.add(tx.hash);
-                  newEntries++;
-
                   const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
                   if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
                   
@@ -945,20 +790,14 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
                       }
                   }
               }
-              if(reachedOlder || newEntries === 0 || txs.length < 1000) break;
-              pageDex++; 
-              if (pageDex > 50) break;
-              await sleep(200); 
+              if(reachedOlder || txs.length < 1000) break;
+              pageDex++; await sleep(200); 
           }
       }
   }
 
-  let finalNetworkWeight = 0;
-  for (const t of conf.tiers) finalNetworkWeight += ((activationStats.breakdown[t.id] || 0) * t.weight);
-  if (finalNetworkWeight === 0) finalNetworkWeight = 1;
-
   const yieldPerWeightUnitAnnual = conf.yieldMode === "oracle_wallet" 
-      ? (totalSampleUsd / conf.oracleWeight) * 52.14 * finalNetworkWeight
+      ? (totalSampleUsd / conf.oracleWeight) * 52.14 * totalNetworkWeight
       : totalSampleUsd * 52.14;
 
   return { 
@@ -1067,11 +906,6 @@ async function loadTokenListPrices(tokenList) {
           marketCap = pair.marketCap || fdv;
       }
       
-      // Store in global dictionary for yield calculation
-      if (priceUsd > 0) {
-          tokenPrices[item.ca.toLowerCase()] = priceUsd;
-      }
-
       let burntBalance = 0;
       let totalSupplyRaw = 0;
 
@@ -1111,10 +945,9 @@ async function run() {
   let previousData = {};
   try { if (fs.existsSync("data.json")) previousData = JSON.parse(fs.readFileSync("data.json", "utf8")); } catch(e) {}
 
-  // 1. Fetch token and stock prices first to populate global dictionary
+  const markets = await loadMarketPrices();
   const memeData = await loadTokenListPrices(MEMES);
   const stockData = await loadTokenListPrices(STOCKS);
-  const markets = await loadMarketPrices(previousData);
   const sevenDaysAgo = Math.floor(Date.now() / 1000) - 7 * 24 * 3600;
   
   const finalJson = { 
@@ -1124,84 +957,79 @@ async function run() {
     stocks: stockData 
   };
 
-  try {
-      for (const [projectKey, conf] of Object.entries(PROJECTS)) {
-          console.log(`\n--- Processing ${projectKey.toUpperCase()} ---`);
-          const prevProjData = previousData.projects ? previousData.projects[projectKey] : {};
-          
-          const activationStats = await fetchActivations(projectKey, conf);
-          const ownershipStats = await getOwnershipStats(conf, activationStats.dualBurn.equivalentBrokersBurnt, prevProjData);
-          
-          const yieldData = await getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, markets[projectKey]);
+  for (const [projectKey, conf] of Object.entries(PROJECTS)) {
+      console.log(`\n--- Processing ${projectKey.toUpperCase()} ---`);
+      const prevProjData = previousData.projects ? previousData.projects[projectKey] : {};
+      
+      const activationStats = await fetchActivations(projectKey, conf);
+      const ownershipStats = await getOwnershipStats(conf, activationStats.dualBurn.equivalentBrokersBurnt, prevProjData);
+      
+      const yieldData = await getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, markets[projectKey]);
 
-          let totalNetworkWeight = 0;
-          for (const t of conf.tiers) totalNetworkWeight += ((activationStats.breakdown[t.id] || 0) * t.weight);
-          
-          const yieldPerWeightUnitAnnual = totalNetworkWeight > 0 ? (yieldData.globalAnnualYield / totalNetworkWeight) : 0;
-          
-          const mappedTiers = [];
-          for (const t of conf.tiers) {
-            mappedTiers.push({
-              tier: t.id,
-              name: t.name,
-              reqTokens: t.reqTokens,
-              multiplier: `${(t.weight/100).toFixed(2)}x`, 
-              weight: t.weight,
-              trackedAnnualYieldUsd: t.weight * yieldPerWeightUnitAnnual,
-              dailyDates: yieldData.dailyDates,
-              dailyYields: yieldData.dailyUsdPerWeight.map(val => val * t.weight)
-            });
-          }
-
-          let lockedLpData = null;
-          if (projectKey === "stonk") {
-              lockedLpData = scanLockedStonkLiquidity(conf.tokenCa, markets[projectKey].tokenPriceUsd);
-          }
-
-          let dailySnapshots = prevProjData.dailySnapshots || [];
-          const todayStr = new Date().toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
-          const floorCostUsd = markets[projectKey].nftFloorEth * markets[projectKey].ethPriceUsd;
-
-          const currentSnapshot = {
-              date: todayStr,
-              timestamp: Date.now(),
-              tokenPriceUsd: markets[projectKey].tokenPriceUsd,
-              totalBurn: (activationStats.dualBurn || {}).totalBurnTokens || 0,
-              tiers: mappedTiers.map(t => {
-                  const actCost = t.reqTokens * markets[projectKey].tokenPriceUsd;
-                  const totalCost = floorCostUsd + actCost;
-                  const roi = totalCost > 0 ? (t.trackedAnnualYieldUsd / totalCost) * 100 : 0;
-                  return { tier: t.tier, roi: roi, yieldUsd: t.trackedAnnualYieldUsd };
-              })
-          };
-
-          if (dailySnapshots.length > 0 && dailySnapshots[dailySnapshots.length - 1].date === todayStr) {
-              dailySnapshots[dailySnapshots.length - 1] = currentSnapshot;
-          } else {
-              dailySnapshots.push(currentSnapshot);
-          }
-          if (dailySnapshots.length > 90) dailySnapshots.shift();
-
-          finalJson.projects[projectKey] = {
-            market: markets[projectKey],
-            activation: activationStats,
-            ownership: ownershipStats,
-            tiers: mappedTiers,
-            revenue: yieldData.revenueBreakdown,
-            lockedLp: lockedLpData,
-            underConstruction: conf.underConstruction,
-            dailySnapshots: dailySnapshots,
-            config: { ticker: conf.ticker, unitValue: conf.unitValue, logo: conf.logo, nftCa: conf.nftCa }
-          };
+      let totalNetworkWeight = 0;
+      for (const t of conf.tiers) totalNetworkWeight += ((activationStats.breakdown[t.id] || 0) * t.weight);
+      
+      const yieldPerWeightUnitAnnual = totalNetworkWeight > 0 ? (yieldData.globalAnnualYield / totalNetworkWeight) : 0;
+      
+      const mappedTiers = [];
+      for (const t of conf.tiers) {
+        mappedTiers.push({
+          tier: t.id,
+          name: t.name,
+          reqTokens: t.reqTokens,
+          multiplier: `${(t.weight/100).toFixed(2)}x`, 
+          weight: t.weight,
+          trackedAnnualYieldUsd: t.weight * yieldPerWeightUnitAnnual,
+          dailyDates: yieldData.dailyDates,
+          dailyYields: yieldData.dailyUsdPerWeight.map(val => val * t.weight)
+        });
       }
 
-      fs.writeFileSync("data.json", JSON.stringify(finalJson, null, 2));
-      console.log("\n✓ Complete dashboard payload generated successfully.");
-  } catch (err) {
-      console.error("\n[ABORT] Run failed. data.json will NOT be overwritten.");
-      console.error(err.message);
-      process.exit(1);
+      let lockedLpData = null;
+      if (projectKey === "stonk") {
+          lockedLpData = scanLockedStonkLiquidity(conf.tokenCa, markets[projectKey].tokenPriceUsd);
+      }
+
+      // DAILY DIARY LOGGER FOR HISTORICAL CHARTS
+      let dailySnapshots = prevProjData.dailySnapshots || [];
+      const todayStr = new Date().toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
+      const floorCostUsd = markets[projectKey].nftFloorEth * markets[projectKey].ethPriceUsd;
+
+      const currentSnapshot = {
+          date: todayStr,
+          timestamp: Date.now(),
+          tokenPriceUsd: markets[projectKey].tokenPriceUsd,
+          totalBurn: (activationStats.dualBurn || {}).totalBurnTokens || 0,
+          tiers: mappedTiers.map(t => {
+              const actCost = t.reqTokens * markets[projectKey].tokenPriceUsd;
+              const totalCost = floorCostUsd + actCost;
+              const roi = totalCost > 0 ? (t.trackedAnnualYieldUsd / totalCost) * 100 : 0;
+              return { tier: t.tier, roi: roi, yieldUsd: t.trackedAnnualYieldUsd };
+          })
+      };
+
+      if (dailySnapshots.length > 0 && dailySnapshots[dailySnapshots.length - 1].date === todayStr) {
+          dailySnapshots[dailySnapshots.length - 1] = currentSnapshot;
+      } else {
+          dailySnapshots.push(currentSnapshot);
+      }
+      if (dailySnapshots.length > 90) dailySnapshots.shift();
+
+      finalJson.projects[projectKey] = {
+        market: markets[projectKey],
+        activation: activationStats,
+        ownership: ownershipStats,
+        tiers: mappedTiers,
+        revenue: yieldData.revenueBreakdown,
+        lockedLp: lockedLpData,
+        underConstruction: conf.underConstruction,
+        dailySnapshots: dailySnapshots,
+        config: { ticker: conf.ticker, unitValue: conf.unitValue, logo: conf.logo, nftCa: conf.nftCa }
+      };
   }
+
+  fs.writeFileSync("data.json", JSON.stringify(finalJson, null, 2));
+  console.log("\n✓ Complete dashboard payload generated successfully.");
 }
 
-run();
+run().catch(err => { console.error(err); process.exit(1); });
