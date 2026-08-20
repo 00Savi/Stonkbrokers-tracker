@@ -252,7 +252,7 @@ async function fetchTokenHoldersSafe(contractAddress, isNft = false) {
   return uniqueHolders.size;
 }
 
-// HARDENED PRICE FETCHER
+// HARDENED MARKET FETCHER
 async function loadMarketPrices(previousData) {
   try {
     const r = await fetch("https://api.exchange.coinbase.com/products/ETH-USD/ticker");
@@ -291,14 +291,24 @@ async function loadMarketPrices(previousData) {
               
               let priceUsd = parseFloat(best.priceUsd || 0);
               
+              // BASE/QUOTE INVERSION ENGINE
               if (best.quoteToken?.address?.toLowerCase() === conf.tokenCa.toLowerCase()) {
                   const priceNative = parseFloat(best.priceNative || 1);
                   if (priceNative > 0) priceUsd = priceUsd / priceNative;
               }
 
-              if (priceUsd > 1.0) {
-                  console.log(`\n[WARN] ${conf.ticker} price ($${priceUsd}) anomalous. Clamping to previous known good data ($${prevPrice}).`);
-                  priceUsd = prevPrice;
+              // SANITY CLAMP
+              let maxPrice = 0.50;
+              if (conf.ticker === "STONK") maxPrice = 0.20;
+              if (conf.ticker === "MANCER") maxPrice = 0.05;
+
+              if (priceUsd > maxPrice) {
+                  console.log(`\n[WARN] ${conf.ticker} price ($${priceUsd}) anomalous. Clamping...`);
+                  if (prevPrice > maxPrice || prevPrice === 0) {
+                      priceUsd = conf.ticker === "STONK" ? 0.022 : (conf.ticker === "MANCER" ? 0.0014 : 0.01);
+                  } else {
+                      priceUsd = prevPrice;
+                  }
               }
 
               markets[key].tokenPriceUsd = priceUsd;
@@ -316,7 +326,7 @@ async function loadMarketPrices(previousData) {
   return markets;
 }
 
-// ADAPTIVE LOG FETCHER RESTORED
+// ADAPTIVE LOG FETCHER
 async function fetchAllLogs(projectKey, address, genesisBlock, topic0 = null) {
   if (!address || address === "0x0000000000000000000000000000000000000000") return [];
 
@@ -635,7 +645,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
               if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
               if (tx.isError === "1" || tx.isError === 1) continue;
               
-              if ((tx.to || "").toLowerCase() === address) {
+              if ((tx.to || "").toLowerCase() === address.toLowerCase()) {
                   let usdVal = 0;
                   
                   if (key === "launchpadUsd") {
@@ -659,6 +669,97 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
           page++; 
           if (page > 50) break;
           await sleep(200); 
+      }
+  }
+
+  // DYNAMIC SECURITY BOX ALL INFLOWS
+  async function fetchSecurityBoxAllInflows(address) {
+      let page = 1;
+      const seenHashes = new Set();
+      const rawTxs = [];
+      const unknownContracts = new Set();
+
+      while(true) {
+          let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokentx&address=${address}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`;
+          let data = await secureFetch(url);
+          const txs = (data && Array.isArray(data.result)) ? data.result : [];
+          if(txs.length === 0) break;
+          
+          let reachedOlder = false;
+          let newEntries = 0;
+          for (const tx of txs) {
+              if (seenHashes.has(tx.hash)) continue;
+              seenHashes.add(tx.hash);
+              newEntries++;
+
+              const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
+              if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
+              
+              if ((tx.to || "").toLowerCase() === address.toLowerCase()) {
+                  rawTxs.push(tx);
+                  const ca = (tx.contractAddress || "").toLowerCase();
+                  if (ca && !tokenPrices[ca]) {
+                      unknownContracts.add(ca);
+                  }
+              }
+          }
+          if(reachedOlder || newEntries === 0 || txs.length < 1000) break;
+          page++;
+          if (page > 50) break;
+          await sleep(200);
+      }
+
+      const unknownArr = Array.from(unknownContracts);
+      for (let i = 0; i < unknownArr.length; i += 30) {
+          const chunk = unknownArr.slice(i, i + 30).join(",");
+          try {
+              const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${chunk}`);
+              const data = await res.json();
+              if (data && data.pairs) {
+                  data.pairs.forEach(pair => {
+                      if (pair.chainId !== 'robinhood' && !(pair.url && pair.url.includes('robinhood'))) return;
+                      
+                      if ((pair.liquidity?.usd || 0) >= 100) {
+                          const baseAddr = pair.baseToken?.address?.toLowerCase();
+                          const quoteAddr = pair.quoteToken?.address?.toLowerCase();
+                          
+                          [baseAddr, quoteAddr].forEach(addr => {
+                              if (!addr || !unknownContracts.has(addr)) return;
+                              
+                              let priceUsd = parseFloat(pair.priceUsd || 0);
+                              if (pair.quoteToken?.address?.toLowerCase() === addr) {
+                                  const pNative = parseFloat(pair.priceNative || 1);
+                                  if (pNative > 0) priceUsd = priceUsd / pNative;
+                              }
+                              
+                              if (!tokenPrices[addr] || (pair.liquidity.usd > (tokenPrices[addr + "_liq"] || 0))) {
+                                  tokenPrices[addr] = priceUsd;
+                                  tokenPrices[addr + "_liq"] = pair.liquidity.usd;
+                              }
+                          });
+                      }
+                  });
+              }
+          } catch(e) {}
+          await sleep(250);
+      }
+
+      for (const tx of rawTxs) {
+          const ca = (tx.contractAddress || "").toLowerCase();
+          const price = tokenPrices[ca] || 0;
+          
+          if (price > 0) {
+              const decimals = parseInt(tx.tokenDecimal || 18, 10);
+              const amount = Number(tx.value || 0) / Math.pow(10, decimals);
+              const usdVal = amount * price;
+
+              if (usdVal > 0) {
+                  const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
+                  const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
+                  revenueBreakdown.securityBoxUsd += usdVal;
+                  revenueBreakdown.dailySecurityBox[dayIdx] += usdVal;
+              }
+          }
       }
   }
 
@@ -762,9 +863,13 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
           revenueBreakdown.dailyAmm[i] = dailyOracleAmmSample[i] * scaleMultiplier;
       }
 
-      // Restored Security Box to track Direct Inflows as Revenue
-      if (projectKey === "stonk" && conf.streams?.securityBox) await fetchDirectEthInflows(conf.streams.securityBox, "securityBoxUsd", "dailySecurityBox");
-      if (projectKey === "stonk" && conf.streams?.launchpad) await fetchDirectEthInflows(conf.streams.launchpad, "launchpadUsd", "dailyLaunchpad");
+      if (projectKey === "stonk" && conf.streams?.securityBox) {
+          await fetchDirectEthInflows(conf.streams.securityBox, "securityBoxUsd", "dailySecurityBox");
+          await fetchSecurityBoxAllInflows(conf.streams.securityBox);
+      }
+      if (projectKey === "stonk" && conf.streams?.launchpad) {
+          await fetchDirectEthInflows(conf.streams.launchpad, "launchpadUsd", "dailyLaunchpad");
+      }
   } 
   else if (conf.yieldMode === "protocol_vault") {
       let page = 1;
@@ -790,11 +895,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
                     const usdVal = amount * marketData.tokenPriceUsd;
                     const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
                     
-                    let activeWeightAtTime = 0;
-                    for (const t of conf.tiers) activeWeightAtTime += ((activationStats.breakdown[t.id] || 0) * t.weight);
-                    if (activeWeightAtTime === 0) activeWeightAtTime = 1;
-                    
-                    dailyUsdPerWeight[dayIdx] += (usdVal / activeWeightAtTime);
+                    dailyUsdPerWeight[dayIdx] += (usdVal / totalNetworkWeight);
                     totalSampleUsd += usdVal;
                     revenueBreakdown.ammFeesUsd += usdVal; 
                     revenueBreakdown.dailyAmm[dayIdx] += usdVal;
@@ -839,10 +940,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
                               revenueBreakdown.dailyDex[dayIdx] += usdVal;
                               totalSampleUsd += usdVal;
 
-                              let activeWeightAtTime = 0;
-                              for (const t of conf.tiers) activeWeightAtTime += ((activationStats.breakdown[t.id] || 0) * t.weight);
-                              if (activeWeightAtTime === 0) activeWeightAtTime = 1;
-                              dailyUsdPerWeight[dayIdx] += (usdVal / activeWeightAtTime);
+                              dailyUsdPerWeight[dayIdx] += (usdVal / totalNetworkWeight);
                           }
                       }
                   }
@@ -969,6 +1067,11 @@ async function loadTokenListPrices(tokenList) {
           marketCap = pair.marketCap || fdv;
       }
       
+      // Store in global dictionary for yield calculation
+      if (priceUsd > 0) {
+          tokenPrices[item.ca.toLowerCase()] = priceUsd;
+      }
+
       let burntBalance = 0;
       let totalSupplyRaw = 0;
 
@@ -1008,9 +1111,10 @@ async function run() {
   let previousData = {};
   try { if (fs.existsSync("data.json")) previousData = JSON.parse(fs.readFileSync("data.json", "utf8")); } catch(e) {}
 
-  const markets = await loadMarketPrices(previousData);
+  // 1. Fetch token and stock prices first to populate global dictionary
   const memeData = await loadTokenListPrices(MEMES);
   const stockData = await loadTokenListPrices(STOCKS);
+  const markets = await loadMarketPrices(previousData);
   const sevenDaysAgo = Math.floor(Date.now() / 1000) - 7 * 24 * 3600;
   
   const finalJson = { 
