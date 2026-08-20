@@ -196,17 +196,29 @@ async function secureFetch(url) {
   for (let i = 0; i < 5; i++) {
     try {
       const res = await fetch(url, { headers });
+      
+      // FATAL ERROR: Immediately exit the process to protect data.json from being overwritten with empty data
       if (res.status === 402) {
-          console.error("\n[CRITICAL ERROR] HTTP 402: Payment Required. Key out of credits!");
-          return { result: [] }; 
+          console.error("\n[CRITICAL ERROR] HTTP 402: Payment Required. Key out of credits! Halting script to protect data.json.");
+          process.exit(1); 
       }
+      
       if (res.status === 429) { await sleep(3000); continue; }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      
       const text = await res.text();
       const data = JSON.parse(text);
+      
       if (data.status === "0") {
           if (data.message === "No records found" || data.message === "No transactions found") return { result: [] };
-          if (typeof data.result === 'string' && data.result.toLowerCase().includes("limit")) { await sleep(3000); continue; }
+          const resultStr = typeof data.result === 'string' ? data.result.toLowerCase() : "";
+          if (resultStr.includes("limit") || resultStr.includes("rate")) { await sleep(3000); continue; }
+          
+          // EXTRA FAILSAFE: Catch JSON body errors regarding exhausted limits if HTTP status is technically 200
+          if (resultStr.includes("credit") || resultStr.includes("exhausted") || resultStr.includes("payment")) {
+              console.error("\n[CRITICAL ERROR] Blockscout API out of credits! Halting script to protect data.json.");
+              process.exit(1);
+          }
       }
       return data;
     } catch (e) {
@@ -636,7 +648,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
   async function fetchSecurityBoxYield(address) {
       let page = 1;
       while(true) {
-          let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=txlist&address=${address}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`;
+          let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=txlistinternal&address=${address}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`;
           let data = await secureFetch(url);
           const txs = (data && Array.isArray(data.result)) ? data.result : [];
           if(txs.length === 0) break;
