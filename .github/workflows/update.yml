@@ -21,8 +21,14 @@ jobs:
         with:
           node-version: '18'
 
+      # npm ci, not npm install: it installs exactly what package-lock.json
+      # pins and fails if the lock and package.json disagree. `npm install
+      # ethers` re-resolved dependencies on every run, so ^6.13.0 was free to
+      # drift to any 6.x -- it had already reached 6.17.0. An upstream
+      # regression would have broken the hourly job with no change on our side
+      # and nothing in the diff to explain it.
       - name: Install Dependencies
-        run: npm install ethers
+        run: npm ci
 
       # The indexer cache must survive between runs, or every run rescans from
       # the genesis block -- which is what the old setup did, because the cache
