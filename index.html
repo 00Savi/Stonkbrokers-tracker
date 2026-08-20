@@ -87,6 +87,19 @@
             </div>
         </div>
         
+        <div class="flex flex-col items-stretch md:items-end gap-2 w-full md:w-auto">
+
+        <!-- Sync badge: compares the block this payload was built at against the
+             LIVE chain head, read straight from the public RPC in the browser.
+             That makes it a verification rather than a self-report -- the page
+             cannot claim to be current unless the chain agrees. -->
+        <div id="sync-badge" title="Checking chain..."
+             class="self-end flex items-center gap-1.5 bg-[#1e293b] border border-[#334155] px-2.5 py-1 rounded-full font-mono text-[10px] cursor-help select-none">
+            <span id="sync-dot" class="inline-block h-1.5 w-1.5 rounded-full bg-slate-500"></span>
+            <span id="sync-state" class="text-slate-400">checking</span>
+            <span id="sync-block" class="text-slate-500"></span>
+        </div>
+
         <div class="flex w-full md:w-auto justify-between md:justify-start gap-2 md:gap-6 text-xs md:text-sm bg-[#1e293b] border border-[#334155] px-4 md:px-6 py-3 rounded-xl shadow-sm z-40">
             <div>
                 <p class="text-slate-400 mb-0.5">ETH</p>
@@ -100,6 +113,8 @@
                 <p class="text-slate-400 mb-0.5">Floor <span class="hidden sm:inline text-[10px] md:text-xs text-slate-500">(Base + 10%)</span></p>
                 <p class="text-white font-bold" id="nft-floor">Loading...</p>
             </div>
+        </div>
+
         </div>
     </header>
 
@@ -770,9 +785,90 @@
                 await fetchLiveDerpPrice();
                 renderMacroMatrix();
                 loadProject('stonk');
+                startSyncBadge();
             } catch (e) {
                 console.error("Dashboard Sync Failed: ", e);
             }
+        }
+
+        /* ---- Sync badge -------------------------------------------------
+         *
+         * Freshness is judged on ELAPSED TIME, not on how many blocks we sit
+         * behind. The chain produces ~10 blocks a second, so an hourly build
+         * is always ~36,000 blocks back even when it is perfectly healthy --
+         * a block-count threshold would just flap. The block numbers are still
+         * shown, because they are what makes the claim checkable against a
+         * block explorer.
+         *
+         * The head comes from the chain's own RPC rather than from the
+         * payload, so a stalled build cannot report itself as current: if the
+         * hourly job dies, this page notices on its own within the minute.
+         */
+        const SYNC_STALE_AFTER_SEC = 90 * 60;   // hourly cron + 30m grace
+        const SYNC_RPC = 'https://rpc.mainnet.chain.robinhood.com';
+
+        function fmtAge(s) {
+            if (s < 60) return Math.max(0, Math.round(s)) + 's';
+            if (s < 3600) return Math.round(s / 60) + 'm';
+            if (s < 86400) return (s / 3600).toFixed(1).replace(/\.0$/, '') + 'h';
+            return (s / 86400).toFixed(1).replace(/\.0$/, '') + 'd';
+        }
+
+        async function refreshSyncBadge() {
+            const dotEl = document.getElementById('sync-dot');
+            const stateEl = document.getElementById('sync-state');
+            const blockEl = document.getElementById('sync-block');
+            const wrapEl = document.getElementById('sync-badge');
+            if (!wrapEl || !masterData) return;
+
+            const builtBlock = masterData.chainHead || null;
+            const builtMs = masterData.lastUpdated ? Date.parse(masterData.lastUpdated) : NaN;
+            const ageSec = isNaN(builtMs) ? null : (Date.now() - builtMs) / 1000;
+
+            let head = null;
+            try {
+                const r = await fetch(SYNC_RPC, {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_blockNumber', params: [] })
+                });
+                const j = await r.json();
+                if (j && j.result) head = parseInt(j.result, 16);
+            } catch (e) { /* offline or RPC down -- handled below */ }
+
+            const fresh = ageSec !== null && ageSec <= SYNC_STALE_AFTER_SEC;
+            const behind = (head && builtBlock) ? Math.max(0, head - builtBlock) : null;
+
+            // Unreachable chain is its own state. Reporting "live" because the
+            // payload looks recent, while unable to confirm it against the
+            // chain, is exactly the lie this badge exists to prevent.
+            if (head === null) {
+                dotEl.className = 'inline-block h-1.5 w-1.5 rounded-full bg-slate-500';
+                stateEl.className = 'text-slate-400';
+                stateEl.textContent = 'chain unreachable';
+            } else if (fresh) {
+                dotEl.className = 'inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse';
+                stateEl.className = 'text-emerald-400';
+                stateEl.textContent = 'live';
+            } else {
+                dotEl.className = 'inline-block h-1.5 w-1.5 rounded-full bg-amber-400';
+                stateEl.className = 'text-amber-400';
+                stateEl.textContent = (ageSec === null ? 'unknown' : fmtAge(ageSec) + ' behind');
+            }
+
+            blockEl.textContent = builtBlock ? '· blk ' + builtBlock.toLocaleString() : '';
+
+            wrapEl.title =
+                'Data built through block ' + (builtBlock ? builtBlock.toLocaleString() : 'unknown') + '\n' +
+                'Live chain head    ' + (head ? head.toLocaleString() : 'unreachable') + '\n' +
+                (behind !== null ? behind.toLocaleString() + ' blocks behind\n' : '') +
+                'Last build ' + (ageSec === null ? 'unknown' : fmtAge(ageSec) + ' ago') +
+                (ageSec !== null ? '  (' + new Date(builtMs).toLocaleString() + ')' : '');
+        }
+
+        function startSyncBadge() {
+            refreshSyncBadge();
+            setInterval(refreshSyncBadge, 30000);
         }
 
         function renderMacroMatrix() {

@@ -1098,11 +1098,16 @@ async function run() {
   const stockData = await loadTokenListPrices(STOCKS);
   const sevenDaysAgo = Math.floor(Date.now() / 1000) - 7 * 24 * 3600;
   
-  const finalJson = { 
-    lastUpdated: new Date().toISOString(), 
-    projects: {}, 
-    memes: memeData, 
-    stocks: stockData 
+  const finalJson = {
+    lastUpdated: new Date().toISOString(),
+    // The block this payload is good through. Captured BEFORE any reads, so it
+    // is a floor, never a boast: later reads in the same run see higher blocks,
+    // and every number here reflects at least this height. The dashboard
+    // compares it against the live chain head to prove freshness.
+    chainHead: head,
+    projects: {},
+    memes: memeData,
+    stocks: stockData
   };
 
   for (const [projectKey, conf] of Object.entries(PROJECTS)) {
