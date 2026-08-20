@@ -263,22 +263,28 @@ async function loadMarketPrices() {
           if (rhPairs.length > 0) {
               rhPairs.forEach(p => allDexPairs.push(p));
               
-              let validPairs = rhPairs.filter(p => p.baseToken?.address?.toLowerCase() === conf.tokenCa.toLowerCase());
-              if (validPairs.length === 0) validPairs = rhPairs;
+              // SORT FIX: Sort by Transactions, then Volume, bypassing fake high-liquidity scam pools
+              const best = rhPairs.sort((a, b) => {
+                  const txsA = (a.txns?.h24?.buys || 0) + (a.txns?.h24?.sells || 0);
+                  const txsB = (b.txns?.h24?.buys || 0) + (b.txns?.h24?.sells || 0);
+                  if (txsB !== txsA) return txsB - txsA;
+                  
+                  const volDiff = (b.volume?.h24 || 0) - (a.volume?.h24 || 0);
+                  if (volDiff !== 0) return volDiff;
+                  
+                  return (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0);
+              })[0];
               
-              const best = validPairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
-              let priceUsd = 0;
+              let priceUsd = parseFloat(best.priceUsd || 0);
               
-              if (best.liquidity && best.liquidity.usd > 0) {
-                  const isBase = best.baseToken?.address?.toLowerCase() === conf.tokenCa.toLowerCase();
-                  const tokenAmount = isBase ? best.liquidity.base : best.liquidity.quote;
-                  if (tokenAmount > 0) {
-                      priceUsd = (best.liquidity.usd / 2) / tokenAmount;
-                  }
+              // RESTORED MATH: If our token is the Quote Token, the Base's USD price must be 
+              // divided by priceNative (which represents Base's price denominated in the Native Chain Token).
+              if (best.quoteToken?.address?.toLowerCase() === conf.tokenCa.toLowerCase()) {
+                  const priceNative = parseFloat(best.priceNative || 1);
+                  if (priceNative > 0) priceUsd = priceUsd / priceNative;
               }
               
-              if (priceUsd === 0) priceUsd = parseFloat(best.priceUsd || 0);
-              markets[key].tokenPriceUsd = priceUsd;
+              if (priceUsd > 0) markets[key].tokenPriceUsd = priceUsd;
           }
         }
       } catch {}
@@ -626,10 +632,11 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
       }
   }
 
-  async function fetchSecurityBoxOutflows(address) {
+  // FIX 2: Switched to track INFLOWS (revenue deposited) to the security box
+  async function fetchSecurityBoxYield(address) {
       let page = 1;
       while(true) {
-          let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=txlistinternal&address=${address}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`;
+          let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=txlist&address=${address}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`;
           let data = await secureFetch(url);
           const txs = (data && Array.isArray(data.result)) ? data.result : [];
           if(txs.length === 0) break;
@@ -639,7 +646,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
               if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
               if (tx.isError === "1" || tx.isError === 1) continue;
               
-              if ((tx.from || "").toLowerCase() === address) {
+              if ((tx.to || "").toLowerCase() === address) {
                   const eth = Number(tx.value || 0) / 1e18;
                   if (eth > 0) {
                       const usdVal = eth * marketData.ethPriceUsd;
@@ -737,7 +744,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
           revenueBreakdown.dailyAmm[i] = dailyOracleAmmSample[i] * scaleMultiplier;
       }
 
-      if (projectKey === "stonk" && conf.streams?.securityBox) await fetchSecurityBoxOutflows(conf.streams.securityBox);
+      if (projectKey === "stonk" && conf.streams?.securityBox) await fetchSecurityBoxYield(conf.streams.securityBox);
       if (projectKey === "stonk" && conf.streams?.launchpad) await fetchDirectEthInflows(conf.streams.launchpad, "launchpadUsd", "dailyLaunchpad");
   } 
   else if (conf.yieldMode === "protocol_vault") {
@@ -873,22 +880,19 @@ async function loadTokenListPrices(tokenList) {
               
               [b, q].forEach(addr => {
                   if (!addr) return;
-                  const isBase = (addr === b);
                   const existing = pairsMap[addr];
                   
-                  if (!existing) {
+                  // FIX 1: Sort MEMES/STOCKS logically by Txs then Vol to prevent scam tokens from overriding
+                  const newTxs = (pair.txns?.h24?.buys || 0) + (pair.txns?.h24?.sells || 0);
+                  const oldTxs = existing ? ((existing.txns?.h24?.buys || 0) + (existing.txns?.h24?.sells || 0)) : -1;
+                  
+                  if (newTxs > oldTxs) {
                       pairsMap[addr] = pair;
-                  } else {
-                      const existingIsBase = (addr === existing.baseToken?.address?.toLowerCase());
-                      const newLiq = pair.liquidity?.usd || 0;
-                      const oldLiq = existing.liquidity?.usd || 0;
-                      
-                      if (isBase && !existingIsBase) {
-                          if (newLiq > oldLiq * 0.1) pairsMap[addr] = pair;
-                      } else if (!isBase && existingIsBase) {
-                          if (newLiq > oldLiq * 10) pairsMap[addr] = pair;
-                      } else {
-                          if (newLiq > oldLiq) pairsMap[addr] = pair;
+                  } else if (newTxs === oldTxs) {
+                      const newVol = pair.volume?.h24 || 0;
+                      const oldVol = existing ? (existing.volume?.h24 || 0) : -1;
+                      if (newVol > oldVol) {
+                          pairsMap[addr] = pair;
                       }
                   }
               });
@@ -909,18 +913,12 @@ async function loadTokenListPrices(tokenList) {
       let priceUsd = 0, volume24h = 0, liquidity = 0, priceChange24h = 0, fdv = 0, marketCap = 0;
 
       if (pair) {
-          if (pair.liquidity && pair.liquidity.usd > 0) {
-              const isBase = pair.baseToken?.address?.toLowerCase() === item.ca.toLowerCase();
-              const tokenAmount = isBase ? pair.liquidity.base : pair.liquidity.quote;
-              if (tokenAmount > 0) {
-                  priceUsd = (pair.liquidity.usd / 2) / tokenAmount;
-              }
-          }
-          if (priceUsd === 0) priceUsd = parseFloat(pair.priceUsd || 0);
+          priceUsd = parseFloat(pair.priceUsd || 0);
           
-          const isBase = pair.baseToken?.address?.toLowerCase() === item.ca.toLowerCase();
-          if (!isBase && pair.priceChange?.h24 !== undefined) {
-              priceChange24h = -(pair.priceChange.h24);
+          if (pair.quoteToken?.address?.toLowerCase() === item.ca.toLowerCase()) {
+              const pNative = parseFloat(pair.priceNative || 1);
+              if (pNative > 0) priceUsd = priceUsd / pNative;
+              priceChange24h = pair.priceChange?.h24 !== undefined ? -(pair.priceChange.h24) : 0;
           } else {
               priceChange24h = pair.priceChange?.h24 || 0;
           }
