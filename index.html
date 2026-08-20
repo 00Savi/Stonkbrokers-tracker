@@ -15,10 +15,8 @@
         ::-webkit-scrollbar-track { background: #0f172a; }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #475569; }
-        
         .dropdown-menu { display: none; }
         .dropdown-container:hover .dropdown-menu { display: block; }
-
         @keyframes pulse-border {
             0% { border-color: rgba(245, 158, 11, 0.4); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
             70% { border-color: rgba(245, 158, 11, 0); box-shadow: 0 0 0 4px rgba(245, 158, 11, 0); }
@@ -34,13 +32,11 @@
     </style>
 </head>
 <body class="p-4 md:p-8 font-sans antialiased overflow-x-hidden">
-    
     <header class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4 md:gap-6">
         <div class="flex items-center gap-3 md:gap-4 w-full md:w-auto z-50">
             <div id="header-logo-container" class="w-10 h-10 md:w-12 md:h-12 flex-shrink-0 bg-[#1e293b] border border-[#334155] rounded-xl overflow-hidden flex items-center justify-center shadow-sm">
                 <img id="header-logo" src="Stonkbroker.png" alt="PFP" class="w-full h-full object-cover">
             </div>
-            
             <div class="relative inline-block" id="project-dropdown-container">
                 <div id="project-dropdown-trigger" onclick="toggleDropdown(event)" class="py-2 cursor-pointer flex items-center gap-2 md:gap-3">
                     <div>
@@ -57,7 +53,6 @@
                         </p>
                     </div>
                 </div>
-                
                 <div id="project-dropdown-menu" class="absolute left-0 top-[85%] mt-1 w-64 bg-[#1e293b] border border-[#334155] rounded-xl shadow-2xl py-2 z-50 hidden transition-all duration-200">
                     <div onclick="selectProject('stonk')" class="px-4 py-2.5 hover:bg-[#334155] cursor-pointer flex items-center gap-3 text-white font-semibold transition">
                         <div class="w-2 h-2 rounded-full bg-blue-500"></div> StonkBrokers
@@ -73,8 +68,7 @@
                     </div>
                     <div class="border-t border-[#334155] my-1"></div>
                     <div onclick="selectProject('portfolio')" class="px-4 py-2.5 hover:bg-[#334155] cursor-pointer flex items-center gap-3 text-emerald-300 font-bold transition">
-                        <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
-                        Portfolio Tracker
+                        <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg> Portfolio Tracker
                     </div>
                     <div class="border-t border-[#334155] my-1"></div>
                     <div onclick="selectProject('memes')" class="px-4 py-2.5 hover:bg-[#334155] cursor-pointer flex items-center gap-3 text-white font-semibold transition">
@@ -86,7 +80,6 @@
                 </div>
             </div>
         </div>
-        
         <div class="flex w-full md:w-auto justify-between md:justify-start gap-2 md:gap-6 text-xs md:text-sm bg-[#1e293b] border border-[#334155] px-4 md:px-6 py-3 rounded-xl shadow-sm z-40">
             <div>
                 <p class="text-slate-400 mb-0.5">ETH</p>
@@ -105,43 +98,26 @@
 
     <div class="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <div id="standard-tabs" class="flex flex-wrap gap-2 md:gap-3 w-full sm:w-auto">
-            <button id="tab-roi" onclick="switchTab('roi')" class="flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm shadow-lg shadow-blue-500/25">
-                ROI Benchmarks
-            </button>
-            <button id="tab-historical" onclick="switchTab('historical')" class="flex-1 sm:flex-none justify-center bg-transparent border border-[#334155] hover:bg-[#1e293b] text-slate-300 px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm">
-                Historical Yield
-            </button>
-            <button id="tab-revenue" onclick="switchTab('revenue')" class="flex-1 sm:flex-none justify-center bg-transparent border border-[#334155] hover:bg-[#1e293b] text-slate-300 px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm">
-                Revenue & LPs
-            </button>
-            <button id="tab-burn" onclick="switchTab('burn')" class="flex-1 sm:flex-none justify-center bg-transparent border border-[#334155] hover:bg-[#1e293b] text-slate-300 px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm">
-                Burn Tracker
-            </button>
-            <button id="tab-activation" onclick="switchTab('activation')" class="flex-1 sm:flex-none justify-center bg-transparent border border-[#334155] hover:bg-[#1e293b] text-slate-300 px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm">
-                Activation
-            </button>
-            <button id="tab-ownership" onclick="switchTab('ownership')" class="flex-1 sm:flex-none justify-center bg-transparent border border-[#334155] hover:bg-[#1e293b] text-slate-300 px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm">
-                Ownership
-            </button>
+            <button id="tab-roi" onclick="switchTab('roi')" class="flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm shadow-lg shadow-blue-500/25">ROI Benchmarks</button>
+            <button id="tab-historical" onclick="switchTab('historical')" class="flex-1 sm:flex-none justify-center bg-transparent border border-[#334155] hover:bg-[#1e293b] text-slate-300 px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm">Historical Yield</button>
+            <button id="tab-revenue" onclick="switchTab('revenue')" class="flex-1 sm:flex-none justify-center bg-transparent border border-[#334155] hover:bg-[#1e293b] text-slate-300 px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm">Revenue & LPs</button>
+            <button id="tab-burn" onclick="switchTab('burn')" class="flex-1 sm:flex-none justify-center bg-transparent border border-[#334155] hover:bg-[#1e293b] text-slate-300 px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm">Burn Tracker</button>
+            <button id="tab-activation" onclick="switchTab('activation')" class="flex-1 sm:flex-none justify-center bg-transparent border border-[#334155] hover:bg-[#1e293b] text-slate-300 px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm">Activation</button>
+            <button id="tab-ownership" onclick="switchTab('ownership')" class="flex-1 sm:flex-none justify-center bg-transparent border border-[#334155] hover:bg-[#1e293b] text-slate-300 px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm">Ownership</button>
         </div>
-        
         <button onclick="shareToX()" class="flex-1 sm:flex-none w-full sm:w-auto justify-center bg-black hover:bg-[#1da1f2] border border-[#334155] text-white px-5 py-2.5 rounded-lg font-bold flex items-center gap-2 transition shadow-sm group">
             <svg class="w-4 h-4 fill-current text-white" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 24.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
             <span id="share-btn-text">Share Stats</span>
         </button>
     </div>
 
-    <!-- View: Tokens/Stocks Spreadsheet Table -->
     <main id="view-memes" class="max-w-6xl mx-auto card rounded-2xl border p-4 md:p-6 mb-8 shadow-xl hidden">
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div>
-                <h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2" id="tokens-view-title">
-                    Robinhood Tokens Tracker
-                </h2>
+                <h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2" id="tokens-view-title">Robinhood Tokens Tracker</h2>
                 <p class="text-xs md:text-sm text-slate-400 mt-1" id="tokens-view-desc">Real-time liquidity, volume, and metrics for Robinhood Chain tokens</p>
             </div>
         </div>
-
         <div class="overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0 pb-2 mb-4">
             <table class="w-full text-left border-collapse min-w-[950px]" id="memes-table">
                 <thead>
@@ -161,23 +137,17 @@
         </div>
     </main>
 
-    <!-- View: Portfolio Multi-Wallet Tracker -->
     <main id="view-portfolio" class="max-w-6xl mx-auto card rounded-2xl border p-4 md:p-6 mb-8 shadow-xl hidden">
         <div class="mb-6">
             <h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2">
-                <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
-                Multi-Wallet Ecosystem Portfolio Tracker
+                <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg> Multi-Wallet Ecosystem Portfolio Tracker
             </h2>
             <p class="text-xs text-slate-400 mt-1">Scan single or multiple comma-separated wallet addresses to track total active NFTs, net asset value, and combined annual cash-flow.</p>
         </div>
-
         <div class="flex flex-col sm:flex-row gap-3 mb-6" data-html2canvas-ignore="true">
             <input type="text" id="portfolio-wallet-input" placeholder="Paste Wallet Address (e.g. 0x123..., 0x456...)" class="bg-[#0f172a] border border-[#334155] text-white px-4 py-2.5 rounded-lg text-sm flex-1 focus:outline-none focus:border-blue-500">
-            <button onclick="scanPortfolioWallets()" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-6 py-2.5 rounded-lg text-sm transition flex items-center justify-center gap-2 shadow-md">
-                Scan Portfolio
-            </button>
+            <button onclick="scanPortfolioWallets()" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-6 py-2.5 rounded-lg text-sm transition flex items-center justify-center gap-2 shadow-md">Scan Portfolio</button>
         </div>
-
         <div id="portfolio-results" class="hidden">
             <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                 <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
@@ -197,24 +167,19 @@
                     <p class="text-xl md:text-2xl font-extrabold text-purple-400" id="port-total-units">0 Units</p>
                 </div>
             </div>
-
             <h3 class="text-sm font-bold text-white mb-4">Owned Asset Breakdown</h3>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="portfolio-items-container"></div>
         </div>
     </main>
 
-    <!-- NEW: View Historical Yield -->
     <main id="view-historical" class="max-w-6xl mx-auto card rounded-2xl border p-4 md:p-6 mb-8 shadow-xl hidden">
         <div class="mb-6">
             <h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2">
-                <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
-                Historical Yield & Payback Horizon
+                <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg> Historical Yield & Payback Horizon
             </h2>
             <p class="text-xs md:text-sm text-slate-400 mt-1">Track capital recovery timelines and ROI trajectory mapped over 90 days.</p>
         </div>
-
         <div class="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4 mb-6" id="payback-cards"></div>
-
         <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6">
             <h3 class="text-sm font-bold text-white mb-4">Tier ROI % Trajectory</h3>
             <div class="relative h-72 md:h-80 w-full">
@@ -223,13 +188,11 @@
         </div>
     </main>
 
-    <!-- View 1: Tier ROI Benchmarks -->
     <main id="view-roi" class="max-w-6xl mx-auto card rounded-2xl border p-4 md:p-6 mb-8 shadow-xl overflow-hidden">
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
             <div>
                 <h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2">
-                    <svg class="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20"><path d="M3 12v3c0 1.657 3.134 3 7 3s7-1.343 7-3v-3c0 1.657-3.134 3-7 3s-7-1.343-7-3z"></path><path d="M3 7v3c0 1.657 3.134 3 7 3s7-1.343 7-3V7c0 1.657-3.134 3-7 3S3 8.657 3 7z"></path><path d="M17 5c0 1.657-3.134 3-7 3S3 6.657 3 5s3.134-3 7-3 7 1.343 7 3z"></path></svg>
-                    Global Yield ROI Benchmarks
+                    <svg class="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20"><path d="M3 12v3c0 1.657 3.134 3 7 3s7-1.343 7-3v-3c0 1.657-3.134 3-7 3s-7-1.343-7-3z"></path><path d="M3 7v3c0 1.657 3.134 3 7 3s7-1.343 7-3V7c0 1.657-3.134 3-7 3S3 8.657 3 7z"></path><path d="M17 5c0 1.657-3.134 3-7 3S3 6.657 3 5s3.134-3 7-3 7 1.343 7 3z"></path></svg> Global Yield ROI Benchmarks
                 </h2>
                 <p class="text-xs md:text-sm text-slate-400 mt-1" id="last-sync">Last automated sync: Loading...</p>
             </div>
@@ -238,20 +201,16 @@
                 <span class="text-white font-bold tracking-wide" id="floor-cost">Loading...</span>
             </div>
         </div>
-
-        <!-- What-If Volume Simulator -->
         <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6 mb-6" id="what-if-container" data-html2canvas-ignore="true">
             <div class="flex justify-between items-center mb-2">
                 <h3 class="text-sm font-bold text-white flex items-center gap-2">
-                    <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg> 
-                    "What-If" Volume Simulator
+                    <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg> "What-If" Volume Simulator
                 </h3>
                 <span class="text-xs font-bold text-purple-400 bg-purple-900/30 px-2 py-1 rounded border border-purple-800/50" id="slider-multiplier-display">1.0x Protocol Volume</span>
             </div>
             <p class="text-xs text-slate-400 mb-4">Slide to model future yield scenarios based on ecosystem trading volume expansion or contraction.</p>
             <input type="range" min="0.1" max="10" step="0.1" value="1" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-500" id="volume-slider" oninput="updateRoiSimulator(this.value)">
         </div>
-
         <div class="overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0 pb-2 mb-8">
             <table class="w-full text-left border-collapse min-w-[850px]">
                 <thead>
@@ -266,37 +225,29 @@
                 <tbody id="tiers-body"></tbody>
             </table>
         </div>
-
         <div class="pt-6 border-t border-[#334155]" data-html2canvas-ignore="true">
             <div class="flex items-center gap-2 mb-2">
                 <svg class="w-5 h-5 text-emerald-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a8 8 0 1114.32 4.906l5.387 5.387a1 1 0 01-1.414 1.414l-5.387-5.387A8 8 0 012 8z" clip-rule="evenodd"></path></svg>
                 <h3 class="text-base md:text-lg font-bold text-white">Individual Unit ROI Calculator</h3>
             </div>
             <p class="text-xs text-slate-400 mb-4">Enter a specific Token ID to analyze its exact cost basis, historical last sale price, and individual Cash-on-Cash performance.</p>
-            
             <div class="flex flex-col sm:flex-row gap-3 max-w-md mb-4">
                 <input type="number" id="lookup-id-input" placeholder="Enter Token ID (e.g. 105)" class="bg-[#0f172a] border border-[#334155] text-white px-4 py-2.5 rounded-lg text-sm w-full focus:outline-none focus:border-blue-500">
-                <button onclick="lookupUnitRoi()" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-6 py-2.5 rounded-lg text-sm transition flex-shrink-0 flex items-center justify-center gap-2 shadow-md">
-                    Analyze Unit
-                </button>
+                <button onclick="lookupUnitRoi()" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-6 py-2.5 rounded-lg text-sm transition flex-shrink-0 flex items-center justify-center gap-2 shadow-md">Analyze Unit</button>
             </div>
-
             <div id="lookup-results" class="hidden bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner mt-4 relative"></div>
         </div>
     </main>
 
-    <!-- View: Revenue & LP Breakdown -->
     <main id="view-revenue" class="max-w-6xl mx-auto card rounded-2xl border p-4 md:p-6 mb-8 shadow-xl hidden">
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div>
                 <h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2">
-                    <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                    Protocol Revenue & Ecosystem Liquidity
+                    <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> Protocol Revenue & Ecosystem Liquidity
                 </h2>
                 <p class="text-xs text-slate-400 mt-1">Multi-stream on-chain fee generation, launchpad revenue, and locked LP assets.</p>
             </div>
         </div>
-
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner" id="rev-card-1">
                 <p class="text-xs uppercase tracking-wider text-slate-400 mb-1" id="rev-label-1">Stream 1</p>
@@ -311,20 +262,17 @@
                 <p class="text-2xl font-extrabold text-purple-400" id="rev-stat-3">$0.00</p>
             </div>
         </div>
-
         <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6 mb-6">
             <h3 class="text-sm font-bold text-white mb-4">Daily Revenue Inflows by Stream (USD)</h3>
             <div class="relative h-72 md:h-80 w-full">
                 <canvas id="revenueChart"></canvas>
             </div>
         </div>
-
         <div id="locked-lp-section" class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6 mb-6">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-2">
                 <div>
                     <h3 class="text-sm font-bold text-white flex items-center gap-2">
-                        <span class="w-2.5 h-2.5 rounded-full bg-orange-400"></span>
-                        "Black Hole" Liquidity: Ecosystem Tokens Locked in Pools
+                        <span class="w-2.5 h-2.5 rounded-full bg-orange-400"></span> "Black Hole" Liquidity: Ecosystem Tokens Locked in Pools
                     </h3>
                     <p class="text-xs text-slate-400 mt-0.5">Scanned from all active partner, meme, and launchpad trading pairs.</p>
                 </div>
@@ -350,12 +298,9 @@
         </div>
     </main>
 
-    <!-- View 2: Burn Tracker -->
     <main id="view-burn" class="max-w-6xl mx-auto card rounded-2xl border p-4 md:p-6 mb-8 shadow-xl hidden">
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-            <div>
-                <h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2">Token Burn & Supply Deflation Tracker</h2>
-            </div>
+            <div><h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2">Token Burn & Supply Deflation Tracker</h2></div>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
@@ -367,8 +312,6 @@
                 <p class="text-2xl md:text-3xl font-extrabold text-blue-400" id="stat-equiv-nfts">Loading...</p>
             </div>
         </div>
-        
-        <!-- Cumulative Burn Chart -->
         <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6 mb-6">
             <div class="flex justify-between items-center mb-6" data-html2canvas-ignore="true">
                 <h3 class="text-sm font-bold text-white hidden sm:block">Cumulative Token Burn Over Time</h3>
@@ -378,12 +321,8 @@
                     <button onclick="updateBurnChart('all')" id="btn-burn-all" class="px-4 py-1.5 text-xs font-bold rounded-md text-slate-400 hover:text-white transition w-1/3 sm:w-auto">ALL TIME</button>
                 </div>
             </div>
-            <div class="relative h-72 md:h-80 w-full">
-                <canvas id="burnChart"></canvas>
-            </div>
+            <div class="relative h-72 md:h-80 w-full"><canvas id="burnChart"></canvas></div>
         </div>
-
-        <!-- Flywheel Chart -->
         <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6">
             <div class="flex justify-between items-center mb-4">
                 <div>
@@ -391,18 +330,13 @@
                     <p class="text-xs text-slate-400 mt-1">Tracks the correlation between token spot price and daily burn rate.</p>
                 </div>
             </div>
-            <div class="relative h-72 md:h-80 w-full">
-                <canvas id="flywheelChart"></canvas>
-            </div>
+            <div class="relative h-72 md:h-80 w-full"><canvas id="flywheelChart"></canvas></div>
         </div>
     </main>
 
-    <!-- View 3: Ecosystem Activation -->
     <main id="view-activation" class="max-w-6xl mx-auto card rounded-2xl border p-4 md:p-6 mb-8 shadow-xl hidden">
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-            <div>
-                <h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2">Ecosystem Activation Metrics</h2>
-            </div>
+            <div><h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2">Ecosystem Activation Metrics</h2></div>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
@@ -414,7 +348,6 @@
                 <p class="text-2xl md:text-3xl font-extrabold text-blue-400" id="stat-active-count">Loading...</p>
             </div>
         </div>
-
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-4 gap-4 mt-8" data-html2canvas-ignore="true">
             <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider">Tier Activation Flow</h3>
             <div class="flex bg-[#1e293b] rounded-lg p-1 border border-[#334155] w-full sm:w-auto">
@@ -424,84 +357,44 @@
                 <button onclick="updateTierStats('allTime')" id="btn-tier-allTime" class="flex-1 sm:flex-none px-4 py-1.5 text-xs font-bold rounded-md bg-[#334155] text-white transition shadow-sm">ALL</button>
             </div>
         </div>
-        
         <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-8">
             <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-4 shadow-sm">
-                <div class="flex items-center gap-2 mb-3">
-                    <div class="w-2.5 h-2.5 rounded-sm bg-[#60a5fa]"></div>
-                    <p class="text-[10px] uppercase tracking-wider text-slate-300 font-bold truncate" id="t0-name">T0</p>
-                </div>
-                <div class="flex justify-between items-end">
-                    <div><p class="text-lg font-bold text-emerald-400" id="t0-act">0</p><p class="text-[9px] text-slate-500 uppercase">Act</p></div>
-                    <div class="text-right"><p class="text-lg font-bold text-rose-400" id="t0-deact">0</p><p class="text-[9px] text-slate-500 uppercase">Deact</p></div>
-                </div>
+                <div class="flex items-center gap-2 mb-3"><div class="w-2.5 h-2.5 rounded-sm bg-[#60a5fa]"></div><p class="text-[10px] uppercase tracking-wider text-slate-300 font-bold truncate" id="t0-name">T0</p></div>
+                <div class="flex justify-between items-end"><div><p class="text-lg font-bold text-emerald-400" id="t0-act">0</p><p class="text-[9px] text-slate-500 uppercase">Act</p></div><div class="text-right"><p class="text-lg font-bold text-rose-400" id="t0-deact">0</p><p class="text-[9px] text-slate-500 uppercase">Deact</p></div></div>
             </div>
             <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-4 shadow-sm">
-                <div class="flex items-center gap-2 mb-3">
-                    <div class="w-2.5 h-2.5 rounded-sm bg-[#34d399]"></div>
-                    <p class="text-[10px] uppercase tracking-wider text-slate-300 font-bold truncate" id="t1-name">T1</p>
-                </div>
-                <div class="flex justify-between items-end">
-                    <div><p class="text-lg font-bold text-emerald-400" id="t1-act">0</p><p class="text-[9px] text-slate-500 uppercase">Act</p></div>
-                    <div class="text-right"><p class="text-lg font-bold text-rose-400" id="t1-deact">0</p><p class="text-[9px] text-slate-500 uppercase">Deact</p></div>
-                </div>
+                <div class="flex items-center gap-2 mb-3"><div class="w-2.5 h-2.5 rounded-sm bg-[#34d399]"></div><p class="text-[10px] uppercase tracking-wider text-slate-300 font-bold truncate" id="t1-name">T1</p></div>
+                <div class="flex justify-between items-end"><div><p class="text-lg font-bold text-emerald-400" id="t1-act">0</p><p class="text-[9px] text-slate-500 uppercase">Act</p></div><div class="text-right"><p class="text-lg font-bold text-rose-400" id="t1-deact">0</p><p class="text-[9px] text-slate-500 uppercase">Deact</p></div></div>
             </div>
             <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-4 shadow-sm">
-                <div class="flex items-center gap-2 mb-3">
-                    <div class="w-2.5 h-2.5 rounded-sm bg-[#f472b6]"></div>
-                    <p class="text-[10px] uppercase tracking-wider text-slate-300 font-bold truncate" id="t2-name">T2</p>
-                </div>
-                <div class="flex justify-between items-end">
-                    <div><p class="text-lg font-bold text-emerald-400" id="t2-act">0</p><p class="text-[9px] text-slate-500 uppercase">Act</p></div>
-                    <div class="text-right"><p class="text-lg font-bold text-rose-400" id="t2-deact">0</p><p class="text-[9px] text-slate-500 uppercase">Deact</p></div>
-                </div>
+                <div class="flex items-center gap-2 mb-3"><div class="w-2.5 h-2.5 rounded-sm bg-[#f472b6]"></div><p class="text-[10px] uppercase tracking-wider text-slate-300 font-bold truncate" id="t2-name">T2</p></div>
+                <div class="flex justify-between items-end"><div><p class="text-lg font-bold text-emerald-400" id="t2-act">0</p><p class="text-[9px] text-slate-500 uppercase">Act</p></div><div class="text-right"><p class="text-lg font-bold text-rose-400" id="t2-deact">0</p><p class="text-[9px] text-slate-500 uppercase">Deact</p></div></div>
             </div>
             <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-4 shadow-sm">
-                <div class="flex items-center gap-2 mb-3">
-                    <div class="w-2.5 h-2.5 rounded-sm bg-[#fbbf24]"></div>
-                    <p class="text-[10px] uppercase tracking-wider text-slate-300 font-bold truncate" id="t3-name">T3</p>
-                </div>
-                <div class="flex justify-between items-end">
-                    <div><p class="text-lg font-bold text-emerald-400" id="t3-act">0</p><p class="text-[9px] text-slate-500 uppercase">Act</p></div>
-                    <div class="text-right"><p class="text-lg font-bold text-rose-400" id="t3-deact">0</p><p class="text-[9px] text-slate-500 uppercase">Deact</p></div>
-                </div>
+                <div class="flex items-center gap-2 mb-3"><div class="w-2.5 h-2.5 rounded-sm bg-[#fbbf24]"></div><p class="text-[10px] uppercase tracking-wider text-slate-300 font-bold truncate" id="t3-name">T3</p></div>
+                <div class="flex justify-between items-end"><div><p class="text-lg font-bold text-emerald-400" id="t3-act">0</p><p class="text-[9px] text-slate-500 uppercase">Act</p></div><div class="text-right"><p class="text-lg font-bold text-rose-400" id="t3-deact">0</p><p class="text-[9px] text-slate-500 uppercase">Deact</p></div></div>
             </div>
             <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-4 shadow-sm">
-                <div class="flex items-center gap-2 mb-3">
-                    <div class="w-2.5 h-2.5 rounded-sm bg-[#a78bfa]"></div>
-                    <p class="text-[10px] uppercase tracking-wider text-slate-300 font-bold truncate" id="t4-name">T4</p>
-                </div>
-                <div class="flex justify-between items-end">
-                    <div><p class="text-lg font-bold text-emerald-400" id="t4-act">0</p><p class="text-[9px] text-slate-500 uppercase">Act</p></div>
-                    <div class="text-right"><p class="text-lg font-bold text-rose-400" id="t4-deact">0</p><p class="text-[9px] text-slate-500 uppercase">Deact</p></div>
-                </div>
+                <div class="flex items-center gap-2 mb-3"><div class="w-2.5 h-2.5 rounded-sm bg-[#a78bfa]"></div><p class="text-[10px] uppercase tracking-wider text-slate-300 font-bold truncate" id="t4-name">T4</p></div>
+                <div class="flex justify-between items-end"><div><p class="text-lg font-bold text-emerald-400" id="t4-act">0</p><p class="text-[9px] text-slate-500 uppercase">Act</p></div><div class="text-right"><p class="text-lg font-bold text-rose-400" id="t4-deact">0</p><p class="text-[9px] text-slate-500 uppercase">Deact</p></div></div>
             </div>
         </div>
-
         <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6 mb-6">
             <h3 class="text-sm font-bold text-white mb-6">Tier Distribution Breakdown</h3>
             <div class="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-16">
-                <div class="relative h-64 md:h-72 w-full md:w-1/2 flex items-center justify-center">
-                    <canvas id="tierPieChart"></canvas>
-                </div>
+                <div class="relative h-64 md:h-72 w-full md:w-1/2 flex items-center justify-center"><canvas id="tierPieChart"></canvas></div>
                 <div class="w-full md:w-1/2 flex flex-col gap-3" id="tier-legend-list"></div>
             </div>
         </div>
-
         <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6">
             <h3 class="text-sm font-bold text-white mb-4">Historical Activity (Net vs. Daily)</h3>
-            <div class="relative h-72 md:h-80 w-full">
-                <canvas id="activationChart"></canvas>
-            </div>
+            <div class="relative h-72 md:h-80 w-full"><canvas id="activationChart"></canvas></div>
         </div>
     </main>
 
-    <!-- View 4: Ownership Stats -->
     <main id="view-ownership" class="max-w-6xl mx-auto card rounded-2xl border p-4 md:p-6 mb-8 shadow-xl hidden">
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-            <div>
-                <h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2">Protocol Ownership & Distribution</h2>
-            </div>
+            <div><h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2">Protocol Ownership & Distribution</h2></div>
         </div>
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
@@ -521,7 +414,6 @@
                 <p class="text-xl md:text-3xl font-extrabold text-blue-400" id="stat-circ-supply">Loading...</p>
             </div>
         </div>
-
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-5 shadow-sm">
                 <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Unique NFT Holders</p>
@@ -539,84 +431,39 @@
                 <p class="text-xs text-slate-500 mt-1">Active addresses with a token balance</p>
             </div>
         </div>
-
         <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6 mb-6">
             <h3 class="text-sm font-bold text-white mb-4">True Active Token Holders Over Time</h3>
-            <div class="relative h-72 md:h-80 w-full">
-                <canvas id="ownershipChart"></canvas>
-            </div>
+            <div class="relative h-72 md:h-80 w-full"><canvas id="ownershipChart"></canvas></div>
         </div>
     </main>
 
-    <!-- Dynamic Contextual Methodology Section -->
     <div class="max-w-6xl mx-auto card rounded-xl p-5 md:p-6 border mb-12 shadow-lg" data-html2canvas-ignore="true">
         <div class="flex items-center gap-2 mb-4">
             <svg class="w-5 h-5 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
             <h3 class="text-base md:text-lg font-bold text-white">Methodology & Disclaimer</h3>
         </div>
-        
         <div class="text-xs md:text-sm text-slate-300 mb-5 leading-relaxed space-y-4">
-            <p id="meth-roi" class="meth-section">
-                <strong class="text-white">Yield & ROI (Global Network Oracle):</strong> Cash-on-Cash (CoC) returns are calculated dynamically based on the selected project's architecture. Automated distributions sample incoming transactions to an active oracle wallet. Soft-staking mechanics track real-time global, aggregate distributions flowing outbound from the central protocol vault. This total is mathematically divided against the live active network weight and evaluated against AMM floor entry costs.
-            </p>
+            <p id="meth-roi" class="meth-section"><strong class="text-white">Yield & ROI (Global Network Oracle):</strong> Cash-on-Cash (CoC) returns are calculated dynamically based on the selected project's architecture. Automated distributions sample incoming transactions to an active oracle wallet. Soft-staking mechanics track real-time global, aggregate distributions flowing outbound from the central protocol vault. This total is mathematically divided against the live active network weight and evaluated against AMM floor entry costs.</p>
         </div>
-        <p class="text-xs md:text-sm text-slate-400 italic leading-relaxed border-t border-[#334155] pt-5">
-            <strong class="text-slate-300 not-italic">Disclaimer:</strong> Tracked yield values are calculated using Mark-to-Market spot pricing at the exact time of the dashboard's last automated sync, rather than the historical price at the time of the drop. Yields fluctuate based on network activation weight, market token prices, and community protocol volume. This is a community-built tracking tool and does not guarantee future returns.
-        </p>
+        <p class="text-xs md:text-sm text-slate-400 italic leading-relaxed border-t border-[#334155] pt-5"><strong class="text-slate-300 not-italic">Disclaimer:</strong> Tracked yield values are calculated using Mark-to-Market spot pricing at the exact time of the dashboard's last automated sync, rather than the historical price at the time of the drop. Yields fluctuate based on network activation weight, market token prices, and community protocol volume. This is a community-built tracking tool and does not guarantee future returns.</p>
     </div>
 
-    <!-- Logic Script -->
     <script>
         const sleep = (ms) => new Promise(r => setTimeout(r, ms));
         
-        const MINING_CONFIG = {
-            shiftsPerDay: 1,
-            avgDerpPerShiftOrange: 120,
-            avgDerpPerShiftBlue: 65,
-            ethGasPerShift: 0.000013,
-            maxSeatsPerBroker: 16
-        };
+        const MINING_CONFIG = { shiftsPerDay: 1, avgDerpPerShiftOrange: 120, avgDerpPerShiftBlue: 65, ethGasPerShift: 0.000013, maxSeatsPerBroker: 16 };
 
         const PROJECT_REVENUE_CONFIG = {
-            stonk: {
-                stream1: { label: "AMM & Swap Protocol Fees (7D)", key: "ammFeesUsd", dailyKey: "dailyAmm", color: "#34d399", name: "AMM & Swaps" },
-                stream2: { label: "Clock-In Security Box (7D)", key: "securityBoxUsd", dailyKey: "dailySecurityBox", color: "#60a5fa", name: "Clock-In Box" },
-                stream3: { label: "Safe Launchpad Deployments (7D)", key: "launchpadUsd", dailyKey: "dailyLaunchpad", color: "#a78bfa", name: "Safe Launchpad" }
-            },
-            mancer: {
-                stream1: { label: "DEX Swap Routing Fees (7D)", key: "dexFeesUsd", dailyKey: "dailyDex", color: "#34d399", name: "DEX Swap Fees" },
-                stream2: { label: "Soft-Staking Rewards (7D)", key: "ammFeesUsd", dailyKey: "dailyAmm", color: "#60a5fa", name: "Soft-Staking Rewards" },
-                stream3: { label: "Order Execution Layer (7D)", key: "securityBoxUsd", dailyKey: "dailySecurityBox", color: "#a855f7", name: "Order Layer" }
-            },
-            tickeryard: {
-                stream1: { label: "Protocol Vault Inflows (7D)", key: "ammFeesUsd", dailyKey: "dailyAmm", color: "#34d399", name: "Vault Distributions" },
-                stream2: { label: "Yard AMM Protocol Fees (7D)", key: "dexFeesUsd", dailyKey: "dailyDex", color: "#60a5fa", name: "Yard AMM Fees" },
-                stream3: { label: "Ecosystem Inflows (7D)", key: "launchpadUsd", dailyKey: "dailyLaunchpad", color: "#a855f7", name: "Ecosystem Fees" }
-            },
-            cardwall: {
-                stream1: { label: "Gacha Marketing Pool (7D)", key: "ammFeesUsd", dailyKey: "dailyAmm", color: "#34d399", name: "Gacha Pool (33%)" },
-                stream2: { label: "PSA 10 Slabs / Physical (7D)", key: "dexFeesUsd", dailyKey: "dailyDex", color: "#60a5fa", name: "Physical Commerce" },
-                stream3: { label: "Anvil Market Fees (7D)", key: "launchpadUsd", dailyKey: "dailyLaunchpad", color: "#a855f7", name: "Anvil Trades" }
-            }
+            stonk: { stream1: { label: "AMM & Swap Protocol Fees (7D)", key: "ammFeesUsd", dailyKey: "dailyAmm", color: "#34d399", name: "AMM & Swaps" }, stream2: { label: "Clock-In Security Box (7D)", key: "securityBoxUsd", dailyKey: "dailySecurityBox", color: "#60a5fa", name: "Clock-In Box" }, stream3: { label: "Safe Launchpad Deployments (7D)", key: "launchpadUsd", dailyKey: "dailyLaunchpad", color: "#a78bfa", name: "Safe Launchpad" } },
+            mancer: { stream1: { label: "DEX Swap Routing Fees (7D)", key: "dexFeesUsd", dailyKey: "dailyDex", color: "#34d399", name: "DEX Swap Fees" }, stream2: { label: "Soft-Staking Rewards (7D)", key: "ammFeesUsd", dailyKey: "dailyAmm", color: "#60a5fa", name: "Soft-Staking Rewards" }, stream3: { label: "Order Execution Layer (7D)", key: "securityBoxUsd", dailyKey: "dailySecurityBox", color: "#a855f7", name: "Order Layer" } },
+            tickeryard: { stream1: { label: "Protocol Vault Inflows (7D)", key: "ammFeesUsd", dailyKey: "dailyAmm", color: "#34d399", name: "Vault Distributions" }, stream2: { label: "Yard AMM Protocol Fees (7D)", key: "dexFeesUsd", dailyKey: "dailyDex", color: "#60a5fa", name: "Yard AMM Fees" }, stream3: { label: "Ecosystem Inflows (7D)", key: "launchpadUsd", dailyKey: "dailyLaunchpad", color: "#a855f7", name: "Ecosystem Fees" } },
+            cardwall: { stream1: { label: "Gacha Marketing Pool (7D)", key: "ammFeesUsd", dailyKey: "dailyAmm", color: "#34d399", name: "Gacha Pool (33%)" }, stream2: { label: "PSA 10 Slabs / Physical (7D)", key: "dexFeesUsd", dailyKey: "dailyDex", color: "#60a5fa", name: "Physical Commerce" }, stream3: { label: "Anvil Market Fees (7D)", key: "launchpadUsd", dailyKey: "dailyLaunchpad", color: "#a855f7", name: "Anvil Trades" } }
         };
 
         const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
         const formatNumber = (val, decimals = 0) => new Intl.NumberFormat('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val);
-        
-        function formatPrice(val) {
-            if (!val || val === 0) return "$0.00";
-            if (val < 1) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 6 }).format(val); }
-            return formatCurrency(val);
-        }
-
-        function resolveIpfsUrl(url) {
-            if (!url) return '';
-            let cleaned = url.replace('ipfs://ipfs/', 'ipfs://');
-            if (cleaned.startsWith('ipfs://')) {
-                return cleaned.replace('ipfs://', 'https://cloudflare-ipfs.com/ipfs/');
-            }
-            return cleaned;
-        }
+        function formatPrice(val) { if (!val || val === 0) return "$0.00"; if (val < 1) return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 6 }).format(val); return formatCurrency(val); }
+        function resolveIpfsUrl(url) { if (!url) return ''; let cleaned = url.replace('ipfs://ipfs/', 'ipfs://'); if (cleaned.startsWith('ipfs://')) return cleaned.replace('ipfs://', 'https://cloudflare-ipfs.com/ipfs/'); return cleaned; }
 
         async function fetchWithRetry(resource, options = {}, maxRetries = 3) {
             const { timeout = 8000 } = options;
@@ -636,105 +483,30 @@
             }
         }
 
-        let masterData = null;
-        let currentProjectKey = 'stonk';
-        let liveDerpPriceUsd = 0;
-        let liveEthPriceUsd = 0;
+        let masterData = null; let currentProjectKey = 'stonk'; let liveDerpPriceUsd = 0; let liveEthPriceUsd = 0;
+        let burnChartInstance = null; let flywheelChartInstance = null; let historicalRoiChartInstance = null;
+        let activationChartInstance = null; let tierPieChartInstance = null; let ownershipChartInstance = null;
+        let revenueChartInstance = null; let tierChartInstances = {};
 
-        let burnChartInstance = null;
-        let flywheelChartInstance = null;
-        let historicalRoiChartInstance = null;
-        let activationChartInstance = null;
-        let tierPieChartInstance = null;
-        let ownershipChartInstance = null;
-        let revenueChartInstance = null;
-        let tierChartInstances = {};
-
-        function toggleDropdown(e) {
-            if (e) e.stopPropagation();
-            const menu = document.getElementById('project-dropdown-menu');
-            if (menu) menu.classList.toggle('hidden');
-        }
-
-        function toggleLpTable() {
-            const cont = document.getElementById('lp-table-container');
-            const btn = document.getElementById('lp-toggle-btn');
-            if (cont.classList.contains('hidden')) {
-                cont.classList.remove('hidden');
-                btn.innerText = 'Hide Pools ▲';
-            } else {
-                cont.classList.add('hidden');
-                btn.innerText = 'Show All Pools ▼';
-            }
-        }
-
-        function selectProject(key) {
-            const menu = document.getElementById('project-dropdown-menu');
-            if (menu) menu.classList.add('hidden');
-            loadProject(key);
-        }
-
-        document.addEventListener('click', (e) => {
-            const container = document.getElementById('project-dropdown-container');
-            const menu = document.getElementById('project-dropdown-menu');
-            if (menu && container && !container.contains(e.target)) {
-                menu.classList.add('hidden');
-            }
-        });
+        function toggleDropdown(e) { if (e) e.stopPropagation(); const menu = document.getElementById('project-dropdown-menu'); if (menu) menu.classList.toggle('hidden'); }
+        function toggleLpTable() { const cont = document.getElementById('lp-table-container'); const btn = document.getElementById('lp-toggle-btn'); if (cont.classList.contains('hidden')) { cont.classList.remove('hidden'); btn.innerText = 'Hide Pools ▲'; } else { cont.classList.add('hidden'); btn.innerText = 'Show All Pools ▼'; } }
+        function selectProject(key) { const menu = document.getElementById('project-dropdown-menu'); if (menu) menu.classList.add('hidden'); loadProject(key); }
+        document.addEventListener('click', (e) => { const container = document.getElementById('project-dropdown-container'); const menu = document.getElementById('project-dropdown-menu'); if (menu && container && !container.contains(e.target)) menu.classList.add('hidden'); });
 
         function switchTab(tab) {
-            const btnRoi = document.getElementById('tab-roi');
-            const btnRev = document.getElementById('tab-revenue');
-            const btnBurn = document.getElementById('tab-burn');
-            const btnActivation = document.getElementById('tab-activation');
-            const btnOwnership = document.getElementById('tab-ownership');
-            const btnHistorical = document.getElementById('tab-historical');
-            
-            const viewRoi = document.getElementById('view-roi');
-            const viewRev = document.getElementById('view-revenue');
-            const viewBurn = document.getElementById('view-burn');
-            const viewActivation = document.getElementById('view-activation');
-            const viewOwnership = document.getElementById('view-ownership');
-            const viewMemes = document.getElementById('view-memes');
-            const viewPortfolio = document.getElementById('view-portfolio');
-            const viewHistorical = document.getElementById('view-historical');
-
-            [btnRoi, btnRev, btnBurn, btnActivation, btnOwnership, btnHistorical].forEach(b => {
-                if(b) b.className = "flex-1 sm:flex-none justify-center bg-transparent border border-[#334155] hover:bg-[#1e293b] text-slate-300 px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm";
-            });
-            
-            [viewRoi, viewRev, viewBurn, viewActivation, viewOwnership, viewMemes, viewPortfolio, viewHistorical].forEach(v => { if(v) v.classList.add('hidden'); });
-
-            if (tab === 'roi') {
-                if(btnRoi) btnRoi.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm shadow-lg shadow-blue-500/25";
-                if(viewRoi) viewRoi.classList.remove('hidden');
-            } else if (tab === 'historical') {
-                if(btnHistorical) btnHistorical.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm shadow-lg shadow-blue-500/25";
-                if(viewHistorical) viewHistorical.classList.remove('hidden');
-                if(window.currentSnapshots) renderHistoricalTab(window.currentSnapshots, window.currentProjectTiers, masterData.projects[currentProjectKey].market);
-            } else if (tab === 'revenue') {
-                if(btnRev) btnRev.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm shadow-lg shadow-blue-500/25";
-                if(viewRev) viewRev.classList.remove('hidden');
-                if (window.revenueData) renderRevenueChart(window.revenueData, currentProjectKey);
-            } else if (tab === 'burn') {
-                if(btnBurn) btnBurn.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm shadow-lg shadow-blue-500/25";
-                if(viewBurn) viewBurn.classList.remove('hidden');
-                updateBurnChart('all');
-                if (window.currentSnapshots) renderFlywheelChart(window.currentSnapshots);
-            } else if (tab === 'activation') {
-                if(btnActivation) btnActivation.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm shadow-lg shadow-blue-500/25";
-                if(viewActivation) viewActivation.classList.remove('hidden');
-                if (window.tierActivationStats) updateTierStats('allTime');
-                if (window.activationChartData) renderActivationCharts(window.activationChartData);
-            } else if (tab === 'ownership') {
-                if(btnOwnership) btnOwnership.className = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm shadow-lg shadow-blue-500/25";
-                if(viewOwnership) viewOwnership.classList.remove('hidden');
-                if (window.ownershipChartData) renderOwnershipChart(window.ownershipChartData);
-            } else if (tab === 'memes') {
-                if(viewMemes) viewMemes.classList.remove('hidden');
-            } else if (tab === 'portfolio') {
-                if(viewPortfolio) viewPortfolio.classList.remove('hidden');
-            }
+            const btns = ['tab-roi', 'tab-revenue', 'tab-burn', 'tab-activation', 'tab-ownership', 'tab-historical'];
+            const views = ['view-roi', 'view-revenue', 'view-burn', 'view-activation', 'view-ownership', 'view-memes', 'view-portfolio', 'view-historical'];
+            btns.forEach(id => { const b = document.getElementById(id); if(b) b.className = "flex-1 sm:flex-none justify-center bg-transparent border border-[#334155] hover:bg-[#1e293b] text-slate-300 px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm"; });
+            views.forEach(id => { const v = document.getElementById(id); if(v) v.classList.add('hidden'); });
+            const activeBtnClass = "flex-1 sm:flex-none justify-center bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm shadow-lg shadow-blue-500/25";
+            if (tab === 'roi') { const b=document.getElementById('tab-roi'); if(b) b.className=activeBtnClass; const v=document.getElementById('view-roi'); if(v) v.classList.remove('hidden'); }
+            else if (tab === 'historical') { const b=document.getElementById('tab-historical'); if(b) b.className=activeBtnClass; const v=document.getElementById('view-historical'); if(v) v.classList.remove('hidden'); if(window.currentSnapshots) renderHistoricalTab(window.currentSnapshots, window.currentProjectTiers, masterData.projects[currentProjectKey].market); }
+            else if (tab === 'revenue') { const b=document.getElementById('tab-revenue'); if(b) b.className=activeBtnClass; const v=document.getElementById('view-revenue'); if(v) v.classList.remove('hidden'); if (window.revenueData) renderRevenueChart(window.revenueData, currentProjectKey); }
+            else if (tab === 'burn') { const b=document.getElementById('tab-burn'); if(b) b.className=activeBtnClass; const v=document.getElementById('view-burn'); if(v) v.classList.remove('hidden'); updateBurnChart('all'); if (window.currentSnapshots) renderFlywheelChart(window.currentSnapshots); }
+            else if (tab === 'activation') { const b=document.getElementById('tab-activation'); if(b) b.className=activeBtnClass; const v=document.getElementById('view-activation'); if(v) v.classList.remove('hidden'); if (window.tierActivationStats) updateTierStats('allTime'); if (window.activationChartData) renderActivationCharts(window.activationChartData); }
+            else if (tab === 'ownership') { const b=document.getElementById('tab-ownership'); if(b) b.className=activeBtnClass; const v=document.getElementById('view-ownership'); if(v) v.classList.remove('hidden'); if (window.ownershipChartData) renderOwnershipChart(window.ownershipChartData); }
+            else if (tab === 'memes') { const v=document.getElementById('view-memes'); if(v) v.classList.remove('hidden'); }
+            else if (tab === 'portfolio') { const v=document.getElementById('view-portfolio'); if(v) v.classList.remove('hidden'); }
         }
 
         async function fetchLiveDerpPrice() {
@@ -769,127 +541,56 @@
 
         function loadProject(projectKey) {
             currentProjectKey = projectKey;
-            
-            const slider = document.getElementById('volume-slider');
-            if (slider) slider.value = 1;
-            const sliderDisplay = document.getElementById('slider-multiplier-display');
-            if (sliderDisplay) sliderDisplay.innerText = '1.0x Protocol Volume';
-
+            const slider = document.getElementById('volume-slider'); if (slider) slider.value = 1;
+            const sliderDisplay = document.getElementById('slider-multiplier-display'); if (sliderDisplay) sliderDisplay.innerText = '1.0x Protocol Volume';
             const ethPrice = masterData?.projects?.['stonk']?.market?.ethPriceUsd || 0;
             document.getElementById('eth-price').innerText = ethPrice ? formatCurrency(ethPrice) : '---';
 
             if (projectKey === 'portfolio') {
-                document.getElementById('header-logo').src = 'Stonkbroker.png';
-                document.getElementById('project-title').innerText = 'Portfolio Tracker';
-                document.getElementById('token-price-box').classList.add('hidden');
-                document.getElementById('nft-floor-box').classList.add('hidden');
-                document.getElementById('standard-tabs').classList.add('hidden');
-                document.getElementById('what-if-container').classList.add('hidden');
-                switchTab('portfolio');
-                return;
+                document.getElementById('header-logo').src = 'Stonkbroker.png'; document.getElementById('project-title').innerText = 'Portfolio Tracker';
+                ['token-price-box','nft-floor-box','standard-tabs','what-if-container'].forEach(id=>{const el=document.getElementById(id);if(el)el.classList.add('hidden');});
+                switchTab('portfolio'); return;
             }
-
             if (projectKey === 'memes' || projectKey === 'stocks') {
                 const isStocks = projectKey === 'stocks';
-                document.getElementById('header-logo').src = 'Stonkbroker.png';
-                document.getElementById('project-title').innerText = isStocks ? 'Robinhood Stock Tokens' : 'Robinhood Tokens';
+                document.getElementById('header-logo').src = 'Stonkbroker.png'; document.getElementById('project-title').innerText = isStocks ? 'Robinhood Stock Tokens' : 'Robinhood Tokens';
                 document.getElementById('dynamic-ticker-label').innerText = isStocks ? '$STOCKS' : '$TOKENS';
-                
-                document.getElementById('token-price-box').classList.add('hidden');
-                document.getElementById('nft-floor-box').classList.add('hidden');
-                document.getElementById('standard-tabs').classList.add('hidden');
-                document.getElementById('what-if-container').classList.add('hidden');
-                
+                ['token-price-box','nft-floor-box','standard-tabs','what-if-container'].forEach(id=>{const el=document.getElementById(id);if(el)el.classList.add('hidden');});
                 document.getElementById('tokens-view-title').innerText = isStocks ? 'Robinhood Stock Tokens Tracker' : 'Robinhood Tokens Tracker';
                 document.getElementById('tokens-view-desc').innerText = isStocks ? 'Real-time liquidity, volume, and metrics for Robinhood Chain stock tokens' : 'Real-time liquidity, volume, and metrics for Robinhood Chain tokens';
-
-                renderMemesTable(isStocks ? masterData.stocks : masterData.memes);
-                switchTab('memes');
-                return;
+                renderMemesTable(isStocks ? masterData.stocks : masterData.memes); switchTab('memes'); return;
             }
 
-            document.getElementById('token-price-box').classList.remove('hidden');
-            document.getElementById('nft-floor-box').classList.remove('hidden');
-            document.getElementById('standard-tabs').classList.remove('hidden');
-            
+            ['token-price-box','nft-floor-box','standard-tabs'].forEach(id=>{const el=document.getElementById(id);if(el)el.classList.remove('hidden');});
             const data = masterData?.projects?.[projectKey];
             
-            // DATA REBUILDING FAILSAFE: Catch corrupt/empty data.json seamlessly
             if (!data || !data.market || !data.tiers || data.tiers.length === 0) {
-                const loadingElements = [
-                    'eth-price', 'token-price', 'nft-floor', 'floor-cost',
-                    'stat-total-burn', 'stat-equiv-nfts', 'stat-pct-activated',
-                    'stat-active-count', 'stat-max-supply', 'stat-circ-supply',
-                    'stat-amm-vault', 'stat-burnt-nfts', 'stat-nft-holders',
-                    'stat-stonk-holders', 'stat-own-ratio'
-                ];
-                loadingElements.forEach(id => {
-                    const el = document.getElementById(id);
-                    if (el) el.innerHTML = '<span class="text-amber-400 text-[10px] uppercase font-bold border border-amber-500/50 bg-amber-900/20 px-2 py-0.5 rounded">Data Syncing</span>';
-                });
-                
-                const tbody = document.getElementById('tiers-body');
-                if (tbody) {
-                    tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-amber-400 font-bold bg-amber-900/10 border border-amber-500/30 rounded-lg">Syncing on-chain metrics. Refresh in a moment.</td></tr>`;
-                }
-                
-                const whatIf = document.getElementById('what-if-container');
-                if (whatIf) whatIf.classList.add('hidden');
-                
+                const loadingElements = ['eth-price', 'token-price', 'nft-floor', 'floor-cost', 'stat-total-burn', 'stat-equiv-nfts', 'stat-pct-activated', 'stat-active-count', 'stat-max-supply', 'stat-circ-supply', 'stat-amm-vault', 'stat-burnt-nfts', 'stat-nft-holders', 'stat-stonk-holders', 'stat-own-ratio'];
+                loadingElements.forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = '<span class="text-amber-400 text-[10px] uppercase font-bold border border-amber-500/50 bg-amber-900/20 px-2 py-0.5 rounded">Data Syncing</span>'; });
+                const tbody = document.getElementById('tiers-body'); if (tbody) tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-amber-400 font-bold bg-amber-900/10 border border-amber-500/30 rounded-lg">Syncing on-chain metrics. Refresh in a moment.</td></tr>`;
+                const whatIf = document.getElementById('what-if-container'); if (whatIf) whatIf.classList.add('hidden');
                 return;
             }
 
-            if (data.underConstruction) {
-                document.getElementById('what-if-container').classList.add('hidden');
-            } else {
-                document.getElementById('what-if-container').classList.remove('hidden');
-            }
+            if (data.underConstruction) document.getElementById('what-if-container').classList.add('hidden');
+            else document.getElementById('what-if-container').classList.remove('hidden');
 
-            const m = data.market;
-            const conf = data.config;
-            
-            liveEthPriceUsd = m.ethPriceUsd;
-
-            let logoSrc = conf.logo || 'Stonkbroker.png';
-            if (projectKey === 'tickeryard') logoSrc = 'Yardkeepers.png';
-            if (projectKey === 'cardwall') logoSrc = 'wall.png';
-
-            const projectNames = {
-                stonk: 'StonkBrokers Tracker',
-                mancer: 'Mancer Tracker',
-                tickeryard: 'TickerYard Tracker',
-                cardwall: 'The Card Wall Tracker'
-            };
-
-            document.getElementById('header-logo').src = logoSrc;
-            document.getElementById('project-title').innerText = projectNames[projectKey] || 'Protocol Tracker';
-            document.getElementById('dynamic-ticker-label').innerText = `$${conf.ticker}`;
-            document.getElementById('token-price').innerText = formatPrice(m.tokenPriceUsd);
+            const m = data.market; const conf = data.config; liveEthPriceUsd = m.ethPriceUsd;
+            let logoSrc = conf.logo || 'Stonkbroker.png'; if (projectKey === 'tickeryard') logoSrc = 'Yardkeepers.png'; if (projectKey === 'cardwall') logoSrc = 'wall.png';
+            const projectNames = { stonk: 'StonkBrokers Tracker', mancer: 'Mancer Tracker', tickeryard: 'TickerYard Tracker', cardwall: 'The Card Wall Tracker' };
+            document.getElementById('header-logo').src = logoSrc; document.getElementById('project-title').innerText = projectNames[projectKey] || 'Protocol Tracker';
+            document.getElementById('dynamic-ticker-label').innerText = `$${conf.ticker}`; document.getElementById('token-price').innerText = formatPrice(m.tokenPriceUsd);
             document.getElementById('nft-floor').innerText = m.nftFloorEth.toFixed(3) + ' ETH';
+            const floorCostUsd = m.nftFloorEth * m.ethPriceUsd; document.getElementById('floor-cost').innerText = formatCurrency(floorCostUsd);
+            document.getElementById('last-sync').innerText = 'Last automated sync: ' + new Date(masterData.lastUpdated).toLocaleString();
             
-            const floorCostUsd = m.nftFloorEth * m.ethPriceUsd;
-            document.getElementById('floor-cost').innerText = formatCurrency(floorCostUsd);
-            
-            const syncDate = new Date(masterData.lastUpdated);
-            document.getElementById('last-sync').innerText = 'Last automated sync: ' + syncDate.toLocaleString();
-            
-            const tbody = document.getElementById('tiers-body');
-            tbody.innerHTML = '';
-            tierChartInstances = {};
-            window.tierChartData = {};
-
-            window.currentProjectTiers = data.tiers;
-            window.currentFloorCostUsd = floorCostUsd;
+            const tbody = document.getElementById('tiers-body'); tbody.innerHTML = ''; tierChartInstances = {}; window.tierChartData = {};
+            window.currentProjectTiers = data.tiers; window.currentFloorCostUsd = floorCostUsd;
 
             if (data.tiers) {
                 data.tiers.forEach(t => {
-                    const activationCostUsd = t.reqTokens * m.tokenPriceUsd;
-                    const totalCostUsd = floorCostUsd + activationCostUsd;
-                    const yieldUsd = t.trackedAnnualYieldUsd;
-                    
-                    let roiHtml = '';
-                    let yieldHtml = '';
-                    
+                    const activationCostUsd = t.reqTokens * m.tokenPriceUsd; const totalCostUsd = floorCostUsd + activationCostUsd; const yieldUsd = t.trackedAnnualYieldUsd;
+                    let roiHtml = ''; let yieldHtml = '';
                     if (data.underConstruction) {
                         roiHtml = `<span class="bg-orange-900/20 text-orange-400 border border-orange-800/50 px-2.5 py-1 rounded text-[10px] font-bold shadow-sm uppercase tracking-wider">Awaiting Data</span>`;
                         yieldHtml = `<span class="text-slate-500 italic text-sm">Epoch Initializing...</span>`;
@@ -903,127 +604,48 @@
                             roiHtml = `<span class="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-2.5 py-1 rounded text-sm font-bold shadow-sm opacity-50">0.00%</span>`;
                         }
                     }
-
                     window.tierChartData[t.tier] = { labels: t.dailyDates || [], data: t.dailyYields || [], name: t.name };
-
-                    const tr = document.createElement('tr');
-                    tr.className = 'cursor-pointer border-b border-[#334155]/50 hover:bg-[#334155]/20 transition-colors group';
-                    tr.setAttribute('onclick', `toggleTierDetails('${t.tier}')`);
+                    const tr = document.createElement('tr'); tr.className = 'cursor-pointer border-b border-[#334155]/50 hover:bg-[#334155]/20 transition-colors group'; tr.setAttribute('onclick', `toggleTierDetails('${t.tier}')`);
                     tr.innerHTML = `
-                        <td class="py-5 pl-2">
-                            <div class="flex items-center gap-3">
-                                <div class="bg-[#0f172a] border border-[#334155] text-blue-400 px-2.5 py-1 rounded text-xs font-bold shadow-inner">${t.tier}</div>
-                                <div><div class="text-white font-bold">${t.name}</div><div class="text-xs text-slate-500 mt-0.5">Weight: <span class="text-yellow-500 font-semibold">${t.weight}x</span></div></div>
-                            </div>
-                        </td>
+                        <td class="py-5 pl-2"><div class="flex items-center gap-3"><div class="bg-[#0f172a] border border-[#334155] text-blue-400 px-2.5 py-1 rounded text-xs font-bold shadow-inner">${t.tier}</div><div><div class="text-white font-bold">${t.name}</div><div class="text-xs text-slate-500 mt-0.5">Weight: <span class="text-yellow-500 font-semibold">${t.weight}x</span></div></div></div></td>
                         <td class="py-5"><span class="text-white font-bold">${formatNumber(t.reqTokens)}</span> ${conf.ticker}</td>
                         <td class="py-5"><div class="text-white font-bold">${formatCurrency(totalCostUsd)}</div><div class="text-xs text-slate-500 mt-0.5">Floor + ${formatCurrency(activationCostUsd)} Act.</div></td>
                         <td class="py-5" id="yield-col-${t.tier}">${yieldHtml}</td>
-                        <td class="py-5 text-right pr-4" id="roi-col-${t.tier}">
-                            <div class="flex items-center justify-end gap-3">
-                                ${roiHtml}
-                                <svg id="chevron-${t.tier}" class="w-4 h-4 text-slate-500 transition-transform duration-200 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                            </div>
-                        </td>
+                        <td class="py-5 text-right pr-4" id="roi-col-${t.tier}"><div class="flex items-center justify-end gap-3">${roiHtml}<svg id="chevron-${t.tier}" class="w-4 h-4 text-slate-500 transition-transform duration-200 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></div></td>
                     `;
                     tbody.appendChild(tr);
-
-                    const detailsTr = document.createElement('tr');
-                    detailsTr.id = `details-${t.tier}`;
-                    detailsTr.className = 'hidden bg-[#0f172a]/40 border-b border-[#334155]/50';
-                    detailsTr.innerHTML = `
-                        <td colspan="5" class="p-4 md:p-6">
-                            <div class="flex justify-between items-center mb-3">
-                                <h4 class="text-sm font-bold text-slate-300">Trailing 7-Day Realized Yield</h4>
-                                <span class="text-xs text-slate-500">Based on On-Chain Distributions</span>
-                            </div>
-                            <div class="relative h-32 md:h-40 w-full">
-                                <canvas id="chart-${t.tier}"></canvas>
-                            </div>
-                        </td>
-                    `;
+                    const detailsTr = document.createElement('tr'); detailsTr.id = `details-${t.tier}`; detailsTr.className = 'hidden bg-[#0f172a]/40 border-b border-[#334155]/50';
+                    detailsTr.innerHTML = `<td colspan="5" class="p-4 md:p-6"><div class="flex justify-between items-center mb-3"><h4 class="text-sm font-bold text-slate-300">Trailing 7-Day Realized Yield</h4><span class="text-xs text-slate-500">Based on On-Chain Distributions</span></div><div class="relative h-32 md:h-40 w-full"><canvas id="chart-${t.tier}"></canvas></div></td>`;
                     tbody.appendChild(detailsTr);
                 });
             }
-
-            processMetricsData(data, projectKey);
-            switchTab('roi');
+            processMetricsData(data, projectKey); switchTab('roi');
         }
 
         function updateRoiSimulator(val) {
-            const display = document.getElementById('slider-multiplier-display');
-            if(display) display.innerText = `${parseFloat(val).toFixed(1)}x Protocol Volume`;
-
+            const display = document.getElementById('slider-multiplier-display'); if(display) display.innerText = `${parseFloat(val).toFixed(1)}x Protocol Volume`;
             if(!window.currentProjectTiers || !masterData) return;
             const m = masterData.projects[currentProjectKey].market;
-
             window.currentProjectTiers.forEach(t => {
-                const elYield = document.getElementById(`yield-col-${t.tier}`);
-                const elRoi = document.getElementById(`roi-col-${t.tier}`);
-                if(!elYield || !elRoi) return;
-
-                const newYieldUsd = t.trackedAnnualYieldUsd * val;
-                const actCostUsd = t.reqTokens * m.tokenPriceUsd;
-                const totalCostUsd = window.currentFloorCostUsd + actCostUsd;
-                
+                const elYield = document.getElementById(`yield-col-${t.tier}`); const elRoi = document.getElementById(`roi-col-${t.tier}`); if(!elYield || !elRoi) return;
+                const newYieldUsd = t.trackedAnnualYieldUsd * val; const actCostUsd = t.reqTokens * m.tokenPriceUsd; const totalCostUsd = window.currentFloorCostUsd + actCostUsd;
                 const roi = totalCostUsd > 0 ? (newYieldUsd / totalCostUsd) * 100 : 0;
-                
                 elYield.innerHTML = `<span class="text-white font-bold text-base">${formatCurrency(newYieldUsd)}</span> <span class="text-slate-500">/yr</span>`;
-                elRoi.innerHTML = `
-                    <div class="flex items-center justify-end gap-3">
-                        <span class="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-2.5 py-1 rounded text-sm font-bold shadow-sm">${roi.toFixed(2)}%</span>
-                        <svg id="chevron-${t.tier}" class="w-4 h-4 text-slate-500 transition-transform duration-200 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                    </div>
-                `;
+                elRoi.innerHTML = `<div class="flex items-center justify-end gap-3"><span class="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-2.5 py-1 rounded text-sm font-bold shadow-sm">${roi.toFixed(2)}%</span><svg id="chevron-${t.tier}" class="w-4 h-4 text-slate-500 transition-transform duration-200 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></div>`;
             });
         }
 
         function toggleTierDetails(tierId) {
-            const detailsRow = document.getElementById('details-' + tierId);
-            if (!detailsRow) return;
-            const isHidden = detailsRow.classList.contains('hidden');
-            const chevron = document.getElementById('chevron-' + tierId);
-            
+            const detailsRow = document.getElementById('details-' + tierId); if (!detailsRow) return;
+            const isHidden = detailsRow.classList.contains('hidden'); const chevron = document.getElementById('chevron-' + tierId);
             if (isHidden) {
-                detailsRow.classList.remove('hidden');
-                if (chevron) chevron.style.transform = 'rotate(180deg)';
-                
+                detailsRow.classList.remove('hidden'); if (chevron) chevron.style.transform = 'rotate(180deg)';
                 if (!tierChartInstances[tierId]) {
-                    const canvas = document.getElementById('chart-' + tierId);
-                    if (!canvas) return;
-                    const ctx = canvas.getContext('2d');
+                    const canvas = document.getElementById('chart-' + tierId); if (!canvas) return; const ctx = canvas.getContext('2d');
                     const cData = window.tierChartData[tierId] || { labels: [], data: [] };
-                    tierChartInstances[tierId] = new Chart(ctx, {
-                        type: 'line',
-                        data: {
-                            labels: cData.labels,
-                            datasets: [{
-                                label: 'Daily Yield (USD)',
-                                data: cData.data,
-                                borderColor: '#3b82f6',
-                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                                borderWidth: 2,
-                                fill: true,
-                                tension: 0.4,
-                                pointRadius: 3,
-                                pointBackgroundColor: '#3b82f6'
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => formatCurrency(ctx.raw) } } },
-                            scales: {
-                                x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
-                                y: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: (v) => '$' + v } }
-                            }
-                        }
-                    });
+                    tierChartInstances[tierId] = new Chart(ctx, { type: 'line', data: { labels: cData.labels, datasets: [{ label: 'Daily Yield (USD)', data: cData.data, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', borderWidth: 2, fill: true, tension: 0.4, pointRadius: 3, pointBackgroundColor: '#3b82f6' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => formatCurrency(ctx.raw) } } }, scales: { x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: (v) => '$' + v } } } } });
                 }
-            } else {
-                detailsRow.classList.add('hidden');
-                if (chevron) chevron.style.transform = 'rotate(0deg)';
-            }
+            } else { detailsRow.classList.add('hidden'); if (chevron) chevron.style.transform = 'rotate(0deg)'; }
         }
 
         function renderHistoricalTab(snapshots, tiers, market) {
@@ -1031,444 +653,235 @@
             if(cardsCont) {
                 cardsCont.innerHTML = '';
                 tiers.forEach(t => {
-                    const floorCost = market.nftFloorEth * market.ethPriceUsd;
-                    const actCost = t.reqTokens * market.tokenPriceUsd;
-                    const totalCost = floorCost + actCost;
-                    
-                    let paybackText = "N/A";
-                    if(t.trackedAnnualYieldUsd > 0) {
-                        const years = totalCost / t.trackedAnnualYieldUsd;
-                        paybackText = years.toFixed(1) + " Years";
-                    }
-
-                    cardsCont.innerHTML += `
-                        <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 shadow-inner">
-                            <p class="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">${t.tier} Payback Horizon</p>
-                            <p class="text-xl md:text-2xl font-extrabold text-blue-400">${paybackText}</p>
-                        </div>
-                    `;
+                    const floorCost = market.nftFloorEth * market.ethPriceUsd; const actCost = t.reqTokens * market.tokenPriceUsd; const totalCost = floorCost + actCost;
+                    let paybackText = "N/A"; if(t.trackedAnnualYieldUsd > 0) { const years = totalCost / t.trackedAnnualYieldUsd; paybackText = years.toFixed(1) + " Years"; }
+                    cardsCont.innerHTML += `<div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 shadow-inner"><p class="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">${t.tier} Payback Horizon</p><p class="text-xl md:text-2xl font-extrabold text-blue-400">${paybackText}</p></div>`;
                 });
             }
-
-            const canvas = document.getElementById('historicalRoiChart');
-            if(!canvas) return;
-            const ctx = canvas.getContext('2d');
-            if(historicalRoiChartInstance) historicalRoiChartInstance.destroy();
-
-            if(!snapshots || snapshots.length === 0) return;
-
-            const labels = snapshots.map(s => s.date);
-            const datasets = [];
-            const colors = ['#60a5fa', '#34d399', '#f472b6', '#fbbf24', '#a78bfa'];
-
-            tiers.forEach((t, index) => {
-                datasets.push({
-                    label: t.tier + ' ROI %',
-                    data: snapshots.map(s => {
-                        const tierSnap = s.tiers.find(st => st.tier === t.tier);
-                        return tierSnap ? tierSnap.roi : 0;
-                    }),
-                    borderColor: colors[index % colors.length],
-                    borderWidth: 2,
-                    tension: 0.3,
-                    pointRadius: 2
-                });
-            });
-
-            historicalRoiChartInstance = new Chart(ctx, {
-                type: 'line',
-                data: { labels, datasets },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: { mode: 'index', intersect: false },
-                    plugins: { legend: { display: true, labels: { color: '#cbd5e1' } } },
-                    scales: {
-                        x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
-                        y: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: (v) => v + '%' } }
-                    }
-                }
-            });
+            const canvas = document.getElementById('historicalRoiChart'); if(!canvas) return; const ctx = canvas.getContext('2d');
+            if(historicalRoiChartInstance) historicalRoiChartInstance.destroy(); if(!snapshots || snapshots.length === 0) return;
+            const labels = snapshots.map(s => s.date); const datasets = []; const colors = ['#60a5fa', '#34d399', '#f472b6', '#fbbf24', '#a78bfa'];
+            tiers.forEach((t, index) => { datasets.push({ label: t.tier + ' ROI %', data: snapshots.map(s => { const tierSnap = s.tiers.find(st => st.tier === t.tier); return tierSnap ? tierSnap.roi : 0; }), borderColor: colors[index % colors.length], borderWidth: 2, tension: 0.3, pointRadius: 2 }); });
+            historicalRoiChartInstance = new Chart(ctx, { type: 'line', data: { labels, datasets }, options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: true, labels: { color: '#cbd5e1' } } }, scales: { x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: (v) => v + '%' } } } });
         }
 
         function renderFlywheelChart(snapshots) {
-            const canvas = document.getElementById('flywheelChart');
-            if(!canvas) return;
-            const ctx = canvas.getContext('2d');
-            if(flywheelChartInstance) flywheelChartInstance.destroy();
-
-            if(!snapshots || snapshots.length === 0) return;
-
-            const labels = [];
-            const prices = [];
-            const dailyBurn = [];
-
-            for (let i = 0; i < snapshots.length; i++) {
-                labels.push(snapshots[i].date);
-                prices.push(snapshots[i].tokenPriceUsd);
-                if (i === 0) {
-                    dailyBurn.push(0);
-                } else {
-                    dailyBurn.push(Math.max(0, snapshots[i].totalBurn - snapshots[i-1].totalBurn));
-                }
-            }
-
-            flywheelChartInstance = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [
-                        {
-                            type: 'line',
-                            label: 'Token Price ($)',
-                            data: prices,
-                            borderColor: '#3b82f6',
-                            backgroundColor: '#3b82f6',
-                            borderWidth: 2,
-                            tension: 0.3,
-                            pointRadius: 3,
-                            yAxisID: 'y1'
-                        },
-                        {
-                            type: 'bar',
-                            label: 'Daily Burn Velocity',
-                            data: dailyBurn,
-                            backgroundColor: 'rgba(249, 115, 22, 0.8)',
-                            borderRadius: 4,
-                            yAxisID: 'y'
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: { mode: 'index', intersect: false },
-                    plugins: { legend: { display: true, labels: { color: '#cbd5e1' } } },
-                    scales: {
-                        x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
-                        y: { 
-                            type: 'linear', display: true, position: 'left',
-                            grid: { color: '#334155', borderDash: [4, 4] },
-                            ticks: { color: '#94a3b8', callback: (v) => (v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v) }, 
-                            title: { display: true, text: 'Tokens Burned', color: '#94a3b8' }
-                        },
-                        y1: {
-                            type: 'linear', display: true, position: 'right',
-                            grid: { drawOnChartArea: false },
-                            ticks: { color: '#3b82f6', callback: v => '$' + v }, 
-                            title: { display: false }
-                        }
-                    }
-                }
-            });
-        }
-
-        function renderActivationCharts({ historyLabels, historyValues, dailyActs, dailyDeacts, breakdownObj, breakdownArr, tiers }) {
-            const canvasLine = document.getElementById('activationChart');
-            if (!canvasLine) return;
-            const ctxLine = canvasLine.getContext('2d');
-            if (activationChartInstance) activationChartInstance.destroy();
-
-            activationChartInstance = new Chart(ctxLine, {
-                type: 'bar',
-                data: {
-                    labels: historyLabels,
-                    datasets: [
-                        {
-                            type: 'line',
-                            label: 'Net Active Units',
-                            data: historyValues,
-                            borderColor: '#3b82f6',
-                            backgroundColor: 'rgba(59, 130, 246, 0.05)',
-                            borderWidth: 3,
-                            fill: true,
-                            tension: 0.3,
-                            pointRadius: 0,
-                            yAxisID: 'y'
-                        },
-                        {
-                            type: 'bar',
-                            label: 'Daily Activations',
-                            data: dailyActs,
-                            backgroundColor: '#34d399',
-                            borderRadius: 4,
-                            yAxisID: 'y1'
-                        },
-                        {
-                            type: 'bar',
-                            label: 'Daily Deactivations',
-                            data: dailyDeacts,
-                            backgroundColor: '#f43f5e',
-                            borderRadius: 4,
-                            yAxisID: 'y1'
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: { mode: 'index', intersect: false },
-                    plugins: { legend: { display: true, position: 'top', labels: { color: '#94a3b8', boxWidth: 12 } } },
-                    scales: {
-                        x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8', maxTicksLimit: 14 } },
-                        y: { type: 'linear', display: true, position: 'left', grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
-                        y1: { type: 'linear', display: false, position: 'right', grid: { drawOnChartArea: false }, min: 0 }
-                    }
-                }
-            });
-
-            const legendList = document.getElementById('tier-legend-list');
-            if (legendList) {
-                legendList.innerHTML = `
-                    <div class="flex justify-between items-center bg-[#1e293b] p-3 rounded-lg border border-[#334155]">
-                        <div class="flex items-center gap-3"><div class="w-4 h-4 rounded-md bg-[#60a5fa]"></div><span class="text-sm font-bold text-slate-300">T0: ${tiers[0].name}</span></div>
-                        <span class="text-white font-bold tracking-wide">${formatNumber(breakdownObj.T0 || 0)}</span>
-                    </div>
-                    <div class="flex justify-between items-center bg-[#1e293b] p-3 rounded-lg border border-[#334155]">
-                        <div class="flex items-center gap-3"><div class="w-4 h-4 rounded-md bg-[#34d399]"></div><span class="text-sm font-bold text-slate-300">T1: ${tiers[1].name}</span></div>
-                        <span class="text-white font-bold tracking-wide">${formatNumber(breakdownObj.T1 || 0)}</span>
-                    </div>
-                    <div class="flex justify-between items-center bg-[#1e293b] p-3 rounded-lg border border-[#334155]">
-                        <div class="flex items-center gap-3"><div class="w-4 h-4 rounded-md bg-[#f472b6]"></div><span class="text-sm font-bold text-slate-300">T2: ${tiers[2].name}</span></div>
-                        <span class="text-white font-bold tracking-wide">${formatNumber(breakdownObj.T2 || 0)}</span>
-                    </div>
-                    <div class="flex justify-between items-center bg-[#1e293b] p-3 rounded-lg border border-[#334155]">
-                        <div class="flex items-center gap-3"><div class="w-4 h-4 rounded-md bg-[#fbbf24]"></div><span class="text-sm font-bold text-slate-300">T3: ${tiers[3].name}</span></div>
-                        <span class="text-white font-bold tracking-wide">${formatNumber(breakdownObj.T3 || 0)}</span>
-                    </div>
-                    <div class="flex justify-between items-center bg-[#1e293b] p-3 rounded-lg border border-[#334155]">
-                        <div class="flex items-center gap-3"><div class="w-4 h-4 rounded-md bg-[#a78bfa]"></div><span class="text-sm font-bold text-slate-300">T4: ${tiers[4].name}</span></div>
-                        <span class="text-white font-bold tracking-wide">${formatNumber(breakdownObj.T4 || 0)}</span>
-                    </div>
-                `;
-            }
-
-            const canvasPie = document.getElementById('tierPieChart');
-            if (!canvasPie) return;
-            const ctxPie = canvasPie.getContext('2d');
-            if (tierPieChartInstance) tierPieChartInstance.destroy();
-
-            tierPieChartInstance = new Chart(ctxPie, {
-                type: 'doughnut',
-                data: {
-                    labels: [tiers[0].name, tiers[1].name, tiers[2].name, tiers[3].name, tiers[4].name],
-                    datasets: [{
-                        data: breakdownArr,
-                        backgroundColor: ['#60a5fa', '#34d399', '#f472b6', '#fbbf24', '#a78bfa'],
-                        borderWidth: 0,
-                        hoverOffset: 4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    cutout: '65%',
-                    plugins: { legend: { display: false } }
-                }
-            });
-        }
-
-        function renderOwnershipChart({ labels, data }) {
-            const canvas = document.getElementById('ownershipChart');
-            if (!canvas) return;
-            const ctx = canvas.getContext('2d');
-            if (ownershipChartInstance) ownershipChartInstance.destroy();
-
-            ownershipChartInstance = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Active Holders',
-                        data: data,
-                        borderColor: '#a855f7',
-                        backgroundColor: 'rgba(168, 85, 247, 0.1)',
-                        borderWidth: 3,
-                        fill: true,
-                        stepped: true,
-                        pointRadius: 0
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
-                        y: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }
-                    }
-                }
-            });
-        }
-
-        function updateTierStats(timeframe) {
-            ['24h', '7d', '30d', 'allTime'].forEach(tf => {
-                const btn = document.getElementById(`btn-tier-${tf}`);
-                if (btn) {
-                    if (tf === timeframe) {
-                        btn.className = "flex-1 sm:flex-none px-4 py-1.5 text-xs font-bold rounded-md bg-[#334155] text-white transition shadow-sm";
-                    } else {
-                        btn.className = "flex-1 sm:flex-none px-4 py-1.5 text-xs font-bold rounded-md text-slate-400 hover:text-white transition";
-                    }
-                }
-            });
-
-            const stats = window.tierActivationStats;
-            if(!stats) return;
-
-            ['T0', 'T1', 'T2', 'T3', 'T4'].forEach(tier => {
-                if(!stats[tier]) return; 
-                const elAct = document.getElementById(`${tier.toLowerCase()}-act`);
-                const elDeact = document.getElementById(`${tier.toLowerCase()}-deact`);
-                const tierData = stats[tier][timeframe] ? stats[tier][timeframe] : { act: 0, deact: 0 };
-                if(elAct) elAct.innerText = formatNumber(tierData.act || 0);
-                if(elDeact) elDeact.innerText = formatNumber(tierData.deact || 0);
-            });
+            const canvas = document.getElementById('flywheelChart'); if(!canvas) return; const ctx = canvas.getContext('2d');
+            if(flywheelChartInstance) flywheelChartInstance.destroy(); if(!snapshots || snapshots.length === 0) return;
+            const labels = []; const prices = []; const dailyBurn = [];
+            for (let i = 0; i < snapshots.length; i++) { labels.push(snapshots[i].date); prices.push(snapshots[i].tokenPriceUsd); if (i === 0) { dailyBurn.push(0); } else { dailyBurn.push(Math.max(0, snapshots[i].totalBurn - snapshots[i-1].totalBurn)); } }
+            flywheelChartInstance = new Chart(ctx, { type: 'bar', data: { labels: labels, datasets: [ { type: 'line', label: 'Token Price ($)', data: prices, borderColor: '#3b82f6', backgroundColor: '#3b82f6', borderWidth: 2, tension: 0.3, pointRadius: 3, yAxisID: 'y1' }, { type: 'bar', label: 'Daily Burn Velocity', data: dailyBurn, backgroundColor: 'rgba(249, 115, 22, 0.8)', borderRadius: 4, yAxisID: 'y' } ] }, options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: true, labels: { color: '#cbd5e1' } } }, scales: { x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { type: 'linear', display: true, position: 'left', grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: (v) => (v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v) }, title: { display: true, text: 'Tokens Burned', color: '#94a3b8' } }, y1: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#3b82f6', callback: v => '$' + v }, title: { display: false } } } } });
         }
 
         function renderRevenueChart(revData, projectKey = 'stonk') {
-            const canvas = document.getElementById('revenueChart');
-            if (!canvas) return;
-            const ctx = canvas.getContext('2d');
-            if (revenueChartInstance) revenueChartInstance.destroy();
+            const canvas = document.getElementById('revenueChart'); if (!canvas) return; const ctx = canvas.getContext('2d');
+            if (revenueChartInstance) revenueChartInstance.destroy(); const pCfg = PROJECT_REVENUE_CONFIG[projectKey] || PROJECT_REVENUE_CONFIG.stonk;
+            revenueChartInstance = new Chart(ctx, { type: 'bar', data: { labels: revData.dates || ["Day 1", "Day 2", "Day 3", "Day 4", "Day 5", "Day 6", "Day 7"], datasets: [ { label: pCfg.stream1.name, data: revData[pCfg.stream1.dailyKey] || [0,0,0,0,0,0,0], backgroundColor: pCfg.stream1.color, borderRadius: 4 }, { label: pCfg.stream2.name, data: revData[pCfg.stream2.dailyKey] || [0,0,0,0,0,0,0], backgroundColor: pCfg.stream2.color, borderRadius: 4 }, { label: pCfg.stream3.name, data: revData[pCfg.stream3.dailyKey] || [0,0,0,0,0,0,0], backgroundColor: pCfg.stream3.color, borderRadius: 4 } ] }, options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true, grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { stacked: true, grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: v => '$' + v } } }, plugins: { legend: { display: true, position: 'top', labels: { color: '#cbd5e1' } } } } });
+        }
 
-            const pCfg = PROJECT_REVENUE_CONFIG[projectKey] || PROJECT_REVENUE_CONFIG.stonk;
+        function processMetricsData(data, projectKey) {
+            const act = data.activation || {}; const own = data.ownership || {}; const conf = data.config;
+            const activeCount = act.activeCount || 0; const totalSupply = act.totalSupply || 4444;
+            let pctActivated = act.percentActivated || 0; if (pctActivated === 0 && totalSupply > 0) pctActivated = (activeCount / totalSupply) * 100;
+            const breakdown = act.breakdown || { T0: 0, T1: 0, T2: 0, T3: 0, T4: 0 };
+            const history = act.history || { labels: [], cumulative: [], cumulativeGross: [], dailyActivations: [], dailyDeactivations: [] };
+            const dualBurn = act.dualBurn || {}; const totalBurn = dualBurn.totalBurnTokens || 0; const equivNfts = dualBurn.equivalentBrokersBurnt || 0;
+            
+            const setTxt = (id, val) => { const el = document.getElementById(id); if (el) el.innerText = val; };
+            setTxt('stat-total-burn', formatNumber(totalBurn) + ` ${conf.ticker}`); setTxt('stat-equiv-nfts', formatNumber(equivNfts, 2) + " Units");
+            setTxt('stat-pct-activated', pctActivated.toFixed(2) + "%"); setTxt('stat-active-count', formatNumber(activeCount) + " Units");
+            setTxt('stat-max-supply', formatNumber(own.currentMaxSupply || 0, 2) + ' Units'); setTxt('stat-circ-supply', formatNumber(own.circulatingNftSupply || 0) + ' Units');
+            setTxt('stat-amm-vault', formatNumber(own.ammVaultNfts || 0) + ' Units'); setTxt('stat-burnt-nfts', formatNumber(own.burntNfts || 0, 2) + ' Units');
+            setTxt('stat-nft-holders', formatNumber(own.nftHolders || 0) + ' Wallets'); setTxt('stat-stonk-holders', formatNumber(own.stonkHolders || 0) + ' Wallets');
+            setTxt('stat-own-ratio', (own.ownershipRatio || 0).toFixed(2) + '%');
+            if (data.tiers) { data.tiers.forEach(t => setTxt(`${t.tier.toLowerCase()}-name`, `${t.tier}: ${t.name}`)); }
+            if(act.tierStats) window.tierActivationStats = act.tierStats;
 
-            revenueChartInstance = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: revData.dates || ["Day 1", "Day 2", "Day 3", "Day 4", "Day 5", "Day 6", "Day 7"],
-                    datasets: [
-                        {
-                            label: pCfg.stream1.name,
-                            data: revData[pCfg.stream1.dailyKey] || [0,0,0,0,0,0,0],
-                            backgroundColor: pCfg.stream1.color,
-                            borderRadius: 4
-                        },
-                        {
-                            label: pCfg.stream2.name,
-                            data: revData[pCfg.stream2.dailyKey] || [0,0,0,0,0,0,0],
-                            backgroundColor: pCfg.stream2.color,
-                            borderRadius: 4
-                        },
-                        {
-                            label: pCfg.stream3.name,
-                            data: revData[pCfg.stream3.dailyKey] || [0,0,0,0,0,0,0],
-                            backgroundColor: pCfg.stream3.color,
-                            borderRadius: 4
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        x: { stacked: true, grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
-                        y: { stacked: true, grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: v => '$' + v } }
-                    },
-                    plugins: {
-                        legend: { display: true, position: 'top', labels: { color: '#cbd5e1' } }
+            const grossArr = history.cumulativeGross && history.cumulativeGross.length > 0 ? history.cumulativeGross : history.cumulative;
+            const maxGross = grossArr.length > 0 ? (grossArr[grossArr.length - 1] || 1) : 1;
+            window.fullBurnLabels = history.labels || []; window.fullBurnData = grossArr.map(v => (v / maxGross) * totalBurn);
+            window.activationChartData = { historyLabels: history.labels || [], historyValues: history.cumulative || [], dailyActs: history.dailyActivations || [], dailyDeacts: history.dailyDeactivations || [], breakdownObj: breakdown, breakdownArr: [breakdown.T0 || 0, breakdown.T1 || 0, breakdown.T2 || 0, breakdown.T3 || 0, breakdown.T4 || 0], tiers: data.tiers || [] };
+            if (own.historicalGrowth && own.historicalGrowth.data && own.historicalGrowth.labels) { const cleanHistData = own.historicalGrowth.data.map((v, i, arr) => v === 0 && i > 0 ? arr[i-1] : v); window.ownershipChartData = { labels: own.historicalGrowth.labels, data: cleanHistData }; }
+
+            const rev = data.revenue || {}; const pCfg = PROJECT_REVENUE_CONFIG[projectKey] || PROJECT_REVENUE_CONFIG.stonk;
+            setTxt('rev-label-1', pCfg.stream1.label); setTxt('rev-stat-1', formatCurrency(rev[pCfg.stream1.key] || 0));
+            setTxt('rev-label-2', pCfg.stream2.label); setTxt('rev-stat-2', formatCurrency(rev[pCfg.stream2.key] || 0));
+            setTxt('rev-label-3', pCfg.stream3.label); setTxt('rev-stat-3', formatCurrency(rev[pCfg.stream3.key] || 0));
+            window.revenueData = { dates: (data.tiers && data.tiers[0]?.dailyDates) ? data.tiers[0].dailyDates : [], dailyAmm: rev.dailyAmm || [], dailySecurityBox: rev.dailySecurityBox || [], dailyLaunchpad: rev.dailyLaunchpad || [], dailyDex: rev.dailyDex || [] };
+
+            const lpSec = document.getElementById('locked-lp-section');
+            if (projectKey === 'stonk' && data.lockedLp) {
+                lpSec.classList.remove('hidden'); setTxt('stat-total-stonk-lp', `${formatNumber(data.lockedLp.totalStonkLocked)} STONK`); setTxt('stat-total-stonk-lp-usd', `${formatCurrency(data.lockedLp.totalLpUsd)} Total Pool Reserves`);
+                const lpTbody = document.getElementById('lp-pools-body'); lpTbody.innerHTML = '';
+                data.lockedLp.pools.forEach(p => { const tr = document.createElement('tr'); tr.className = 'border-b border-[#334155]/40 hover:bg-[#334155]/20'; tr.innerHTML = `<td class="py-2.5 pl-2 font-bold text-white">${p.pairName}</td><td class="py-2.5 text-slate-400">${p.dex}</td><td class="py-2.5 text-right font-bold text-orange-400">${formatNumber(p.stonkAmount)}</td><td class="py-2.5 text-right pr-2 text-slate-200">${formatCurrency(p.liquidityUsd)}</td>`; lpTbody.appendChild(tr); });
+            } else { lpSec.classList.add('hidden'); }
+            window.currentSnapshots = data.dailySnapshots || [];
+        }
+
+        async function fetchAndSetNftImage(nftCa, tokenId, imgId) {
+            try {
+                const imgRes = await fetchWithRetry(`https://robinhoodchain.blockscout.com/api/v2/tokens/${nftCa}/instances/${tokenId}`, {timeout: 4000});
+                if (imgRes.ok) {
+                    const imgData = await imgRes.json(); let meta = imgData?.metadata; if (typeof meta === 'string') { try { meta = JSON.parse(meta); } catch(e) {} }
+                    let imgSrc = null;
+                    if (meta?.image) imgSrc = resolveIpfsUrl(meta.image); else if (meta?.image_url) imgSrc = resolveIpfsUrl(meta.image_url); else if (imgData?.image_url) imgSrc = resolveIpfsUrl(imgData.image_url); else if (imgData?.animation_url) imgSrc = resolveIpfsUrl(imgData.animation_url);
+                    if (imgSrc) { const imgEl = document.getElementById(imgId); if (imgEl) { const pinata = imgSrc.replace('cloudflare-ipfs.com', 'gateway.pinata.cloud'); const dweb = imgSrc.replace('cloudflare-ipfs.com', 'dweb.link'); imgEl.onerror = function() { if (this.src === imgSrc) this.src = pinata; else if (this.src === pinata) this.src = dweb; else this.onerror = null; }; imgEl.src = imgSrc; } }
+                }
+            } catch(e) {}
+        }
+
+        async function scanPortfolioWallets() {
+            const input = document.getElementById('portfolio-wallet-input').value.trim(); if (!input) return;
+            const wallets = input.split(',').map(w => w.trim()).filter(w => ethers.isAddress(w)); if (wallets.length === 0) { alert('Please enter at least one valid EVM wallet address.'); return; }
+            const resDiv = document.getElementById('portfolio-results'); resDiv.classList.remove('hidden');
+            const itemsCont = document.getElementById('portfolio-items-container'); itemsCont.innerHTML = '<p class="text-xs text-slate-400 animate-pulse col-span-2">Scanning blockchain for exact owned Token IDs...</p>';
+            try {
+                const provider = new ethers.JsonRpcProvider("https://rpc.mainnet.chain.robinhood.com"); const erc721Abi = ["function balanceOf(address) view returns (uint256)", "function tokenOfOwnerByIndex(address, uint256) view returns (uint256)"];
+                let totalFloorUsd = 0; let totalYieldUsd = 0; let totalUnits = 0; let portfolioHasErrors = false; itemsCont.innerHTML = '';
+                for (const [pKey, pData] of Object.entries(masterData.projects)) {
+                    if (!pData.config?.nftCa) continue; const nftContract = new ethers.Contract(pData.config.nftCa, erc721Abi, provider); const floorUsd = (pData.market.nftFloorEth || 0) * (pData.market.ethPriceUsd || 0);
+                    for (const wallet of wallets) {
+                        try {
+                            const bal = Number(await nftContract.balanceOf(wallet));
+                            if (bal > 0) {
+                                totalUnits += bal; totalFloorUsd += (bal * floorUsd); let exactYieldUsd = 0; let ownedTokenIds = new Set(); let fetchError = false;
+                                try { for (let i = 0; i < bal; i++) { const tId = await nftContract.tokenOfOwnerByIndex(wallet, i); ownedTokenIds.add(Number(tId)); } } catch (rpcErr) {
+                                    try { const instUrl = `https://robinhoodchain.blockscout.com/api/v2/tokens/${pData.config.nftCa}/instances?holder_address_hash=${wallet}`; const resInst = await fetch(instUrl); const jsonInst = await resInst.json(); if (jsonInst.items && Array.isArray(jsonInst.items) && jsonInst.items.length > 0) { jsonInst.items.forEach(it => ownedTokenIds.add(Number(it.id))); } } catch (e) {}
+                                    if (ownedTokenIds.size !== bal) { try { let page = 1; while(true) { const url = `https://robinhoodchain.blockscout.com/api?module=account&action=tokennfttx&contractaddress=${pData.config.nftCa}&address=${wallet}&page=${page}&offset=1000&sort=asc`; const res = await fetch(url); const json = await res.json(); if (json.status === "1" && Array.isArray(json.result)) { json.result.forEach(tx => { if (tx.to && tx.to.toLowerCase() === wallet.toLowerCase()) ownedTokenIds.add(Number(tx.tokenID)); if (tx.from && tx.from.toLowerCase() === wallet.toLowerCase()) ownedTokenIds.delete(Number(tx.tokenID)); }); if (json.result.length < 1000) break; page++; } else { break; } } } catch (apiErr) { fetchError = true; } }
+                                }
+                                let yieldHtml = "";
+                                if (ownedTokenIds.size !== bal) { portfolioHasErrors = true; yieldHtml = `<span class="text-rose-400 border border-rose-500/50 bg-rose-900/20 px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider">ID Sync Error - Yield 0.00</span>`; } else { const activeMap = pData.activation?.activeTokenTiers || {}; ownedTokenIds.forEach(tokenId => { const tokenData = activeMap[tokenId]; const tierId = tokenData ? tokenData.t : 'T0'; const tierObj = pData.tiers.find(t => t.tier === tierId) || pData.tiers[0]; exactYieldUsd += tierObj.trackedAnnualYieldUsd; }); totalYieldUsd += exactYieldUsd; yieldHtml = `<span class="text-emerald-400">+ ${formatCurrency(exactYieldUsd)} /yr</span>`; }
+                                const imgId = `port-img-${pKey}-${wallet}`; const card = document.createElement('div'); card.className = 'bg-[#0f172a] border border-[#334155] rounded-xl p-4 flex items-center justify-between shadow-inner';
+                                card.innerHTML = `<div class="flex items-center gap-3"><img id="${imgId}" src="${pData.config.logo || 'Stonkbroker.png'}" class="w-10 h-10 rounded-lg object-cover border border-[#334155]"><div><h4 class="text-sm font-bold text-white">${pData.config.ticker} Units (${bal} Owned)</h4><p class="text-[10px] text-slate-400">${wallet.slice(0,6)}...${wallet.slice(-4)}</p></div></div><div class="text-right"><p class="text-sm font-bold">${yieldHtml}</p><p class="text-[10px] text-slate-400 mt-1">Floor: ${formatCurrency(bal * floorUsd)}</p></div>`; itemsCont.appendChild(card);
+                                if (ownedTokenIds.size > 0 && !fetchError) { const firstTokenId = Array.from(ownedTokenIds)[0]; fetchAndSetNftImage(pData.config.nftCa, firstTokenId, imgId); }
+                            }
+                        } catch (e) {}
                     }
                 }
+                document.getElementById('port-total-floor').innerText = formatCurrency(totalFloorUsd);
+                if (portfolioHasErrors) { document.getElementById('port-total-yield').innerText = 'ERROR'; document.getElementById('port-total-roi').innerText = 'ERROR'; document.getElementById('port-total-roi').className = 'text-xl md:text-2xl font-extrabold text-rose-400'; document.getElementById('port-total-yield').className = 'text-xl md:text-2xl font-extrabold text-rose-400'; } else { document.getElementById('port-total-yield').innerText = `${formatCurrency(totalYieldUsd)} /yr`; const combinedRoi = totalFloorUsd > 0 ? (totalYieldUsd / totalFloorUsd) * 100 : 0; document.getElementById('port-total-roi').innerText = `${combinedRoi.toFixed(2)}%`; document.getElementById('port-total-roi').className = 'text-xl md:text-2xl font-extrabold text-blue-400'; document.getElementById('port-total-yield').className = 'text-xl md:text-2xl font-extrabold text-emerald-400'; }
+                document.getElementById('port-total-units').innerText = `${totalUnits} Units`;
+                if (totalUnits === 0) { itemsCont.innerHTML = '<p class="text-xs text-slate-400 col-span-2">No ecosystem NFTs found in the provided wallet(s).</p>'; }
+            } catch (err) { console.error(err); itemsCont.innerHTML = '<p class="text-xs text-rose-400 col-span-2">Error scanning wallets. Please retry.</p>'; }
+        }
+
+        async function shareMemeToX(name, ca, index) { const tweetText = `Tracking $${name} on Robinhood Chain via @savicrypto\nhttps://savicrypto.xyz/`; await executeShare(`meme-details-${index}`, tweetText, `${name}-stats.png`, `share-btn-${index}`); }
+        async function shareUnitToX() { const inputVal = document.getElementById('lookup-id-input').value.trim(); const tweetText = `My ${currentProjectKey.toUpperCase()} Unit #${inputVal} ROI Analysis via @savicrypto\nhttps://savicrypto.xyz/`; await executeShare('lookup-results', tweetText, `unit-${inputVal}-roi.png`, 'unit-share-btn-text'); }
+
+        function renderMemesTable(customTokenList = null) {
+            const tbody = document.getElementById('memes-body'); tbody.innerHTML = ''; const memes = customTokenList || masterData.memes || [];
+            memes.forEach((meme, index) => {
+                const roiColor = meme.priceChange24h >= 0 ? 'text-emerald-400' : 'text-rose-400'; const roiSign = meme.priceChange24h >= 0 ? '+' : '';
+                const copyBtn = meme.ca ? `<button onclick="event.stopPropagation(); navigator.clipboard.writeText('${meme.ca}'); alert('Copied CA for ${meme.name}:\\n${meme.ca}');" class="text-[10px] bg-[#334155] hover:bg-slate-600 text-slate-200 px-2 py-0.5 rounded border border-slate-600 ml-2 transition" title="Copy Contract Address">Copy CA</button>` : `<span class="text-[10px] text-slate-500 ml-2">No CA</span>`;
+                const totalSupply = meme.totalSupply || 1000000000; const burntPct = meme.burnt > 0 ? ((meme.burnt / totalSupply) * 100).toFixed(2) + '%' : '0.00%'; const burntFormatted = meme.burnt > 0 ? `<span class="text-[12px] text-orange-400 font-bold">${burntPct}</span>` : '<span class="text-[12px] text-slate-500 font-normal">0.00%</span>';
+                const tr = document.createElement('tr'); tr.className = 'cursor-pointer border-b border-[#334155]/50 hover:bg-[#334155]/20 transition-colors group'; tr.onclick = () => toggleMemeDetails(index);
+                tr.innerHTML = `<td class="py-4 pl-2 font-bold text-white flex items-center justify-between pr-4"><div class="flex items-center gap-2"><div class="w-2.5 h-2.5 rounded-full bg-emerald-400"></div>${meme.name}</div>${copyBtn}</td><td class="py-4 text-slate-200">${formatCurrency(meme.volume24h)}</td><td class="py-4 text-slate-200">${formatCurrency(meme.liquidity)}</td><td class="py-4 font-bold ${roiColor}">${roiSign}${meme.priceChange24h.toFixed(2)}%</td><td class="py-4 text-emerald-400 font-semibold">${meme.roi || '0.00%'}</td><td class="py-4 text-slate-200">${formatCurrency(meme.fdv)}</td><td class="py-4 text-slate-200">${formatCurrency(meme.marketCap)}</td><td class="py-4 text-right pr-4 text-orange-400 font-semibold"><div class="flex items-center justify-end gap-2">${burntFormatted}<svg id="meme-chevron-${index}" class="w-4 h-4 text-slate-500 transition-transform duration-200 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></div></td>`;
+                tbody.appendChild(tr);
+                const detailsTr = document.createElement('tr'); detailsTr.id = `meme-details-${index}`; detailsTr.className = 'hidden bg-[#0f172a]/60 border-b border-[#334155]/50';
+                const chartContent = meme.ca ? `<div id="iframe-container-${index}" data-src="https://dexscreener.com/robinhood/${meme.ca}?embed=1&theme=dark&trades=0&info=0" class="relative w-full h-[450px] rounded-xl overflow-hidden border border-[#334155] shadow-inner"></div>` : `<div class="p-8 text-center text-slate-400 italic bg-[#1e293b]/40 rounded-xl border border-[#334155]">Interactive chart unavailable (Contract Address pending launch).</div>`;
+                detailsTr.innerHTML = `<td colspan="8" class="p-4 md:p-6"><div class="flex justify-between items-center mb-3"><h4 class="text-sm font-bold text-white flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-emerald-400"></span>${meme.name} Live Interactive Chart</h4><button onclick="shareMemeToX('${meme.name}', '${meme.ca}', ${index})" id="share-btn-${index}" class="bg-[#1da1f2] hover:bg-[#1a91da] text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition shadow-sm" data-html2canvas-ignore="true"><svg class="w-3 h-3 fill-current text-white" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 24.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg> Share</button></div>${chartContent}</td>`;
+                tbody.appendChild(detailsTr);
             });
         }
 
-        // ==============================================
-        // SCREENSHOT SHARE
-        // ==============================================
-        const makeImagePromise = async (element) => {
-            const canvas = await html2canvas(element, { 
-                backgroundColor: '#0f172a', 
-                scale: window.devicePixelRatio || 2, 
-                useCORS: true,
-                allowTaint: false,
-                ignoreElements: (node) => node.tagName && node.tagName.toLowerCase() === 'iframe' || node.hasAttribute('data-html2canvas-ignore')
-            });
-            return new Promise((resolve, reject) => {
-                canvas.toBlob(b => b ? resolve(b) : reject(new Error("Canvas export failed")), 'image/png');
-            });
-        };
+        function toggleMemeDetails(index) {
+            const detailsRow = document.getElementById('meme-details-' + index); if (!detailsRow) return;
+            const isHidden = detailsRow.classList.contains('hidden'); const chevron = document.getElementById('meme-chevron-' + index);
+            if (isHidden) { detailsRow.classList.remove('hidden'); if (chevron) chevron.style.transform = 'rotate(180deg)'; const iframeContainer = document.getElementById('iframe-container-' + index); if (iframeContainer && !iframeContainer.querySelector('iframe')) { iframeContainer.innerHTML = `<iframe src="${iframeContainer.getAttribute('data-src')}" class="w-full h-full border-0"></iframe>`; } } else { detailsRow.classList.add('hidden'); if (chevron) chevron.style.transform = 'rotate(0deg)'; }
+        }
 
-        async function executeShare(elementId, tweetText, fileName, btnId) {
-            const elementToCapture = document.getElementById(elementId);
-            const shareBtn = document.getElementById(btnId);
-            const ogText = shareBtn.innerHTML; 
-            shareBtn.innerText = "Capturing...";
-            
-            const originalBg = elementToCapture.style.backgroundColor;
-            elementToCapture.style.backgroundColor = '#0f172a';
+        let memeSortDirections = {};
+        function sortMemesTable(colIndex, isNumeric) {
+            const tbody = document.getElementById('memes-body'); const rows = Array.from(tbody.querySelectorAll('tr')).filter(row => !row.id.startsWith('meme-details-'));
+            memeSortDirections[colIndex] = !memeSortDirections[colIndex]; const asc = memeSortDirections[colIndex];
+            rows.sort((a, b) => { let cellA = a.cells[colIndex].innerText.trim(); let cellB = b.cells[colIndex].innerText.trim(); if (isNumeric) { let valA = parseFloat(cellA.replace(/[^0-9.-]+/g,"")) || 0; let valB = parseFloat(cellB.replace(/[^0-9.-]+/g,"")) || 0; return asc ? valA - valB : valB - valA; } else { return asc ? cellA.localeCompare(cellB) : cellB.localeCompare(cellA); } });
+            rows.forEach(row => { tbody.appendChild(row); const detailId = row.getAttribute('onclick')?.match(/\d+/)?.[0]; if (detailId !== undefined) { const detailRow = document.getElementById('meme-details-' + detailId); if (detailRow) tbody.appendChild(detailRow); } });
+        }
 
+        async function lookupUnitRoi() {
+            const inputVal = document.getElementById('lookup-id-input').value.trim(); const resultsDiv = document.getElementById('lookup-results'); if (!inputVal) return;
+            resultsDiv.classList.remove('hidden'); resultsDiv.innerHTML = '<p class="text-xs text-slate-400 animate-pulse font-semibold">Scanning blockchain ledger for Token #' + inputVal + '...</p>';
             try {
-                const canvas = await html2canvas(elementToCapture, { 
-                    backgroundColor: '#0f172a', 
-                    scale: window.devicePixelRatio || 2, 
-                    useCORS: true,
-                    allowTaint: false,
-                    ignoreElements: (node) => node.tagName && node.tagName.toLowerCase() === 'iframe' || node.hasAttribute('data-html2canvas-ignore')
-                });
-                
-                const blob = await new Promise((resolve, reject) => {
-                    canvas.toBlob(b => b ? resolve(b) : reject(new Error("Canvas failed")), 'image/png');
-                });
-
-                elementToCapture.style.backgroundColor = originalBg;
-
-                const file = new File([blob], fileName, { type: "image/png" });
-                if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                    try {
-                        await navigator.share({ text: tweetText, files: [file] });
-                        shareBtn.innerHTML = ogText;
-                        return;
-                    } catch(e) {}
+                const proj = masterData.projects[currentProjectKey]; const conf = proj.config; const m = proj.market; const activeMap = proj.activation.activeTokenTiers || {};
+                const tokenData = activeMap[inputVal]; const isActivated = tokenData !== undefined; const tierId = isActivated ? tokenData.t : 'T0'; const tierData = proj.tiers.find(t => t.tier === tierId) || proj.tiers[0];
+                let seatedSeats = 0; const pitTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error("RPC Timeout")), 4000));
+                if (isActivated && currentProjectKey === 'stonk') { try { const provider = new ethers.JsonRpcProvider("https://rpc.mainnet.chain.robinhood.com"); const pitMineContract = new ethers.Contract("0x2d0da469115232aD00159757f9d25f81D498206D", ["function activeSlotCount(uint256 tokenId) view returns (uint256)"], provider); const count = await Promise.race([pitMineContract.activeSlotCount(inputVal), pitTimeout]); seatedSeats = Number(count); } catch (e) {} }
+                let imageSources = [];
+                try { const provider = new ethers.JsonRpcProvider("https://rpc.mainnet.chain.robinhood.com"); const nftContract = new ethers.Contract(conf.nftCa, ["function tokenURI(uint256) view returns (string)"], provider); const uriTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error("RPC Timeout")), 5000)); let tokenUri = await Promise.race([nftContract.tokenURI(inputVal), uriTimeout]); if (tokenUri) { if (tokenUri.startsWith("data:application/json;base64,")) { const jsonStr = atob(tokenUri.split(",")[1]); const meta = JSON.parse(jsonStr); if (meta.image) imageSources.push(resolveIpfsUrl(meta.image)); } else { const httpUri = resolveIpfsUrl(tokenUri); const metaRes = await fetchWithRetry(httpUri, {timeout: 4000}); if (metaRes.ok) { const text = await metaRes.text(); try { const meta = JSON.parse(text); if (meta.image) imageSources.push(resolveIpfsUrl(meta.image)); } catch (parseErr) { const match = text.match(/"image"\s*:\s*"([^"]+)"/); if (match && match[1]) imageSources.push(resolveIpfsUrl(match[1])); } } } } } catch (e) {}
+                try { const imgRes = await fetchWithRetry(`https://robinhoodchain.blockscout.com/api/v2/tokens/${conf.nftCa}/instances/${inputVal}`, {timeout: 4000}); if (imgRes.ok) { const imgData = await imgRes.json(); let meta = imgData?.metadata; if (typeof meta === 'string') { try { meta = JSON.parse(meta); } catch(e) {} } if (meta?.image) imageSources.push(resolveIpfsUrl(meta.image)); if (meta?.image_url) imageSources.push(resolveIpfsUrl(meta.image_url)); if (imgData?.image_url) imageSources.push(resolveIpfsUrl(imgData.image_url)); if (imgData?.animation_url) imageSources.push(resolveIpfsUrl(imgData.animation_url)); } } catch(e) {}
+                let nftImageHtml = `<div class="w-12 h-12 md:w-16 md:h-16 rounded-xl bg-[#1e293b] border border-[#334155] flex items-center justify-center flex-shrink-0"><svg class="w-6 h-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg></div>`;
+                let finalImageSrc = null;
+                if (imageSources.length > 0) { const uniqueSources = [...new Set(imageSources.filter(s => s && s.trim() !== ''))]; if (uniqueSources.length > 0) { const primary = uniqueSources[0]; try { const b64Res = await fetchWithRetry(primary, {timeout: 4000}); if (b64Res.ok) { const blob = await b64Res.blob(); finalImageSrc = await new Promise((r) => { const reader = new FileReader(); reader.onloadend = () => r(reader.result); reader.readAsDataURL(blob); }); } } catch(e) {} if (!finalImageSrc) { const pinata = primary.replace('cloudflare-ipfs.com', 'gateway.pinata.cloud'); const dweb = primary.replace('cloudflare-ipfs.com', 'dweb.link'); finalImageSrc = primary; nftImageHtml = `<img src="${finalImageSrc}" onerror="this.onerror=null; this.src='${pinata}'; this.onerror=function(){this.onerror=null; this.src='${dweb}';};" alt="Unit #${inputVal}" crossorigin="anonymous" class="w-12 h-12 md:w-16 md:h-16 rounded-xl border border-[#334155] object-cover bg-[#0f172a] flex-shrink-0 shadow-md">`; } else { nftImageHtml = `<img src="${finalImageSrc}" alt="Unit #${inputVal}" class="w-12 h-12 md:w-16 md:h-16 rounded-xl border border-[#334155] object-cover bg-[#0f172a] flex-shrink-0 shadow-md">`; } } }
+                let lastSaleEth = 0; let foundValidTx = false; let totalTransfers = 0; let purchaseTs = null; let txApiFailed = false;
+                try { const txsRes = await fetchWithRetry(`https://robinhoodchain.blockscout.com/api/v2/tokens/${conf.nftCa}/instances/${inputVal}/transfers`, {timeout: 6000}); if (txsRes.ok) { const txsData = await txsRes.json(); const items = txsData.items || []; totalTransfers = items.length; const itemsToCheck = items.slice(0, 2); for (const transfer of itemsToCheck) { const txHash = transfer.transaction_hash || transfer.tx_hash || transfer.hash; if (!txHash) continue; if (itemsToCheck.length > 1 && itemsToCheck.indexOf(transfer) > 0) { await sleep(500); } try { const txRes = await fetchWithRetry(`https://robinhoodchain.blockscout.com/api/v2/transactions/${txHash}`, {timeout: 6000}); if (txRes.ok) { const txData = await txRes.json(); let val = parseFloat(txData.value || "0") / 1e18; if (val === 0) { let tokenTransfers = txData.token_transfers || []; if (tokenTransfers.length > 0) { let maxWethTransfer = 0; for (const tt of tokenTransfers) { const sym = (tt.token?.symbol || "").toUpperCase(); const dec = parseInt(tt.token?.decimals || "0", 10); if (dec >= 18 && !sym.includes(conf.ticker) && !sym.includes("STONK") && !sym.includes("MANCER")) { const rawVal = tt.total?.value || tt.value || "0"; const amt = parseFloat(rawVal) / Math.pow(10, dec); if (amt > maxWethTransfer && amt < 50000) maxWethTransfer = amt; } } val = maxWethTransfer; } } if (val > 0) { lastSaleEth = val; foundValidTx = true; if (txData.timestamp) purchaseTs = new Date(txData.timestamp).getTime() / 1000; break; } } } catch (e) { txApiFailed = true; break; } } if (!foundValidTx && totalTransfers > 0 && !txApiFailed) { const mintTx = items[items.length - 1]; if (mintTx && mintTx.timestamp) purchaseTs = new Date(mintTx.timestamp).getTime() / 1000; } } else { txApiFailed = true; } } catch (e) { txApiFailed = true; }
+                function getHistoricalTokenPriceFallback(ticker, ts, currentSpot) { if (!ts) return currentSpot; const date = new Date(ts * 1000); if (ticker === 'STONK') { if (date < new Date('2026-07-20')) return 0.004; if (date < new Date('2026-07-25')) return 0.008; if (date < new Date('2026-08-01')) return 0.015; if (date < new Date('2026-08-05')) return 0.022; if (date < new Date('2026-08-08')) return 0.028; if (date < new Date('2026-08-11')) return 0.031; } if (ticker === 'MANCER') { if (date < new Date('2026-08-06')) return 0.0022; if (date < new Date('2026-08-09')) return 0.0025; if (date < new Date('2026-08-15')) return 0.0028; } return currentSpot; }
+                const actTs = isActivated ? tokenData.ts : null; const effectiveTs = (purchaseTs && actTs) ? Math.min(purchaseTs, actTs) : (purchaseTs || actTs); const historicalTokenPrice = getHistoricalTokenPriceFallback(conf.ticker, effectiveTs, m.tokenPriceUsd);
+                const activationCostUsd = tierData.reqTokens * historicalTokenPrice; const annualYieldUsd = tierData.trackedAnnualYieldUsd; const weeklyYieldUsd = (tierData.dailyYields || []).reduce((a, b) => a + b, 0); const purchaseCostUsd = lastSaleEth * m.ethPriceUsd; let totalBasisUsd = activationCostUsd; if (!txApiFailed && foundValidTx) { totalBasisUsd += purchaseCostUsd; } const cocRoi = totalBasisUsd > 0 ? ((annualYieldUsd / totalBasisUsd) * 100) : 0;
+                let basisHtml = ''; let cocRoiHtml = '';
+                if (txApiFailed) { basisHtml = `<div class="bg-amber-900/20 p-3 rounded-lg border border-amber-800/50"><p class="text-[10px] uppercase text-amber-400 mb-0.5">Last Sale Basis</p><p class="text-xs font-bold text-amber-300">API Timeout</p><p class="text-[10px] text-amber-400/80">Using base activation cost</p></div>`; const baseRoi = activationCostUsd > 0 ? ((annualYieldUsd / activationCostUsd) * 100) : 0; cocRoiHtml = `<div class="flex flex-col items-end"><span class="bg-amber-900/20 text-amber-400 border border-amber-800/50 px-3 py-1 rounded text-sm font-bold">${baseRoi.toFixed(2)}%*</span><span class="text-[9px] text-amber-500/70 mt-1">*Base ROI (No Sale Data)</span></div>`; } else if (!foundValidTx && totalTransfers > 0) { basisHtml = `<div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60"><p class="text-[10px] uppercase text-slate-400 mb-0.5">Last Sale Basis</p><p class="text-base font-bold text-emerald-400">$0.00</p><p class="text-[10px] text-emerald-500/80">Minted (Free)</p></div>`; cocRoiHtml = `<span class="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-3 py-1 rounded text-sm font-bold">${cocRoi.toFixed(2)}%</span>`; } else { basisHtml = `<div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60"><p class="text-[10px] uppercase text-slate-400 mb-0.5">Last Sale Basis</p><p class="text-base font-bold text-white">${formatCurrency(purchaseCostUsd)}</p><p class="text-[10px] text-slate-500">${lastSaleEth.toFixed(3)} ETH</p></div>`; cocRoiHtml = `<span class="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-3 py-1 rounded text-sm font-bold">${cocRoi.toFixed(2)}%</span>`; }
+                const tokenBasisLabel = effectiveTs ? 'Est. Token Basis' : 'Current Token Basis'; const priceRef = effectiveTs ? formatPrice(historicalTokenPrice) : '(Spot)'; const tokenBasisHtml = `<div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60"><p class="text-[10px] uppercase text-slate-400 mb-0.5">${tokenBasisLabel}</p><p class="text-base font-bold text-white">${formatCurrency(activationCostUsd)}</p><p class="text-[10px] text-slate-500">${formatNumber(tierData.reqTokens)} ${conf.ticker} at ${priceRef}</p></div>`;
+                let derpMiningHtml = '';
+                if (isActivated && currentProjectKey === 'stonk' && liveDerpPriceUsd > 0) { const dailyDerpPerSeat = MINING_CONFIG.avgDerpPerShiftOrange * MINING_CONFIG.shiftsPerDay; const netDailyProfitPerSeat = (dailyDerpPerSeat * liveDerpPriceUsd) - (MINING_CONFIG.ethGasPerShift * liveEthPriceUsd * MINING_CONFIG.shiftsPerDay); const netAnnualPerSeatUsd = netDailyProfitPerSeat > 0 ? (netDailyProfitPerSeat * 365) : 0; const maxAnnual16SeatsUsd = netAnnualPerSeatUsd * MINING_CONFIG.maxSeatsPerBroker; const currentActiveSeats = seatedSeats > 0 ? seatedSeats : 1; const currentAnnualNetUsd = netAnnualPerSeatUsd * currentActiveSeats; if (netAnnualPerSeatUsd > 0) { if (seatedSeats > 0) { derpMiningHtml = `<div class="col-span-2 lg:col-span-4 mt-2"><div class="mining-card p-4 rounded-xl relative overflow-hidden group"><div class="flex flex-col md:flex-row justify-between items-start md:items-center relative z-10 gap-4"><div><h4 class="text-base font-bold text-white">$DERP Mining Yield <span class="bg-emerald-500 text-white text-[9px] px-2 py-0.5 rounded font-bold uppercase">Active: ${seatedSeats}/16 Seats</span></h4><p class="text-xs text-orange-200/70">Estimated Net Profit (After Gas & Fees)</p></div><div class="text-right"><p class="text-xl font-black text-emerald-400">+ ${formatCurrency(currentAnnualNetUsd)} <span class="text-xs">/yr</span></p><p class="text-[10px] text-slate-400">Max 16-Seat Cap: ${formatCurrency(maxAnnual16SeatsUsd)}/yr</p></div></div></div></div>`; } else { derpMiningHtml = `<div class="col-span-2 lg:col-span-4 mt-2"><div class="p-4 rounded-xl border border-dashed border-[#334155] bg-[#1e293b]/60"><div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4"><div><h4 class="text-base font-bold text-slate-300">Potential $DERP Yield <span class="bg-slate-700 text-slate-300 text-[9px] px-2 py-0.5 rounded font-bold uppercase">Unseated</span></h4><p class="text-xs text-slate-500">Projected Net Profit if seated in the Pit</p></div><div class="text-right"><p class="text-lg font-bold text-orange-400">+ ${formatCurrency(netAnnualPerSeatUsd)} <span class="text-xs">/yr (1 Seat)</span></p><p class="text-xs text-orange-300 font-semibold">Max 16-Seat Capacity: + ${formatCurrency(maxAnnual16SeatsUsd)} /yr</p></div></div></div></div>`; } } }
+                if (proj.underConstruction) { resultsDiv.innerHTML = `<div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[#334155] pb-4 mb-4"><div class="flex items-center gap-4">${nftImageHtml}<div><div class="flex items-center gap-2 mb-1"><span class="text-xs uppercase font-bold text-blue-400 bg-blue-900/30 px-2 py-0.5 rounded border border-blue-800/50">${tierData.tier}: ${tierData.name}</span><span class="text-xs font-semibold ${isActivated ? 'text-emerald-400 bg-emerald-900/20' : 'text-slate-400 bg-slate-800'} px-2 py-0.5 rounded border border-[#334155]">${isActivated ? 'Active Unit' : 'Unactivated'}</span></div><h4 class="text-lg font-bold text-white">Unit #${inputVal} Analysis</h4></div></div><div class="flex flex-col sm:flex-row gap-3 w-full md:w-auto items-stretch sm:items-center"><div class="bg-[#1e293b] px-5 py-2.5 rounded-lg border border-[#334155] text-right w-full sm:w-auto flex justify-between sm:block items-center"><span class="text-xs uppercase text-slate-400 sm:block">Individual CoC ROI</span><span class="bg-orange-900/20 text-orange-400 border border-orange-800/50 px-2.5 py-1 rounded text-[10px] font-bold shadow-sm uppercase tracking-wider">Awaiting Data</span></div><button onclick="shareUnitToX()" id="unit-share-btn-text" data-html2canvas-ignore="true" class="bg-[#1da1f2] hover:bg-[#1a91da] text-white px-4 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition shadow-sm w-full sm:w-auto"><svg class="w-4 h-4 fill-current text-white" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 24.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg> Share to X</button><button onclick="document.getElementById('lookup-results').classList.add('hidden')" data-html2canvas-ignore="true" class="bg-[#1e293b] hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-[#334155] px-3 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center transition shadow-sm" title="Close Analysis"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button></div></div><div class="grid grid-cols-2 lg:grid-cols-4 gap-4">${basisHtml}${tokenBasisHtml}<div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60 opacity-50"><p class="text-[10px] uppercase text-slate-400 mb-0.5">Trailing 7-Day Revenue</p><p class="text-base font-bold text-slate-400 italic">Initializing...</p></div><div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60 opacity-50"><p class="text-[10px] uppercase text-slate-400 mb-0.5">Forecasted Annual Yield</p><p class="text-base font-bold text-slate-400 italic">Awaiting 7D Epoch</p></div></div>`;
+                } else {
+                    resultsDiv.innerHTML = `<div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[#334155] pb-4 mb-4"><div class="flex items-center gap-4">${nftImageHtml}<div><div class="flex items-center gap-2 mb-1"><span class="text-xs uppercase font-bold text-blue-400 bg-blue-900/30 px-2 py-0.5 rounded border border-blue-800/50">${tierData.tier}: ${tierData.name}</span><span class="text-xs font-semibold ${isActivated ? 'text-emerald-400 bg-emerald-900/20' : 'text-slate-400 bg-slate-800'} px-2 py-0.5 rounded border border-[#334155]">${isActivated ? 'Active Unit' : 'Unactivated'}</span></div><h4 class="text-lg font-bold text-white">Unit #${inputVal} Analysis</h4></div></div><div class="flex flex-col sm:flex-row gap-3 w-full md:w-auto items-stretch sm:items-center"><div class="bg-[#1e293b] px-5 py-2.5 rounded-lg border border-[#334155] text-right w-full sm:w-auto flex justify-between sm:block items-center"><span class="text-xs uppercase text-slate-400 sm:block">Individual CoC ROI</span>${cocRoiHtml}</div><button onclick="shareUnitToX()" id="unit-share-btn-text" data-html2canvas-ignore="true" class="bg-[#1da1f2] hover:bg-[#1a91da] text-white px-4 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition shadow-sm w-full sm:w-auto"><svg class="w-4 h-4 fill-current text-white" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 24.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg> Share to X</button><button onclick="document.getElementById('lookup-results').classList.add('hidden')" data-html2canvas-ignore="true" class="bg-[#1e293b] hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-[#334155] px-3 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center transition shadow-sm" title="Close Analysis"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button></div></div><div class="grid grid-cols-2 lg:grid-cols-4 gap-4">${basisHtml}${tokenBasisHtml}<div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60"><p class="text-[10px] uppercase text-slate-400 mb-0.5">Trailing 7-Day Revenue</p><p class="text-base font-bold text-emerald-400">${formatCurrency(weeklyYieldUsd)}</p><p class="text-[10px] text-slate-500">Realized Inflows</p></div><div class="bg-[#1e293b]/60 p-3 rounded-lg border border-[#334155]/60"><p class="text-[10px] uppercase text-slate-400 mb-0.5">Forecasted Annual Yield</p><p class="text-base font-bold text-emerald-400">${formatCurrency(annualYieldUsd)} /yr</p><p class="text-[10px] text-slate-500">Weight: <span class="text-yellow-400 font-bold">${tierData.weight}x</span></p></div>${derpMiningHtml}</div>`;
                 }
-
-                try {
-                    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-                    shareBtn.innerHTML = ogText;
-                    alert("✅ SCREENSHOT COPIED!\n\nJust hit Paste (Ctrl+V / Cmd+V) when X/Twitter opens to attach it!");
-                    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`, '_blank');
-                    return;
-                } catch(e) {}
-
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = fileName;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                
-                shareBtn.innerHTML = ogText;
-                alert("✅ IMAGE DOWNLOADED!\n\nYour browser blocked auto-copying. The stats image has been saved to your device to attach on X!");
-                window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`, '_blank');
-
-            } catch (e) {
-                elementToCapture.style.backgroundColor = originalBg;
-                shareBtn.innerHTML = ogText;
-                window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`, '_blank');
+            } catch (globalErr) {
+                console.error(globalErr);
+                resultsDiv.innerHTML = `<p class="text-rose-400 font-bold p-4 text-center">Network Error: Could not connect to the Robinhood Chain RPC. Please try again in a moment.</p>`;
             }
         }
 
-        async function shareToX() {
-            let tweetText = `Tracked via @savicrypto\nhttps://savicrypto.xyz/`;
-            if (currentProjectKey === 'stonk') tweetText = `Clock in - @savicrypto\nhttps://savicrypto.xyz/`;
-            else if (currentProjectKey === 'mancer') tweetText = `Hoods up - @savicrypto\nhttps://savicrypto.xyz/`;
-            
-            let activeViewId = 'view-roi';
-            ['view-roi', 'view-revenue', 'view-burn', 'view-activation', 'view-ownership', 'view-memes', 'view-portfolio', 'view-historical'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el && !el.classList.contains('hidden')) {
-                    activeViewId = id;
-                }
-            });
+        function updateBurnChart(timeframe) {
+            ['7d', '30d', 'all'].forEach(tf => { const btn = document.getElementById(`btn-burn-${tf}`); if (btn) { if (tf === timeframe) { btn.className = "px-4 py-1.5 text-xs font-bold rounded-md bg-[#334155] text-white transition shadow-sm w-1/3 sm:w-auto"; } else { btn.className = "px-4 py-1.5 text-xs font-bold rounded-md text-slate-400 hover:text-white transition w-1/3 sm:w-auto"; } } });
+            if (!window.fullBurnLabels || !window.fullBurnData) return;
+            let sliceCount = window.fullBurnLabels.length; if (timeframe === '7d') sliceCount = 7; if (timeframe === '30d') sliceCount = 30;
+            const slicedLabels = window.fullBurnLabels.slice(-sliceCount); const slicedData = window.fullBurnData.slice(-sliceCount);
+            const canvas = document.getElementById('burnChart'); if (!canvas) return; const ctx = canvas.getContext('2d'); if (burnChartInstance) burnChartInstance.destroy();
+            burnChartInstance = new Chart(ctx, { type: 'line', data: { labels: slicedLabels, datasets: [{ label: 'Cumulative Burnt', data: slicedData, borderColor: '#fb923c', backgroundColor: 'rgba(251, 146, 60, 0.1)', borderWidth: 3, fill: true, tension: 0.3, pointRadius: 4, pointBackgroundColor: '#fb923c' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => formatNumber(ctx.raw) + ' Units' } } }, scales: { x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: (v) => (v >= 1000000 ? (v / 1000000).toFixed(1) + 'M' : v) } } } } });
+        }
 
+        function renderFlywheelChart(snapshots) {
+            const canvas = document.getElementById('flywheelChart'); if(!canvas) return; const ctx = canvas.getContext('2d'); if(flywheelChartInstance) flywheelChartInstance.destroy(); if(!snapshots || snapshots.length === 0) return;
+            const labels = []; const prices = []; const dailyBurn = [];
+            for (let i = 0; i < snapshots.length; i++) { labels.push(snapshots[i].date); prices.push(snapshots[i].tokenPriceUsd); if (i === 0) { dailyBurn.push(0); } else { dailyBurn.push(Math.max(0, snapshots[i].totalBurn - snapshots[i-1].totalBurn)); } }
+            flywheelChartInstance = new Chart(ctx, { type: 'bar', data: { labels: labels, datasets: [ { type: 'line', label: 'Token Price ($)', data: prices, borderColor: '#3b82f6', backgroundColor: '#3b82f6', borderWidth: 2, tension: 0.3, pointRadius: 3, yAxisID: 'y1' }, { type: 'bar', label: 'Daily Burn Velocity', data: dailyBurn, backgroundColor: 'rgba(249, 115, 22, 0.8)', borderRadius: 4, yAxisID: 'y' } ] }, options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: true, labels: { color: '#cbd5e1' } } }, scales: { x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { type: 'linear', display: true, position: 'left', grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: (v) => (v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v) }, title: { display: true, text: 'Tokens Burned', color: '#94a3b8' } }, y1: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#3b82f6', callback: v => '$' + v }, title: { display: false } } } } });
+        }
+
+        function renderActivationCharts({ historyLabels, historyValues, dailyActs, dailyDeacts, breakdownObj, breakdownArr, tiers }) {
+            const canvasLine = document.getElementById('activationChart'); if (!canvasLine) return; const ctxLine = canvasLine.getContext('2d'); if (activationChartInstance) activationChartInstance.destroy();
+            activationChartInstance = new Chart(ctxLine, { type: 'bar', data: { labels: historyLabels, datasets: [ { type: 'line', label: 'Net Active Units', data: historyValues, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.05)', borderWidth: 3, fill: true, tension: 0.3, pointRadius: 0, yAxisID: 'y' }, { type: 'bar', label: 'Daily Activations', data: dailyActs, backgroundColor: '#34d399', borderRadius: 4, yAxisID: 'y1' }, { type: 'bar', label: 'Daily Deactivations', data: dailyDeacts, backgroundColor: '#f43f5e', borderRadius: 4, yAxisID: 'y1' } ] }, options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: true, position: 'top', labels: { color: '#94a3b8', boxWidth: 12 } } }, scales: { x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8', maxTicksLimit: 14 } }, y: { type: 'linear', display: true, position: 'left', grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y1: { type: 'linear', display: false, position: 'right', grid: { drawOnChartArea: false }, min: 0 } } } });
+            const legendList = document.getElementById('tier-legend-list');
+            if (legendList) {
+                legendList.innerHTML = `<div class="flex justify-between items-center bg-[#1e293b] p-3 rounded-lg border border-[#334155]"><div class="flex items-center gap-3"><div class="w-4 h-4 rounded-md bg-[#60a5fa]"></div><span class="text-sm font-bold text-slate-300">T0: ${tiers[0].name}</span></div><span class="text-white font-bold tracking-wide">${formatNumber(breakdownObj.T0 || 0)}</span></div><div class="flex justify-between items-center bg-[#1e293b] p-3 rounded-lg border border-[#334155]"><div class="flex items-center gap-3"><div class="w-4 h-4 rounded-md bg-[#34d399]"></div><span class="text-sm font-bold text-slate-300">T1: ${tiers[1].name}</span></div><span class="text-white font-bold tracking-wide">${formatNumber(breakdownObj.T1 || 0)}</span></div><div class="flex justify-between items-center bg-[#1e293b] p-3 rounded-lg border border-[#334155]"><div class="flex items-center gap-3"><div class="w-4 h-4 rounded-md bg-[#f472b6]"></div><span class="text-sm font-bold text-slate-300">T2: ${tiers[2].name}</span></div><span class="text-white font-bold tracking-wide">${formatNumber(breakdownObj.T2 || 0)}</span></div><div class="flex justify-between items-center bg-[#1e293b] p-3 rounded-lg border border-[#334155]"><div class="flex items-center gap-3"><div class="w-4 h-4 rounded-md bg-[#fbbf24]"></div><span class="text-sm font-bold text-slate-300">T3: ${tiers[3].name}</span></div><span class="text-white font-bold tracking-wide">${formatNumber(breakdownObj.T3 || 0)}</span></div><div class="flex justify-between items-center bg-[#1e293b] p-3 rounded-lg border border-[#334155]"><div class="flex items-center gap-3"><div class="w-4 h-4 rounded-md bg-[#a78bfa]"></div><span class="text-sm font-bold text-slate-300">T4: ${tiers[4].name}</span></div><span class="text-white font-bold tracking-wide">${formatNumber(breakdownObj.T4 || 0)}</span></div>`;
+            }
+            const canvasPie = document.getElementById('tierPieChart'); if (!canvasPie) return; const ctxPie = canvasPie.getContext('2d'); if (tierPieChartInstance) tierPieChartInstance.destroy();
+            tierPieChartInstance = new Chart(ctxPie, { type: 'doughnut', data: { labels: [tiers[0].name, tiers[1].name, tiers[2].name, tiers[3].name, tiers[4].name], datasets: [{ data: breakdownArr, backgroundColor: ['#60a5fa', '#34d399', '#f472b6', '#fbbf24', '#a78bfa'], borderWidth: 0, hoverOffset: 4 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { display: false } } } });
+        }
+
+        function renderOwnershipChart({ labels, data }) {
+            const canvas = document.getElementById('ownershipChart'); if (!canvas) return; const ctx = canvas.getContext('2d'); if (ownershipChartInstance) ownershipChartInstance.destroy();
+            ownershipChartInstance = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: 'Active Holders', data: data, borderColor: '#a855f7', backgroundColor: 'rgba(168, 85, 247, 0.1)', borderWidth: 3, fill: true, stepped: true, pointRadius: 0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } } } } });
+        }
+
+        const makeImagePromise = async (element) => { const canvas = await html2canvas(element, { backgroundColor: '#0f172a', scale: window.devicePixelRatio || 2, useCORS: true, allowTaint: false, ignoreElements: (node) => node.tagName && node.tagName.toLowerCase() === 'iframe' || node.hasAttribute('data-html2canvas-ignore') }); return new Promise((resolve, reject) => { canvas.toBlob(b => b ? resolve(b) : reject(new Error("Canvas export failed")), 'image/png'); }); };
+        async function executeShare(elementId, tweetText, fileName, btnId) {
+            const elementToCapture = document.getElementById(elementId); const shareBtn = document.getElementById(btnId); const ogText = shareBtn.innerHTML; shareBtn.innerText = "Capturing..."; const originalBg = elementToCapture.style.backgroundColor; elementToCapture.style.backgroundColor = '#0f172a';
+            try {
+                const canvas = await html2canvas(elementToCapture, { backgroundColor: '#0f172a', scale: window.devicePixelRatio || 2, useCORS: true, allowTaint: false, ignoreElements: (node) => node.tagName && node.tagName.toLowerCase() === 'iframe' || node.hasAttribute('data-html2canvas-ignore') });
+                const blob = await new Promise((resolve, reject) => { canvas.toBlob(b => b ? resolve(b) : reject(new Error("Canvas failed")), 'image/png'); });
+                elementToCapture.style.backgroundColor = originalBg; const file = new File([blob], fileName, { type: "image/png" });
+                if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ text: tweetText, files: [file] }); shareBtn.innerHTML = ogText; return; } catch(e) {} }
+                try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); shareBtn.innerHTML = ogText; alert("✅ SCREENSHOT COPIED!\n\nJust hit Paste (Ctrl+V / Cmd+V) when X/Twitter opens to attach it!"); window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`, '_blank'); return; } catch(e) {}
+                const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = fileName; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); shareBtn.innerHTML = ogText; alert("✅ IMAGE DOWNLOADED!\n\nYour browser blocked auto-copying. The stats image has been saved to your device to attach on X!"); window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`, '_blank');
+            } catch (e) { elementToCapture.style.backgroundColor = originalBg; shareBtn.innerHTML = ogText; window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`, '_blank'); }
+        }
+        async function shareToX() {
+            let tweetText = `Tracked via @savicrypto\nhttps://savicrypto.xyz/`; if (currentProjectKey === 'stonk') tweetText = `Clock in - @savicrypto\nhttps://savicrypto.xyz/`; else if (currentProjectKey === 'mancer') tweetText = `Hoods up - @savicrypto\nhttps://savicrypto.xyz/`;
+            let activeViewId = 'view-roi'; ['view-roi', 'view-revenue', 'view-burn', 'view-activation', 'view-ownership', 'view-memes', 'view-portfolio', 'view-historical'].forEach(id => { const el = document.getElementById(id); if (el && !el.classList.contains('hidden')) { activeViewId = id; } });
             await executeShare(activeViewId, tweetText, 'ecosystem-stats.png', 'share-btn-text');
         }
 
-        // ==============================================
-        // INITIALIZATION
-        // ==============================================
         initDashboard();
     </script>
 </body>
