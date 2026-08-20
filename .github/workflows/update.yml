@@ -24,6 +24,26 @@ jobs:
       - name: Install Dependencies
         run: npm install ethers
 
+      # The indexer cache must survive between runs, or every run rescans from
+      # the genesis block -- which is what the old setup did, because the cache
+      # was written to the runner and only data.json was committed.
+      #
+      # This is the Actions cache rather than git on purpose. Committing it
+      # works, but the files are rewritten every hour, which measured out at
+      # ~40KB of new git objects per run -- roughly 342MB/year on a repo that
+      # is currently ~1MB. The Actions cache is built for exactly this and
+      # costs the repository nothing.
+      #
+      # restore-keys makes the lookup a prefix match, so each run restores the
+      # most recent previous cache and saves a new one under its own key.
+      - name: Restore indexer cache
+        uses: actions/cache@v4
+        with:
+          path: cache
+          key: indexer-cache-${{ github.run_id }}
+          restore-keys: |
+            indexer-cache-
+
       - name: Run Fetcher Script
         run: node fetcher.js
         env:
@@ -33,6 +53,6 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add data.json cache/
+          git add data.json
           git commit -m "Automated data sync" || echo "No changes to commit"
           git push
