@@ -262,16 +262,26 @@ async function loadMarketPrices() {
           const rhPairs = j.pairs.filter(p => p.chainId === 'robinhood' || (p.url && p.url.includes('robinhood')));
           if (rhPairs.length > 0) {
               rhPairs.forEach(p => allDexPairs.push(p));
-              const best = rhPairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
+              
+              let validPairs = rhPairs.filter(p => p.baseToken?.address?.toLowerCase() === conf.tokenCa.toLowerCase());
+              if (validPairs.length === 0) validPairs = rhPairs;
+              
+              const best = validPairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
               let priceUsd = parseFloat(best.priceUsd || 0);
+              
               if (best.quoteToken?.address?.toLowerCase() === conf.tokenCa.toLowerCase()) {
-                  const priceNative = parseFloat(best.priceNative || 1);
-                  if (priceNative > 0) priceUsd = priceUsd / priceNative;
+                  if (best.liquidity && best.liquidity.usd > 0 && best.liquidity.quote > 0) {
+                      priceUsd = (best.liquidity.usd / 2) / best.liquidity.quote;
+                  } else {
+                      const priceNative = parseFloat(best.priceNative || 1);
+                      if (priceNative > 0) priceUsd = priceUsd / priceNative;
+                  }
               }
               markets[key].tokenPriceUsd = priceUsd;
           }
         }
       } catch {}
+      
       markets[key].nftFloorEth = +((conf.unitValue * markets[key].tokenPriceUsd * 1.10) / ethPriceUsd).toFixed(3);
       tokenPrices[conf.tokenCa.toLowerCase()] = markets[key].tokenPriceUsd;
       await sleep(250);
@@ -561,7 +571,6 @@ async function fetchActivations(projectKey, conf) {
   };
 }
 
-// MULTI-STREAM REVENUE ENGINE
 async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, marketData) {
   const oneDay = 86400;
   const dailyDates = [];
@@ -616,7 +625,6 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
       }
   }
 
-  // Scan Security Box Contract Outflows (Rewards paid directly to clock-in users)
   async function fetchSecurityBoxOutflows(address) {
       let page = 1;
       while(true) {
@@ -722,7 +730,6 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
         }
       }
 
-      // SCALE AMM PROTOCOL REVENUE TO GLOBAL LEVEL
       const scaleMultiplier = totalNetworkWeight / conf.oracleWeight;
       revenueBreakdown.ammFeesUsd = oracleAmmSampleUsd * scaleMultiplier;
       for (let i = 0; i < 7; i++) {
@@ -865,8 +872,23 @@ async function loadTokenListPrices(tokenList) {
               
               [b, q].forEach(addr => {
                   if (!addr) return;
-                  if (!pairsMap[addr] || (pair.liquidity?.usd || 0) > (pairsMap[addr].liquidity?.usd || 0)) {
+                  const isBase = (addr === b);
+                  const existing = pairsMap[addr];
+                  
+                  if (!existing) {
                       pairsMap[addr] = pair;
+                  } else {
+                      const existingIsBase = (addr === existing.baseToken?.address?.toLowerCase());
+                      const newLiq = pair.liquidity?.usd || 0;
+                      const oldLiq = existing.liquidity?.usd || 0;
+                      
+                      if (isBase && !existingIsBase) {
+                          if (newLiq > oldLiq * 0.1) pairsMap[addr] = pair;
+                      } else if (!isBase && existingIsBase) {
+                          if (newLiq > oldLiq * 10) pairsMap[addr] = pair;
+                      } else {
+                          if (newLiq > oldLiq) pairsMap[addr] = pair;
+                      }
                   }
               });
           });
@@ -876,16 +898,8 @@ async function loadTokenListPrices(tokenList) {
   for (const item of tokenList) {
       if (!item.ca) {
           tokenResults.push({
-              name: item.name,
-              ca: null,
-              volume24h: 0,
-              liquidity: 0,
-              priceChange24h: 0,
-              fdv: 0,
-              marketCap: 0,
-              burnt: 0,
-              totalSupply: 1000000000,
-              roi: "0.00%"
+              name: item.name, ca: null, volume24h: 0, liquidity: 0,
+              priceChange24h: 0, fdv: 0, marketCap: 0, burnt: 0, totalSupply: 1000000000, roi: "0.00%"
           });
           continue;
       }
@@ -895,16 +909,24 @@ async function loadTokenListPrices(tokenList) {
 
       if (pair) {
           priceUsd = parseFloat(pair.priceUsd || 0);
+          
           if (pair.quoteToken?.address?.toLowerCase() === item.ca.toLowerCase()) {
-              const pNative = parseFloat(pair.priceNative || 1);
-              if (pNative > 0) priceUsd = priceUsd / pNative;
+              if (pair.liquidity && pair.liquidity.usd > 0 && pair.liquidity.quote > 0) {
+                  priceUsd = (pair.liquidity.usd / 2) / pair.liquidity.quote;
+              } else {
+                  const pNative = parseFloat(pair.priceNative || 1);
+                  if (pNative > 0) priceUsd = priceUsd / pNative;
+              }
+              priceChange24h = pair.priceChange?.h24 !== undefined ? -(pair.priceChange.h24) : 0;
+          } else {
+              priceChange24h = pair.priceChange?.h24 || 0;
           }
+          
           volume24h = pair.volume?.h24 || 0;
           liquidity = pair.liquidity?.usd || 0;
-          priceChange24h = pair.priceChange?.h24 || 0;
-          fdv = pair.fdv || 0;
-          marketCap = pair.marketCap || fdv;
       }
+      
+      tokenPrices[item.ca.toLowerCase()] = priceUsd;
       
       let burntBalance = 0;
       let totalSupplyRaw = 0;
@@ -923,6 +945,9 @@ async function loadTokenListPrices(tokenList) {
 
       await sleep(200);
       let finalTotalSupply = totalSupplyRaw > 0 ? totalSupplyRaw : 1000000000;
+      
+      fdv = priceUsd * finalTotalSupply;
+      marketCap = priceUsd * Math.max(0, finalTotalSupply - burntBalance);
 
       tokenResults.push({
           name: item.name,
@@ -990,7 +1015,6 @@ async function run() {
           lockedLpData = scanLockedStonkLiquidity(conf.tokenCa, markets[projectKey].tokenPriceUsd);
       }
 
-      // DAILY DIARY LOGGER FOR HISTORICAL CHARTS
       let dailySnapshots = prevProjData.dailySnapshots || [];
       const todayStr = new Date().toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
       const floorCostUsd = markets[projectKey].nftFloorEth * markets[projectKey].ethPriceUsd;
