@@ -1,11 +1,54 @@
 const fs = require("fs");
 const { ethers } = require("ethers");
 
+const { Rpc, sleep, SEL, encodeAddr, decodeUint } = require("./lib/rpc");
+const chain = require("./lib/chain");
+const { BlockTime } = require("./lib/blocktime");
+
 const API_KEY = process.env.BLOCKSCOUT_API_KEY;
 const PRO_API = "https://api.blockscout.com/v2/api";
 const CHAIN_ID = 4663;
 
-const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+// The chain's own RPC: free, unmetered, and the source of truth. Every read
+// that can be answered here instead of by Blockscout Pro costs zero credits.
+const rpc = new Rpc();
+
+// Shared block->time table. Describes the CHAIN, so one table serves all four
+// projects and every revenue window. See lib/blocktime.js.
+const blockTime = new BlockTime().load();
+
+// Credit accounting, so a run reports what it actually spent.
+const spend = { metered: 0, byEndpoint: {}, exhausted: false };
+
+/** Sentinel for "the metered source could not answer". Deliberately NOT an
+ *  empty result: zero holders and unknown holders are different facts, and
+ *  writing the first when you mean the second is how a dashboard lies. */
+const UNAVAILABLE = { result: null, __unavailable: true };
+const isUnavailable = (r) => !r || r.__unavailable === true;
+function noteMetered(url) {
+  spend.metered++;
+  const m = /action=([a-zA-Z_]+)/.exec(url);
+  const k = m ? m[1] : "other";
+  spend.byEndpoint[k] = (spend.byEndpoint[k] || 0) + 1;
+}
+
+/** Measured long-run block rate for this chain (28.2M blocks / 32.7 days). */
+const BLOCKS_PER_SEC = 9.97;
+
+let _headBlock = null;
+/**
+ * The block height a given unix timestamp falls at, deliberately erring EARLY.
+ *
+ * A log filter that starts too late silently drops real revenue; one that
+ * starts too early just reads some extra blocks for free and discards them by
+ * timestamp afterwards. The 15% margin covers drift in the instantaneous rate.
+ */
+async function blockAtOrBefore(ts) {
+  if (_headBlock === null) _headBlock = await rpc.blockNumber();
+  const secondsBack = Math.max(0, Math.floor(Date.now() / 1000) - ts);
+  const blocksBack = Math.ceil(secondsBack * BLOCKS_PER_SEC * 1.15);
+  return { from: Math.max(0, _headBlock - blocksBack), to: _headBlock };
+}
 
 const TOKEN_TICKERS = {
   "0xe934e36a439c94017b64a3fece66af12099abf50": "STONK", 
@@ -168,11 +211,18 @@ const PROJECTS = {
   }
 };
 
+// Canonical WETH on Robinhood Chain, read from the Stonk Exchange factory.
+// Matched by address, never by symbol -- see the dex-fee comment below.
+const WETH = "0x0bd7d308f8e1639fab988df18a8011f41eacad73";
+
+// Lowercased at the source. These are compared against addresses that have
+// already been lowercased, so the launchpad's mixed-case literal previously
+// never matched and its fees went uncounted.
 const PROTOCOL_CONTRACTS = [
-  "0x1f12fe622c11947f93f53d63f68f7f46b6d081c9", 
+  "0x1f12fe622c11947f93f53d63f68f7f46b6d081c9",
   "0x55642a3f10f1af5145d3d59021b1d6b03bb8692c",
   "0xEcA5726dae1e53365c37fFc02369d947A91d71f9"
-];
+].map(a => a.toLowerCase());
 
 const ACTIVATION_ABI = [
   "event ActivationUpgraded(uint256 indexed tokenId, address indexed owner, uint8 fromTier, uint8 toTier, uint256 feePaid)",
@@ -187,22 +237,57 @@ const ACTIVATION_ABI = [
 ];
 const iface = new ethers.Interface(ACTIVATION_ABI);
 
+/**
+ * topic0 for every event the ABI above can decode.
+ *
+ * This is the filter the node applies, and it matters more than it looks:
+ * mancer's activation contract IS its vault, so it emits a Transfer for every
+ * payout. Reading the address unfiltered pulled tens of thousands of logs and
+ * then a block timestamp for each one, to decode a few hundred activations.
+ *
+ * Deriving the list from the ABI rather than hardcoding three hashes means a
+ * project using one of the other Activated() signature variants is still
+ * matched -- the filter can never be narrower than what the parser accepts.
+ */
+const ACTIVATION_TOPICS = [
+  ...new Set(iface.fragments.filter(f => f.type === "event").map(f => f.topicHash)),
+];
+
 let ethPriceUsd = 1917;
 let tokenPrices = {};
 let allDexPairs = [];
 
 async function secureFetch(url) {
+  // Once the key is known dead, stop asking. The old script discovered this
+  // separately at every call site; there is no reason to spend another 200
+  // round trips confirming a fact already established.
+  if (spend.exhausted) return UNAVAILABLE;
+
   const headers = { "Accept": "application/json" };
   for (let i = 0; i < 5; i++) {
     try {
+      noteMetered(url);
       const res = await fetch(url, { headers });
-      
-      // FATAL ERROR: Immediately exit the process to protect data.json from being overwritten with empty data
-      if (res.status === 402) {
-          console.error("\n[CRITICAL ERROR] HTTP 402: Payment Required. Key out of credits! Halting script to protect data.json.");
-          process.exit(1); 
+
+      // No key, bad key, or no credits: all mean "this source cannot answer",
+      // and none of them get better by retrying.
+      if (res.status === 401 || res.status === 403 || !API_KEY) {
+          if (!spend.exhausted) console.error(`\n[degraded] Blockscout Pro unavailable (${API_KEY ? "HTTP " + res.status : "no API key"}) -- continuing on free chain reads.`);
+          spend.exhausted = true;
+          return UNAVAILABLE;
       }
-      
+
+      // Out of credits. Do NOT kill the run: almost everything is read from
+      // the chain now, and those reads are free. Mark the metered source dead,
+      // hand back an explicit "unavailable" -- distinct from an empty result --
+      // and let each caller decide whether to carry its previous value
+      // forward. Exiting here is what has left the site 13 hours stale.
+      if (res.status === 402) {
+          if (!spend.exhausted) console.error("\n[degraded] Blockscout Pro out of credits -- continuing on free chain reads.");
+          spend.exhausted = true;
+          return UNAVAILABLE;
+      }
+
       if (res.status === 429) { await sleep(3000); continue; }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       
@@ -214,10 +299,11 @@ async function secureFetch(url) {
           const resultStr = typeof data.result === 'string' ? data.result.toLowerCase() : "";
           if (resultStr.includes("limit") || resultStr.includes("rate")) { await sleep(3000); continue; }
           
-          // EXTRA FAILSAFE: Catch JSON body errors regarding exhausted limits if HTTP status is technically 200
+          // Same exhaustion, dressed as HTTP 200 with the error in the body.
           if (resultStr.includes("credit") || resultStr.includes("exhausted") || resultStr.includes("payment")) {
-              console.error("\n[CRITICAL ERROR] Blockscout API out of credits! Halting script to protect data.json.");
-              process.exit(1);
+              if (!spend.exhausted) console.error("\n[degraded] Blockscout Pro out of credits -- continuing on free chain reads.");
+              spend.exhausted = true;
+              return UNAVAILABLE;
           }
       }
       return data;
@@ -225,19 +311,32 @@ async function secureFetch(url) {
       await sleep(1500 * (i + 1));
     }
   }
-  return { result: [] };
+  // Retries exhausted. Unknown, not empty.
+  return UNAVAILABLE;
 }
 
+/**
+ * Holder count. Still metered -- getTokenHolders has no RPC equivalent, since
+ * the chain knows balances but not the SET of addresses holding them. Building
+ * that set from replayed Transfer logs is the next thing to move off credits.
+ *
+ * Returns null when the count could not be established, so the caller can keep
+ * the last known good value instead of publishing a zero.
+ */
 async function fetchTokenHoldersSafe(contractAddress, isNft = false) {
   if (!contractAddress || contractAddress === "0x0000000000000000000000000000000000000000") return 0;
   let page = 1;
   let activeHolders = 0;
   let hasData = false;
-  const dustThreshold = isNft ? 1n : 1000000000000000000n; 
+  const dustThreshold = isNft ? 1n : 1000000000000000000n;
 
   while (true) {
     let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=token&action=getTokenHolders&contractaddress=${contractAddress}&page=${page}&offset=1000&apikey=${API_KEY}`;
     let data = await secureFetch(url);
+
+    // A page we could not read makes the whole count unknown -- a partial walk
+    // would undercount, which looks exactly like holders leaving.
+    if (isUnavailable(data)) return null;
 
     if (data && data.result && Array.isArray(data.result) && data.result.length > 0) {
         hasData = true;
@@ -254,7 +353,7 @@ async function fetchTokenHoldersSafe(contractAddress, isNft = false) {
         break; 
     }
   }
-  return hasData ? activeHolders : 0;
+  return hasData ? activeHolders : null;
 }
 
 async function loadMarketPrices() {
@@ -308,149 +407,160 @@ async function loadMarketPrices() {
   return markets;
 }
 
-async function fetchAllLogs(projectKey, address, genesisBlock, topic0 = null) {
+/**
+ * Every activation event a project has ever emitted, read straight from chain.
+ *
+ * WAS: a paged walk of module=logs&action=getLogs, ~101 metered credits per
+ * project per run. WHY IT WAS THAT EXPENSIVE: the old cache was written to the
+ * GitHub Actions runner's disk, and the workflow only committed data.json --
+ * so the runner was destroyed with the cache on it and the next run started
+ * over from the genesis block. Every hour, forever, re-reading blocks that had
+ * not changed since July.
+ *
+ * NOW: eth_getLogs on the free public RPC, which answered all 3,664 stonk
+ * activation logs across 29M blocks in a single request.
+ *
+ * The cache stores DECODED EVENTS rather than raw logs -- 60 bytes each
+ * instead of 660. Raw logs came to 2.4MB for stonk alone, which is not
+ * something to commit to git every hour; the decoded form is ~220KB and holds
+ * exactly the fields the stats below actually read. This is the same
+ * store-derived-state-not-raw-logs rule the sniper indexer runs on.
+ *
+ * Dedupe is on (block, logIndex), which is unique chain-wide, so re-reading
+ * the boundary block after a reorg is free of consequence.
+ */
+async function fetchActivationEvents(projectKey, conf) {
+  const address = conf.activationCa;
   if (!address || address === "0x0000000000000000000000000000000000000000") return [];
 
-  let latestBlock = 999999999;
-  try {
-    const br = await secureFetch(`${PRO_API}?chain_id=${CHAIN_ID}&module=block&action=eth_block_number&apikey=${API_KEY}`);
-    if (br && br.result) {
-        const val = br.result.toString();
-        latestBlock = val.startsWith("0x") ? parseInt(val, 16) : parseInt(val, 10);
-    }
-  } catch {}
+  const latestBlock = await rpc.blockNumber();
+  const cacheFile = `cache/${projectKey}_activations.json`;
 
-  const cacheFile = `cache_${projectKey}_logs.json`;
-  let cachedLogs = [];
-  let lastProcessedBlock = genesisBlock;
-
+  let cached = [];
+  let lastBlock = conf.genesisBlock - 1;
   try {
       if (fs.existsSync(cacheFile)) {
-          cachedLogs = JSON.parse(fs.readFileSync(cacheFile, "utf8"));
-          if (cachedLogs.length > 0) {
-              const highestBlock = Math.max(...cachedLogs.map(l => {
-                  let b = l.blockNumber;
-                  return b ? (b.toString().startsWith("0x") ? parseInt(b, 16) : parseInt(b, 10)) : 0;
-              }));
-              if (highestBlock > lastProcessedBlock) {
-                  lastProcessedBlock = highestBlock;
-              }
+          const c = JSON.parse(fs.readFileSync(cacheFile, "utf8"));
+          // Only trust a cache built for this same contract; a config change
+          // must not silently inherit another address's history.
+          if (c.address === address.toLowerCase() && Array.isArray(c.events)) {
+              cached = c.events;
+              if (typeof c.lastBlock === "number") lastBlock = c.lastBlock;
           }
       }
   } catch (e) {}
 
-  let allLogs = [...cachedLogs];
-  let fromBlock = lastProcessedBlock === genesisBlock ? genesisBlock : lastProcessedBlock + 1; 
-  let step = 500000; 
-  let fetchedNewLogs = false;
+  // Overlap the last 200 blocks so a reorg at the seam is re-read, not trusted.
+  const fromBlock = Math.max(conf.genesisBlock, lastBlock - 200);
 
-  while (fromBlock <= latestBlock) {
-    let toBlock = fromBlock + step;
-    if (toBlock > latestBlock) toBlock = latestBlock;
+  let fresh = [];
+  if (fromBlock <= latestBlock) {
+      const logs = await chain.fetchLogsWithTimestamps(
+          rpc,
+          { address, fromBlock, toBlock: latestBlock, topics: [ACTIVATION_TOPICS] },
+          `${projectKey} activations`,
+          blockTime,
+      );
+      for (const log of logs) {
+          let parsed;
+          try {
+              const topics = Array.isArray(log.topics) ? log.topics.filter(t => t !== null) : [];
+              parsed = iface.parseLog({ topics, data: log.data });
+          } catch (e) { continue; }
+          if (!parsed) continue;
 
-    let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=logs&action=getLogs&address=${address}&fromBlock=${fromBlock}&toBlock=${toBlock}&apikey=${API_KEY}`;
-    if (topic0) url += `&topic0=${topic0}`;
+          const isAct = parsed.name === "Activated" || parsed.name.includes("Upgraded");
+          const isDeact = parsed.name === "ActivationCleared";
+          if (!isAct && !isDeact) continue;
 
-    let data = await secureFetch(url);
-    const logs = (data && Array.isArray(data.result)) ? data.result : [];
-
-    if (logs.length >= 1000 && step > 1) { 
-        step = Math.floor(step / 2); 
-        continue; 
-    }
-
-    if (logs.length > 0) {
-        allLogs.push(...logs);
-        fetchedNewLogs = true;
-    }
-
-    fromBlock = toBlock + 1;
-    if (logs.length < 500) { step = Math.min(500000, Math.floor(step * 2)); }
-    await sleep(200); 
+          const ev = {
+              b: log.blockNumber,
+              li: log.logIndex,
+              ts: log.timeStamp,
+              id: parsed.args.tokenId.toString(),
+              k: isDeact ? "c" : (parsed.name.includes("Upgraded") ? "u" : "a"),
+          };
+          if (isAct) {
+              const tierVal = parsed.args.toTier !== undefined ? parsed.args.toTier
+                  : (parsed.args.newTier !== undefined ? parsed.args.newTier : parsed.args.tier);
+              if (tierVal === undefined || tierVal === null) continue;
+              ev.t = Number(tierVal);
+          }
+          fresh.push(ev);
+      }
   }
 
-  const parseNum = (val) => {
-    if (val === undefined || val === null) return 0;
-    if (typeof val === 'number') return val;
-    const str = val.toString().trim();
-    if (str.startsWith("0x") || str.startsWith("0X")) return parseInt(str, 16);
-    return parseInt(str, 10);
-  };
-
-  const uniqueLogsMap = new Map();
-  for (const log of allLogs) {
-      const idxStr = log.logIndex !== undefined ? log.logIndex : (log.log_index !== undefined ? log.log_index : (log.index !== undefined ? log.index : "0"));
-      const idx = parseNum(idxStr);
-      uniqueLogsMap.set(log.transactionHash + "-" + idx, log); 
-  }
-  const uniqueLogs = Array.from(uniqueLogsMap.values());
-
-  uniqueLogs.sort((a, b) => {
-    const blockA = parseNum(a.blockNumber);
-    const blockB = parseNum(b.blockNumber);
-    if (blockA !== blockB) return blockA - blockB;
-
-    const txIdxA = parseNum(a.transactionIndex);
-    const txIdxB = parseNum(b.transactionIndex);
-    if (txIdxA !== txIdxB) return txIdxA - txIdxB;
-
-    const logIdxA = parseNum(a.logIndex !== undefined ? a.logIndex : (a.log_index !== undefined ? a.log_index : a.index));
-    const logIdxB = parseNum(b.logIndex !== undefined ? b.logIndex : (b.log_index !== undefined ? b.log_index : a.index));
-    return logIdxA - logIdxB;
-  });
-
-  if (fetchedNewLogs || !fs.existsSync(cacheFile)) {
-      fs.writeFileSync(cacheFile, JSON.stringify(uniqueLogs));
-  }
-
-  return uniqueLogs;
-}
-
-async function getTrueDeflationStats(conf) {
-  let currentSupply = conf.maxSupply * conf.unitValue;
-  let deadBalance = 0;
+  const byKey = new Map();
+  for (const e of [...cached, ...fresh]) byKey.set(`${e.b}-${e.li}`, e);
+  const events = Array.from(byKey.values()).sort((a, b) => a.b - b.b || a.li - b.li);
 
   try {
-    const supplyUrl = `${PRO_API}?chain_id=${CHAIN_ID}&module=stats&action=tokensupply&contractaddress=${conf.tokenCa}&apikey=${API_KEY}`;
-    const res = await secureFetch(supplyUrl);
-    if (res && res.result) currentSupply = Number(res.result) / 1e18;
-  } catch(e) {}
+      fs.mkdirSync("cache", { recursive: true });
+      fs.writeFileSync(
+          cacheFile,
+          JSON.stringify({ address: address.toLowerCase(), lastBlock: latestBlock, events }),
+      );
+  } catch (e) {}
 
-  const deadAddresses = ["0x000000000000000000000000000000000000dead", "0x0000000000000000000000000000000000000000"];
-  for (const addr of deadAddresses) {
-    let res = await secureFetch(`${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokenbalance&contractaddress=${conf.tokenCa}&address=${addr}&apikey=${API_KEY}`);
-    if (res && res.result) deadBalance += Number(res.result) / 1e18;
-    await sleep(200); 
-  }
+  return events;
+}
 
-  let totalBurnTokens = 0;
-  if (conf.ticker === "STONK") {
-    let lockedBalance = 0;
-    let res = await secureFetch(`${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokenbalance&contractaddress=${conf.tokenCa}&address=${conf.activationCa}&apikey=${API_KEY}`);
-    if (res && res.result) lockedBalance += Number(res.result) / 1e18;
-    const nativeBurn = Math.max(0, (conf.maxSupply * conf.unitValue) - currentSupply);
-    totalBurnTokens = nativeBurn + deadBalance + lockedBalance;
-  } else {
-    const nativeBurn = Math.max(0, (conf.maxSupply * conf.unitValue) - currentSupply);
-    totalBurnTokens = nativeBurn + deadBalance;
-  }
-  
+/**
+ * Burn accounting. WAS 4 metered calls per project (1 tokensupply + 3
+ * tokenbalance, each a separate round trip with a 200ms sleep between them);
+ * NOW one batched eth_call set -- a single free http request.
+ */
+async function getTrueDeflationStats(conf) {
+  const holders = [chain.DEAD, chain.ZERO];
+  if (conf.ticker === "STONK") holders.push(conf.activationCa);
+
+  const [supplyRaw, ...balanceRaw] = await rpc.calls([
+    { to: conf.tokenCa, data: SEL.totalSupply },
+    ...holders.map((h) => ({ to: conf.tokenCa, data: SEL.balanceOf + encodeAddr(h) })),
+  ]);
+
+  // A reverted read is UNKNOWN, not zero. Falling back to the theoretical max
+  // supply keeps a failed call from being reported as a total burn.
+  const supply = decodeUint(supplyRaw);
+  const currentSupply = supply === null ? conf.maxSupply * conf.unitValue : Number(supply) / 1e18;
+
+  const bal = balanceRaw.map((r) => {
+    const v = decodeUint(r);
+    return v === null ? 0 : Number(v) / 1e18;
+  });
+  const deadBalance = bal[0] + bal[1];
+  const lockedBalance = conf.ticker === "STONK" ? bal[2] : 0;
+
+  const nativeBurn = Math.max(0, (conf.maxSupply * conf.unitValue) - currentSupply);
+  const totalBurnTokens = nativeBurn + deadBalance + lockedBalance;
+
   const equivalentBrokersBurnt = totalBurnTokens / conf.unitValue;
   return { totalBurnTokens: Math.round(totalBurnTokens), equivalentBrokersBurnt: parseFloat(equivalentBrokersBurnt.toFixed(2)) };
 }
 
 async function getOwnershipStats(conf, equivBurnt, previousData) {
+  // How many NFTs the AMM vault is holding. ERC-721 balanceOf is a plain
+  // eth_call -- there was never a reason to pay Blockscout for it.
   let ammVaultNfts = 0;
   if (conf.nftCa && conf.ammCa) {
-    let res = await secureFetch(`${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokenbalance&contractaddress=${conf.nftCa}&address=${conf.ammCa}&apikey=${API_KEY}`);
-    if (res && res.result) ammVaultNfts = parseInt(res.result, 10);
+    const [raw] = await rpc.calls([{ to: conf.nftCa, data: SEL.balanceOf + encodeAddr(conf.ammCa) }]);
+    const v = decodeUint(raw);
+    if (v !== null) ammVaultNfts = Number(v);
   }
 
-  let rawNftHolders = await fetchTokenHoldersSafe(conf.nftCa, true);
-  let trueUniqueNftHolders = rawNftHolders > (conf.teamWallets || 0) ? rawNftHolders - (conf.teamWallets || 0) : 0;
+  // Holder counts are the one figure still coming from metered credits. When
+  // they are unavailable, carry the previous run's number forward rather than
+  // publishing a zero: a dashboard that reports "0 holders" during an API
+  // outage is worse than one reporting an hour-old count.
+  const netTeam = (n) => (n > (conf.teamWallets || 0) ? n - (conf.teamWallets || 0) : 0);
+
+  const rawNftHolders = await fetchTokenHoldersSafe(conf.nftCa, true);
+  const trueUniqueNftHolders =
+      rawNftHolders === null ? (previousData?.ownership?.nftHolders ?? 0) : netTeam(rawNftHolders);
 
   const rawStonkHolders = await fetchTokenHoldersSafe(conf.tokenCa, false);
-  const trueUniqueStonkHolders = rawStonkHolders > (conf.teamWallets || 0) ? rawStonkHolders - (conf.teamWallets || 0) : 0;
+  const trueUniqueStonkHolders =
+      rawStonkHolders === null ? (previousData?.ownership?.stonkHolders ?? 0) : netTeam(rawStonkHolders);
 
   const circulatingNftSupply = Math.max(0, conf.maxSupply - ammVaultNfts - Math.floor(equivBurnt)); 
   const currentMaxSupply = Math.max(0, conf.maxSupply - Math.floor(equivBurnt));
@@ -485,8 +595,8 @@ async function getOwnershipStats(conf, equivBurnt, previousData) {
 }
 
 async function fetchActivations(projectKey, conf) {
-  const mergedLogs = await fetchAllLogs(projectKey, conf.activationCa, conf.genesisBlock);
-  const activeBrokers = new Map(); 
+  const events = await fetchActivationEvents(projectKey, conf);
+  const activeBrokers = new Map();
   const dailyData = {};
   const now = Math.floor(Date.now() / 1000);
   const oneDay = 86400;
@@ -501,50 +611,43 @@ async function fetchActivations(projectKey, conf) {
 
   let minTs = now;
 
-  for (const log of mergedLogs) {
-    let ts = log.timeStamp || log.timestamp;
-    ts = ts ? (ts.toString().startsWith("0x") ? parseInt(ts, 16) : parseInt(ts, 10)) : 0;
+  // NOTE: an "Upgraded" event still counts as an activation here, exactly as
+  // it did before. That is arguably wrong -- a tier upgrade is a broker moving
+  // between tiers, not a new activation, so the counts run high -- but this
+  // pass is about where the data comes FROM, not what it means. Changing the
+  // math here would make it impossible to verify that the chain-native reads
+  // reproduce the old numbers. Worth fixing next, separately.
+  for (const ev of events) {
+    const ts = ev.ts || 0;
     if (ts > 0 && ts < minTs) minTs = ts;
     const age = now - ts;
 
-    try {
-      const topics = log.topics && Array.isArray(log.topics) ? log.topics.filter(t => t !== null) : [];
-      const parsed = iface.parseLog({ topics, data: log.data });
-      if (!parsed) continue;
+    const tokenId = ev.id;
+    const isDeact = ev.k === "c";
+    const isAct = !isDeact;
 
-      const tokenId = parsed.args.tokenId.toString();
-      const isAct = parsed.name === "Activated" || parsed.name === "ActivationUpgraded" || parsed.name.includes("Upgraded");
-      const isDeact = parsed.name === "ActivationCleared";
+    let tierId = null;
+    if (isAct) {
+        tierId = `T${ev.t}`;
+        activeBrokers.set(tokenId, { t: tierId, ts: ts });
+    } else {
+        tierId = activeBrokers.has(tokenId) ? activeBrokers.get(tokenId).t : null;
+        activeBrokers.delete(tokenId);
+    }
 
-      if (isAct || isDeact) {
-          let tierId = null;
-          if (isAct) { 
-            const tierVal = parsed.args.toTier !== undefined ? parsed.args.toTier : (parsed.args.newTier !== undefined ? parsed.args.newTier : parsed.args.tier);
-            if (tierVal !== undefined && tierVal !== null) {
-                tierId = `T${tierVal.toString()}`; 
-                activeBrokers.set(tokenId, { t: tierId, ts: ts }); 
-            }
-          } 
-          else if (isDeact) { 
-            tierId = activeBrokers.has(tokenId) ? activeBrokers.get(tokenId).t : null;
-            activeBrokers.delete(tokenId); 
-          }
+    if (tierId && tierStats[tierId]) {
+        if (isAct) tierStats[tierId].allTime.act++;
+        if (isDeact) tierStats[tierId].allTime.deact++;
+        if (age <= oneDay) { if (isAct) tierStats[tierId]['24h'].act++; if (isDeact) tierStats[tierId]['24h'].deact++; }
+        if (age <= 7 * oneDay) { if (isAct) tierStats[tierId]['7d'].act++; if (isDeact) tierStats[tierId]['7d'].deact++; }
+        if (age <= 30 * oneDay) { if (isAct) tierStats[tierId]['30d'].act++; if (isDeact) tierStats[tierId]['30d'].deact++; }
+    }
 
-          if (tierId && tierStats[tierId]) {
-              if (isAct) tierStats[tierId].allTime.act++;
-              if (isDeact) tierStats[tierId].allTime.deact++;
-              if (age <= oneDay) { if (isAct) tierStats[tierId]['24h'].act++; if (isDeact) tierStats[tierId]['24h'].deact++; }
-              if (age <= 7 * oneDay) { if (isAct) tierStats[tierId]['7d'].act++; if (isDeact) tierStats[tierId]['7d'].deact++; }
-              if (age <= 30 * oneDay) { if (isAct) tierStats[tierId]['30d'].act++; if (isDeact) tierStats[tierId]['30d'].deact++; }
-          }
-
-          const date = new Date(ts * 1000);
-          const dateStr = `${date.getMonth() + 1}/${date.getDate()}`;
-          if (!dailyData[dateStr]) dailyData[dateStr] = { activated: 0, deactivated: 0, timestamp: new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime() / 1000 };
-          if (isAct) dailyData[dateStr].activated++;
-          if (isDeact) dailyData[dateStr].deactivated++;
-      }
-    } catch (e) { }
+    const date = new Date(ts * 1000);
+    const dateStr = `${date.getMonth() + 1}/${date.getDate()}`;
+    if (!dailyData[dateStr]) dailyData[dateStr] = { activated: 0, deactivated: 0, timestamp: new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime() / 1000 };
+    if (isAct) dailyData[dateStr].activated++;
+    if (isDeact) dailyData[dateStr].deactivated++;
   }
 
   if (minTs < now - (60 * 86400)) minTs = now - (60 * 86400);
@@ -599,7 +702,11 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
   const dailyUsdPerWeight = [0, 0, 0, 0, 0, 0, 0];
   const revenueBreakdown = {
     ammFeesUsd: 0, securityBoxUsd: 0, launchpadUsd: 0, dexFeesUsd: 0,
-    dailyAmm: [0,0,0,0,0,0,0], dailySecurityBox: [0,0,0,0,0,0,0], dailyLaunchpad: [0,0,0,0,0,0,0], dailyDex: [0,0,0,0,0,0,0]
+    dailyAmm: [0,0,0,0,0,0,0], dailySecurityBox: [0,0,0,0,0,0,0], dailyLaunchpad: [0,0,0,0,0,0,0], dailyDex: [0,0,0,0,0,0,0],
+    // Streams that could not be read this run. run() restores each from the
+    // previous payload, so an unreadable stream shows its last known value
+    // instead of collapsing to $0 and faking a revenue cliff on the chart.
+    degraded: []
   };
 
   let totalNetworkWeight = 0;
@@ -611,6 +718,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
       while(true) {
           let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=txlist&address=${address}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`;
           let data = await secureFetch(url);
+          if (isUnavailable(data)) { revenueBreakdown.degraded.push([key, dailyKey]); return; }
           const txs = (data && Array.isArray(data.result)) ? data.result : [];
           if(txs.length === 0) break;
           let reachedOlder = false;
@@ -650,6 +758,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
       while(true) {
           let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=txlistinternal&address=${address}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`;
           let data = await secureFetch(url);
+          if (isUnavailable(data)) { revenueBreakdown.degraded.push(["securityBoxUsd", "dailySecurityBox"]); return; }
           const txs = (data && Array.isArray(data.result)) ? data.result : [];
           if(txs.length === 0) break;
           let reachedOlder = false;
@@ -677,10 +786,15 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
       let oracleAmmSampleUsd = 0;
       let dailyOracleAmmSample = [0,0,0,0,0,0,0];
 
+      // Native-ETH fees into the oracle wallet. Still metered: internal value
+      // transfers are not logs, and this node exposes no trace API, so there
+      // is no free equivalent to read them from.
       let pageEth = 1;
+      let ethInflowsRead = true;
       while(true) {
           let urlEth = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=txlistinternal&address=${conf.oracleSource}&page=${pageEth}&offset=1000&sort=desc&apikey=${API_KEY}`;
           let dataEth = await secureFetch(urlEth);
+          if (isUnavailable(dataEth)) { ethInflowsRead = false; break; }
           const txs = (dataEth && Array.isArray(dataEth.result)) ? dataEth.result : [];
           if(txs.length === 0) break;
           let reachedOlder = false;
@@ -712,41 +826,42 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
           pageEth++; await sleep(200); 
       }
 
-      for (const tokenAddr of Object.keys(TOKEN_TICKERS)) {
-        const price = tokenPrices[tokenAddr.toLowerCase()] || 0;
-        if (price <= 0) continue;
-        
-        let pageTok = 1;
-        while(true) {
-            let urlTok = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokentx&address=${conf.oracleSource}&contractaddress=${tokenAddr}&page=${pageTok}&offset=1000&sort=desc&apikey=${API_KEY}`;
-            let dataTok = await secureFetch(urlTok);
-            const txs = (dataTok && Array.isArray(dataTok.result)) ? dataTok.result : [];
-            if(txs.length === 0) break;
+      // Token fees paid into the oracle wallet by protocol contracts.
+      //
+      // WAS: one PAGED tokentx query per token per wallet -- 17 tokens, each
+      // returning every transfer that wallet ever made, so the script could
+      // discard the ones from the wrong sender client-side. NOW: the node does
+      // that selection. Topic positions AND together and arrays within a
+      // position OR, so "from ANY protocol contract AND to the oracle wallet"
+      // across all 17 tokens at once is a single filter, and only the matching
+      // logs ever cross the wire.
+      {
+        const range = await blockAtOrBefore(sevenDaysAgo);
+        const priced = Object.keys(TOKEN_TICKERS).filter(
+          (t) => (tokenPrices[t.toLowerCase()] || 0) > 0,
+        );
+        if (priced.length) {
+          const transfers = await chain.erc20Transfers(rpc, {
+            tokens: priced,
+            from: PROTOCOL_CONTRACTS,
+            to: conf.oracleSource,
+            fromBlock: range.from,
+            toBlock: range.to,
+            label: `${projectKey} oracle token fees`,
+            blockTime,
+          });
+          for (const t of transfers) {
+            if (t.timeStamp < sevenDaysAgo || t.amount <= 0) continue;
+            const price = tokenPrices[t.token] || 0;
+            if (price <= 0) continue;
+            const usdVal = t.amount * price;
+            const dayIdx = Math.max(0, Math.min(6, Math.floor((t.timeStamp - sevenDaysAgo) / oneDay)));
 
-            let reachedOlder = false;
-            for (const tx of txs) {
-              const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
-              if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
-              if (tx.isError === "1" || tx.isError === 1) continue;
-              
-              const fromAddr = (tx.from || "").toLowerCase();
-              const toAddr = (tx.to || "").toLowerCase();
-              if (PROTOCOL_CONTRACTS.includes(fromAddr) && toAddr === conf.oracleSource.toLowerCase()) {
-                const amount = Number(tx.value || 0) / Math.pow(10, parseInt(tx.tokenDecimal || 18, 10));
-                if (amount > 0) {
-                    const usdVal = amount * price;
-                    const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
-                    
-                    totalSampleUsd += usdVal;
-                    if (conf.oracleWeight) dailyUsdPerWeight[dayIdx] += (usdVal / conf.oracleWeight);
-                    
-                    oracleAmmSampleUsd += usdVal;
-                    dailyOracleAmmSample[dayIdx] += usdVal;
-                }
-              }
-            }
-            if(reachedOlder || txs.length < 1000) break;
-            pageTok++; await sleep(200); 
+            totalSampleUsd += usdVal;
+            if (conf.oracleWeight) dailyUsdPerWeight[dayIdx] += (usdVal / conf.oracleWeight);
+            oracleAmmSampleUsd += usdVal;
+            dailyOracleAmmSample[dayIdx] += usdVal;
+          }
         }
       }
 
@@ -755,70 +870,61 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
       for (let i = 0; i < 7; i++) {
           revenueBreakdown.dailyAmm[i] = dailyOracleAmmSample[i] * scaleMultiplier;
       }
+      // The token half of AMM fees was read from chain; the ETH half was not.
+      // Publishing the token half alone would understate the total, so the
+      // whole figure falls back to the previous run.
+      if (!ethInflowsRead) revenueBreakdown.degraded.push(["ammFeesUsd", "dailyAmm"]);
 
       if (projectKey === "stonk" && conf.streams?.securityBox) await fetchSecurityBoxYield(conf.streams.securityBox);
       if (projectKey === "stonk" && conf.streams?.launchpad) await fetchDirectEthInflows(conf.streams.launchpad, "launchpadUsd", "dailyLaunchpad");
   } 
   else if (conf.yieldMode === "protocol_vault") {
-      let page = 1;
-      while(true) {
-          let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokentx&address=${conf.oracleSource}&contractaddress=${conf.tokenCa}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`;
-          let data = await secureFetch(url);
-          const txs = (data && Array.isArray(data.result)) ? data.result : [];
-          if(txs.length === 0) break;
-          let reachedOlder = false;
-          for (const tx of txs) {
-            const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
-            if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
-            if ((tx.from || "").toLowerCase() === conf.oracleSource.toLowerCase()) {
-                const amount = Number(tx.value || 0) / Math.pow(10, parseInt(tx.tokenDecimal || 18, 10));
-                if (amount > 0) {
-                    const usdVal = amount * marketData.tokenPriceUsd;
-                    const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
-                    
-                    dailyUsdPerWeight[dayIdx] += (usdVal / totalNetworkWeight);
-                    totalSampleUsd += usdVal;
-                    revenueBreakdown.ammFeesUsd += usdVal; 
-                    revenueBreakdown.dailyAmm[dayIdx] += usdVal;
-                }
-            }
-          }
-          if(reachedOlder || txs.length < 1000) break;
-          page++; await sleep(200); 
+      // Payouts OUT of the vault. One filter: Transfer(tokenCa) where from == vault.
+      const range = await blockAtOrBefore(sevenDaysAgo);
+      const payouts = await chain.erc20Transfers(rpc, {
+          tokens: [conf.tokenCa],
+          from: conf.oracleSource,
+          fromBlock: range.from,
+          toBlock: range.to,
+          label: `${projectKey} vault payouts`,
+          blockTime,
+      });
+      for (const t of payouts) {
+          if (t.timeStamp < sevenDaysAgo || t.amount <= 0) continue;
+          const usdVal = t.amount * marketData.tokenPriceUsd;
+          const dayIdx = Math.max(0, Math.min(6, Math.floor((t.timeStamp - sevenDaysAgo) / oneDay)));
+
+          dailyUsdPerWeight[dayIdx] += (usdVal / totalNetworkWeight);
+          totalSampleUsd += usdVal;
+          revenueBreakdown.ammFeesUsd += usdVal;
+          revenueBreakdown.dailyAmm[dayIdx] += usdVal;
       }
 
       if (projectKey === "mancer" && conf.streams?.dexCollector) {
-          let pageDex = 1;
-          while(true) {
-              let urlDex = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokentx&address=${conf.streams.dexCollector}&page=${pageDex}&offset=1000&sort=desc&apikey=${API_KEY}`;
-              let dataDex = await secureFetch(urlDex);
-              const txs = (dataDex && Array.isArray(dataDex.result)) ? dataDex.result : [];
-              if(txs.length === 0) break;
-              let reachedOlder = false;
-              for (const tx of txs) {
-                  const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
-                  if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
-                  
-                  if ((tx.to || "").toLowerCase() === conf.streams.dexCollector) {
-                      const dec = parseInt(tx.tokenDecimal || 18, 10);
-                      const amount = Number(tx.value || 0) / Math.pow(10, dec);
-                      const sym = (tx.tokenSymbol || "").toUpperCase();
-                      
-                      if (amount > 0 && amount < 5 && (sym === "WETH" || sym === "ETH")) {
-                          const usdVal = amount * marketData.ethPriceUsd;
-                          if (usdVal > 0) {
-                              const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
-                              revenueBreakdown.dexFeesUsd += usdVal;
-                              revenueBreakdown.dailyDex[dayIdx] += usdVal;
-                              totalSampleUsd += usdVal;
-
-                              dailyUsdPerWeight[dayIdx] += (usdVal / totalNetworkWeight);
-                          }
-                      }
-                  }
-              }
-              if(reachedOlder || txs.length < 1000) break;
-              pageDex++; await sleep(200); 
+          // DEX fees arriving at the collector, matched by WETH's ADDRESS
+          // rather than by its symbol. Symbol matching is unsafe on this chain:
+          // wallets here are full of typosquats, and anything can call itself
+          // "WETH". The canonical contract cannot be impersonated.
+          const dexIn = await chain.erc20Transfers(rpc, {
+              tokens: [WETH],
+              to: conf.streams.dexCollector,
+              fromBlock: range.from,
+              toBlock: range.to,
+              label: "mancer dex fees",
+              blockTime,
+          });
+          for (const t of dexIn) {
+              if (t.timeStamp < sevenDaysAgo) continue;
+              // Same outlier guard as before: a single >5 WETH transfer is a
+              // treasury move, not a fee, and would swamp the weekly figure.
+              if (!(t.amount > 0 && t.amount < 5)) continue;
+              const usdVal = t.amount * marketData.ethPriceUsd;
+              if (usdVal <= 0) continue;
+              const dayIdx = Math.max(0, Math.min(6, Math.floor((t.timeStamp - sevenDaysAgo) / oneDay)));
+              revenueBreakdown.dexFeesUsd += usdVal;
+              revenueBreakdown.dailyDex[dayIdx] += usdVal;
+              totalSampleUsd += usdVal;
+              dailyUsdPerWeight[dayIdx] += (usdVal / totalNetworkWeight);
           }
       }
   }
@@ -912,6 +1018,11 @@ async function loadTokenListPrices(tokenList) {
       }
   } catch(e) {}
 
+  // Supply and burn balance for the whole list in one batched pass.
+  // WAS: 2 metered calls + 400ms of sleeps per token, serially -- 60 credits
+  // and ~25s for the 30 memes and stocks. NOW: ~4 free http requests.
+  const supplyStats = await chain.tokenStats(rpc, validTokens.map((t) => t.ca));
+
   for (const item of tokenList) {
       if (!item.ca) {
           tokenResults.push({
@@ -941,22 +1052,10 @@ async function loadTokenListPrices(tokenList) {
       
       tokenPrices[item.ca.toLowerCase()] = priceUsd;
       
-      let burntBalance = 0;
-      let totalSupplyRaw = 0;
+      const stat = supplyStats.get(item.ca.toLowerCase());
+      const burntBalance = stat && stat.dead !== null ? Number(stat.dead) / 1e18 : 0;
+      const totalSupplyRaw = stat && stat.supply !== null ? Number(stat.supply) / 1e18 : 0;
 
-      try {
-          const burnRes = await secureFetch(`${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokenbalance&contractaddress=${item.ca}&address=0x000000000000000000000000000000000000dead&apikey=${API_KEY}`);
-          if (burnRes && burnRes.result) burntBalance = Number(burnRes.result) / 1e18;
-      } catch(e) {}
-      
-      await sleep(200);
-
-      try {
-          const supplyRes = await secureFetch(`${PRO_API}?chain_id=${CHAIN_ID}&module=stats&action=tokensupply&contractaddress=${item.ca}&apikey=${API_KEY}`);
-          if (supplyRes && supplyRes.result) totalSupplyRaw = Number(supplyRes.result) / 1e18;
-      } catch(e) {}
-
-      await sleep(200);
       let finalTotalSupply = totalSupplyRaw > 0 ? totalSupplyRaw : 1000000000;
       
       fdv = priceUsd * finalTotalSupply;
@@ -983,6 +1082,17 @@ async function run() {
   let previousData = {};
   try { if (fs.existsSync("data.json")) previousData = JSON.parse(fs.readFileSync("data.json", "utf8")); } catch(e) {}
 
+  // Seed the shared block->time table once, before anything needs it. Doing it
+  // here rather than lazily means every project and every revenue window reads
+  // from the same fully-built table, including projects with no activation
+  // contract that would otherwise never trigger a build.
+  const head = await rpc.blockNumber();
+  const earliestGenesis = Math.min(...Object.values(PROJECTS).map(p => p.genesisBlock));
+  await blockTime.ensureRange(rpc, earliestGenesis, head, (d, t) =>
+      process.stdout.write(`\r  block-time anchors ${d}/${t}   `),
+  );
+  console.log(`\r  block-time table: ${blockTime.anchors.length} anchors covering ${earliestGenesis}-${head}`.padEnd(70));
+
   const markets = await loadMarketPrices();
   const memeData = await loadTokenListPrices(MEMES);
   const stockData = await loadTokenListPrices(STOCKS);
@@ -1003,6 +1113,16 @@ async function run() {
       const ownershipStats = await getOwnershipStats(conf, activationStats.dualBurn.equivalentBrokersBurnt, prevProjData);
       
       const yieldData = await getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, markets[projectKey]);
+
+      // Restore any stream that could not be read this run from the last good
+      // payload, and say so out loud rather than shipping a silent zero.
+      for (const [key, dailyKey] of yieldData.revenueBreakdown.degraded) {
+          const prev = prevProjData?.revenue;
+          if (!prev || typeof prev[key] !== "number") continue;
+          yieldData.revenueBreakdown[key] = prev[key];
+          if (Array.isArray(prev[dailyKey])) yieldData.revenueBreakdown[dailyKey] = prev[dailyKey];
+          console.log(`  [degraded] ${projectKey}.${key} carried forward from previous run`);
+      }
 
       let totalNetworkWeight = 0;
       for (const t of conf.tiers) totalNetworkWeight += ((activationStats.breakdown[t.id] || 0) * t.weight);
@@ -1067,6 +1187,27 @@ async function run() {
 
   fs.writeFileSync("data.json", JSON.stringify(finalJson, null, 2));
   console.log("\n✓ Complete dashboard payload generated successfully.");
+
+  // Re-measure the interpolation error against blocks fetched fresh from the
+  // node, so the accuracy claim is something this run proved rather than
+  // something a comment asserts.
+  try {
+      const span = head - earliestGenesis;
+      const sample = Array.from({ length: 20 }, (_, i) =>
+          earliestGenesis + Math.floor((span * (i + 0.37)) / 20));
+      const acc = await blockTime.verify(rpc, sample);
+      if (acc) console.log(`\n  block-time accuracy vs ${acc.n} live blocks: mean ${acc.meanSec}s, max ${acc.maxSec}s`);
+  } catch (e) {
+      console.log(`\n  block-time accuracy check skipped: ${e.message}`);
+  }
+
+  console.log("\n--- call budget ---");
+  console.log(`  free RPC http requests : ${rpc.requests}`);
+  console.log(`  metered Blockscout Pro : ${spend.metered} credits`);
+  for (const [k, v] of Object.entries(spend.byEndpoint).sort((a, b) => b[1] - a[1])) {
+      console.log(`      ${k.padEnd(18)} ${v}`);
+  }
+  console.log(`  projected daily credits: ${spend.metered * 24}`);
 }
 
 run().catch(err => { console.error(err); process.exit(1); });
