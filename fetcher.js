@@ -103,6 +103,12 @@ const PROJECTS = {
     ticker: "MANCER",
     logo: "logo.png",
     yieldMode: "protocol_vault",
+    // This contract emits no Deactivated/ActivationCleared event -- confirmed
+    // with the Mancer team. A tier is bound to the NFT, so moving or selling it
+    // clears the activation, and the ERC-721 Transfer is the only trace of it.
+    // Without this the dashboard reports 0 deactivations forever and
+    // activeCount only ever climbs. See reconstruction in fetchActivations.
+    deactivateOnTransfer: true,
     oracleSource: "0x47c2194cAacfC778c0Baa41E10008bb7D720Cd59".toLowerCase(), 
     underConstruction: false,
     teamWallets: 2,
@@ -129,6 +135,12 @@ const PROJECTS = {
     ticker: "YARD",
     logo: "Yardkeepers.png", 
     yieldMode: "protocol_vault",
+    // Same contract generation as mancer and also reporting 0 deactivations,
+    // so this is very likely wrong in the same way. Left off until someone
+    // confirms with the Yardkeepers team that a transfer clears a tier here
+    // too -- flipping it on without that would swap one wrong number for
+    // another. Everything else needed is already in place.
+    deactivateOnTransfer: false,
     oracleSource: "0xEf5f726990442bC3207d72D1F9DcF8677Cf02358".toLowerCase(), 
     underConstruction: false, 
     teamWallets: 0,
@@ -195,6 +207,37 @@ const ACTIVATION_ABI = [
   "event ActivationCleared(uint256 tokenId)"
 ];
 const iface = new ethers.Interface(ACTIVATION_ABI);
+
+// ERC-721 and ERC-20 share this topic0. They are told apart by shape: a 721
+// indexes all three params, so a real NFT transfer has 4 topics and empty data.
+const TRANSFER_TOPIC = ethers.id("Transfer(address,address,uint256)").toLowerCase();
+const ZERO_ADDR = "0x0000000000000000000000000000000000000000";
+const topicToAddr = (t) => (t ? ("0x" + t.slice(-40)).toLowerCase() : null);
+
+// Blockscout returns these as decimal strings on some routes and hex on others.
+const logNum = (val) => {
+  if (val === undefined || val === null) return 0;
+  if (typeof val === "number") return val;
+  const str = val.toString().trim();
+  return str.startsWith("0x") || str.startsWith("0X") ? parseInt(str, 16) : parseInt(str, 10);
+};
+
+// Activation and transfer logs come from two different contracts, so they
+// arrive as two independently-sorted lists. Ordering the merge by
+// (block, txIndex, logIndex) is what makes "transferred AFTER activating"
+// decidable -- and it has to hold within a block, not just across blocks,
+// because an activate-then-flip can land in one.
+function mergeChronological(a, b) {
+  return [...a, ...b].sort((x, y) => {
+    const bd = logNum(x.blockNumber) - logNum(y.blockNumber);
+    if (bd !== 0) return bd;
+    const td = logNum(x.transactionIndex) - logNum(y.transactionIndex);
+    if (td !== 0) return td;
+    const xi = x.logIndex !== undefined ? x.logIndex : (x.log_index !== undefined ? x.log_index : x.index);
+    const yi = y.logIndex !== undefined ? y.logIndex : (y.log_index !== undefined ? y.log_index : y.index);
+    return logNum(xi) - logNum(yi);
+  });
+}
 
 let ethPriceUsd = 1917;
 let tokenPrices = {};
@@ -492,7 +535,17 @@ async function getOwnershipStats(conf, equivBurnt, previousData) {
 }
 
 async function fetchActivations(projectKey, conf) {
-  const mergedLogs = await fetchAllLogs(projectKey, conf.activationCa, conf.genesisBlock);
+  const activationLogs = await fetchAllLogs(projectKey, conf.activationCa, conf.genesisBlock);
+
+  // Cached under a separate projectKey: fetchAllLogs derives its cache file
+  // from that argument, so reusing `projectKey` here would have the NFT
+  // transfers overwrite the activation log cache on every run.
+  const transferLogs = conf.deactivateOnTransfer
+    ? (await fetchAllLogs(`${projectKey}_nft`, conf.nftCa, conf.genesisBlock, TRANSFER_TOPIC))
+        .map(l => ({ ...l, __nftTransfer: true }))
+    : [];
+
+  const mergedLogs = mergeChronological(activationLogs, transferLogs);
   const activeBrokers = new Map(); 
   const dailyData = {};
   const now = Math.floor(Date.now() / 1000);
@@ -516,27 +569,57 @@ async function fetchActivations(projectKey, conf) {
 
     try {
       const topics = log.topics && Array.isArray(log.topics) ? log.topics.filter(t => t !== null) : [];
-      const parsed = iface.parseLog({ topics, data: log.data });
-      if (!parsed) continue;
 
-      const tokenId = parsed.args.tokenId.toString();
-      const isAct = parsed.name === "Activated" || parsed.name === "ActivationUpgraded" || parsed.name.includes("Upgraded");
-      const isDeact = parsed.name === "ActivationCleared" || parsed.name === "Deactivated" || parsed.name.includes("Deact");
+      let tokenId, isAct = false, isDeact = false, tierId = null;
 
-      if (isAct || isDeact) {
-          let tierId = null;
-          if (isAct) { 
+      if (log.__nftTransfer) {
+          // A 721 indexes from/to/tokenId, so anything without 4 topics is an
+          // ERC-20 sharing the signature hash -- not a broker moving.
+          if (topics.length !== 4) continue;
+          const from = topicToAddr(topics[1]);
+          const to = topicToAddr(topics[2]);
+          // A mint cannot follow an activation, and a leg in or out of the
+          // activation contract is protocol custody rather than an owner
+          // leaving. Neither is a deactivation.
+          if (from === ZERO_ADDR) continue;
+          if (from === conf.activationCa || to === conf.activationCa) continue;
+
+          tokenId = BigInt(topics[3]).toString();
+          const prev = activeBrokers.get(tokenId);
+          // Only an *active* broker can deactivate. This also makes the pass
+          // idempotent for projects that emit a real Deactivated event: the
+          // event clears the entry first, so the sale that follows is a no-op
+          // rather than a second deduction.
+          if (!prev) continue;
+          // Same transaction as the activation itself: contracts that move the
+          // token as part of activating would otherwise deactivate instantly.
+          if (prev.tx && prev.tx === log.transactionHash) continue;
+
+          tierId = prev.t;
+          activeBrokers.delete(tokenId);
+          isDeact = true;
+      } else {
+          const parsed = iface.parseLog({ topics, data: log.data });
+          if (!parsed) continue;
+
+          tokenId = parsed.args.tokenId.toString();
+          isAct = parsed.name === "Activated" || parsed.name === "ActivationUpgraded" || parsed.name.includes("Upgraded");
+          isDeact = parsed.name === "ActivationCleared" || parsed.name === "Deactivated" || parsed.name.includes("Deact");
+
+          if (isAct) {
             const tierVal = parsed.args.toTier !== undefined ? parsed.args.toTier : (parsed.args.newTier !== undefined ? parsed.args.newTier : parsed.args.tier);
             if (tierVal !== undefined && tierVal !== null) {
-                tierId = `T${tierVal.toString()}`; 
-                activeBrokers.set(tokenId, { t: tierId, ts: ts }); 
+                tierId = `T${tierVal.toString()}`;
+                activeBrokers.set(tokenId, { t: tierId, ts: ts, tx: log.transactionHash });
             }
-          } 
-          else if (isDeact) { 
-            tierId = activeBrokers.has(tokenId) ? activeBrokers.get(tokenId).t : null;
-            activeBrokers.delete(tokenId); 
           }
+          else if (isDeact) {
+            tierId = activeBrokers.has(tokenId) ? activeBrokers.get(tokenId).t : null;
+            activeBrokers.delete(tokenId);
+          }
+      }
 
+      if (isAct || isDeact) {
           if (tierId && tierStats[tierId]) {
               if (isAct) tierStats[tierId].allTime.act++;
               if (isDeact) tierStats[tierId].allTime.deact++;
@@ -593,7 +676,9 @@ async function fetchActivations(projectKey, conf) {
     tierStats, 
     history, 
     dualBurn,
-    activeTokenTiers: Object.fromEntries(activeBrokers) 
+    // `tx` is bookkeeping for the same-transaction guard, not payload. Left in
+    // it would add a 66-char hash per active token to every hourly commit.
+    activeTokenTiers: Object.fromEntries([...activeBrokers].map(([id, v]) => [id, { t: v.t, ts: v.ts }])) 
   };
 }
 

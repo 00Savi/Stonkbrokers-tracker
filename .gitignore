@@ -1,2 +1,4 @@
 node_modules/
 cache/
+# fetchAllLogs writes one of these per log set at the repo root
+cache_*.json
