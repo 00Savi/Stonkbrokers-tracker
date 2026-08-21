@@ -53,10 +53,15 @@ jobs:
       #
       # restore-keys makes the lookup a prefix match, so each run restores the
       # most recent previous cache and saves a new one under its own key.
+      # The path has to match where fetchAllLogs actually writes:
+      # cache_<key>_logs.json at the repo root, NOT a cache/ directory. As
+      # written before, this step cached a directory that never existed, so
+      # every run silently rescanned from the genesis block. That is also why
+      # the job takes ~6 minutes.
       - name: Restore indexer cache
         uses: actions/cache@v4
         with:
-          path: cache
+          path: cache_*.json
           key: indexer-cache-${{ github.run_id }}
           restore-keys: |
             indexer-cache-
