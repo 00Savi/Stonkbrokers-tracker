@@ -1113,7 +1113,7 @@
                 const equivNfts = db.equivalentBrokersBurnt || 0;
                 
                 const unitVal = proj.config.unitValue || 1;
-                const maxSupplyRaw = proj.config.maxSupply * unitVal;
+                const maxSupplyRaw = proj.activation.totalSupply * unitVal;
                 const currentBurnPct = maxSupplyRaw > 0 ? (db.totalBurnTokens / maxSupplyRaw) * 100 : 0;
                 
                 topCards.innerHTML += `
@@ -1127,7 +1127,7 @@
                     </div>
                 `;
 
-                if (proj.dailySnapshots && proj.config.maxSupply > 0) {
+                if (proj.dailySnapshots && proj.activation.totalSupply > 0) {
                     let lastVal = 0;
                     const projData = masterDates.map(d => {
                         const snap = proj.dailySnapshots.find(s => s.date === d);
