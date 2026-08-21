@@ -8,6 +8,17 @@ on:
 permissions:
   contents: write
 
+# The job checks out, spends ~6 minutes indexing, then pushes. Two runs
+# overlapping in that window both commit a rewritten data.json against the same
+# base, and whichever pushes second is rejected as non-fast-forward. That is
+# exactly what happened when a manual dispatch landed 19 seconds before the
+# hourly cron fired. cancel-in-progress lets a manual run supersede an in-flight
+# one rather than queue behind it -- the fetcher rebuilds data.json from scratch
+# every time, so there is nothing to lose by dropping the older run.
+concurrency:
+  group: fetch-protocol-data
+  cancel-in-progress: true
+
 jobs:
   update-data:
     runs-on: ubuntu-latest
@@ -55,10 +66,27 @@ jobs:
         env:
           BLOCKSCOUT_API_KEY: ${{ secrets.BLOCKSCOUT_API_KEY }}
 
+      # Belt and suspenders alongside the concurrency group: that stops this
+      # workflow racing itself, but an unrelated push to main during the ~6
+      # minute run window would still reject us. Retry against the moved remote
+      # instead of failing the run.
       - name: Commit and Push Data
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add data.json
-          git commit -m "Automated data sync" || echo "No changes to commit"
+          git commit -m "Automated data sync" || exit 0
+          for attempt in 1 2 3; do
+            git push && exit 0
+            echo "Push rejected (attempt $attempt of 3), rebasing onto origin/$BRANCH"
+            git fetch origin "$BRANCH"
+            # data.json is regenerated in full each run, so our copy is strictly
+            # the newer snapshot -- take it wholesale rather than attempting a
+            # line-level merge of generated JSON. During a rebase our commit is
+            # the one being replayed, which -X calls "theirs".
+            git rebase "origin/$BRANCH" -X theirs || { git rebase --abort; exit 1; }
+            sleep 5
+          done
           git push
+        env:
+          BRANCH: ${{ github.ref_name }}
