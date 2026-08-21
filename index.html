@@ -313,18 +313,7 @@
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6" id="rev-top-cards">
-            <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner" id="rev-card-1">
-                <p class="text-xs uppercase tracking-wider text-slate-400 mb-1" id="rev-label-1">Stream 1</p>
-                <p class="text-2xl font-extrabold text-emerald-400" id="rev-stat-1">$0.00</p>
-            </div>
-            <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner" id="rev-card-2">
-                <p class="text-xs uppercase tracking-wider text-slate-400 mb-1" id="rev-label-2">Stream 2</p>
-                <p class="text-2xl font-extrabold text-blue-400" id="rev-stat-2">$0.00</p>
-            </div>
-            <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner" id="rev-card-3">
-                <p class="text-xs uppercase tracking-wider text-slate-400 mb-1" id="rev-label-3">Stream 3</p>
-                <p class="text-2xl font-extrabold text-purple-400" id="rev-stat-3">$0.00</p>
-            </div>
+            <!-- Dynamically populated to avoid DOM collision -->
         </div>
 
         <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6 mb-6">
@@ -372,15 +361,9 @@
                 <h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2">Token Burn & Supply Deflation Tracker</h2>
             </div>
         </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6" id="burn-top-cards">
-            <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
-                <p class="text-xs uppercase tracking-wider text-slate-400 mb-1" id="dynamic-burn-label">Total $TOKEN Burnt</p>
-                <p class="text-2xl md:text-3xl font-extrabold text-orange-400" id="stat-total-burn">Loading...</p>
-            </div>
-            <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
-                <p class="text-xs uppercase tracking-wider text-slate-400 mb-1" id="dynamic-burn-label-2">Equivalent NFTs Locked / Removed</p>
-                <p class="text-2xl md:text-3xl font-extrabold text-blue-400" id="stat-equiv-nfts">Loading...</p>
-            </div>
+        
+        <div class="grid gap-4 mb-6" id="burn-top-cards">
+            <!-- Dynamically populated based on Ecosystem vs Solo mode -->
         </div>
         
         <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6 mb-6" id="old-burn-chart-container">
@@ -418,14 +401,7 @@
             </div>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6" id="act-top-cards">
-            <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
-                <p class="text-xs uppercase tracking-wider text-slate-400 mb-1" id="dynamic-act-label-1">Activated Supply Ratio</p>
-                <p class="text-2xl md:text-3xl font-extrabold text-emerald-400" id="stat-pct-activated">Loading...</p>
-            </div>
-            <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
-                <p class="text-xs uppercase tracking-wider text-slate-400 mb-1" id="dynamic-act-label-2">Total Active Units</p>
-                <p class="text-2xl md:text-3xl font-extrabold text-blue-400" id="stat-active-count">Loading...</p>
-            </div>
+             <!-- Dynamically populated based on Ecosystem vs Solo mode -->
         </div>
 
         <div id="act-tier-switcher-container">
@@ -518,41 +494,13 @@
                 <h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2">Protocol Ownership & Distribution</h2>
             </div>
         </div>
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6" id="own-top-cards-1">
-            <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
-                <p class="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1" id="dyn-own-1">Current Max Supply</p>
-                <p class="text-xl md:text-3xl font-extrabold text-white" id="stat-max-supply">Loading...</p>
-            </div>
-            <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
-                <p class="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1" id="dyn-own-2">Permanently Burnt</p>
-                <p class="text-xl md:text-3xl font-extrabold text-orange-400" id="stat-burnt-nfts">Loading...</p>
-            </div>
-            <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
-                <p class="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1" id="dyn-own-3">AMM Vault Inventory</p>
-                <p class="text-xl md:text-3xl font-extrabold text-slate-300" id="stat-amm-vault">Loading...</p>
-            </div>
-            <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner border-b-4 border-b-blue-500">
-                <p class="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1" id="dyn-own-4">True Circulating NFTs</p>
-                <p class="text-xl md:text-3xl font-extrabold text-blue-400" id="stat-circ-supply">Loading...</p>
-            </div>
+        
+        <div class="grid gap-4 mb-6" id="own-top-cards-1">
+             <!-- Dynamically populated based on Ecosystem vs Solo mode -->
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6" id="own-top-cards-2">
-            <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-5 shadow-sm">
-                <p class="text-xs uppercase tracking-wider text-slate-400 mb-1" id="dyn-own-5">Unique NFT Holders</p>
-                <p class="text-2xl md:text-3xl font-extrabold text-purple-400" id="stat-nft-holders">Loading...</p>
-                <p class="text-xs text-slate-500 mt-1" id="dyn-own-5-sub">Wallets holding at least 1 unit</p>
-            </div>
-            <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-5 shadow-sm ring-1 ring-emerald-500/20">
-                <p class="text-xs uppercase tracking-wider text-slate-400 mb-1" id="dyn-own-6">Ownership Concentration</p>
-                <p class="text-2xl md:text-3xl font-extrabold text-emerald-400" id="stat-own-ratio">Loading...</p>
-                <p class="text-xs text-slate-500 mt-1" id="dyn-own-6-sub">Unique humans / True Circulating Supply</p>
-            </div>
-            <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-5 shadow-sm">
-                <p class="text-xs uppercase tracking-wider text-slate-400 mb-1" id="dynamic-holder-label">Unique $TOKEN Holders</p>
-                <p class="text-2xl md:text-3xl font-extrabold text-purple-400" id="stat-stonk-holders">Loading...</p>
-                <p class="text-xs text-slate-500 mt-1" id="dyn-own-7-sub">Active addresses with a token balance</p>
-            </div>
+        <div class="grid gap-4 mb-6" id="own-top-cards-2">
+             <!-- Dynamically populated based on Ecosystem vs Solo mode -->
         </div>
 
         <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6 mb-6">
@@ -585,10 +533,10 @@
         const sleep = (ms) => new Promise(r => setTimeout(r, ms));
         
         const ECOSYSTEM_COLORS = {
-            stonk: '#3b82f6',     // Blue
-            mancer: '#a855f7',    // Purple
-            tickeryard: '#34d399',// Emerald
-            cardwall: '#fbbf24'   // Amber
+            stonk: '#3b82f6',     
+            mancer: '#a855f7',    
+            tickeryard: '#34d399',
+            cardwall: '#fbbf24'   
         };
 
         const ECOSYSTEM_NAMES = {
@@ -678,6 +626,19 @@
         let ownershipChartInstance = null;
         let revenueChartInstance = null;
         let tierChartInstances = {};
+
+        function destroyAllCharts() {
+            if (burnChartInstance) burnChartInstance.destroy();
+            if (flywheelChartInstance) flywheelChartInstance.destroy();
+            if (historicalRoiChartInstance) historicalRoiChartInstance.destroy();
+            if (activationChartInstance) activationChartInstance.destroy();
+            if (tierPieChartInstance) tierPieChartInstance.destroy();
+            if (ownershipChartInstance) ownershipChartInstance.destroy();
+            if (revenueChartInstance) revenueChartInstance.destroy();
+            
+            Object.values(tierChartInstances).forEach(chart => chart && chart.destroy());
+            tierChartInstances = {};
+        }
 
         function toggleDropdown(e) {
             if (e) e.stopPropagation();
@@ -1074,17 +1035,21 @@
                 }
             });
 
-            document.getElementById('rev-label-1').innerText = "Total Ecosystem Yield (7D)";
-            document.getElementById('rev-stat-1').innerText = formatCurrency(totalEcosystemYield);
-            document.getElementById('rev-stat-1').className = "text-2xl font-extrabold text-emerald-400";
-            
-            document.getElementById('rev-label-2').innerText = "Combined Protocol AMM TVL";
-            document.getElementById('rev-stat-2').innerText = formatCurrency(totalAmmLockedUsd);
-            document.getElementById('rev-stat-2').className = "text-2xl font-extrabold text-blue-400";
-            
-            document.getElementById('rev-label-3').innerText = "Active Revenue Protocols";
-            document.getElementById('rev-stat-3').innerText = "3 Live";
-            document.getElementById('rev-stat-3').className = "text-2xl font-extrabold text-purple-400";
+            const topCards = document.getElementById('rev-top-cards');
+            topCards.innerHTML = `
+                <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
+                    <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Total Ecosystem Yield (7D)</p>
+                    <p class="text-2xl font-extrabold text-emerald-400">${formatCurrency(totalEcosystemYield)}</p>
+                </div>
+                <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
+                    <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Combined Protocol AMM TVL</p>
+                    <p class="text-2xl font-extrabold text-blue-400">${formatCurrency(totalAmmLockedUsd)}</p>
+                </div>
+                <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
+                    <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Active Revenue Protocols</p>
+                    <p class="text-2xl font-extrabold text-purple-400">3 Live</p>
+                </div>
+            `;
 
             const canvas = document.getElementById('revenueChart');
             if (canvas) {
@@ -1130,37 +1095,46 @@
         }
 
         function renderEcosystemBurn() {
-            let totalEcosystemBurnUsd = 0;
-            let totalEcosystemUnitsBurned = 0;
-            
             const datasets = [];
             let masterDates = [];
             if (masterData.projects.stonk && masterData.projects.stonk.dailySnapshots) {
                 masterDates = masterData.projects.stonk.dailySnapshots.map(s => s.date);
             }
 
+            const topCards = document.getElementById('burn-top-cards');
+            topCards.className = "grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6";
+            topCards.innerHTML = ''; 
+
             ['stonk', 'mancer', 'tickeryard', 'cardwall'].forEach(key => {
                 const proj = masterData.projects[key];
                 if (!proj || !proj.activation) return;
                 
-                const m = proj.market;
                 const db = proj.activation.dualBurn || {};
+                const equivNfts = db.equivalentBrokersBurnt || 0;
                 
-                totalEcosystemUnitsBurned += (db.equivalentBrokersBurnt || 0);
-                if (db.totalBurnTokens) {
-                    totalEcosystemBurnUsd += (db.totalBurnTokens * m.tokenPriceUsd);
-                }
+                const unitVal = proj.config.unitValue || 1;
+                const maxSupplyRaw = proj.config.maxSupply * unitVal;
+                const currentBurnPct = maxSupplyRaw > 0 ? (db.totalBurnTokens / maxSupplyRaw) * 100 : 0;
+                
+                topCards.innerHTML += `
+                    <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 shadow-inner">
+                        <p class="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-1">
+                            <span class="w-2 h-2 rounded-full" style="background-color: ${ECOSYSTEM_COLORS[key]}"></span>
+                            ${ECOSYSTEM_NAMES[key]} Deflation
+                        </p>
+                        <p class="text-xl md:text-2xl font-extrabold" style="color: ${ECOSYSTEM_COLORS[key]}">${currentBurnPct.toFixed(2)}%</p>
+                        <p class="text-[10px] text-slate-500 mt-0.5">${formatNumber(equivNfts, 1)} Equivalent Units</p>
+                    </div>
+                `;
 
                 if (proj.dailySnapshots && proj.config.maxSupply > 0) {
-                    const unitVal = proj.config.unitValue || 1;
-                    const maxSupplyRaw = proj.config.maxSupply * unitVal;
-                    
+                    let lastVal = 0;
                     const projData = masterDates.map(d => {
                         const snap = proj.dailySnapshots.find(s => s.date === d);
                         if (snap && snap.totalBurn) {
-                            return (snap.totalBurn / maxSupplyRaw) * 100;
+                            lastVal = (snap.totalBurn / maxSupplyRaw) * 100;
                         }
-                        return null;
+                        return lastVal;
                     });
                     
                     datasets.push({
@@ -1169,19 +1143,13 @@
                         borderColor: ECOSYSTEM_COLORS[key],
                         borderWidth: 2,
                         tension: 0.3,
-                        pointRadius: 1,
+                        pointRadius: 2,
+                        spanGaps: true,
                         yAxisID: 'y'
                     });
                 }
             });
 
-            document.getElementById('dynamic-burn-label').innerText = "Total Ecosystem Value Burned";
-            document.getElementById('stat-total-burn').innerText = formatCurrency(totalEcosystemBurnUsd);
-            document.getElementById('stat-total-burn').className = "text-2xl md:text-3xl font-extrabold text-orange-400";
-            
-            document.getElementById('dynamic-burn-label-2').innerText = "Total Ecosystem Units Deflated";
-            document.getElementById('stat-equiv-nfts').innerText = formatNumber(totalEcosystemUnitsBurned, 2) + " Units";
-            
             document.getElementById('old-burn-chart-container').classList.add('hidden');
             document.getElementById('flywheel-title').innerText = "Ecosystem Supply Deflation (% of Total Supply)";
             document.getElementById('flywheel-subtitle').innerText = "Normalized comparison of permanent supply removal across all protocols.";
@@ -1204,7 +1172,7 @@
                             y: { 
                                 type: 'linear', display: true, position: 'left',
                                 grid: { color: '#334155', borderDash: [4, 4] },
-                                ticks: { color: '#94a3b8', callback: (v) => v.toFixed(1) + '%' }, 
+                                ticks: { color: '#94a3b8', callback: (v) => v.toFixed(2) + '%' }, 
                                 title: { display: false }
                             }
                         }
@@ -1214,35 +1182,52 @@
         }
 
         function renderEcosystemActivation() {
-            let totalEcosystemMax = 0;
-            let totalEcosystemActive = 0;
             const breakdownData = [];
             const breakdownLabels = [];
             const breakdownColors = [];
-            
             const datasets = [];
+            
             let masterDates = [];
             if (masterData.projects.stonk && masterData.projects.stonk.activation) {
                 masterDates = masterData.projects.stonk.activation.history.labels || [];
             }
+
+            const topCards = document.getElementById('act-top-cards');
+            topCards.className = "grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6";
+            topCards.innerHTML = '';
 
             ['stonk', 'mancer', 'tickeryard', 'cardwall'].forEach(key => {
                 const proj = masterData.projects[key];
                 if (!proj || !proj.activation) return;
                 
                 const act = proj.activation;
-                totalEcosystemMax += (act.totalSupply || 0);
-                totalEcosystemActive += (act.activeCount || 0);
+                const actCount = act.activeCount || 0;
+                const maxSup = act.totalSupply || 1;
+                const pctActivated = (actCount / maxSup) * 100;
                 
                 breakdownLabels.push(ECOSYSTEM_NAMES[key]);
-                breakdownData.push(act.activeCount || 0);
+                breakdownData.push(actCount);
                 breakdownColors.push(ECOSYSTEM_COLORS[key]);
 
+                topCards.innerHTML += `
+                    <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 shadow-inner">
+                        <p class="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-1">
+                            <span class="w-2 h-2 rounded-full" style="background-color: ${ECOSYSTEM_COLORS[key]}"></span>
+                            ${ECOSYSTEM_NAMES[key]} Active
+                        </p>
+                        <p class="text-xl md:text-2xl font-extrabold" style="color: ${ECOSYSTEM_COLORS[key]}">${formatNumber(actCount)}</p>
+                        <p class="text-[10px] text-slate-500 mt-0.5">${pctActivated.toFixed(1)}% of Supply</p>
+                    </div>
+                `;
+
                 if (act.history && act.history.cumulative) {
+                    let lastVal = 0;
                     const projData = masterDates.map(d => {
                         const idx = (act.history.labels || []).indexOf(d);
-                        if (idx !== -1) return act.history.cumulative[idx];
-                        return null;
+                        if (idx !== -1) {
+                            lastVal = act.history.cumulative[idx];
+                        }
+                        return lastVal;
                     });
                     
                     datasets.push({
@@ -1253,21 +1238,15 @@
                         borderWidth: 2,
                         tension: 0.3,
                         pointRadius: 0,
-                        fill: true
+                        fill: true,
+                        spanGaps: true
                     });
                 }
             });
 
-            const overallPct = totalEcosystemMax > 0 ? (totalEcosystemActive / totalEcosystemMax) * 100 : 0;
-            document.getElementById('dynamic-act-label-1').innerText = "Combined Ecosystem Activation Ratio";
-            document.getElementById('stat-pct-activated').innerText = overallPct.toFixed(2) + "%";
-            
-            document.getElementById('dynamic-act-label-2').innerText = "Total Network Active Units";
-            document.getElementById('stat-active-count').innerText = formatNumber(totalEcosystemActive) + " Units";
-            
             document.getElementById('act-tier-switcher-container').classList.add('hidden');
-            
             document.getElementById('pie-chart-title').innerText = "Ecosystem Dominance (Share of Total Active Units)";
+            
             const pieCanvas = document.getElementById('tierPieChart');
             if (pieCanvas) {
                 const ctxPie = pieCanvas.getContext('2d');
@@ -1315,37 +1294,46 @@
         }
 
         function renderEcosystemOwnership() {
-            let sumMaxSupply = 0;
-            let sumBurnt = 0;
-            let sumAmmVault = 0;
-            let sumCircSupply = 0;
-            let sumNftHolders = 0;
-            let sumStonkHolders = 0;
-            
             const datasets = [];
             let masterDates = [];
             if (masterData.projects.stonk && masterData.projects.stonk.ownership && masterData.projects.stonk.ownership.historicalGrowth) {
                 masterDates = masterData.projects.stonk.ownership.historicalGrowth.labels || [];
             }
 
+            const topCards1 = document.getElementById('own-top-cards-1');
+            topCards1.className = "grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6";
+            topCards1.innerHTML = ''; 
+            
+            const topCards2 = document.getElementById('own-top-cards-2');
+            topCards2.innerHTML = ''; 
+            topCards2.className = "hidden";
+
             ['stonk', 'mancer', 'tickeryard', 'cardwall'].forEach(key => {
                 const proj = masterData.projects[key];
                 if (!proj || !proj.ownership) return;
                 
                 const own = proj.ownership;
-                sumMaxSupply += (own.currentMaxSupply || 0);
-                sumBurnt += (own.burntNfts || 0);
-                sumAmmVault += (own.ammVaultNfts || 0);
-                sumCircSupply += (own.circulatingNftSupply || 0);
-                sumNftHolders += (own.nftHolders || 0);
-                sumStonkHolders += (own.stonkHolders || 0);
+                const ownRatio = own.ownershipRatio || 0;
+
+                topCards1.innerHTML += `
+                    <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-4 shadow-inner">
+                        <p class="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-1">
+                            <span class="w-2 h-2 rounded-full" style="background-color: ${ECOSYSTEM_COLORS[key]}"></span>
+                            ${ECOSYSTEM_NAMES[key]} Concentration
+                        </p>
+                        <p class="text-xl md:text-2xl font-extrabold" style="color: ${ECOSYSTEM_COLORS[key]}">${ownRatio.toFixed(2)}%</p>
+                        <p class="text-[10px] text-slate-500 mt-0.5">${formatNumber(own.nftHolders)} Unique Wallets</p>
+                    </div>
+                `;
 
                 if (own.historicalGrowth && own.historicalGrowth.data) {
                     const cleanHistData = own.historicalGrowth.data.map((v, i, arr) => v === 0 && i > 0 ? arr[i-1] : v);
+                    
+                    let lastVal = 0;
                     const projData = masterDates.map(d => {
                         const idx = (own.historicalGrowth.labels || []).indexOf(d);
-                        if (idx !== -1) return cleanHistData[idx];
-                        return null;
+                        if (idx !== -1) lastVal = cleanHistData[idx];
+                        return lastVal;
                     });
                     
                     datasets.push({
@@ -1356,35 +1344,11 @@
                         borderWidth: 3,
                         fill: false,
                         stepped: true,
+                        spanGaps: true,
                         pointRadius: 0
                     });
                 }
             });
-
-            document.getElementById('dyn-own-1').innerText = "Combined Maximum Supply";
-            document.getElementById('stat-max-supply').innerText = formatNumber(sumMaxSupply, 2) + " Units";
-            
-            document.getElementById('dyn-own-2').innerText = "Total Units Erased / Locked";
-            document.getElementById('stat-burnt-nfts').innerText = formatNumber(sumBurnt, 2) + " Units";
-            
-            document.getElementById('dyn-own-3').innerText = "Combined AMM / Vault Storage";
-            document.getElementById('stat-amm-vault').innerText = formatNumber(sumAmmVault) + " Units";
-            
-            document.getElementById('dyn-own-4').innerText = "Ecosystem Circulating Supply";
-            document.getElementById('stat-circ-supply').innerText = formatNumber(sumCircSupply) + " Units";
-
-            document.getElementById('dyn-own-5').innerText = "Ecosystem NFT Reach";
-            document.getElementById('dyn-own-5-sub').innerText = "Sum of unique wallets per protocol";
-            document.getElementById('stat-nft-holders').innerText = formatNumber(sumNftHolders);
-            
-            const ownRatio = sumCircSupply > 0 ? (sumNftHolders / sumCircSupply) * 100 : 0;
-            document.getElementById('dyn-own-6').innerText = "Macro Concentration";
-            document.getElementById('dyn-own-6-sub').innerText = "Ecosystem Humans / Ecosystem Supply";
-            document.getElementById('stat-own-ratio').innerText = ownRatio.toFixed(2) + "%";
-            
-            document.getElementById('dynamic-holder-label').innerText = "Combined ERC-20 Holdership";
-            document.getElementById('dyn-own-7-sub').innerText = "Sum of active ecosystem token wallets";
-            document.getElementById('stat-stonk-holders').innerText = formatNumber(sumStonkHolders);
 
             document.getElementById('ownership-chart-title').innerText = "Ecosystem Holder Growth Trajectories";
             const canvas = document.getElementById('ownershipChart');
@@ -1413,7 +1377,9 @@
         function loadProject(projectKey) {
             currentProjectKey = projectKey;
             
-            // Reset the what-if slider
+            destroyAllCharts();
+            window.ownershipChartData = null; 
+            
             const slider = document.getElementById('volume-slider');
             if (slider) slider.value = 1;
             const sliderDisplay = document.getElementById('slider-multiplier-display');
@@ -1534,7 +1500,6 @@
 
             const tbody = document.getElementById('tiers-body');
             tbody.innerHTML = '';
-            tierChartInstances = {};
             window.tierChartData = {};
 
             window.currentProjectTiers = data.tiers;
@@ -1814,54 +1779,75 @@
             const totalBurn = dualBurn.totalBurnTokens || 0;
             const equivNfts = dualBurn.equivalentBrokersBurnt || 0;
             
-            document.getElementById('dynamic-burn-label').innerText = `Total ${conf.ticker} Burnt`;
-            document.getElementById('dynamic-burn-label-2').innerText = `Equivalent NFTs Locked / Removed`;
-            document.getElementById('dyn-act-label-1').innerText = "Activated Supply Ratio";
-            document.getElementById('dyn-act-label-2').innerText = "Total Active Units";
+            // Rebuild Burn Top Cards explicitly for Solo View
+            const burnTopCards = document.getElementById('burn-top-cards');
+            burnTopCards.className = "grid grid-cols-1 md:grid-cols-2 gap-4 mb-6";
+            burnTopCards.innerHTML = `
+                <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
+                    <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Total ${conf.ticker} Burnt</p>
+                    <p class="text-2xl md:text-3xl font-extrabold text-orange-400">${formatNumber(totalBurn)} ${conf.ticker}</p>
+                </div>
+                <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
+                    <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Equivalent NFTs Locked / Removed</p>
+                    <p class="text-2xl md:text-3xl font-extrabold text-blue-400">${formatNumber(equivNfts, 2)} Units</p>
+                </div>
+            `;
+            
+            // Rebuild Act Top Cards explicitly for Solo View
+            const actTopCards = document.getElementById('act-top-cards');
+            actTopCards.className = "grid grid-cols-1 md:grid-cols-2 gap-4 mb-6";
+            actTopCards.innerHTML = `
+                <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
+                    <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Activated Supply Ratio</p>
+                    <p class="text-2xl md:text-3xl font-extrabold text-emerald-400">${pctActivated.toFixed(2)}%</p>
+                </div>
+                <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
+                    <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Total Active Units</p>
+                    <p class="text-2xl md:text-3xl font-extrabold text-blue-400">${formatNumber(activeCount)} Units</p>
+                </div>
+            `;
 
-            document.getElementById('dyn-own-1').innerText = "Current Max Supply";
-            document.getElementById('dyn-own-2').innerText = "Permanently Burnt";
-            document.getElementById('dyn-own-3').innerText = "AMM Vault Inventory";
-            document.getElementById('dyn-own-4').innerText = "True Circulating NFTs";
-            document.getElementById('dyn-own-5').innerText = "Unique NFT Holders";
-            document.getElementById('dyn-own-5-sub').innerText = "Wallets holding at least 1 unit";
-            document.getElementById('dyn-own-6').innerText = "Ownership Concentration";
-            document.getElementById('dyn-own-6-sub').innerText = "Unique humans / True Circulating Supply";
-            document.getElementById('dynamic-holder-label').innerText = `Unique ${conf.ticker} Holders`;
-            document.getElementById('dyn-own-7-sub').innerText = "Active addresses with a token balance";
-            
-            const elTotalBurn = document.getElementById('stat-total-burn');
-            if (elTotalBurn) { elTotalBurn.innerText = formatNumber(totalBurn) + ` ${conf.ticker}`; elTotalBurn.className = "text-2xl md:text-3xl font-extrabold text-orange-400"; }
-            
-            const elEquiv = document.getElementById('stat-equiv-nfts');
-            if (elEquiv) elEquiv.innerText = formatNumber(equivNfts, 2) + " Units";
-            
-            const elPctAct = document.getElementById('stat-pct-activated');
-            if (elPctAct) elPctAct.innerText = pctActivated.toFixed(2) + "%";
-            
-            const elActCount = document.getElementById('stat-active-count');
-            if (elActCount) elActCount.innerText = formatNumber(activeCount) + " Units";
+            // Rebuild Own Top Cards explicitly for Solo View
+            const ownTopCards1 = document.getElementById('own-top-cards-1');
+            ownTopCards1.className = "grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6";
+            ownTopCards1.innerHTML = `
+                <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
+                    <p class="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Current Max Supply</p>
+                    <p class="text-xl md:text-3xl font-extrabold text-white">${formatNumber(own.currentMaxSupply || 0, 2)} Units</p>
+                </div>
+                <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
+                    <p class="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Permanently Burnt</p>
+                    <p class="text-xl md:text-3xl font-extrabold text-orange-400">${formatNumber(own.burntNfts || 0, 2)} Units</p>
+                </div>
+                <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
+                    <p class="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">AMM Vault Inventory</p>
+                    <p class="text-xl md:text-3xl font-extrabold text-slate-300">${formatNumber(own.ammVaultNfts || 0)} Units</p>
+                </div>
+                <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner border-b-4 border-b-blue-500">
+                    <p class="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">True Circulating NFTs</p>
+                    <p class="text-xl md:text-3xl font-extrabold text-blue-400">${formatNumber(own.circulatingNftSupply || 0)} Units</p>
+                </div>
+            `;
 
-            const elMaxSupply = document.getElementById('stat-max-supply');
-            if (elMaxSupply) elMaxSupply.innerText = formatNumber(own.currentMaxSupply || 0, 2) + ' Units';
-            
-            const elCircSupply = document.getElementById('stat-circ-supply');
-            if (elCircSupply) elCircSupply.innerText = formatNumber(own.circulatingNftSupply || 0) + ' Units';
-            
-            const elAmmVault = document.getElementById('stat-amm-vault');
-            if (elAmmVault) elAmmVault.innerText = formatNumber(own.ammVaultNfts || 0) + ' Units';
-            
-            const elBurntNfts = document.getElementById('stat-burnt-nfts');
-            if (elBurntNfts) elBurntNfts.innerText = formatNumber(own.burntNfts || 0, 2) + ' Units';
-            
-            const elNftHolders = document.getElementById('stat-nft-holders');
-            if (elNftHolders) elNftHolders.innerText = formatNumber(own.nftHolders || 0);
-            
-            const elStonkHolders = document.getElementById('stat-stonk-holders');
-            if (elStonkHolders) elStonkHolders.innerText = formatNumber(own.stonkHolders || 0);
-            
-            const elOwnRatio = document.getElementById('stat-own-ratio');
-            if (elOwnRatio) elOwnRatio.innerText = (own.ownershipRatio || 0).toFixed(2) + '%';
+            const ownTopCards2 = document.getElementById('own-top-cards-2');
+            ownTopCards2.className = "grid grid-cols-1 md:grid-cols-3 gap-4 mb-6";
+            ownTopCards2.innerHTML = `
+                <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-5 shadow-sm">
+                    <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Unique NFT Holders</p>
+                    <p class="text-2xl md:text-3xl font-extrabold text-purple-400">${formatNumber(own.nftHolders || 0)}</p>
+                    <p class="text-xs text-slate-500 mt-1">Wallets holding at least 1 unit</p>
+                </div>
+                <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-5 shadow-sm ring-1 ring-emerald-500/20">
+                    <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Ownership Concentration</p>
+                    <p class="text-2xl md:text-3xl font-extrabold text-emerald-400">${(own.ownershipRatio || 0).toFixed(2)}%</p>
+                    <p class="text-xs text-slate-500 mt-1">Unique humans / True Circulating Supply</p>
+                </div>
+                <div class="bg-[#1e293b] border border-[#334155] rounded-xl p-5 shadow-sm">
+                    <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Unique ${conf.ticker} Holders</p>
+                    <p class="text-2xl md:text-3xl font-extrabold text-purple-400">${formatNumber(own.stonkHolders || 0)}</p>
+                    <p class="text-xs text-slate-500 mt-1">Active addresses with a token balance</p>
+                </div>
+            `;
 
             if (data.tiers) {
                 data.tiers.forEach(t => { 
@@ -1898,17 +1884,21 @@
             const rev = data.revenue || {};
             const pCfg = PROJECT_REVENUE_CONFIG[projectKey] || PROJECT_REVENUE_CONFIG.stonk;
 
-            document.getElementById('rev-label-1').innerText = pCfg.stream1.label;
-            document.getElementById('rev-stat-1').innerText = formatCurrency(rev[pCfg.stream1.key] || 0);
-            document.getElementById('rev-stat-1').className = "text-2xl font-extrabold text-emerald-400";
-
-            document.getElementById('rev-label-2').innerText = pCfg.stream2.label;
-            document.getElementById('rev-stat-2').innerText = formatCurrency(rev[pCfg.stream2.key] || 0);
-            document.getElementById('rev-stat-2').className = "text-2xl font-extrabold text-blue-400";
-
-            document.getElementById('rev-label-3').innerText = pCfg.stream3.label;
-            document.getElementById('rev-stat-3').innerText = formatCurrency(rev[pCfg.stream3.key] || 0);
-            document.getElementById('rev-stat-3').className = "text-2xl font-extrabold text-purple-400";
+            const revTopCards = document.getElementById('rev-top-cards');
+            revTopCards.innerHTML = `
+                <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
+                    <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">${pCfg.stream1.label}</p>
+                    <p class="text-2xl font-extrabold text-emerald-400">${formatCurrency(rev[pCfg.stream1.key] || 0)}</p>
+                </div>
+                <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
+                    <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">${pCfg.stream2.label}</p>
+                    <p class="text-2xl font-extrabold text-blue-400">${formatCurrency(rev[pCfg.stream2.key] || 0)}</p>
+                </div>
+                <div class="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
+                    <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">${pCfg.stream3.label}</p>
+                    <p class="text-2xl font-extrabold text-purple-400">${formatCurrency(rev[pCfg.stream3.key] || 0)}</p>
+                </div>
+            `;
 
             window.revenueData = {
                 dates: (data.tiers && data.tiers[0]?.dailyDates) ? data.tiers[0].dailyDates : [],
