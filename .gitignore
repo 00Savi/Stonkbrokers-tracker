@@ -2,3 +2,8 @@ node_modules/
 cache/
 # fetchAllLogs writes one of these per log set at the repo root
 cache_*.json
+
+# Stale build output. vite.config.js builds to docs/ (what Pages serves);
+# dist/ is left over from before that switch and shipped its own outdated
+# copy of data.json.
+dist/
