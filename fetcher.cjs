@@ -1,5 +1,44 @@
 const fs = require("fs");
+const path = require("path");
 const { ethers } = require("ethers");
+
+// The dashboard fetches /data.json. Vite serves that out of public/ during dev
+// and copies it into the build output on `vite build`; GitHub Pages serves the
+// build output in docs/. Nothing rebuilds docs/ on a schedule, so an hourly job
+// that only wrote public/ would leave the live site frozen until someone ran a
+// build by hand. Write both, and commit both.
+//
+// public/ is canonical: it is the copy the next `vite build` reads, and the one
+// previousData is carried forward from.
+const DATA_CANONICAL = path.join(__dirname, "public", "data.json");
+const DATA_MIRRORS = [path.join(__dirname, "docs", "data.json")];
+
+function readPreviousData() {
+  for (const file of [DATA_CANONICAL, ...DATA_MIRRORS]) {
+    try {
+      if (fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, "utf8"));
+    } catch (e) {
+      console.warn(`[warn] could not parse ${file}, trying next: ${e.message}`);
+    }
+  }
+  return {};
+}
+
+function writeData(payload) {
+  const json = JSON.stringify(payload, null, 2);
+  fs.mkdirSync(path.dirname(DATA_CANONICAL), { recursive: true });
+  fs.writeFileSync(DATA_CANONICAL, json);
+  const written = [DATA_CANONICAL];
+  for (const file of DATA_MIRRORS) {
+    // Only refresh a mirror that already exists. Creating docs/ here would
+    // hand Pages a directory with a data file and no index.html.
+    if (fs.existsSync(path.dirname(file))) {
+      fs.writeFileSync(file, json);
+      written.push(file);
+    }
+  }
+  return written.map((f) => path.relative(__dirname, f));
+}
 
 const API_KEY = process.env.BLOCKSCOUT_API_KEY;
 const PRO_API = "https://api.blockscout.com/v2/api";
@@ -1071,7 +1110,7 @@ async function loadTokenListPrices(tokenList) {
 async function run() {
   console.log("Starting Multi-Project Build...");
   let previousData = {};
-  try { if (fs.existsSync("data.json")) previousData = JSON.parse(fs.readFileSync("data.json", "utf8")); } catch(e) {}
+  previousData = readPreviousData();
 
   const markets = await loadMarketPrices();
   const memeData = await loadTokenListPrices(MEMES);
@@ -1155,8 +1194,8 @@ async function run() {
       };
   }
 
-  fs.writeFileSync("data.json", JSON.stringify(finalJson, null, 2));
-  console.log("\n✓ Complete dashboard payload generated successfully.");
+  const written = writeData(finalJson);
+  console.log(`\n✓ Complete dashboard payload generated successfully -> ${written.join(", ")}`);
 }
 
 run().catch(err => { console.error(err); process.exit(1); });

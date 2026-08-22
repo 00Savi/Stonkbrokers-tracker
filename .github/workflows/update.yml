@@ -13,7 +13,7 @@ permissions:
 # base, and whichever pushes second is rejected as non-fast-forward. That is
 # exactly what happened when a manual dispatch landed 19 seconds before the
 # hourly cron fired. cancel-in-progress lets a manual run supersede an in-flight
-# one rather than queue behind it -- the fetcher rebuilds data.json from scratch
+# one rather than queue behind it -- the fetcher rebuilds the data payload from scratch
 # every time, so there is nothing to lose by dropping the older run.
 concurrency:
   group: fetch-protocol-data
@@ -67,7 +67,7 @@ jobs:
             indexer-cache-
 
       - name: Run Fetcher Script
-        run: node fetcher.js
+        run: node fetcher.cjs
         env:
           BLOCKSCOUT_API_KEY: ${{ secrets.BLOCKSCOUT_API_KEY }}
 
@@ -79,16 +79,19 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add data.json
+          # public/data.json is what the next build reads; docs/data.json is what
+          # Pages actually serves. The fetcher writes both -- commit both, or the
+          # live site stays pinned to whenever someone last ran a build by hand.
+          git add public/data.json docs/data.json
           git commit -m "Automated data sync" || exit 0
           for attempt in 1 2 3; do
             git push && exit 0
             echo "Push rejected (attempt $attempt of 3), rebasing onto origin/$BRANCH"
             git fetch origin "$BRANCH"
-            # data.json is regenerated in full each run, so our copy is strictly
-            # the newer snapshot -- take it wholesale rather than attempting a
-            # line-level merge of generated JSON. During a rebase our commit is
-            # the one being replayed, which -X calls "theirs".
+            # The data payload is regenerated in full each run, so our copy is
+            # strictly the newer snapshot -- take it wholesale rather than
+            # attempting a line-level merge of generated JSON. During a rebase our
+            # commit is the one being replayed, which -X calls "theirs".
             git rebase "origin/$BRANCH" -X theirs || { git rebase --abort; exit 1; }
             sleep 5
           done
