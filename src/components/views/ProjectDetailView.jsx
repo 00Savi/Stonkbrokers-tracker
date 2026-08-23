@@ -32,6 +32,7 @@ export default function ProjectDetailView({ projectKey, data, activeTab }) {
   const [histTimeframe, setHistTimeframe] = useState('all');
   const [burnTimeframe, setBurnTimeframe] = useState('all');
   const [lpTableOpen, setLpTableOpen] = useState(true);
+  const [tierTimeframe, setTierTimeframe] = useState('allTime');
 
   const project = data?.projects?.[projectKey];
 
@@ -396,6 +397,61 @@ export default function ProjectDetailView({ projectKey, data, activeTab }) {
               <p className="text-3xl font-bold text-blue-400">{formatNumber(activation.activeCount || 1812)} Units</p>
             </div>
           </div>
+
+          {/* --- NEW: TIER ACTIVATION FLOW (D/W/M/ALL) --- */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-4 gap-4 mt-8">
+            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Tier Activation Flow</h3>
+            <div className="flex bg-[#1e293b] rounded-lg p-1 border border-[#334155] w-full sm:w-auto">
+              {[
+                { id: '24h', label: 'D' },
+                { id: '7d', label: 'W' },
+                { id: '30d', label: 'M' },
+                { id: 'allTime', label: 'ALL' }
+              ].map((tf) => (
+                <button
+                  key={tf.id}
+                  onClick={() => setTierTimeframe(tf.id)}
+                  className={`flex-1 sm:flex-none px-4 py-1.5 text-xs font-bold rounded-md transition ${
+                    tierTimeframe === tf.id
+                      ? 'bg-[#334155] text-white shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {tf.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-8">
+            {['T0', 'T1', 'T2', 'T3', 'T4'].map((tierId, index) => {
+              const tierInfo = tiers.find(t => t.tier === tierId) || { name: `Tier ${index}` };
+              const tData = (activation.tierStats?.[tierId]?.[tierTimeframe]) || { act: 0, deact: 0 };
+              const colors = ['bg-[#60a5fa]', 'bg-[#34d399]', 'bg-[#f472b6]', 'bg-[#fbbf24]', 'bg-[#a78bfa]'];
+
+              return (
+                <div key={tierId} className="bg-[#1e293b] border border-[#334155] rounded-xl p-4 shadow-sm">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className={`w-2.5 h-2.5 rounded-sm ${colors[index]}`}></div>
+                    <p className="text-[10px] uppercase tracking-wider text-slate-300 font-bold truncate">
+                      {tierId}: {tierInfo.name}
+                    </p>
+                  </div>
+                  <div className="flex justify-between items-end">
+                    <div>
+                      <p className="text-lg font-bold text-emerald-400">{formatNumber(tData.act)}</p>
+                      <p className="text-[9px] text-slate-500 uppercase">Act</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-lg font-bold text-rose-400">{formatNumber(tData.deact)}</p>
+                      <p className="text-[9px] text-slate-500 uppercase">Deact</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {/* --- END TIER ACTIVATION FLOW --- */}
 
           <div className="bg-[#1e293b] border border-[#334155] p-6 rounded-2xl shadow-xl">
             <h3 className="text-lg font-bold text-white mb-6">Active Units & Tier Distribution</h3>
