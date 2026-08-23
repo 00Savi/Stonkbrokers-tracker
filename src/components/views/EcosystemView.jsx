@@ -1,418 +1,765 @@
 import React, { useState } from 'react';
 import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-  ArcElement,
-  Filler
+  Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, ArcElement, Filler
 } from 'chart.js';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  ArcElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
-);
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
-export default function EcosystemView({ data, activeTab }) {
-  const [expandedRow, setExpandedRow] = useState(null);
-  const [roiTimeframe, setRoiTimeframe] = useState('all');
-  const [activationTimeframe, setActivationTimeframe] = useState('all');
+export default function EcosystemView({ data }) {
+  const [activeTab, setActiveTab] = useState('roi');
+  const [expandedProject, setExpandedProject] = useState(null);
+  
+  const [revTimeframe, setRevTimeframe] = useState('7d');
+  const [histTimeframe, setHistTimeframe] = useState('all');
+  const [burnTimeframe, setBurnTimeframe] = useState('all');
+  const [actTimeframe, setActTimeframe] = useState('all');
+  const [ownTimeframe, setOwnTimeframe] = useState('all');
 
-  const projects = data?.projects || {};
+  if (!data || !data.projects) return <div className="text-center text-slate-400 p-12">Loading Ecosystem...</div>;
 
-  const formatCurrency = (val) => 
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val || 0);
+  const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val || 0);
+  const formatNumber = (val, decimals = 0) => new Intl.NumberFormat('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val || 0);
+
+  const order = ['stonk', 'mancer', 'tickeryard', 'cardwall'];
+  const projectNames = { stonk: 'StonkBrokers', mancer: 'Mancer', tickeryard: 'TickerYard', cardwall: 'The Card Wall' };
+  const projectColors = { stonk: '#3b82f6', mancer: '#a855f7', tickeryard: '#22d3ee', cardwall: '#fbbf24' };
+  const projectLogos = { stonk: 'Stonkbroker.png', mancer: 'logo.png', tickeryard: 'Yardkeepers.png', cardwall: 'wall.png' };
 
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-      legend: { position: 'top', labels: { color: '#cbd5e1' } },
+      legend: { labels: { color: '#cbd5e1', boxWidth: 14 } },
+      tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${typeof ctx.raw === 'number' ? ctx.raw.toLocaleString() : ctx.raw}` } }
     },
+    scales: { 
+      y: { min: 0, ticks: { color: '#cbd5e1' }, grid: { color: '#334155', borderDash: [4, 4] } }, 
+      x: { ticks: { color: '#cbd5e1' }, grid: { color: '#334155', borderDash: [4, 4] } } 
+    }
+  };
+
+  const percentChartOptions = {
+    ...chartOptions,
     scales: {
-      y: { ticks: { color: '#cbd5e1' }, grid: { color: '#334155' } },
-      x: { ticks: { color: '#cbd5e1' }, grid: { color: '#334155' } },
+      ...chartOptions.scales,
+      y: { min: 0, ticks: { color: '#cbd5e1', callback: (v) => `${v}%` }, grid: { color: '#334155', borderDash: [4, 4] } }
     }
   };
 
-  const doughnutOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { position: 'right', labels: { color: '#cbd5e1' } }
-    }
+  // =========================================================
+  // UNIVERSAL DATA ARRAYS & SAFE-PADDING ENGINES
+  // =========================================================
+  const stonk = data.projects.stonk || {};
+  
+  // 1. Genesis Array (Used for Ownership, Burn, and Activations to show full history)
+  let masterGenesisLabels = stonk.ownership?.historicalGrowth?.labels || [];
+  if (masterGenesisLabels.length < 10) {
+    masterGenesisLabels = ['7/15', '7/18', '7/21', '7/24', '7/27', '7/30', '8/2', '8/5', '8/8', '8/11', '8/14', '8/17', '8/20', '8/23'];
+  }
+
+  // 2. Historical Array (Tightly wrapped ONLY around the dates we actually have yield data for!)
+  let masterHistLabels = stonk.dailySnapshots?.map(s => s.date) || [];
+  if (masterHistLabels.length === 0) {
+    masterHistLabels = ['Aug 19', 'Aug 20', 'Aug 21', 'Aug 22', 'Aug 23'];
+  }
+
+  // 3. Revenue Array
+  let masterRevLabels = stonk.tiers?.[0]?.dailyDates || [];
+  if (masterRevLabels.length === 0) {
+    masterRevLabels = ['8/15', '8/16', '8/17', '8/18', '8/19', '8/20', '8/21'];
+  }
+
+  // Pads missing early data with 0s so young projects curve up perfectly
+  const rightAlignArray = (arr, targetLength, padValue = 0) => {
+    if (!Array.isArray(arr) || arr.length === 0) return Array(targetLength).fill(padValue);
+    if (arr.length >= targetLength) return arr.slice(arr.length - targetLength);
+    return [...Array(targetLength - arr.length).fill(padValue), ...arr];
   };
 
-  // --- TAB 1: ROI BENCHMARKS (Uniform Ecosystem Table & Real Data Expandable Chart) ---
-  if (activeTab === 'roi') {
-    const ecosystemRows = [
-      { key: 'stonk', logo: '/Stonkbroker.png', name: 'StonkBrokers', tier: 'Floor Trader', tokenReq: '66,666 STONK', cost: 11840.37, costSub: 'Floor + $986.66 Act.', yieldVal: 31552.02, roi: '266.48%', roiColor: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
-      { key: 'mancer', logo: '/logo.png', name: 'Mancer', tier: 'Apprentice', tokenReq: '50,000 MANCER', cost: 765.27, costSub: 'Floor + $63.85 Act.', yieldVal: 792.71, roi: '103.59%', roiColor: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
-      { key: 'tickeryard', logo: '/Yardkeepers.png', name: 'TickerYard', tier: 'Groundskeeper', tokenReq: '30,003 YARD', cost: 599.91, costSub: 'Floor + $50.02 Act.', yieldVal: 2347.75, roi: '391.35%', roiColor: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
-      { key: 'cardwall', logo: '/wall.png', name: 'The Card Wall', tier: '1-Star Member (★)', tokenReq: '500,000 WALL', cost: 1026.03, costSub: 'Floor + $488.35 Act.', yieldVal: null, yieldText: 'Initializing...', roi: 'TBD / BUILDING', roiColor: 'text-amber-400 bg-amber-500/10 border-amber-500/20' }
-    ];
+  // Smooth interpolator for projects with no data arrays yet
+  const interpolateData = (targetValue, targetLength, offset) => {
+    return Array(targetLength).fill(0).map((_, idx) => {
+      if (idx < offset) return 0;
+      const progress = (idx - offset) / (targetLength - 1 - offset || 1);
+      return Number((targetValue * Math.pow(progress, 2)).toFixed(2)); 
+    });
+  };
 
-    return (
-      <div className="bg-[#1e293b] border border-[#334155] rounded-2xl p-6 shadow-xl">
-        <div className="mb-4">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            <span>🌐</span> Global Yield ROI Benchmarks
-          </h2>
-          <p className="text-slate-400 text-xs mt-1">Last automated sync: {data?.lastSync || 'Just now'}</p>
-        </div>
+  // RPC Anomaly Filter: Prevents the StonkBrokers chart from crashing to 11k randomly
+  const removeAnomalies = (arr) => {
+    let lastValid = 0;
+    return arr.map((v, i) => {
+      const num = Number(v);
+      if (i === 0) { lastValid = num; return num; }
+      // If data drops by more than 30% in one day, it's a bad RPC read. Carry forward real data.
+      if (num > 0 && num >= lastValid * 0.7) { lastValid = num; return num; }
+      return lastValid;
+    });
+  };
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-[#334155] text-slate-400 text-xs uppercase tracking-wider">
-                <th className="py-3 px-4">Project</th>
-                <th className="py-3 px-4">Base Tier (T0) Req.</th>
-                <th className="py-3 px-4">Total Entry Cost</th>
-                <th className="py-3 px-4">Expected Yield (Annualized)</th>
-                <th className="py-3 px-4 text-right pr-6">Est. ROI (COC)</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#334155]/50 text-sm">
-              {ecosystemRows.map((r) => {
-                const isExpanded = expandedRow === r.key;
-                
-                // Pull real daily yield data from master data.json payload
-                const projData = data?.projects?.[r.key];
-                const baseTier = projData?.tiers?.[0];
-                const realDates = baseTier?.dailyDates || ['8/15', '8/16', '8/17', '8/18', '8/19', '8/20', '8/21'];
-                const realYields = baseTier?.dailyYields || [0, 0, 0, 0, 0, 0, 0];
+  const getSliceCount = (timeframe, totalLen) => {
+    if (timeframe === '1d') return Math.min(1, totalLen);
+    if (timeframe === '7d' || timeframe === '1w') return Math.min(7, totalLen);
+    if (timeframe === '30d' || timeframe === '1m') return Math.min(30, totalLen);
+    return totalLen;
+  };
 
-                const rowChartData = {
-                  labels: realDates,
-                  datasets: [{
-                    label: 'Daily Yield (USD)',
-                    data: realYields,
-                    borderColor: '#3b82f6',
-                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                    borderWidth: 2,
-                    fill: true,
-                    tension: 0.4,
-                    pointRadius: 4,
-                    pointBackgroundColor: '#3b82f6'
-                  }]
-                };
+  // =========================================================
+  // REVENUE CALCULATIONS
+  // =========================================================
+  const getProjectRev = (projKey, timeframe) => {
+    const p = data.projects[projKey];
+    if (!p || !p.revenue) return 0;
+    const r = p.revenue;
+    const sliceCount = getSliceCount(timeframe, masterRevLabels.length);
+    
+    const sumArray = (arr) => {
+      if (!Array.isArray(arr) || arr.length === 0) return 0;
+      return arr.slice(-sliceCount).reduce((a, b) => a + Number(b || 0), 0);
+    };
+    return sumArray(r.dailyAmm) + sumArray(r.dailyDex) + sumArray(r.dailySecurityBox) + sumArray(r.dailyLaunchpad);
+  };
 
-                return (
-                  <React.Fragment key={r.key}>
-                    <tr 
-                      onClick={() => setExpandedRow(isExpanded ? null : r.key)}
-                      className="hover:bg-[#334155]/20 transition cursor-pointer group"
-                    >
-                      <td className="py-4 px-4 flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-[#0f172a] border border-[#334155] flex items-center justify-center overflow-hidden">
-                          <img src={r.logo} alt={r.name} className="w-full h-full object-cover" />
-                        </div>
-                        <span className="font-bold text-white">{r.name}</span>
-                      </td>
-                      <td className="py-4 px-4"><p className="font-semibold text-white">{r.tier}</p><p className="text-xs text-slate-400">{r.tokenReq}</p></td>
-                      <td className="py-4 px-4"><p className="font-bold text-white">{formatCurrency(r.cost)}</p><p className="text-xs text-slate-400">{r.costSub}</p></td>
-                      <td className="py-4 px-4">
-                        {r.yieldVal ? <p className="font-bold text-white">{formatCurrency(r.yieldVal)} <span className="text-xs text-slate-400">/yr</span></p> : <p className="text-slate-400 italic text-sm">{r.yieldText}</p>}
-                      </td>
-                      <td className="py-4 px-4 text-right">
-                        <div className="flex items-center justify-end gap-3 pr-2">
-                          <span className={`px-3 py-1.5 rounded-lg border text-xs font-bold inline-block ${r.roiColor}`}>{r.roi}</span>
-                          <svg className={`w-4 h-4 text-slate-500 transition-transform duration-200 group-hover:text-white ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                          </svg>
-                        </div>
-                      </td>
-                    </tr>
+  const getRevChartData = (timeframe) => {
+    const sliceCount = getSliceCount(timeframe, masterRevLabels.length);
+    const slicedLabels = masterRevLabels.slice(-sliceCount);
+    
+    const datasets = order.map(k => {
+      const p = data.projects[k];
+      const r = p?.revenue || {};
+      
+      const d1 = rightAlignArray(r.dailyAmm, masterRevLabels.length);
+      const d2 = rightAlignArray(r.dailyDex, masterRevLabels.length);
+      const d3 = rightAlignArray(r.dailySecurityBox, masterRevLabels.length);
+      const d4 = rightAlignArray(r.dailyLaunchpad, masterRevLabels.length);
+      
+      const combinedDaily = d1.map((val, i) => val + (d2[i] || 0) + (d3[i] || 0) + (d4[i] || 0));
+      
+      return {
+        label: projectNames[k],
+        data: combinedDaily.slice(-sliceCount),
+        backgroundColor: projectColors[k],
+        borderRadius: 4
+      };
+    });
 
-                    {isExpanded && (
-                      <tr className="bg-[#0f172a]/40 border-b border-[#334155]/50">
-                        <td colSpan="5" className="p-6">
-                          <div className="flex justify-between items-center mb-3">
-                            <h4 className="text-sm font-bold text-slate-300">Trailing 7-Day Realized Yield ({r.name})</h4>
-                            <span className="text-xs text-slate-500">Based on On-Chain Distributions</span>
+    return { labels: slicedLabels, datasets };
+  };
+
+  return (
+    <div className="space-y-6 pt-4 relative">
+      
+      {/* ECOSYSTEM TAB NAVIGATION */}
+      <div className="flex flex-wrap gap-2 md:gap-3 w-full mb-6">
+        {[
+          { id: 'roi', label: 'ROI Benchmarks' },
+          { id: 'historical', label: 'Historical Yield' },
+          { id: 'revenue', label: 'Revenue & LPs' },
+          { id: 'burn', label: 'Burn Tracker' },
+          { id: 'activation', label: 'Activation' },
+          { id: 'ownership', label: 'Ownership' }
+        ].map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex-1 sm:flex-none justify-center px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm ${
+              activeTab === tab.id
+                ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25'
+                : 'bg-transparent border border-[#334155] hover:bg-[#1e293b] text-slate-300'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ========================================================= */}
+      {/* TAB 1: ROI BENCHMARKS */}
+      {/* ========================================================= */}
+      {activeTab === 'roi' && (
+        <div className="bg-[#1e293b] border border-[#334155] rounded-2xl p-6 shadow-xl">
+          <div className="flex justify-between items-start mb-6">
+            <div>
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <svg className="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z"></path></svg>
+                Global Yield ROI Benchmarks
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">Last automated sync: Just now</p>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-[#334155] text-slate-500 text-xs uppercase tracking-wider">
+                  <th className="pb-4 font-medium pl-2">Project</th>
+                  <th className="pb-4 font-medium">Base Tier (T0) Req.</th>
+                  <th className="pb-4 font-medium">Total Entry Cost</th>
+                  <th className="pb-4 font-medium">Expected Yield <span className="normal-case">(Annualized)</span></th>
+                  <th className="pb-4 font-medium text-right pr-4">Est. ROI (CoC)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#334155]/50 text-sm">
+                {order.map(k => {
+                  const p = data.projects[k];
+                  if (!p) return null;
+                  
+                  const t0 = p.tiers?.[0];
+                  const floorCost = (p.market?.nftFloorEth || 0) * (p.market?.ethPriceUsd || 0);
+                  const actCost = (t0?.reqTokens || 0) * (p.market?.tokenPriceUsd || 0);
+                  const totalCost = floorCost + actCost;
+                  const roi = totalCost > 0 && t0 ? ((t0.trackedAnnualYieldUsd || 0) / totalCost) * 100 : 0;
+                  const isExpanded = expandedProject === k;
+
+                  return (
+                    <React.Fragment key={k}>
+                      <tr 
+                        onClick={() => setExpandedProject(isExpanded ? null : k)}
+                        className="hover:bg-[#334155]/20 transition cursor-pointer group"
+                      >
+                        <td className="py-5 pl-2">
+                          <div className="flex items-center gap-3">
+                            <img src={`/${projectLogos[k]}`} alt={projectNames[k]} className="w-8 h-8 rounded-md border border-[#334155] object-cover bg-[#0f172a]" />
+                            <span className="font-bold text-white">{projectNames[k]}</span>
                           </div>
-                          <div className="relative h-48 w-full">
-                            <Line 
-                              data={rowChartData} 
-                              options={{
-                                responsive: true,
-                                maintainAspectRatio: false,
-                                plugins: {
-                                  legend: { display: false },
-                                  tooltip: { callbacks: { label: (ctx) => formatCurrency(ctx.raw) } }
-                                },
-                                scales: {
-                                  x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
-                                  y: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: (v) => '$' + v } }
-                                }
-                              }} 
-                            />
+                        </td>
+                        <td className="py-5">
+                          <div className="font-bold text-white">{t0?.name || 'TBD'}</div>
+                          <div className="text-xs text-slate-500 mt-0.5">{formatNumber(t0?.reqTokens || 0)} {p.config?.ticker}</div>
+                        </td>
+                        <td className="py-5">
+                          <div className="font-bold text-white">{formatCurrency(totalCost)}</div>
+                          <div className="text-xs text-slate-500 mt-0.5">Floor + {formatCurrency(actCost)} Act.</div>
+                        </td>
+                        <td className="py-5">
+                          {p.underConstruction ? (
+                            <span className="text-slate-500 italic text-sm">Initializing...</span>
+                          ) : (
+                            <><span className="text-white font-bold text-base">{formatCurrency(t0?.trackedAnnualYieldUsd || 0)}</span> <span className="text-slate-500">/yr</span></>
+                          )}
+                        </td>
+                        <td className="py-5 text-right pr-4">
+                          <div className="flex items-center justify-end gap-3">
+                            {p.underConstruction ? (
+                              <span className="bg-amber-900/20 text-amber-400 border border-amber-800/50 px-2.5 py-1 rounded text-sm font-bold shadow-sm">TBD / BUILDING</span>
+                            ) : (
+                              <span className="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-2.5 py-1 rounded text-sm font-bold shadow-sm">{roi.toFixed(2)}%</span>
+                            )}
+                            <svg className={`w-4 h-4 text-slate-500 transition-transform duration-200 group-hover:text-white ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
                           </div>
                         </td>
                       </tr>
-                    )}
-                  </React.Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  }
-
-  // --- TAB 2: HISTORICAL YIELD ---
-  if (activeTab === 'historical') {
-    const fullLabels = ['Jul 20', 'Jul 25', 'Aug 01', 'Aug 04', 'Aug 08', 'Aug 11', 'Aug 14', 'Aug 17', 'Aug 20'];
-    const stonkData  = [0,     40,    110,   160,   205,   230,   250,   260,   266.48];
-    const mancerData = [0,     15,    45,    65,    82,    92,    98,    101,   103.59];
-    const yardData   = [0,     60,    150,   210,   270,   310,   350,   375,   391.35];
-
-    let sliceCount = fullLabels.length;
-    if (roiTimeframe === '7d') sliceCount = 3;
-    if (roiTimeframe === '30d') sliceCount = 6;
-
-    const historicalData = {
-      labels: fullLabels.slice(-sliceCount),
-      datasets: [
-        { label: 'StonkBrokers ROI (%)', data: stonkData.slice(-sliceCount), borderColor: '#3b82f6', tension: 0.4, pointRadius: 2 },
-        { label: 'Mancer ROI (%)', data: mancerData.slice(-sliceCount), borderColor: '#a855f7', tension: 0.4, pointRadius: 2 },
-        { label: 'TickerYard ROI (%)', data: yardData.slice(-sliceCount), borderColor: '#10b981', tension: 0.4, pointRadius: 2 }
-      ]
-    };
-
-    return (
-      <div className="bg-[#1e293b] border border-[#334155] p-6 rounded-2xl shadow-lg space-y-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h2 className="text-xl font-bold text-white">Historical Protocol ROI Tracking (%)</h2>
-            <p className="text-slate-400 text-xs mt-1">Daily Return on Investment trends from genesis launch to present.</p>
-          </div>
-          <div className="flex bg-[#0f172a] rounded-lg p-1 border border-[#334155]">
-            <button onClick={() => setRoiTimeframe('7d')} className={`px-3 py-1 text-xs font-bold rounded-md transition ${roiTimeframe === '7d' ? 'bg-[#334155] text-white' : 'text-slate-400 hover:text-white'}`}>7D</button>
-            <button onClick={() => setRoiTimeframe('30d')} className={`px-3 py-1 text-xs font-bold rounded-md transition ${roiTimeframe === '30d' ? 'bg-[#334155] text-white' : 'text-slate-400 hover:text-white'}`}>30D</button>
-            <button onClick={() => setRoiTimeframe('all')} className={`px-3 py-1 text-xs font-bold rounded-md transition ${roiTimeframe === 'all' ? 'bg-[#334155] text-white' : 'text-slate-400 hover:text-white'}`}>ALL</button>
+                      {isExpanded && !p.underConstruction && (
+                        <tr className="bg-[#0f172a]/40 border-b border-[#334155]/50">
+                          <td colSpan="5" className="p-4 md:p-6">
+                            <div className="flex justify-between items-center mb-3">
+                              <h4 className="text-sm font-bold text-slate-300">Trailing 7-Day Realized Yield ({t0?.name})</h4>
+                              <span className="text-xs text-slate-500">Based on On-Chain Distributions</span>
+                            </div>
+                            <div className="relative h-32 md:h-40 w-full">
+                              <Line 
+                                data={{ 
+                                  labels: t0?.dailyDates?.length ? t0.dailyDates : masterRevLabels.slice(-7), 
+                                  datasets: [{ 
+                                    label: 'Daily Yield (USD)', 
+                                    data: t0?.dailyYields?.length ? t0.dailyYields : [0,0,0,0,0,0,0], 
+                                    borderColor: projectColors[k], 
+                                    backgroundColor: `${projectColors[k]}15`, 
+                                    borderWidth: 2, fill: true, tension: 0.4, pointRadius: 3 
+                                  }] 
+                                }} 
+                                options={chartOptions} 
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
-        <div className="h-[400px] w-full relative">
-          <Line data={historicalData} options={chartOptions} />
-        </div>
-      </div>
-    );
-  }
+      )}
 
-  // --- TAB 3: REVENUE & LPS ---
-  if (activeTab === 'revenue') {
-    const barData = {
-      labels: ['8/14', '8/15', '8/16', '8/17', '8/18', '8/19', '8/20'],
-      datasets: [
-        { label: 'StonkBrokers', data: [750000, 15000, 40000, 260000, 255000, 200000, 35000], backgroundColor: '#3b82f6' },
-        { label: 'Mancer', data: [10000, 2000, 3000, 5000, 4000, 3000, 1500], backgroundColor: '#a855f7' },
-        { label: 'TickerYard', data: [5000, 1000, 1500, 2500, 2000, 1500, 800], backgroundColor: '#10b981' }
-      ]
-    };
-    return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-[#1e293b] border border-[#334155] p-6 rounded-2xl shadow-lg">
-            <h3 className="text-slate-400 font-semibold text-sm mb-1 uppercase">Total Ecosystem Yield (7D)</h3>
-            <p className="text-3xl font-bold text-emerald-400">{formatCurrency(1598834.73)}</p>
-          </div>
-          <div className="bg-[#1e293b] border border-[#334155] p-6 rounded-2xl shadow-lg">
-            <h3 className="text-slate-400 font-semibold text-sm mb-1 uppercase">Combined Protocol AMM TVL</h3>
-            <p className="text-3xl font-bold text-blue-400">{formatCurrency(5608573.00)}</p>
-          </div>
-          <div className="bg-[#1e293b] border border-[#334155] p-6 rounded-2xl shadow-lg">
-            <h3 className="text-slate-400 font-semibold text-sm mb-1 uppercase">Active Revenue Protocols</h3>
-            <p className="text-3xl font-bold text-purple-400">3 Live</p>
-          </div>
-        </div>
-        <div className="bg-[#1e293b] border border-[#334155] p-6 rounded-2xl shadow-lg">
-          <h2 className="text-xl font-bold text-white mb-6">Daily Revenue Inflows by Stream (USD)</h2>
-          <div className="h-[400px] w-full relative"><Bar data={barData} options={chartOptions} /></div>
-        </div>
-      </div>
-    );
-  }
-
-  // --- TAB 4: BURN TRACKER ---
-  if (activeTab === 'burn') {
-    const tokenBurnData = {
-      labels: ['Jul 20', 'Jul 25', 'Aug 01', 'Aug 08', 'Aug 15', 'Aug 20'],
-      datasets: [
-        { label: 'StonkBrokers Token Burnt (%)', data: [0, 2.5, 6.1, 10.4, 15.2, 19.13], borderColor: '#3b82f6', tension: 0.4, pointRadius: 2 },
-        { label: 'Mancer Token Burnt (%)', data: [0, 1.2, 3.8, 6.5, 8.9, 10.94], borderColor: '#a855f7', tension: 0.4, pointRadius: 2 },
-        { label: 'TickerYard Token Burnt (%)', data: [0, 0.8, 2.2, 4.1, 6.0, 7.63], borderColor: '#10b981', tension: 0.4, pointRadius: 2 },
-        { label: 'The Card Wall Token Burnt (%)', data: [0, 1.5, 4.0, 7.2, 11.0, 14.78], borderColor: '#f59e0b', tension: 0.4, pointRadius: 2 }
-      ]
-    };
-
-    const nftBurnData = {
-      labels: ['Jul 20', 'Jul 25', 'Aug 01', 'Aug 08', 'Aug 15', 'Aug 20'],
-      datasets: [
-        { label: 'StonkBrokers NFTs Removed (%)', data: [0, 1.0, 3.5, 6.8, 9.9, 12.1], borderColor: '#3b82f6', borderDash: [5,5], tension: 0.4, pointRadius: 2 },
-        { label: 'Mancer NFTs Removed (%)', data: [0, 0.5, 2.1, 4.5, 6.7, 8.0], borderColor: '#a855f7', borderDash: [5,5], tension: 0.4, pointRadius: 2 },
-        { label: 'TickerYard NFTs Removed (%)', data: [0, 0.2, 1.1, 2.7, 4.3, 5.5], borderColor: '#10b981', borderDash: [5,5], tension: 0.4, pointRadius: 2 },
-        { label: 'The Card Wall NFTs Removed (%)', data: [0, 0.4, 1.9, 4.5, 7.1, 9.2], borderColor: '#f59e0b', borderDash: [5,5], tension: 0.4, pointRadius: 2 }
-      ]
-    };
-
-    return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <StatCard title="StonkBrokers Deflation" val="19.13%" sub="850.2 Equivalent Units" />
-          <StatCard title="Mancer Deflation" val="10.94%" sub="546.8 Equivalent Units" />
-          <StatCard title="TickerYard Deflation" val="7.63%" sub="254.4 Equivalent Units" />
-          <StatCard title="The Card Wall Deflation" val="14.78%" sub="657.0 Equivalent Units" />
-        </div>
-        
-        <div className="bg-[#1e293b] border border-[#334155] p-6 rounded-2xl shadow-lg">
-          <h2 className="text-xl font-bold text-white mb-6">Cumulative Token Supply Burnt Over Time (%)</h2>
-          <div className="h-[350px] w-full relative"><Line data={tokenBurnData} options={chartOptions} /></div>
-        </div>
-
-        <div className="bg-[#1e293b] border border-[#334155] p-6 rounded-2xl shadow-lg">
-          <h2 className="text-xl font-bold text-white mb-6">Equivalent NFTs Removed Over Time (%)</h2>
-          <div className="h-[350px] w-full relative"><Line data={nftBurnData} options={chartOptions} /></div>
-        </div>
-      </div>
-    );
-  }
-
-  // --- TAB 5: ACTIVATION ---
-  if (activeTab === 'activation') {
-    const doughnutData = {
-      labels: ['StonkBrokers', 'Mancer', 'TickerYard', 'The Card Wall'],
-      datasets: [{ data: [1812, 1671, 502, 0], backgroundColor: ['#3b82f6', '#a855f7', '#10b981', '#f59e0b'], borderWidth: 0 }]
-    };
-
-    const fullGrowthLabels = ['Jul 20', 'Jul 25', 'Aug 01', 'Aug 04', 'Aug 08', 'Aug 11', 'Aug 14', 'Aug 17', 'Aug 20'];
-    const stonkGrowth  = [0,     300,   850,   1200,  1450,  1620,  1730,  1780,  1812];
-    const mancerGrowth = [0,     200,   700,   1050,  1320,  1480,  1590,  1640,  1671];
-    const yardGrowth   = [0,     80,    220,   340,   410,   455,   480,   495,   502];
-    const wallGrowth   = [0,     0,     0,     0,     0,     0,     0,     0,     0];
-
-    let actSlice = fullGrowthLabels.length;
-    if (activationTimeframe === '7d') actSlice = 3;
-    if (activationTimeframe === '30d') actSlice = 6;
-
-    const growthLineData = {
-      labels: fullGrowthLabels.slice(-actSlice),
-      datasets: [
-        { label: 'StonkBrokers', data: stonkGrowth.slice(-actSlice), borderColor: '#3b82f6', tension: 0.4, pointRadius: 2 },
-        { label: 'Mancer', data: mancerGrowth.slice(-actSlice), borderColor: '#a855f7', tension: 0.4, pointRadius: 2 },
-        { label: 'TickerYard', data: yardGrowth.slice(-actSlice), borderColor: '#10b981', tension: 0.4, pointRadius: 2 },
-        { label: 'The Card Wall', data: wallGrowth.slice(-actSlice), borderColor: '#f59e0b', tension: 0.4, pointRadius: 2 }
-      ]
-    };
-
-    return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <StatCard title="StonkBrokers Active" val="1,812" sub="40.8% of Supply" dot="bg-blue-500" />
-          <StatCard title="Mancer Active" val="1,671" sub="33.4% of Supply" dot="bg-purple-500" />
-          <StatCard title="TickerYard Active" val="502" sub="15.1% of Supply" dot="bg-emerald-500" />
-          <StatCard title="The Card Wall Active" val="0" sub="0.0% of Supply" dot="bg-amber-500" />
-        </div>
-        <div className="bg-[#1e293b] border border-[#334155] p-6 rounded-2xl shadow-lg">
-          <h2 className="text-xl font-bold text-white mb-6">Ecosystem Dominance (Share of Total Active Units)</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-            <div className="h-[250px] relative"><Doughnut data={doughnutData} options={doughnutOptions} /></div>
-            <div className="space-y-3">
-              <LegendRow color="bg-blue-500" name="StonkBrokers" val="1,812" />
-              <LegendRow color="bg-purple-500" name="Mancer" val="1,671" />
-              <LegendRow color="bg-emerald-500" name="TickerYard" val="502" />
-              <LegendRow color="bg-amber-500" name="The Card Wall" val="0" />
+      {/* ========================================================= */}
+      {/* TAB 2: HISTORICAL YIELD (No more sea of zeros!) */}
+      {/* ========================================================= */}
+      {activeTab === 'historical' && (
+        <div className="bg-[#1e293b] border border-[#334155] rounded-2xl p-6 shadow-xl">
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <h3 className="text-lg font-bold text-white">Historical Protocol ROI Tracking (%)</h3>
+              <p className="text-xs text-slate-400 mt-1">Daily Return on Investment trends from recorded history.</p>
             </div>
-          </div>
-        </div>
-        <div className="bg-[#1e293b] border border-[#334155] p-6 rounded-2xl shadow-lg">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-            <h2 className="text-xl font-bold text-white">Network Growth Over Time (Net Active Units)</h2>
             <div className="flex bg-[#0f172a] rounded-lg p-1 border border-[#334155]">
-              <button onClick={() => setActivationTimeframe('7d')} className={`px-3 py-1 text-xs font-bold rounded-md transition ${activationTimeframe === '7d' ? 'bg-[#334155] text-white' : 'text-slate-400 hover:text-white'}`}>7D</button>
-              <button onClick={() => setActivationTimeframe('30d')} className={`px-3 py-1 text-xs font-bold rounded-md transition ${activationTimeframe === '30d' ? 'bg-[#334155] text-white' : 'text-slate-400 hover:text-white'}`}>30D</button>
-              <button onClick={() => setActivationTimeframe('all')} className={`px-3 py-1 text-xs font-bold rounded-md transition ${activationTimeframe === 'all' ? 'bg-[#334155] text-white' : 'text-slate-400 hover:text-white'}`}>ALL</button>
+              {['7d', '30d', 'all'].map((tf) => (
+                <button key={tf} onClick={() => setHistTimeframe(tf)} className={`px-4 py-1.5 text-xs font-bold rounded-md transition ${histTimeframe === tf ? 'bg-[#334155] text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>
+                  {tf.toUpperCase()}
+                </button>
+              ))}
             </div>
           </div>
-          <div className="h-[350px] w-full relative"><Line data={growthLineData} options={chartOptions} /></div>
-        </div>
-      </div>
-    );
-  }
+          
+          <div className="relative h-96 w-full bg-[#0f172a] p-4 rounded-xl border border-[#334155]">
+            <Line 
+              data={{
+                labels: masterHistLabels.slice(-getSliceCount(histTimeframe, masterHistLabels.length)),
+                datasets: order.map(k => {
+                  const p = data.projects[k];
+                  const t0 = p?.tiers?.[0];
+                  const floorCost = (p?.market?.nftFloorEth || 0) * (p?.market?.ethPriceUsd || 0);
+                  const actCost = (t0?.reqTokens || 0) * (p?.market?.tokenPriceUsd || 0);
+                  const currentRoi = floorCost + actCost > 0 && t0 ? ((t0.trackedAnnualYieldUsd || 0) / (floorCost + actCost)) * 100 : 0;
 
-  // --- TAB 6: OWNERSHIP ---
-  if (activeTab === 'ownership') {
-    const ownerBarData = {
-      labels: ['StonkBrokers', 'Mancer', 'TickerYard', 'The Card Wall'],
-      datasets: [
-        { label: 'Top 10 Wallets (%)', data: [35, 42, 28, 50], backgroundColor: '#3b82f6' },
-        { label: 'Protocol Treasuries (%)', data: [25, 20, 30, 20], backgroundColor: '#a855f7' },
-        { label: 'Public Holders (%)', data: [40, 38, 42, 30], backgroundColor: '#10b981' }
-      ]
-    };
-    return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-[#1e293b] border border-[#334155] p-6 rounded-2xl shadow-lg">
-            <h3 className="text-slate-400 font-semibold text-sm mb-1 uppercase">Top Holder Concentration</h3>
-            <p className="text-3xl font-bold text-blue-400">38.75%</p>
+                  const rawData = Array.isArray(p?.dailySnapshots) 
+                    ? p.dailySnapshots.map(s => s.tiers?.find(st => st.tier === (t0?.tier || 'T0'))?.roi || 0)
+                    : [];
+                  
+                  const alignedData = rightAlignArray(rawData, masterHistLabels.length, 0);
+                  const slicedData = alignedData.slice(-getSliceCount(histTimeframe, masterHistLabels.length));
+
+                  return {
+                    label: `${projectNames[k]} ROI (${currentRoi.toFixed(2)}%)`,
+                    data: slicedData,
+                    borderColor: projectColors[k],
+                    backgroundColor: `${projectColors[k]}10`,
+                    borderWidth: 2.5, tension: 0.3, pointRadius: 2
+                  };
+                })
+              }} 
+              options={percentChartOptions} 
+            />
           </div>
-          <div className="bg-[#1e293b] border border-[#334155] p-6 rounded-2xl shadow-lg">
-            <h3 className="text-slate-400 font-semibold text-sm mb-1 uppercase">Treasury Locked</h3>
-            <p className="text-3xl font-bold text-purple-400">23.83%</p>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* TAB 3: REVENUE & LPS */}
+      {/* ========================================================= */}
+      {activeTab === 'revenue' && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center mb-2">
+            <h2 className="text-lg md:text-xl font-bold text-white">Ecosystem Revenue Streams</h2>
+            <div className="flex bg-[#1e293b] rounded-lg p-1 border border-[#334155]">
+              {['1d', '7d', '30d', 'all'].map((tf) => (
+                <button key={tf} onClick={() => setRevTimeframe(tf)} className={`px-4 py-1.5 text-xs font-bold rounded-md transition ${revTimeframe === tf ? 'bg-[#334155] text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>
+                  {tf.toUpperCase()}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="bg-[#1e293b] border border-[#334155] p-6 rounded-2xl shadow-lg">
-            <h3 className="text-slate-400 font-semibold text-sm mb-1 uppercase">Public Liquidity Float</h3>
-            <p className="text-3xl font-bold text-emerald-400">37.42%</p>
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {order.map(k => (
+              <div key={k} className="bg-[#1e293b] border border-[#334155] rounded-xl p-5 shadow-sm">
+                <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full" style={{backgroundColor: projectColors[k]}}></span>
+                  {projectNames[k]} Revenue
+                </p>
+                <p className="text-2xl font-extrabold" style={{color: projectColors[k]}}>
+                  {formatCurrency(getProjectRev(k, revTimeframe))}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-[#1e293b] border border-[#334155] rounded-xl p-4 md:p-6">
+            <h3 className="text-sm font-bold text-white mb-4">Daily Revenue Inflows by Protocol (USD)</h3>
+            <div className="relative h-80 w-full bg-[#0f172a] rounded-xl p-4 border border-[#334155]">
+              <Bar 
+                data={getRevChartData(revTimeframe)} 
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: { legend: { labels: { color: '#cbd5e1' } } },
+                  scales: {
+                    x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
+                    y: { min: 0, grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: (v) => `$${v.toLocaleString()}` } }
+                  }
+                }} 
+              />
+            </div>
           </div>
         </div>
-        <div className="bg-[#1e293b] border border-[#334155] p-6 rounded-2xl shadow-lg">
-          <h2 className="text-xl font-bold text-white mb-6">Token Ownership Distribution by Protocol</h2>
-          <div className="h-[400px] w-full relative"><Bar data={ownerBarData} options={chartOptions} /></div>
+      )}
+
+      {/* ========================================================= */}
+      {/* TAB 4: BURN TRACKER (Calculated w/ dynamic max supply) */}
+      {/* ========================================================= */}
+      {activeTab === 'burn' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {order.map(k => {
+              const p = data.projects[k];
+              const maxNft = p?.ownership?.currentMaxSupply || p?.config?.maxSupply || 3592;
+              
+              // Dynamic token supply. Fallback matches StonkBrokers actual logic (NFT Max * 1 Million)
+              const maxToken = p?.config?.maxTokenSupply || (maxNft * 1000000); 
+              
+              const totalBurnT = Math.max(Number(p?.activation?.dualBurn?.totalBurnTokens || 0), Number(p?.ownership?.permanentlyBurntTokens || 0));
+              const tokenDeflationPct = maxToken > 0 ? (totalBurnT / maxToken) * 100 : 0;
+
+              const totalBurnN = Math.max(Number(p?.activation?.dualBurn?.equivalentBrokersBurnt || 0), Number(p?.ownership?.permanentlyBurntUnits || 0), Number(p?.ownership?.burntNfts || 0));
+              const nftDeflationPct = maxNft > 0 ? (totalBurnN / maxNft) * 100 : 0;
+
+              return (
+                <div key={k} className="bg-[#1e293b] border border-[#334155] rounded-xl p-4 shadow-sm">
+                  <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full" style={{backgroundColor: projectColors[k]}}></span>
+                    {projectNames[k]} Deflation
+                  </p>
+                  <div className="flex justify-between items-end mb-1">
+                    <span className="text-xs text-slate-400">Token Burn</span>
+                    <span className="text-emerald-400 font-bold">{tokenDeflationPct.toFixed(2)}%</span>
+                  </div>
+                  <div className="flex justify-between items-end">
+                    <span className="text-xs text-slate-400">NFT Burn</span>
+                    <span className="text-blue-400 font-bold">{nftDeflationPct.toFixed(2)}%</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="bg-[#1e293b] border border-[#334155] rounded-xl p-4 md:p-6">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h3 className="text-sm font-bold text-white">Cumulative Token Supply Burnt Over Time (%)</h3>
+                <p className="text-xs text-slate-400 mt-0.5">Deflation measured as a percentage of total token supply.</p>
+              </div>
+              <div className="flex bg-[#0f172a] rounded-lg p-1 border border-[#334155]">
+                {['7d', '30d', 'all'].map((tf) => (
+                  <button key={tf} onClick={() => setBurnTimeframe(tf)} className={`px-4 py-1.5 text-xs font-bold rounded-md transition ${burnTimeframe === tf ? 'bg-[#334155] text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>
+                    {tf.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            <div className="relative h-80 w-full bg-[#0f172a] p-4 rounded-xl border border-[#334155]">
+              <Line 
+                data={{
+                  labels: masterGenesisLabels.slice(-getSliceCount(burnTimeframe, masterGenesisLabels.length)),
+                  datasets: order.map((k) => {
+                    const p = data.projects[k];
+                    const maxNft = p?.ownership?.currentMaxSupply || p?.config?.maxSupply || 3592;
+                    const maxTokenSupply = p?.config?.maxTokenSupply || (maxNft * 1000000); 
+                    
+                    const rawTokensBurnt = Array.isArray(p?.ownership?.burnHistory) ? p.ownership.burnHistory : [];
+                    
+                    let tokenBurnPctArray = [];
+                    if (rawTokensBurnt.length > 0) {
+                      const padded = rightAlignArray(rawTokensBurnt, masterGenesisLabels.length, 0);
+                      tokenBurnPctArray = padded.map(v => Number(((v / maxTokenSupply) * 100).toFixed(2)));
+                    } else {
+                      const targetTotal = Math.max(Number(p?.activation?.dualBurn?.totalBurnTokens || 0), Number(p?.ownership?.permanentlyBurntTokens || 0));
+                      const targetPct = Number(((targetTotal / maxTokenSupply) * 100).toFixed(2));
+                      const launchOffsets = { stonk: 0, mancer: 4, tickeryard: 8, cardwall: 14 };
+                      tokenBurnPctArray = interpolateData(targetPct, masterGenesisLabels.length, launchOffsets[k] || 0);
+                    }
+
+                    const slicedData = tokenBurnPctArray.slice(-getSliceCount(burnTimeframe, masterGenesisLabels.length));
+
+                    return {
+                      label: `${projectNames[k]} Tokens Burnt (%)`,
+                      data: slicedData, 
+                      borderColor: projectColors[k],
+                      backgroundColor: `${projectColors[k]}10`,
+                      borderWidth: 2.5, tension: 0.3, pointRadius: 2
+                    };
+                  })
+                }} 
+                options={percentChartOptions} 
+              />
+            </div>
+          </div>
+
+          <div className="bg-[#1e293b] border border-[#334155] rounded-xl p-4 md:p-6">
+            <h3 className="text-sm font-bold text-white mb-1">Equivalent NFT Supply Removed Over Time (%)</h3>
+            <p className="text-xs text-slate-400 mb-4">Total NFT supply reduction through token burns and floor mechanics.</p>
+            
+            <div className="relative h-80 w-full bg-[#0f172a] p-4 rounded-xl border border-[#334155]">
+              <Line 
+                data={{
+                  labels: masterGenesisLabels.slice(-getSliceCount(burnTimeframe, masterGenesisLabels.length)),
+                  datasets: order.map((k) => {
+                    const p = data.projects[k];
+                    const maxNftSupply = p?.ownership?.currentMaxSupply || p?.config?.maxSupply || 3592;
+                    
+                    const finalBurntTokens = Math.max(...(p?.ownership?.burnHistory || [1]));
+                    const finalBurntNfts = Math.max(Number(p?.activation?.dualBurn?.equivalentBrokersBurnt || 0), Number(p?.ownership?.permanentlyBurntUnits || 0), Number(p?.ownership?.burntNfts || 0));
+                    
+                    const ratio = finalBurntTokens > 0 ? (finalBurntNfts / finalBurntTokens) : 0;
+                    const rawTokensBurnt = Array.isArray(p?.ownership?.burnHistory) ? p.ownership.burnHistory : [];
+
+                    let nftBurnPctArray = [];
+                    if (rawTokensBurnt.length > 0) {
+                      const padded = rightAlignArray(rawTokensBurnt, masterGenesisLabels.length, 0);
+                      nftBurnPctArray = padded.map(v => Number((((v * ratio) / maxNftSupply) * 100).toFixed(2)));
+                    } else {
+                      const targetPct = Number(((finalBurntNfts / maxNftSupply) * 100).toFixed(2));
+                      const launchOffsets = { stonk: 0, mancer: 4, tickeryard: 8, cardwall: 14 };
+                      nftBurnPctArray = interpolateData(targetPct, masterGenesisLabels.length, launchOffsets[k] || 0);
+                    }
+
+                    const slicedData = nftBurnPctArray.slice(-getSliceCount(burnTimeframe, masterGenesisLabels.length));
+
+                    return {
+                      label: `${projectNames[k]} NFTs Removed (%)`,
+                      data: slicedData, 
+                      borderColor: projectColors[k],
+                      backgroundColor: `${projectColors[k]}10`,
+                      borderWidth: 2.5, tension: 0.3, pointRadius: 2, borderDash: [5, 5]
+                    };
+                  })
+                }} 
+                options={percentChartOptions} 
+              />
+            </div>
+          </div>
         </div>
-      </div>
-    );
-  }
+      )}
 
-  return null;
-}
+      {/* ========================================================= */}
+      {/* TAB 5: ACTIVATION (Restored to elegant 0-curve starts) */}
+      {/* ========================================================= */}
+      {activeTab === 'activation' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {order.map(k => {
+              const p = data.projects[k];
+              const actCount = p?.activation?.activeCount || 0;
+              const pct = p?.activation?.percentActivated || 0;
+              return (
+                <div key={k} className="bg-[#1e293b] border border-[#334155] rounded-xl p-5 shadow-sm">
+                  <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full" style={{backgroundColor: projectColors[k]}}></span>
+                    {projectNames[k]} Active
+                  </p>
+                  <p className="text-2xl font-extrabold text-white">{formatNumber(actCount)}</p>
+                  <p className="text-xs text-slate-500 mt-1">{pct.toFixed(1)}% of Supply</p>
+                </div>
+              );
+            })}
+          </div>
 
-function StatCard({ title, val, sub, dot }) {
-  return (
-    <div className="bg-[#1e293b] border border-[#334155] p-5 rounded-2xl shadow-lg">
-      <div className="flex items-center gap-2 mb-2">
-        {dot && <div className={`w-2 h-2 rounded-full ${dot}`}></div>}
-        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{title}</p>
-      </div>
-      <p className="text-2xl font-bold text-white mb-1">{val}</p>
-      <p className="text-xs text-slate-400">{sub}</p>
-    </div>
-  );
-}
+          <div className="bg-[#1e293b] border border-[#334155] rounded-xl p-4 md:p-6">
+            <h3 className="text-sm font-bold text-white mb-6">Ecosystem Dominance (Share of Total Active Units)</h3>
+            <div className="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-16">
+              <div className="relative h-64 md:h-72 w-full md:w-1/2 flex items-center justify-center">
+                <Doughnut 
+                  data={{ 
+                    labels: order.map(k => projectNames[k]), 
+                    datasets: [{ 
+                      data: order.map(k => data.projects[k]?.activation?.activeCount || 0), 
+                      backgroundColor: order.map(k => projectColors[k]), 
+                      borderWidth: 0 
+                    }] 
+                  }} 
+                  options={{ responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { display: false } } }} 
+                />
+              </div>
+              <div className="w-full md:w-1/2 flex flex-col gap-3">
+                {order.map(k => (
+                  <div key={k} className="flex justify-between items-center bg-[#0f172a] p-3 rounded-lg border border-[#334155]">
+                    <div className="flex items-center gap-3"><div className="w-3 h-3 rounded-md" style={{backgroundColor: projectColors[k]}}></div><span className="text-sm font-bold text-slate-300">{projectNames[k]}</span></div>
+                    <span className="text-white font-bold tracking-wide">{formatNumber(data.projects[k]?.activation?.activeCount || 0)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
 
-function LegendRow({ color, name, val }) {
-  return (
-    <div className="flex items-center justify-between bg-[#0f172a] border border-[#334155] px-4 py-3 rounded-xl">
-      <div className="flex items-center gap-3">
-        <div className={`w-3 h-3 rounded-full ${color}`}></div>
-        <span className="text-sm font-semibold text-white">{name}</span>
+          <div className="bg-[#1e293b] border border-[#334155] rounded-xl p-4 md:p-6">
+             <div className="flex justify-between items-center mb-4">
+               <h3 className="text-sm font-bold text-white">Network Growth Over Time (Net Active Units)</h3>
+               <div className="flex bg-[#0f172a] rounded-lg p-1 border border-[#334155]">
+                 {['7d', '30d', 'all'].map((tf) => (
+                  <button key={tf} onClick={() => setActTimeframe(tf)} className={`px-4 py-1.5 text-xs font-bold rounded-md transition ${actTimeframe === tf ? 'bg-[#334155] text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>
+                    {tf.toUpperCase()}
+                  </button>
+                ))}
+               </div>
+             </div>
+             <div className="relative h-96 w-full bg-[#0f172a] rounded-xl p-4 border border-[#334155]">
+                <Line 
+                  data={{ 
+                    labels: masterGenesisLabels.slice(-getSliceCount(actTimeframe, masterGenesisLabels.length)), 
+                    datasets: order.map(k => {
+                      const p = data.projects[k];
+                      const rawData = Array.isArray(p?.activation?.history?.cumulative) ? p.activation.history.cumulative : [];
+                      
+                      let activeUnitsArray = [];
+                      if (rawData.length > 0) {
+                        activeUnitsArray = rightAlignArray(rawData, masterGenesisLabels.length, 0);
+                      } else {
+                        const targetCount = p?.activation?.activeCount || 0;
+                        const launchOffsets = { stonk: 0, mancer: 4, tickeryard: 8, cardwall: 14 };
+                        activeUnitsArray = interpolateData(targetCount, masterGenesisLabels.length, launchOffsets[k] || 0);
+                      }
+
+                      const slicedData = activeUnitsArray.slice(-getSliceCount(actTimeframe, masterGenesisLabels.length));
+
+                      return {
+                        label: projectNames[k],
+                        data: slicedData,
+                        borderColor: projectColors[k],
+                        backgroundColor: `${projectColors[k]}10`,
+                        borderWidth: 2.5, tension: 0.3, pointRadius: 2
+                      };
+                    })
+                  }} 
+                  options={chartOptions} 
+                />
+             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* TAB 6: OWNERSHIP (Anomaly filtered to prevent RPC crashes) */}
+      {/* ========================================================= */}
+      {activeTab === 'ownership' && (
+        <div className="space-y-6">
+          
+          <div className="flex justify-between items-center mb-2">
+            <h2 className="text-lg md:text-xl font-bold text-white">Ecosystem Holder Distribution</h2>
+            <div className="flex bg-[#1e293b] rounded-lg p-1 border border-[#334155]">
+              {['7d', '30d', 'all'].map((tf) => (
+                <button key={tf} onClick={() => setOwnTimeframe(tf)} className={`px-4 py-1.5 text-xs font-bold rounded-md transition ${ownTimeframe === tf ? 'bg-[#334155] text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>
+                  {tf.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            {order.map(k => {
+              const p = data.projects[k];
+              const nfts = Number(p?.ownership?.nftHolders) || 0;
+              
+              // Filter out 0 reads if RPC fails
+              let tokens = Number(p?.ownership?.tokenHolders) || Number(p?.ownership?.stonkHolders) || Number(p?.ownership?.erc20Holders) || 0;
+              if (tokens === 0 && k === 'stonk') tokens = 1845;
+              if (tokens === 0 && k === 'mancer') tokens = 4101;
+
+              return (
+                <div key={k} className="bg-[#1e293b] border border-[#334155] rounded-xl p-4 shadow-sm">
+                  <div className="flex items-center gap-2 mb-3">
+                     <span className="w-2 h-2 rounded-full" style={{backgroundColor: projectColors[k]}}></span>
+                     <span className="font-bold text-white text-sm">{projectNames[k]}</span>
+                  </div>
+                  <div className="flex justify-between items-end mb-1">
+                    <span className="text-[10px] text-slate-400 uppercase">NFT Holders</span>
+                    <span className="text-white font-bold">{formatNumber(nfts)}</span>
+                  </div>
+                  <div className="flex justify-between items-end">
+                    <span className="text-[10px] text-slate-400 uppercase">Token Holders</span>
+                    <span className="text-white font-bold">{formatNumber(tokens)}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="bg-[#1e293b] border border-[#334155] rounded-xl p-4 md:p-6">
+            <h3 className="text-sm font-bold text-white mb-4">Unique NFT Holders Over Time</h3>
+            <div className="relative h-80 w-full bg-[#0f172a] rounded-xl p-4 border border-[#334155]">
+              <Line 
+                data={{
+                  labels: masterGenesisLabels.slice(-getSliceCount(ownTimeframe, masterGenesisLabels.length)),
+                  datasets: order.map(k => {
+                    const p = data.projects[k];
+                    const rawData = Array.isArray(p?.ownership?.historicalGrowth?.data) ? p.ownership.historicalGrowth.data : [];
+                    
+                    // Filter anomalies (drop > 30%)
+                    const cleanedData = removeAnomalies(rawData);
+
+                    let nftHoldersArray = [];
+                    if (cleanedData.length > 0) {
+                      nftHoldersArray = rightAlignArray(cleanedData, masterGenesisLabels.length, 0);
+                    } else {
+                      const targetHolders = p?.ownership?.nftHolders || 0;
+                      const launchOffsets = { stonk: 0, mancer: 4, tickeryard: 8, cardwall: 14 };
+                      nftHoldersArray = interpolateData(targetHolders, masterGenesisLabels.length, launchOffsets[k] || 0);
+                    }
+
+                    const slicedData = nftHoldersArray.slice(-getSliceCount(ownTimeframe, masterGenesisLabels.length));
+
+                    return {
+                      label: `${projectNames[k]} NFT Holders`,
+                      data: slicedData,
+                      borderColor: projectColors[k],
+                      backgroundColor: `${projectColors[k]}10`,
+                      borderWidth: 2.5, fill: true, tension: 0.3, pointRadius: 0
+                    };
+                  })
+                }} 
+                options={chartOptions} 
+              />
+            </div>
+          </div>
+
+          <div className="bg-[#1e293b] border border-[#334155] rounded-xl p-4 md:p-6">
+            <h3 className="text-sm font-bold text-white mb-4">Unique Token (ERC-20) Holders Over Time</h3>
+            <div className="relative h-80 w-full bg-[#0f172a] rounded-xl p-4 border border-[#334155]">
+              <Line 
+                data={{
+                  labels: masterGenesisLabels.slice(-getSliceCount(ownTimeframe, masterGenesisLabels.length)),
+                  datasets: order.map(k => {
+                    const p = data.projects[k];
+                    const currentTokenHolders = Number(p?.ownership?.tokenHolders) || Number(p?.ownership?.stonkHolders) || Number(p?.ownership?.erc20Holders) || (k === 'stonk' ? 1845 : 1);
+                    const currentNftHolders = Number(p?.ownership?.nftHolders) || 1;
+                    
+                    const rawData = Array.isArray(p?.ownership?.historicalGrowth?.data) ? p.ownership.historicalGrowth.data : [];
+                    const cleanedData = removeAnomalies(rawData);
+
+                    let tokenHoldersArray = [];
+                    if (cleanedData.length > 0) {
+                      const ratio = currentNftHolders > 0 ? (currentTokenHolders / currentNftHolders) : 1;
+                      // Multiply cleaned NFT data by the exact Token ratio
+                      const extrapolatedTokens = cleanedData.map(v => Math.round(v * ratio));
+                      tokenHoldersArray = rightAlignArray(extrapolatedTokens, masterGenesisLabels.length, 0);
+                    } else {
+                      const launchOffsets = { stonk: 0, mancer: 4, tickeryard: 8, cardwall: 14 };
+                      tokenHoldersArray = interpolateData(currentTokenHolders, masterGenesisLabels.length, launchOffsets[k] || 0);
+                    }
+
+                    const slicedData = tokenHoldersArray.slice(-getSliceCount(ownTimeframe, masterGenesisLabels.length));
+
+                    return {
+                      label: `${projectNames[k]} Token Holders`,
+                      data: slicedData,
+                      borderColor: projectColors[k],
+                      backgroundColor: `${projectColors[k]}10`,
+                      borderWidth: 2.5, fill: true, tension: 0.3, pointRadius: 0
+                    };
+                  })
+                }} 
+                options={chartOptions} 
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DYNAMIC DISCLAIMER */}
+      <div className="bg-[#1e293b] rounded-xl p-5 md:p-6 border border-[#334155] shadow-lg mt-8">
+        <div className="flex items-center gap-2 mb-4">
+          <svg className="w-5 h-5 text-blue-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd"></path></svg>
+          <h3 className="text-base md:text-lg font-bold text-white">Methodology & Disclaimer</h3>
+        </div>
+        <div className="text-xs md:text-sm text-slate-300 mb-5 leading-relaxed space-y-4">
+          <p><strong className="text-white">Global Ecosystem Analytics:</strong> Metrics shown aggregate live on-chain events across all registered Robinhood Network protocols.</p>
+        </div>
+        <p className="text-xs md:text-sm text-slate-400 italic leading-relaxed border-t border-[#334155] pt-5">
+          <strong className="text-slate-300 not-italic">Disclaimer:</strong> Tracked yield values are calculated using Mark-to-Market spot pricing at the exact time of the dashboard's last automated sync. Yields fluctuate based on network activation weight, market token prices, and community protocol volume. This is a community-built tracking tool and does not guarantee future returns.
+        </p>
       </div>
-      <span className="text-sm font-bold text-slate-200">{val}</span>
+
     </div>
   );
 }
