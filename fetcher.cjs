@@ -342,7 +342,11 @@ async function secureFetch(url) {
       await sleep(1500 * (i + 1));
     }
   }
-  return { result: [] };
+  // Every attempt failed. `failed` marks this apart from a genuine empty
+  // result: a paged walk breaks out on an empty page, so without the flag an
+  // exhausted request reads as "end of history" and silently truncates the
+  // window it was summing.
+  return { result: [], failed: true };
 }
 
 /**
@@ -891,12 +895,28 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
       let oracleAmmSampleUsd = 0;
       let dailyOracleAmmSample = [0,0,0,0,0,0,0];
 
+      // Walks that ended before covering the whole seven days.
+      //
+      // Page exhaustion alone does not prove truncation: a wallet whose entire
+      // history fits inside the window legitimately runs out of pages without
+      // ever seeing an older row. The two are told apart by Blockscout's own
+      // `status` -- "2" means it knows it has more that it has not indexed yet.
+      // So a walk is only suspect when it stopped short AND the source admitted
+      // it was incomplete, or when a request failed outright.
+      const truncatedWalks = [];
+
       let pageEth = 1;
+      let sawEthRows = false;
+      let ethReachedWindow = false;
+      let ethIncompleteSignalled = false;
       while(true) {
           let urlEth = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=txlistinternal&address=${conf.oracleSource}&page=${pageEth}&offset=1000&sort=desc&apikey=${API_KEY}`;
           let dataEth = await secureFetch(urlEth);
+          if (dataEth?.failed) { truncatedWalks.push("txlistinternal (oracle) - request failed"); break; }
+          if (dataEth?.status === "2") ethIncompleteSignalled = true;
           const txs = (dataEth && Array.isArray(dataEth.result)) ? dataEth.result : [];
           if(txs.length === 0) break;
+          sawEthRows = true;
           let reachedOlder = false;
           for (const tx of txs) {
             const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
@@ -922,8 +942,16 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
               }
             }
           }
-          if(reachedOlder || txs.length < 1000) break;
-          pageEth++; await sleep(200); 
+          if(reachedOlder) { ethReachedWindow = true; break; }
+          // A short page is NOT the end of the history. Blockscout serves short
+          // pages while its own indexing is behind -- it says so in `status: 2`,
+          // "Some internal transactions within this block range have not yet
+          // been processed" -- and treating one as the end silently truncates
+          // the window. Keep paging; an empty page is the only real terminator.
+          pageEth++; await sleep(200);
+      }
+      if (sawEthRows && !ethReachedWindow && ethIncompleteSignalled) {
+        truncatedWalks.push("txlistinternal (oracle)");
       }
 
       for (const tokenAddr of Object.keys(TOKEN_TICKERS)) {
@@ -931,11 +959,17 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
         if (price <= 0) continue;
         
         let pageTok = 1;
+        let sawTokRows = false;
+        let tokReachedWindow = false;
+        let tokIncompleteSignalled = false;
         while(true) {
             let urlTok = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokentx&address=${conf.oracleSource}&contractaddress=${tokenAddr}&page=${pageTok}&offset=1000&sort=desc&apikey=${API_KEY}`;
             let dataTok = await secureFetch(urlTok);
+            if (dataTok?.failed) { truncatedWalks.push(`tokentx ${tokenAddr} - request failed`); break; }
+            if (dataTok?.status === "2") tokIncompleteSignalled = true;
             const txs = (dataTok && Array.isArray(dataTok.result)) ? dataTok.result : [];
             if(txs.length === 0) break;
+            sawTokRows = true;
 
             let reachedOlder = false;
             for (const tx of txs) {
@@ -959,9 +993,32 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
                 }
               }
             }
-            if(reachedOlder || txs.length < 1000) break;
-            pageTok++; await sleep(200); 
+            if(reachedOlder) { tokReachedWindow = true; break; }
+            pageTok++; await sleep(200);
         }
+        if (sawTokRows && !tokReachedWindow && tokIncompleteSignalled) {
+          truncatedWalks.push(`tokentx ${tokenAddr}`);
+        }
+      }
+
+      // Refuse to publish a total derived from a window we could not see all of.
+      //
+      // The sum here is scaled by totalNetworkWeight/oracleWeight -- a factor of
+      // ~634 -- so a walk that quietly stops short does not produce a slightly
+      // low number, it produces a confidently wrong one. That is what happened:
+      // ammFeesUsd printed 10,770 against 209,037 an hour earlier, with whole
+      // days sitting at exactly zero, because page 2 came back short and the
+      // loop read that as the end of seven days of history.
+      //
+      // Failing the run leaves the last good data.json in place. Stale and
+      // correct beats fresh and wrong, and it is the same call the gg-index
+      // preflight already makes.
+      if (truncatedWalks.length) {
+        throw new Error(
+          `${projectKey}: Blockscout returned a truncated history for ${truncatedWalks.join(", ")} ` +
+          `-- pages ran out before reaching ${new Date(sevenDaysAgo * 1000).toISOString()}. ` +
+          `Refusing to publish a partial revenue total.`,
+        );
       }
 
       const scaleMultiplier = totalNetworkWeight / conf.oracleWeight;
