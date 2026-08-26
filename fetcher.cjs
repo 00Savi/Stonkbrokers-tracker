@@ -765,6 +765,46 @@ async function fetchActivations(projectKey, conf) {
   };
 }
 
+/**
+ * Legacy path: token transfers OUT of a project's vault/AMM, via Blockscout.
+ *
+ * Only reached by a project with no activation contract -- cardwall today --
+ * where there are no RewardPaid events to read and `oracleSource` points at the
+ * AMM. Lifted out of the branch unchanged so the replacement above reads as one
+ * thing rather than being interleaved with the code it replaces.
+ */
+async function fetchVaultTokenOutflows(conf, marketData, sevenDaysAgo, oneDay, sink) {
+  let page = 1;
+  while (true) {
+    const url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokentx&address=${conf.oracleSource}&contractaddress=${conf.tokenCa}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`;
+    const data = await secureFetch(url);
+    const txs = (data && Array.isArray(data.result)) ? data.result : [];
+    if (txs.length === 0) break;
+
+    let reachedOlder = false;
+    for (const tx of txs) {
+      const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
+      if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
+      if ((tx.from || "").toLowerCase() !== conf.oracleSource.toLowerCase()) continue;
+
+      const amount = Number(tx.value || 0) / Math.pow(10, parseInt(tx.tokenDecimal || 18, 10));
+      if (amount <= 0) continue;
+
+      const usdVal = amount * marketData.tokenPriceUsd;
+      const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
+
+      sink.dailyUsdPerWeight[dayIdx] += (usdVal / sink.totalNetworkWeight);
+      sink.addSample(usdVal);
+      sink.revenueBreakdown.ammFeesUsd += usdVal;
+      sink.revenueBreakdown.dailyAmm[dayIdx] += usdVal;
+    }
+
+    if (reachedOlder || txs.length < 1000) break;
+    page++;
+    await sleep(200);
+  }
+}
+
 async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, marketData) {
   const oneDay = 86400;
   const dailyDates = [];
@@ -934,31 +974,64 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
       if (projectKey === "stonk" && conf.streams?.launchpad) await fetchDirectEthInflows(conf.streams.launchpad, "launchpadUsd", "dailyLaunchpad");
   } 
   else if (conf.yieldMode === "protocol_vault") {
-      let page = 1;
-      while(true) {
-          let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokentx&address=${conf.oracleSource}&contractaddress=${conf.tokenCa}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`;
-          let data = await secureFetch(url);
-          const txs = (data && Array.isArray(data.result)) ? data.result : [];
-          if(txs.length === 0) break;
-          let reachedOlder = false;
-          for (const tx of txs) {
-            const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
-            if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
-            if ((tx.from || "").toLowerCase() === conf.oracleSource.toLowerCase()) {
-                const amount = Number(tx.value || 0) / Math.pow(10, parseInt(tx.tokenDecimal || 18, 10));
-                if (amount > 0) {
-                    const usdVal = amount * marketData.tokenPriceUsd;
-                    const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
-                    
-                    dailyUsdPerWeight[dayIdx] += (usdVal / totalNetworkWeight);
-                    totalSampleUsd += usdVal;
-                    revenueBreakdown.ammFeesUsd += usdVal; 
-                    revenueBreakdown.dailyAmm[dayIdx] += usdVal;
-                }
-            }
-          }
-          if(reachedOlder || txs.length < 1000) break;
-          page++; await sleep(200); 
+      // Yield paid out of the protocol vault, from the index's RewardPaid
+      // totals instead of a paged tokentx walk.
+      //
+      // This is not an approximation of the old number -- it is the same
+      // quantity read from a better source. The tokentx walk asked for every
+      // token transfer the vault had ever made and kept the ones whose sender
+      // was the vault; RewardPaid is the contract stating outright that it paid
+      // a reward, with the token and amount, so nothing has to be inferred from
+      // direction. Mancer alone has 15,582 of these.
+      //
+      // Eight cumulative reads differenced into seven daily buckets, rather
+      // than paging thousands of events and bucketing here. The endpoint sums
+      // server-side, so each call is small and there is no pagination to get
+      // wrong. Day boundaries come from the same anchor table used for log
+      // timestamps -- see BlockTime.blockAt.
+      // Only where the project HAS an activation contract.
+      //
+      // Cardwall does not -- its activationCa is the zero address -- and its
+      // oracleSource points at the AMM instead, so the legacy walk there sums
+      // token transfers out of the AMM rather than reward payouts. Those are
+      // different quantities, and swapping one for the other because both land
+      // in ammFeesUsd would silently change what the figure means. Cardwall
+      // keeps the old path until it has an activation contract to read.
+      const hasActivation = conf.activationCa && conf.activationCa !== ZERO_ADDR;
+
+      if (hasActivation) {
+        const cumulative = [];
+        for (let i = 0; i <= 7; i++) {
+          const fromBlock = blockTime.blockAt(sevenDaysAgo + i * oneDay);
+          const t = await gg.activations(projectKey, { fromBlock });
+          const paid = (t.totals || []).filter(
+            (x) => x.kind === "reward_paid" &&
+                   (x.reward_token || "").toLowerCase() === conf.tokenCa.toLowerCase(),
+          );
+          // Totals are base-unit strings; BigInt then scale, never a raw double.
+          const sum = paid.reduce((acc, x) => acc + BigInt(x.total || "0"), 0n);
+          cumulative.push(Number(sum) / 1e18);
+        }
+
+        // cumulative[i] counts everything after dayBlocks[i], so day i is the
+        // difference between consecutive reads.
+        for (let i = 0; i < 7; i++) {
+          const amount = Math.max(0, cumulative[i] - cumulative[i + 1]);
+          if (amount <= 0) continue;
+          const usdVal = amount * marketData.tokenPriceUsd;
+
+          dailyUsdPerWeight[i] += (usdVal / totalNetworkWeight);
+          totalSampleUsd += usdVal;
+          revenueBreakdown.ammFeesUsd += usdVal;
+          revenueBreakdown.dailyAmm[i] += usdVal;
+        }
+      } else {
+        await fetchVaultTokenOutflows(conf, marketData, sevenDaysAgo, oneDay, {
+          dailyUsdPerWeight,
+          revenueBreakdown,
+          addSample: (usd) => { totalSampleUsd += usd; },
+          totalNetworkWeight,
+        });
       }
 
       if (projectKey === "mancer" && conf.streams?.dexCollector) {
