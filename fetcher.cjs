@@ -44,6 +44,32 @@ const API_KEY = process.env.BLOCKSCOUT_API_KEY;
 const PRO_API = "https://api.blockscout.com/v2/api";
 const CHAIN_ID = 4663;
 
+// gg-index: the self-hosted indexer that replaces the metered calls.
+//
+// Two different jobs, and which one serves a given read is not arbitrary:
+//
+//   lib/chain.cjs  -> anything the chain answers directly (supply, balances,
+//                     logs). Free, unmetered, no dependency on our own uptime.
+//   lib/ggindex    -> anything that requires an INDEX. A holder count cannot be
+//                     read from the chain at all -- it only has Transfer
+//                     events, so the count has to be produced by replaying and
+//                     folding them. Same for activation and reward aggregates.
+//
+// Set GG_INDEX_URL to point at a different deployment.
+const { GgIndex } = require("./lib/ggindex.cjs");
+const { Rpc } = require("./lib/rpc.cjs");
+const { fetchLogsWithTimestamps } = require("./lib/chain.cjs");
+const { BlockTime } = require("./lib/blocktime.cjs");
+
+const gg = new GgIndex();
+const rpc = new Rpc();
+
+// Block number -> timestamp, shared across every project because it describes
+// the chain rather than a contract. Loaded from cache/blocktime.json and
+// extended as the chain grows; see lib/blocktime.cjs for why interpolation is
+// used instead of reading a block per log.
+const blockTime = new BlockTime().load();
+
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 const TOKEN_TICKERS = {
@@ -319,33 +345,27 @@ async function secureFetch(url) {
   return { result: [] };
 }
 
-async function fetchTokenHoldersSafe(contractAddress, isNft = false) {
-  if (!contractAddress || contractAddress === "0x0000000000000000000000000000000000000000") return 0;
-  let page = 1;
-  let activeHolders = 0;
-  let hasData = false;
-  const dustThreshold = isNft ? 1n : 1000000000000000000n; 
-
-  while (true) {
-    let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=token&action=getTokenHolders&contractaddress=${contractAddress}&page=${page}&offset=1000&apikey=${API_KEY}`;
-    let data = await secureFetch(url);
-
-    if (data && data.result && Array.isArray(data.result) && data.result.length > 0) {
-        hasData = true;
-        for (const holder of data.result) {
-            try {
-                const bal = BigInt(holder.value || 0);
-                if (bal >= dustThreshold) activeHolders++;
-            } catch(e) {}
-        }
-        if (data.result.length < 1000) break; 
-        page++;
-        await sleep(200); 
-    } else {
-        break; 
-    }
-  }
-  return hasData ? activeHolders : 0;
+/**
+ * Holder count, from the gg-index fold rather than Blockscout.
+ *
+ * This one call was 45 of the 58 credits a run spent, and it grew more
+ * expensive as a project succeeded: it paged the entire holder list -- 28,000
+ * addresses for STONK -- purely to count the entries above a dust threshold.
+ * The index maintains that count continuously and answers it in one request.
+ *
+ * The dust rule is unchanged, only relocated. `dustThreshold = isNft ? 1n :
+ * 1e18` is now the index's default floor of one whole token, derived from the
+ * token's own decimals, so `isNft` no longer needs passing.
+ *
+ * **This throws where the old version returned 0.** That is the point. The old
+ * version answered 0 for a failed read as readily as for a genuinely empty
+ * token, and data.json is rewritten in full each run -- so one bad response
+ * published "no holders" and overwrote the correct figure. Halting is what the
+ * existing 402 guard already does for the same reason.
+ */
+async function fetchTokenHoldersSafe(contractAddress) {
+  if (!contractAddress || contractAddress === ZERO_ADDR) return 0;
+  return gg.holders(contractAddress);
 }
 
 async function loadMarketPrices() {
@@ -400,14 +420,10 @@ async function loadMarketPrices() {
 async function fetchAllLogs(projectKey, address, genesisBlock, topic0 = null) {
   if (!address || address === "0x0000000000000000000000000000000000000000") return [];
 
-  let latestBlock = 999999999;
-  try {
-    const br = await secureFetch(`${PRO_API}?chain_id=${CHAIN_ID}&module=block&action=eth_block_number&apikey=${API_KEY}`);
-    if (br && br.result) {
-        const val = br.result.toString();
-        latestBlock = val.startsWith("0x") ? parseInt(val, 16) : parseInt(val, 10);
-    }
-  } catch {}
+  // eth_blockNumber straight off the node. The old default of 999999999 on a
+  // failed read was load-bearing in the wrong direction: it made the loop scan
+  // to a block that does not exist.
+  const latestBlock = await rpc.blockNumber();
 
   const cacheFile = `cache_${projectKey}_logs.json`;
   let cachedLogs = [];
@@ -429,33 +445,40 @@ async function fetchAllLogs(projectKey, address, genesisBlock, topic0 = null) {
   } catch (e) {}
 
   let allLogs = [...cachedLogs];
-  let fromBlock = lastProcessedBlock === genesisBlock ? genesisBlock : lastProcessedBlock + 1; 
-  let step = 500000; 
+  const fromBlock = lastProcessedBlock === genesisBlock ? genesisBlock : lastProcessedBlock + 1;
   let fetchedNewLogs = false;
 
-  while (fromBlock <= latestBlock) {
-    let toBlock = fromBlock + step;
-    if (toBlock > latestBlock) toBlock = latestBlock;
+  // eth_getLogs directly, replacing the paged Blockscout walk.
+  //
+  // The hand-rolled adaptive stepping is gone because rpc.getLogs already does
+  // it, and does it against the failure this version could not see. Blockscout
+  // signalled "too many results" by returning exactly 1,000 and saying nothing;
+  // the node has TWO signals -- a silent 10,000-result cap and an explicit
+  // "exceeds limit" error -- and treats both as "narrow the window" rather than
+  // as a hard failure to retry unchanged.
+  //
+  // Timestamps are the one thing raw eth_getLogs will not give us: this node
+  // returns blockTimestamp as 0x0, and the activation parser below depends on
+  // it. They come from the interpolated anchor table instead -- measured to
+  // ~12s of true block time, against day and 24h/7d/30d buckets. See
+  // lib/blocktime.cjs.
+  if (fromBlock <= latestBlock) {
+    const fresh = await fetchLogsWithTimestamps(
+      rpc,
+      {
+        address,
+        fromBlock,
+        toBlock: latestBlock,
+        topics: topic0 ? [topic0] : undefined,
+      },
+      projectKey,
+      blockTime,
+    );
 
-    let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=logs&action=getLogs&address=${address}&fromBlock=${fromBlock}&toBlock=${toBlock}&apikey=${API_KEY}`;
-    if (topic0) url += `&topic0=${topic0}`;
-
-    let data = await secureFetch(url);
-    const logs = (data && Array.isArray(data.result)) ? data.result : [];
-
-    if (logs.length >= 1000 && step > 1) { 
-        step = Math.floor(step / 2); 
-        continue; 
+    if (fresh.length > 0) {
+      allLogs.push(...fresh);
+      fetchedNewLogs = true;
     }
-
-    if (logs.length > 0) {
-        allLogs.push(...logs);
-        fetchedNewLogs = true;
-    }
-
-    fromBlock = toBlock + 1;
-    if (logs.length < 500) { step = Math.min(500000, Math.floor(step * 2)); }
-    await sleep(200); 
   }
 
   const parseNum = (val) => {
@@ -495,50 +518,71 @@ async function fetchAllLogs(projectKey, address, genesisBlock, topic0 = null) {
   return uniqueLogs;
 }
 
+/**
+ * Supply lost to burns, plus (for STONK) tokens locked in activation.
+ *
+ * Was four metered calls -- tokensupply, then a tokenbalance per burn address,
+ * plus one for the activation contract. Now one batched supply read and, where
+ * needed, one batched balance read.
+ *
+ * Amounts are scaled by the token's OWN decimals rather than a hardcoded 1e18.
+ * Every one of these is an 18-decimal token today, so this changes no current
+ * number -- but the constant was an assumption the payload never stated, and
+ * the batch endpoint hands us the real value for free.
+ */
 async function getTrueDeflationStats(conf) {
-  let currentSupply = conf.maxSupply * conf.unitValue;
-  let deadBalance = 0;
+  const stats = await gg.supplies([conf.tokenCa]);
+  const s = stats.get(conf.tokenCa.toLowerCase());
 
-  try {
-    const supplyUrl = `${PRO_API}?chain_id=${CHAIN_ID}&module=stats&action=tokensupply&contractaddress=${conf.tokenCa}&apikey=${API_KEY}`;
-    const res = await secureFetch(supplyUrl);
-    if (res && res.result) currentSupply = Number(res.result) / 1e18;
-  } catch(e) {}
-
-  const deadAddresses = ["0x000000000000000000000000000000000000dead", "0x0000000000000000000000000000000000000000"];
-  for (const addr of deadAddresses) {
-    let res = await secureFetch(`${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokenbalance&contractaddress=${conf.tokenCa}&address=${addr}&apikey=${API_KEY}`);
-    if (res && res.result) deadBalance += Number(res.result) / 1e18;
-    await sleep(200); 
+  if (!s || s.supply === null) {
+    throw new Error(`supply read failed for ${conf.ticker} (${conf.tokenCa})`);
   }
 
-  let totalBurnTokens = 0;
+  const scale = 10 ** (s.decimals ?? 18);
+  const currentSupply = Number(s.supply) / scale;
+
+  // A reverted burn-balance read is unknown, not zero. ERC-721 balanceOf(0x0)
+  // reverts by spec, and treating that as a zero balance would understate the
+  // burn -- so it is surfaced rather than absorbed.
+  if (s.dead === null || s.zero === null) {
+    throw new Error(`burn balance read failed for ${conf.ticker} (${conf.tokenCa})`);
+  }
+  const deadBalance = (Number(s.dead) + Number(s.zero)) / scale;
+
+  let lockedBalance = 0;
   if (conf.ticker === "STONK") {
-    let lockedBalance = 0;
-    let res = await secureFetch(`${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokenbalance&contractaddress=${conf.tokenCa}&address=${conf.activationCa}&apikey=${API_KEY}`);
-    if (res && res.result) lockedBalance += Number(res.result) / 1e18;
-    const nativeBurn = Math.max(0, (conf.maxSupply * conf.unitValue) - currentSupply);
-    totalBurnTokens = nativeBurn + deadBalance + lockedBalance;
-  } else {
-    const nativeBurn = Math.max(0, (conf.maxSupply * conf.unitValue) - currentSupply);
-    totalBurnTokens = nativeBurn + deadBalance;
+    const bals = await gg.balances(conf.tokenCa, [conf.activationCa]);
+    const locked = bals.get(conf.activationCa.toLowerCase());
+    if (locked === null || locked === undefined) {
+      throw new Error(`locked balance read failed for ${conf.ticker}`);
+    }
+    lockedBalance = Number(locked) / scale;
   }
-  
+
+  const nativeBurn = Math.max(0, (conf.maxSupply * conf.unitValue) - currentSupply);
+  const totalBurnTokens = nativeBurn + deadBalance + lockedBalance;
+
   const equivalentBrokersBurnt = totalBurnTokens / conf.unitValue;
   return { totalBurnTokens: Math.round(totalBurnTokens), equivalentBrokersBurnt: parseFloat(equivalentBrokersBurnt.toFixed(2)) };
 }
 
 async function getOwnershipStats(conf, equivBurnt, previousData) {
+  // How many of the collection sit in the AMM vault. An ERC-721 balanceOf is a
+  // plain token count, so no decimal scaling applies here.
   let ammVaultNfts = 0;
   if (conf.nftCa && conf.ammCa) {
-    let res = await secureFetch(`${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokenbalance&contractaddress=${conf.nftCa}&address=${conf.ammCa}&apikey=${API_KEY}`);
-    if (res && res.result) ammVaultNfts = parseInt(res.result, 10);
+    const bals = await gg.balances(conf.nftCa, [conf.ammCa]);
+    const held = bals.get(conf.ammCa.toLowerCase());
+    if (held === null || held === undefined) {
+      throw new Error(`AMM vault balance read failed for ${conf.ticker}`);
+    }
+    ammVaultNfts = Number(held);
   }
 
-  let rawNftHolders = await fetchTokenHoldersSafe(conf.nftCa, true);
+  let rawNftHolders = await fetchTokenHoldersSafe(conf.nftCa);
   let trueUniqueNftHolders = rawNftHolders > (conf.teamWallets || 0) ? rawNftHolders - (conf.teamWallets || 0) : 0;
 
-  const rawStonkHolders = await fetchTokenHoldersSafe(conf.tokenCa, false);
+  const rawStonkHolders = await fetchTokenHoldersSafe(conf.tokenCa);
   const trueUniqueStonkHolders = rawStonkHolders > (conf.teamWallets || 0) ? rawStonkHolders - (conf.teamWallets || 0) : 0;
 
   const circulatingNftSupply = Math.max(0, conf.maxSupply - ammVaultNfts - Math.floor(equivBurnt)); 
@@ -1008,7 +1052,15 @@ async function loadTokenListPrices(tokenList) {
   const tokenResults = [];
   const validTokens = tokenList.filter(m => m.ca !== null);
   const addresses = validTokens.map(m => m.ca).join(",");
-  
+
+  // Supply and burn balance for the whole list up front, in ONE request.
+  //
+  // This was the single largest metered cost after holder counts: two calls per
+  // token, walked one at a time with a 200ms pause between each. The meme and
+  // stock lists together are 30 tokens, so ~60 credits and ~12 seconds of
+  // sleeping per run become one call.
+  const supplyByToken = await gg.supplies(validTokens.map(m => m.ca));
+
   let pairsMap = {};
   try {
       const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${addresses}`);
@@ -1070,22 +1122,16 @@ async function loadTokenListPrices(tokenList) {
       
       tokenPrices[item.ca.toLowerCase()] = priceUsd;
       
-      let burntBalance = 0;
-      let totalSupplyRaw = 0;
+      // Read from the batch fetched above rather than two calls per token.
+      const s = supplyByToken.get(item.ca.toLowerCase());
+      const scale = 10 ** (s?.decimals ?? 18);
+      const burntBalance = s && s.dead !== null ? Number(s.dead) / scale : 0;
+      const totalSupplyRaw = s && s.supply !== null ? Number(s.supply) / scale : 0;
 
-      try {
-          const burnRes = await secureFetch(`${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokenbalance&contractaddress=${item.ca}&address=0x000000000000000000000000000000000000dead&apikey=${API_KEY}`);
-          if (burnRes && burnRes.result) burntBalance = Number(burnRes.result) / 1e18;
-      } catch(e) {}
-      
-      await sleep(200);
-
-      try {
-          const supplyRes = await secureFetch(`${PRO_API}?chain_id=${CHAIN_ID}&module=stats&action=tokensupply&contractaddress=${item.ca}&apikey=${API_KEY}`);
-          if (supplyRes && supplyRes.result) totalSupplyRaw = Number(supplyRes.result) / 1e18;
-      } catch(e) {}
-
-      await sleep(200);
+      // The 1e9 fallback is kept from the original: these are long-tail meme
+      // tokens and a reverted supply read leaves FDV needing *some* basis.
+      // Unlike the protocol tokens above this does not throw, because one dead
+      // meme contract should not take down the whole payload.
       let finalTotalSupply = totalSupplyRaw > 0 ? totalSupplyRaw : 1000000000;
       
       fdv = priceUsd * finalTotalSupply;
@@ -1111,6 +1157,26 @@ async function run() {
   console.log("Starting Multi-Project Build...");
   let previousData = {};
   previousData = readPreviousData();
+
+  // Extend the block-time anchor table before anything reads a log, because
+  // `blockTime.at()` interpolates between anchors and CLAMPS outside them —
+  // past the last anchor every block reports that anchor's timestamp. Events
+  // from the current hour would all share one stale time and land in the wrong
+  // 24h bucket. On a warm cache the chain has only moved ~36k blocks since the
+  // last run, so this adds an anchor or two.
+  const chainHead = await rpc.blockNumber();
+  const earliestGenesis = Math.min(...Object.values(PROJECTS).map(p => p.genesisBlock));
+  await blockTime.ensureRange(rpc, earliestGenesis, chainHead, (done, total) => {
+    process.stdout.write(`\r  block-time anchors: ${done}/${total}   `);
+  });
+  console.log(`\r  block-time anchors: ${blockTime.anchors.length} covering to block ${chainHead}`.padEnd(70));
+
+  // The index has to be reachable and current before we overwrite data.json.
+  // Checking here means an outage fails the run in the first second with a
+  // clear message, rather than part-way through after several projects have
+  // already been rebuilt.
+  const idx = await gg.status();
+  console.log(`  gg-index: head ${idx.chain_head}, ${idx.cursors.length} cursors`);
 
   const markets = await loadMarketPrices();
   const memeData = await loadTokenListPrices(MEMES);
