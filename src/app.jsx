@@ -8,6 +8,7 @@ import MancerDetailView from './components/views/MancerDetailView';
 import YardDetailView from './components/views/YardDetailView';
 import CardWallDetailView from './components/views/CardWallDetailView';
 import MemesTokensView from './components/views/MemesTokensView';
+import { loadOverlay, applyOverlay } from './lib/ggindex';
 
 export default function App() {
   const [data, setData] = useState(null);
@@ -16,16 +17,39 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('roi');
 
   useEffect(() => {
-    fetch('/data.json?v=' + Date.now())
-      .then((res) => res.json())
-      .then((json) => {
-        setData(json);
+    const ac = new AbortController();
+
+    (async () => {
+      let json;
+      try {
+        const res = await fetch('/data.json?v=' + Date.now(), { signal: ac.signal });
+        json = await res.json();
+      } catch (err) {
+        if (!ac.signal.aborted) console.error('Failed loading data:', err);
         setLoading(false);
-      })
-      .catch((err) => {
-        console.error('Failed loading data:', err);
-        setLoading(false);
-      });
+        return;
+      }
+
+      // Paint from data.json first. It is an hourly snapshot, so it is stale by
+      // up to an hour but it is complete, and showing it immediately beats
+      // holding a blank screen while the index is queried.
+      setData(json);
+      setLoading(false);
+
+      // Then correct the figures gg-index owns. Holder and activation counts
+      // are wrong in the snapshot often enough to matter — see lib/ggindex.js
+      // for what each one gets wrong and why.
+      try {
+        const overlay = await loadOverlay(ac.signal);
+        setData((current) => applyOverlay(current, overlay));
+      } catch (err) {
+        if (!ac.signal.aborted) {
+          console.warn('gg-index unavailable; showing data.json figures', err);
+        }
+      }
+    })();
+
+    return () => ac.abort();
   }, []);
 
   if (loading) return <div className="min-h-screen bg-[#0f172a] text-white flex items-center justify-center">Syncing Protocol Ledger...</div>;
