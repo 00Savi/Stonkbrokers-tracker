@@ -16,8 +16,12 @@ import { Value, price, usd, eth } from './kit';
 
 function BrandMark() {
   return (
-    <NavLink to="/" className="flex shrink-0 items-center gap-2">
-      <span className="text-[17px] leading-none text-brand">◆</span>
+    <NavLink to="/" className="flex shrink-0 items-center gap-2.5">
+      <img
+        src="/Stonkbroker.png"
+        alt=""
+        className="h-7 w-7 rounded-lg border border-line object-cover"
+      />
       <span className="hidden text-[15px] tracking-tight sm:inline">
         Stonk<em className="font-semibold not-italic">brokers</em>
       </span>
@@ -47,6 +51,9 @@ export function TopNav({ live }) {
             </NavLink>
           ))}
           <span className="mx-1 h-4 w-px shrink-0 bg-line" />
+          <NavLink to="/rankings" className={({ isActive }) => `${pill(isActive)} whitespace-nowrap`}>
+            Rankings
+          </NavLink>
           <NavLink to="/ecosystem" className={({ isActive }) => `${pill(isActive)} whitespace-nowrap`}>
             Ecosystem
           </NavLink>
@@ -114,23 +121,37 @@ export function PageHeader({ data, pending }) {
   const p = data?.projects?.[key];
   const market = p?.market || {};
 
+  // Each project ships its own artwork in data.json (`Stonkbroker.png`,
+  // `logo.png`, `Yardkeepers.png`, `wall.png`) and it has always been the
+  // icon beside the title. It is the project's identity, so it is read from
+  // the data rather than hardcoded here -- adding a project should not mean
+  // editing this file.
+  const logo = p?.config?.logo || 'Stonkbroker.png';
+
   return (
     <header className="flex flex-col gap-4 pb-5 pt-6 md:flex-row md:items-end md:justify-between">
-      <div>
-        <h1 className="text-[26px] font-semibold tracking-tight text-ink md:text-[30px]">
-          {meta?.name ?? 'Tracker'}
-        </h1>
-        <p className="mt-1 font-mono text-[11px] text-faint">
-          Robinhood Chain · built by{' '}
-          <a
-            href="https://x.com/savicrypto"
-            target="_blank"
-            rel="noreferrer"
-            className="text-muted underline-offset-2 hover:text-ink hover:underline"
-          >
-            @savicrypto
-          </a>
-        </p>
+      <div className="flex items-center gap-4">
+        <img
+          src={`/${logo}`}
+          alt=""
+          className="h-12 w-12 shrink-0 rounded-xl border border-line bg-panel object-cover md:h-14 md:w-14"
+        />
+        <div>
+          <h1 className="text-[26px] font-semibold tracking-tight text-ink md:text-[30px]">
+            {meta?.name ?? 'Tracker'}
+          </h1>
+          <p className="mt-1 font-mono text-[11px] text-faint">
+            Robinhood Chain · built by{' '}
+            <a
+              href="https://x.com/savicrypto"
+              target="_blank"
+              rel="noreferrer"
+              className="text-muted underline-offset-2 hover:text-ink hover:underline"
+            >
+              @savicrypto
+            </a>
+          </p>
+        </div>
       </div>
 
       <div className="flex gap-6 rounded-xl border border-line bg-panel px-5 py-3">

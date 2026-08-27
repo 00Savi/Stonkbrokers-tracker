@@ -95,11 +95,15 @@ export default function App() {
 
       <main className="mx-auto w-full max-w-[1500px] px-4">
         <Routes>
-          <Route path="/" element={<OverviewView data={data} pending={booting} />} />
-          {/* The former front page. The new overview answers "what should I
-              buy"; this answers "how is the whole ecosystem trending", which
-              is a different question with its own charts, so it keeps a URL
-              rather than being deleted along with its old entry point. */}
+          {/* Home is the StonkBrokers ROI page, which is where the app has
+              always opened -- `activeProject` and `activeTab` defaulted to
+              'stonk' and 'roi'. Routing made that default visible as a URL;
+              it did not licence changing it. */}
+          <Route path="/" element={<Navigate to="/stonkbrokers/roi" replace />} />
+          <Route
+            path="/rankings"
+            element={<OverviewView data={data} pending={booting} />}
+          />
           <Route
             path="/ecosystem"
             element={

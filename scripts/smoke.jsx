@@ -37,6 +37,7 @@ globalThis.fetch = () =>
 
 const ROUTES = [
   '/',
+  '/rankings',
   '/ecosystem',
   '/portfolio',
   '/tokens',
