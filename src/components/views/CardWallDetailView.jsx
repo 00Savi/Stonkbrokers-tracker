@@ -3,6 +3,7 @@ import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, ArcElement, Filler
 } from 'chart.js';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
+import { burnSeries, burnRateSeries } from '../../lib/burn';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
@@ -56,26 +57,13 @@ export default function CardWallDetailView({ data, activeTab }) {
   const realBurntTokens = Math.max(Number(activation.dualBurn?.totalBurnTokens || 0), Number(ownership.permanentlyBurntTokens || 0));
   const realBurntUnits = Math.max(Number(activation.dualBurn?.equivalentBrokersBurnt || 0), Number(ownership.permanentlyBurntUnits || 0), Number(ownership.burntNfts || 0));
   
-  const rawBurnHistory = Array.isArray(ownership.burnHistory) && ownership.burnHistory.length > 0 
-    ? ownership.burnHistory 
-    : [2500000, 5800000, 8900000, 12100000, 15300000, 18450000, realBurntTokens];
+  const burn = burnSeries(dailySnapshots, burnTimeframe);
+  const slicedBurnLabels = burn.labels;
+  const slicedBurnData = burn.data;
 
-  let highestBurnSeen = 0;
-  const cumulativeBurnData = rawBurnHistory.map(val => {
-    const num = Number(val || 0);
-    if (num > highestBurnSeen) highestBurnSeen = num;
-    return highestBurnSeen;
-  });
-
-  const fullBurnLabels = Array.isArray(ownership.burnLabels) && ownership.burnLabels.length > 0 ? ownership.burnLabels : ['Aug 17', 'Aug 18', 'Aug 19', 'Aug 20', 'Aug 21', 'Aug 22', 'Aug 23'];
-  let sliceCount = fullBurnLabels.length;
-  if (burnTimeframe === '7d') sliceCount = Math.min(7, fullBurnLabels.length);
-  if (burnTimeframe === '30d') sliceCount = Math.min(30, fullBurnLabels.length);
-  const slicedBurnLabels = fullBurnLabels.slice(-sliceCount);
-  const slicedBurnData = cumulativeBurnData.slice(-sliceCount);
-
-  const fwPrices = hasSnaps ? dailySnapshots.map(s => s.tokenPriceUsd || 0) : [0.0008, 0.00081, 0.00082, 0.00081, 0.0008115];
-  const fwBurn = hasSnaps ? dailySnapshots.map((s, i) => (i === 0 ? 0 : Math.max(0, (s.totalBurn || 0) - (dailySnapshots[i-1].totalBurn || 0)))) : [500000, 800000, 1200000, 1500000, 1845000];
+  const flywheel = burnRateSeries(dailySnapshots);
+  const fwPrices = flywheel.prices;
+  const fwBurn = flywheel.burn;
 
   const actHistory = activation.history || {};
   const hasActHist = Array.isArray(actHistory.labels) && actHistory.labels.length > 0;
@@ -340,11 +328,23 @@ export default function CardWallDetailView({ data, activeTab }) {
               </div>
             </div>
             <div className="relative h-72 md:h-80 w-full">
-              <Line 
-                data={{ labels: slicedBurnLabels, datasets: [{ label: 'Cumulative Burnt', data: slicedBurnData, borderColor: '#fb923c', backgroundColor: 'rgba(251, 146, 60, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] }} 
-                options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: (v) => (v >= 1000000 ? (v / 1000000).toFixed(1) + 'M' : v) } } } }} 
-              />
+              {slicedBurnData.length > 0 ? (
+                <Line
+                  data={{ labels: slicedBurnLabels, datasets: [{ label: 'Cumulative Burnt', data: slicedBurnData, borderColor: '#fb923c', backgroundColor: 'rgba(251, 146, 60, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] }}
+                  options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: (v) => (v >= 1000000 ? (v / 1000000).toFixed(1) + 'M' : v) } } } }}
+                />
+              ) : (
+                <div className="h-full flex items-center justify-center text-sm text-slate-500">
+                  No burn history recorded yet
+                </div>
+              )}
             </div>
+            {burn.days > 0 && burn.days < 30 && (
+              <p className="text-xs text-slate-500 mt-3">
+                {burn.days} day{burn.days === 1 ? '' : 's'} of recorded history
+                {burn.dropped > 0 && ` — ${burn.dropped} bad reading${burn.dropped === 1 ? '' : 's'} excluded`}
+              </p>
+            )}
           </div>
 
           <div className="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6">
@@ -353,7 +353,7 @@ export default function CardWallDetailView({ data, activeTab }) {
             <div className="relative h-72 md:h-80 w-full">
               <Bar 
                 data={{
-                  labels: masterDates.slice(-5),
+                  labels: flywheel.labels.slice(-5),
                   datasets: [
                     { type: 'line', label: 'Token Price ($)', data: fwPrices.slice(-5), borderColor: '#fbbf24', backgroundColor: '#fbbf24', borderWidth: 2, tension: 0.3, pointRadius: 3, yAxisID: 'y1' },
                     { type: 'bar', label: 'Daily Burn Velocity', data: fwBurn.slice(-5), backgroundColor: 'rgba(249, 115, 22, 0.8)', borderRadius: 4, yAxisID: 'y' }
