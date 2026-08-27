@@ -6,7 +6,8 @@
     "update": "node fetcher.cjs",
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "smoke": "esbuild scripts/smoke.jsx --bundle --platform=node --format=cjs --jsx=automatic --loader:.jsx=jsx --outfile=node_modules/.cache/smoke.cjs --log-level=error && node node_modules/.cache/smoke.cjs"
   },
   "dependencies": {
     "chart.js": "^4.4.1",
@@ -19,6 +20,7 @@
     "react": "^18.3.1",
     "react-chartjs-2": "^5.3.0",
     "react-dom": "^18.3.1",
+    "react-router-dom": "^7.18.2",
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {

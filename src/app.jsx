@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import Header from './components/Header';
-import Navigation from './components/Navigation';
+import React from 'react';
+import { Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom';
+import { TopNav, TabBar, PageHeader } from './components/Shell';
+import OverviewView from './components/views/OverviewView';
 import EcosystemView from './components/views/EcosystemView';
 import PortfolioView from './components/views/PortfolioView';
 import StonkDetailView from './components/views/StonkDetailView';
@@ -8,137 +9,156 @@ import MancerDetailView from './components/views/MancerDetailView';
 import YardDetailView from './components/views/YardDetailView';
 import CardWallDetailView from './components/views/CardWallDetailView';
 import MemesTokensView from './components/views/MemesTokensView';
-import { loadProjects, loadOverlay, applyOverlay } from './lib/ggindex';
-import { loadPrices, applyPrices } from './lib/prices';
+import { useDashboard } from './lib/useDashboard';
+import { PROJECT_BY_SLUG, TAB_BY_SLUG, DEFAULT_TAB } from './lib/routes';
+import { SkeletonCard } from './components/kit';
 
-export default function App() {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [activeProject, setActiveProject] = useState('stonk');
-  const [activeTab, setActiveTab] = useState('roi');
+const DETAIL_VIEWS = {
+  stonk: StonkDetailView,
+  mancer: MancerDetailView,
+  tickeryard: YardDetailView,
+  cardwall: CardWallDetailView,
+};
 
-  useEffect(() => {
-    const ac = new AbortController();
-    let priceTimer = null;
-    let painted = false;
+/**
+ * A project page at /:project/:tab.
+ *
+ * The tab is a route parameter rather than component state, which is the whole
+ * point of the exercise: /stonkbrokers/burn survives a refresh, can be
+ * bookmarked, and can be linked to. Previously every one of these was
+ * `useState('roi')`, so a refresh anywhere in the app returned you to the
+ * StonkBrokers ROI tab regardless of where you were.
+ *
+ * An unknown project or tab redirects rather than rendering blank -- a typo in
+ * a shared link should land somewhere real.
+ */
+function ProjectPage({ data, sources }) {
+  const { project, tab } = useParams();
+  const key = PROJECT_BY_SLUG[project];
+  const activeTab = TAB_BY_SLUG[tab];
 
-    const paint = (payload) => {
-      painted = true;
-      setData(payload);
-      setLoading(false);
-    };
+  if (!key) return <Navigate to="/" replace />;
+  if (!activeTab) return <Navigate to={`/${project}/${DEFAULT_TAB}`} replace />;
 
-    (async () => {
-      let json;
-      try {
-        const res = await fetch('/data.json?v=' + Date.now(), { signal: ac.signal });
-        json = await res.json();
-      } catch (err) {
-        if (!ac.signal.aborted) console.error('Failed loading data:', err);
-        setLoading(false);
-        return;
-      }
-
-      // data.json is deliberately NOT painted yet.
-      //
-      // It is an hourly snapshot, and the specific figures it gets wrong are the
-      // ones corrected below: holder counts Blockscout truncates, activation
-      // counts a log-only walk overstates, and prices that are an hour stale.
-      // Painting first and correcting a second later showed numbers already
-      // known to be wrong, and showed them as though they were right. A wrong
-      // number that settles is worse than a slow one, because nothing on screen
-      // says which of the two you are looking at.
-      //
-      // The load screen stands until the live figures arrive.
-      const deadline = setTimeout(() => {
-        // Unless they do not. A dashboard that never renders is worse than one
-        // rendering an hour-old snapshot, so the snapshot is the floor rather
-        // than the default.
-        if (!painted) {
-          console.warn('live sources timed out; falling back to the data.json snapshot');
-          paint(json);
-        }
-      }, 6000);
-
-      let enriched = json;
-      try {
-        const projects = await loadProjects(ac.signal);
-
-        // Independent of each other, so they run together rather than in
-        // sequence — this whole block is what the user is waiting on.
-        const [overlay, prices] = await Promise.all([
-          loadOverlay(ac.signal, projects).catch((err) => {
-            if (!ac.signal.aborted) console.warn('gg-index overlay failed', err);
-            return null;
-          }),
-          loadPrices(projects, ac.signal).catch((err) => {
-            if (!ac.signal.aborted) console.warn('price load failed', err);
-            return null;
-          }),
-        ]);
-
-        if (overlay) enriched = applyOverlay(enriched, overlay);
-        if (prices) enriched = applyPrices(enriched, prices);
-
-        if (!ac.signal.aborted) {
-          const refreshPrices = async () => {
-            try {
-              const next = await loadPrices(projects, ac.signal);
-              setData((current) => applyPrices(current, next));
-            } catch (err) {
-              if (!ac.signal.aborted) console.warn('price refresh failed', err);
-            }
-          };
-          priceTimer = setInterval(refreshPrices, 60_000);
-        }
-      } catch (err) {
-        if (!ac.signal.aborted) console.warn('gg-index unavailable; using snapshot', err);
-      }
-
-      clearTimeout(deadline);
-      if (!ac.signal.aborted) paint(enriched);
-    })();
-
-    return () => {
-      ac.abort();
-      if (priceTimer) clearInterval(priceTimer);
-    };
-  }, []);
-
-  if (loading) return <div className="min-h-screen bg-[#0f172a] text-white flex items-center justify-center">Syncing Protocol Ledger...</div>;
+  const View = DETAIL_VIEWS[key];
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-slate-200 pb-16 font-sans antialiased">
-      <Header data={data} activeProject={activeProject} onSelectProject={setActiveProject} />
-      
-      <main className="max-w-6xl mx-auto px-4 md:px-6">
-        {/* View 1: Full Ecosystem Overview (Unified God-View) */}
-        {activeProject === 'ecosystem' && (
-          <EcosystemView data={data} />
+    <>
+      <PageHeader data={data} pending={sources.snapshot === 'loading'} />
+      <TabBar />
+      <div className="pt-5">
+        {data ? (
+          <View data={data} activeTab={activeTab} />
+        ) : (
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <SkeletonCard />
+            <SkeletonCard />
+          </div>
         )}
+      </div>
+    </>
+  );
+}
 
-        {/* View 2: Portfolio Wallet Scanner */}
-        {activeProject === 'portfolio' && (
-          <PortfolioView data={data} />
-        )}
+/** Scroll to the top when the path changes, but not when only a tab does. */
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  const project = pathname.split('/')[1];
+  React.useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [project]);
+  return null;
+}
 
-        {/* View 3: Robinhood Tokens & Robinhood Stocks */}
-        {(activeProject === 'memes' || activeProject === 'stocks') && (
-          <MemesTokensView data={data} type={activeProject} />
-        )}
+export default function App() {
+  const { data, sources, pending } = useDashboard();
+  const booting = sources.snapshot === 'loading';
 
-        {/* View 4: Isolated Project Detail Views */}
-        {['stonk', 'mancer', 'tickeryard', 'cardwall'].includes(activeProject) && (
-          <>
-            <Navigation activeTab={activeTab} setActiveTab={setActiveTab} />
-            
-            {activeProject === 'stonk' && <StonkDetailView data={data} activeTab={activeTab} />}
-            {activeProject === 'mancer' && <MancerDetailView data={data} activeTab={activeTab} />}
-            {activeProject === 'tickeryard' && <YardDetailView data={data} activeTab={activeTab} />}
-            {activeProject === 'cardwall' && <CardWallDetailView data={data} activeTab={activeTab} />}
-          </>
-        )}
+  if (sources.snapshot === 'error') {
+    return (
+      <div className="flex min-h-full items-center justify-center px-6">
+        <div className="max-w-md text-center">
+          <p className="font-mono text-[13px] text-danger">Could not load the ledger.</p>
+          <p className="mt-2 font-mono text-[11px] leading-relaxed text-faint">
+            <code className="text-muted">data.json</code> did not respond. Nothing else on this
+            page is trustworthy without it, so nothing is shown.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex min-h-full flex-col">
+      <ScrollToTop />
+      <TopNav live={sources.prices === 'ready'} />
+
+      <main className="mx-auto w-full max-w-[1500px] px-4">
+        <Routes>
+          <Route path="/" element={<OverviewView data={data} pending={booting} />} />
+          {/* The former front page. The new overview answers "what should I
+              buy"; this answers "how is the whole ecosystem trending", which
+              is a different question with its own charts, so it keeps a URL
+              rather than being deleted along with its old entry point. */}
+          <Route
+            path="/ecosystem"
+            element={
+              <Section title="Ecosystem Overview">
+                {data ? <EcosystemView data={data} /> : <SkeletonCard rows={6} />}
+              </Section>
+            }
+          />
+          <Route
+            path="/portfolio"
+            element={
+              <Section title="Portfolio">
+                {data ? <PortfolioView data={data} /> : <SkeletonCard rows={5} />}
+              </Section>
+            }
+          />
+          <Route
+            path="/tokens"
+            element={
+              <Section title="Robinhood Tokens">
+                {data ? <MemesTokensView data={data} type="memes" /> : <SkeletonCard rows={5} />}
+              </Section>
+            }
+          />
+          <Route
+            path="/stocks"
+            element={
+              <Section title="Robinhood Stock Tokens">
+                {data ? <MemesTokensView data={data} type="stocks" /> : <SkeletonCard rows={5} />}
+              </Section>
+            }
+          />
+          <Route
+            path="/:project/:tab"
+            element={<ProjectPage data={data} sources={sources} />}
+          />
+          <Route path="/:project" element={<RedirectToDefaultTab />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </main>
+    </div>
+  );
+}
+
+function RedirectToDefaultTab() {
+  const { project } = useParams();
+  if (!PROJECT_BY_SLUG[project]) return <Navigate to="/" replace />;
+  return <Navigate to={`/${project}/${DEFAULT_TAB}`} replace />;
+}
+
+function Section({ title, children }) {
+  return (
+    <div className="pb-16">
+      <header className="pb-5 pt-6">
+        <h1 className="text-[26px] font-semibold tracking-tight text-ink md:text-[30px]">
+          {title}
+        </h1>
+      </header>
+      {children}
     </div>
   );
 }

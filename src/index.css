@@ -1,54 +1,166 @@
-@import "tailwindcss";
+/* `source(none)` disables Tailwind v4's automatic content detection, and the
+   two @source lines put it back deliberately.
+
+   Automatic detection walks the repo and skips only what git ignores. `docs/`
+   is the BUILD OUTPUT and it is committed -- GitHub Pages serves from it -- so
+   Tailwind was scanning last build's minified bundle as if it were source.
+   Every class from every previous build stayed alive in the CSS, and a class
+   deleted from src/ could not actually leave until it had been absent for two
+   consecutive builds. Naming the inputs explicitly is what stops the output
+   feeding back into the input. */
+@import "tailwindcss" source(none);
+@source "../index.html";
+@source "./";
+
 @import "tw-animate-css";
 
-/* shadcn components are written against a `dark:` variant. This dashboard has
-   no light mode -- every surface is hardcoded slate-900 and always has been --
-   so the variant is wired to the root element and the root is dark. That keeps
-   the generated components unmodified while giving them one theme to render
-   against, rather than a light default nobody ever sees. */
+/* ===========================================================================
+   PALETTE
+
+   Robinhood green on near-black, structured like hl.eco -- the same system
+   Clockwork uses -- with StonkBrokers' own orange (#ff6600, lifted from the
+   background on stonkbrokers.cash) as the brand accent.
+
+   Every value below was measured, not chosen. dE figures are OKLab x100 with
+   Vienot dichromat simulation against the panel surface.
+
+   --------------------------------------------------------------------------
+   THE ONE RULE THAT MATTERS: brand orange is CHROME, never a data mark.
+
+   Green vs orange measures deutan dE 8.1 -- over the threshold of 8, but only
+   just, and the margin evaporates in both directions:
+
+       #FF6600  deutan  8.1  protan  9.0   <- the only step that passes
+       #F26100  deutan  5.5  protan 11.2
+       #E85D00  deutan  3.5  protan 13.0
+       #FF7A00  deutan 10.6  protan  4.5
+
+   Darken it and deutan collapses; lighten it and protan does. A pair that
+   survives at exactly one hex value is not a pair, it is a coincidence, so
+   orange is not allowed anywhere a reader must tell it apart from green.
+
+   Data marks are green + violet instead, which measures deutan dE 32.8 --
+   a real margin that survives being nudged.
+
+   --------------------------------------------------------------------------
+   AND ITS COROLLARY: orange and red cannot both appear in one component.
+
+   No red is distinguishable from brand orange for a normal-vision reader:
+
+       #FF6600 vs #FF5000  normal dE  3.7
+       #FF6600 vs #FF3333  normal dE  8.5
+       #FF6600 vs #F4212E  normal dE 10.8   <- best case, floor is 15
+
+   Every one fails. Rather than give up red -- which in a financial dashboard
+   carries real meaning -- the two are separated STRUCTURALLY:
+
+       orange lives only in the chrome  (nav, header, route indicator, brand
+                                         mark, footer rule)
+       red    lives only in the data    (negative deltas, dead/no-exit flags)
+
+   The chrome contains no data values and the data surfaces contain no brand
+   marks, so the two never share a visual field. This is a boundary you can
+   check by grepping, not a judgement call per component.
+=========================================================================== */
+
+@theme {
+  /* --- UI ink ------------------------------------------------------------ */
+  --color-accent: #00c805;      /* true Robinhood green: buttons, focus, active */
+  --color-accent-dim: #00a004;
+  --color-brand: #ff6600;       /* StonkBrokers orange -- CHROME ONLY */
+
+  /* --- Data marks -------------------------------------------------------- */
+  /* All 10 pairs pass normal + deutan + protan + tritan. Weakest link is
+     green vs amber at protan dE 10.2, still over the target of 8.
+     Three sit above the dark-mode lightness band (L>0.67), which is
+     deliberate: the band governs large FILLS against the surface, and these
+     are 2px line strokes carrying 7.2-10.6:1 contrast. Stepping them into
+     band was tried and destroys the palette -- amber at #C99700 measures
+     protan dE 0.5 against green, invisible. */
+  --color-mark-green: #00a804;  /* L 0.634 */
+  --color-mark-violet: #8b5cf6; /* L 0.606 */
+  --color-mark-sky: #38bdf8;    /* L 0.754 */
+  --color-mark-amber: #f5b700;  /* L 0.814 */
+  --color-mark-pink: #f472b6;   /* L 0.725 */
+
+  /* --- Status ------------------------------------------------------------ */
+  /* Never colour alone: every use ships an icon or a text label. */
+  --color-danger: #ff3333;      /* data surfaces only -- see the rule above */
+  --color-warn: #f5b700;
+
+  /* --- Surfaces ---------------------------------------------------------- */
+  --color-bg: #08090b;
+  --color-panel: #0e1013;
+  --color-panel-2: #14171b;
+  --color-line: #1e2228;
+  --color-line-soft: #171a1f;
+
+  /* --- Text -------------------------------------------------------------- */
+  --color-ink: #e7e9ec;
+  --color-muted: #8b929b;
+  --color-faint: #575e67;
+
+  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+
+  /* --- Slate, remapped onto the new ramp --------------------------------- */
+  /* The four project detail views are ~500 lines each and are written almost
+     entirely in `slate-*`. Rewriting two thousand lines of class names to move
+     one palette would be a large diff with a large chance of a typo in it and
+     nothing to show for the risk.
+
+     Redefining the scale instead moves every one of them at once, and it is
+     reviewable: the mapping is these nine lines rather than a thousand
+     scattered edits. The step relationships are preserved -- 900 is still the
+     page, 800 still a panel, 700 still a border, 300 still primary text -- so
+     the views keep meaning exactly what they meant.
+
+     Arbitrary values like `bg-[#0f172a]` cannot be reached this way and were
+     rewritten to these classes separately. */
+  --color-slate-950: #050608;
+  --color-slate-900: #08090b; /* page      */
+  --color-slate-800: #0e1013; /* panel     */
+  --color-slate-700: #1e2228; /* border    */
+  --color-slate-600: #2a3038;
+  --color-slate-500: #575e67; /* faint     */
+  --color-slate-400: #8b929b; /* muted     */
+  --color-slate-300: #e7e9ec; /* ink       */
+  --color-slate-200: #eef0f2;
+}
+
+/* shadcn components are written against a `dark:` variant and its own token
+   names. Mapping them onto the surfaces above keeps every dropped-in shadcn
+   component looking like the hand-written panels beside it. */
 @custom-variant dark (&:is(.dark *));
 
-/* Tokens are the palette the dashboard already used, not shadcn's defaults:
-   slate-900 surfaces, slate-800 cards, slate-700 borders, slate-300 text. A
-   dropped-in Card should be indistinguishable from the hand-written panels
-   beside it, and it will not be if it arrives with its own greys. */
 :root {
-  --radius: 0.75rem; /* matches the existing rounded-xl panels */
+  --radius: 1rem;
 
-  --background: oklch(0.208 0.042 265.755);          /* #0f172a slate-900 */
-  --foreground: oklch(0.869 0.022 252.894);          /* #cbd5e1 slate-300 */
+  --background: #08090b;
+  --foreground: #e7e9ec;
+  --card: #0e1013;
+  --card-foreground: #e7e9ec;
+  --popover: #0e1013;
+  --popover-foreground: #e7e9ec;
+  --primary: #00c805;
+  --primary-foreground: #08090b;
+  --secondary: #14171b;
+  --secondary-foreground: #e7e9ec;
+  --muted: #14171b;
+  --muted-foreground: #8b929b;
+  --accent: #14171b;
+  --accent-foreground: #e7e9ec;
+  --destructive: #ff3333;
+  --destructive-foreground: #08090b;
+  --border: #1e2228;
+  --input: #1e2228;
+  --ring: #00c805;
 
-  --card: oklch(0.279 0.041 260.031);                /* #1e293b slate-800 */
-  --card-foreground: oklch(0.869 0.022 252.894);
-  --popover: oklch(0.279 0.041 260.031);
-  --popover-foreground: oklch(0.869 0.022 252.894);
-
-  --primary: oklch(0.696 0.17 162.48);               /* emerald-500 */
-  --primary-foreground: oklch(0.208 0.042 265.755);
-
-  --secondary: oklch(0.372 0.044 257.287);           /* #334155 slate-700 */
-  --secondary-foreground: oklch(0.869 0.022 252.894);
-
-  --muted: oklch(0.279 0.041 260.031);
-  --muted-foreground: oklch(0.704 0.04 256.788);     /* #94a3b8 slate-400 */
-
-  --accent: oklch(0.372 0.044 257.287);
-  --accent-foreground: oklch(0.869 0.022 252.894);
-
-  --destructive: oklch(0.637 0.237 25.331);          /* red-500 */
-  --destructive-foreground: oklch(0.985 0 0);
-
-  --border: oklch(0.372 0.044 257.287);              /* #334155 slate-700 */
-  --input: oklch(0.372 0.044 257.287);
-  --ring: oklch(0.696 0.17 162.48);
-
-  /* Chart slots reuse the accents already on the page: emerald for value,
-     purple for mancer, amber for mining, sky and rose for the rest. */
-  --chart-1: oklch(0.696 0.17 162.48);
-  --chart-2: oklch(0.627 0.265 303.9);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.685 0.169 237.323);
-  --chart-5: oklch(0.645 0.246 16.439);
+  --chart-1: #00a804;
+  --chart-2: #8b5cf6;
+  --chart-3: #38bdf8;
+  --chart-4: #f5b700;
+  --chart-5: #f472b6;
 }
 
 .dark {
@@ -56,8 +168,8 @@
 }
 
 @theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 8px);
+  --radius-md: calc(var(--radius) - 4px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 
@@ -71,10 +183,7 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
@@ -87,24 +196,110 @@
   --color-chart-5: var(--chart-5);
 }
 
+html,
+body,
+#root {
+  height: 100%;
+}
+
 body {
-  background-color: var(--background);
-  color: var(--foreground);
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }
 
-::-webkit-scrollbar { height: 6px; width: 6px; }
-::-webkit-scrollbar-track { background: #0f172a; }
-::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #475569; }
-
-@keyframes pulse-border {
-  0% { border-color: rgba(245, 158, 11, 0.4); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
-  70% { border-color: rgba(245, 158, 11, 0); box-shadow: 0 0 0 4px rgba(245, 158, 11, 0); }
-  100% { border-color: rgba(245, 158, 11, 0); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+/* Every numeral in the product is mono -- the reference's defining trait.
+   Columns need tabular so digits line up down the page. */
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
 
-.mining-card {
-  animation: pulse-border 3s infinite;
-  background: linear-gradient(145deg, rgba(30, 41, 59, 0.9) 0%, rgba(67, 33, 10, 0.25) 100%);
-  border: 1px solid rgba(245, 158, 11, 0.4);
+/* Hero figures read better proportional; only columns need tabular. */
+.hero {
+  font-family: var(--font-mono);
+  font-variant-numeric: proportional-nums;
+  letter-spacing: -0.03em;
+  line-height: 0.95;
+}
+
+/* Uppercase tracked mono card labels, e.g. "REALISED YIELD · FLOOR TRADER". */
+.eyebrow {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  font-size: 11px;
+}
+
+.card {
+  background: var(--color-panel);
+  border: 1px solid var(--color-line);
+  border-radius: 16px;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-line);
+  border-radius: 5px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2a3038;
+}
+
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgb(0 200 5 / 0.25);
+  }
+  70% {
+    box-shadow: 0 0 0 5px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+.live-dot {
+  animation: pulse-ring 2.4s infinite;
+}
+
+/* Skeleton shimmer. The gradient sweeps a highlight across the placeholder so
+   "still loading" is distinguishable at a glance from "loaded and empty" --
+   a static grey block reads as a rendered zero. */
+@keyframes skeleton-sweep {
+  100% {
+    transform: translateX(100%);
+  }
+}
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--color-panel-2);
+  border-radius: 6px;
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(255 255 255 / 0.045),
+    transparent
+  );
+  animation: skeleton-sweep 1.6s infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot,
+  .skeleton::after {
+    animation: none;
+  }
 }

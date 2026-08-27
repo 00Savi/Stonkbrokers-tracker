@@ -23,7 +23,7 @@ export default function EcosystemView({ data }) {
 
   const order = ['stonk', 'mancer', 'tickeryard', 'cardwall'];
   const projectNames = { stonk: 'StonkBrokers', mancer: 'Mancer', tickeryard: 'TickerYard', cardwall: 'The Card Wall' };
-  const projectColors = { stonk: '#3b82f6', mancer: '#a855f7', tickeryard: '#22d3ee', cardwall: '#fbbf24' };
+  const projectColors = { stonk: '#00a804', mancer: '#8b5cf6', tickeryard: '#38bdf8', cardwall: '#f5b700' };
   const projectLogos = { stonk: 'Stonkbroker.png', mancer: 'logo.png', tickeryard: 'Yardkeepers.png', cardwall: 'wall.png' };
 
   const chartOptions = {
@@ -34,8 +34,8 @@ export default function EcosystemView({ data }) {
       tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${typeof ctx.raw === 'number' ? ctx.raw.toLocaleString() : ctx.raw}` } }
     },
     scales: { 
-      y: { min: 0, ticks: { color: '#cbd5e1' }, grid: { color: '#334155', borderDash: [4, 4] } }, 
-      x: { ticks: { color: '#cbd5e1' }, grid: { color: '#334155', borderDash: [4, 4] } } 
+      y: { min: 0, ticks: { color: '#cbd5e1' }, grid: { color: '#1e2228', borderDash: [4, 4] } }, 
+      x: { ticks: { color: '#cbd5e1' }, grid: { color: '#1e2228', borderDash: [4, 4] } } 
     }
   };
 
@@ -43,7 +43,7 @@ export default function EcosystemView({ data }) {
     ...chartOptions,
     scales: {
       ...chartOptions.scales,
-      y: { min: 0, ticks: { color: '#cbd5e1', callback: (v) => `${v}%` }, grid: { color: '#334155', borderDash: [4, 4] } }
+      y: { min: 0, ticks: { color: '#cbd5e1', callback: (v) => `${v}%` }, grid: { color: '#1e2228', borderDash: [4, 4] } }
     }
   };
 
@@ -166,7 +166,7 @@ export default function EcosystemView({ data }) {
             className={`flex-1 sm:flex-none justify-center px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm ${
               activeTab === tab.id
                 ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25'
-                : 'bg-transparent border border-[#334155] hover:bg-[#1e293b] text-slate-300'
+                : 'bg-transparent border border-[#1e2228] hover:bg-[#0e1013] text-slate-300'
             }`}
           >
             {tab.label}
@@ -178,7 +178,7 @@ export default function EcosystemView({ data }) {
       {/* TAB 1: ROI BENCHMARKS */}
       {/* ========================================================= */}
       {activeTab === 'roi' && (
-        <div className="bg-[#1e293b] border border-[#334155] rounded-2xl p-6 shadow-xl">
+        <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-6 shadow-xl">
           <div className="flex justify-between items-start mb-6">
             <div>
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
@@ -192,7 +192,7 @@ export default function EcosystemView({ data }) {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-[#334155] text-slate-500 text-xs uppercase tracking-wider">
+                <tr className="border-b border-[#1e2228] text-slate-500 text-xs uppercase tracking-wider">
                   <th className="pb-4 font-medium pl-2">Project</th>
                   <th className="pb-4 font-medium">Base Tier (T0) Req.</th>
                   <th className="pb-4 font-medium">Total Entry Cost</th>
@@ -200,7 +200,7 @@ export default function EcosystemView({ data }) {
                   <th className="pb-4 font-medium text-right pr-4">Est. ROI (CoC)</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#334155]/50 text-sm">
+              <tbody className="divide-y divide-[#1e2228]/50 text-sm">
                 {order.map(k => {
                   const p = data.projects[k];
                   if (!p) return null;
@@ -216,11 +216,11 @@ export default function EcosystemView({ data }) {
                     <React.Fragment key={k}>
                       <tr 
                         onClick={() => setExpandedProject(isExpanded ? null : k)}
-                        className="hover:bg-[#334155]/20 transition cursor-pointer group"
+                        className="hover:bg-[#1e2228]/20 transition cursor-pointer group"
                       >
                         <td className="py-5 pl-2">
                           <div className="flex items-center gap-3">
-                            <img src={`/${projectLogos[k]}`} alt={projectNames[k]} className="w-8 h-8 rounded-md border border-[#334155] object-cover bg-[#0f172a]" />
+                            <img src={`/${projectLogos[k]}`} alt={projectNames[k]} className="w-8 h-8 rounded-md border border-[#1e2228] object-cover bg-[#08090b]" />
                             <span className="font-bold text-white">{projectNames[k]}</span>
                           </div>
                         </td>
@@ -251,7 +251,7 @@ export default function EcosystemView({ data }) {
                         </td>
                       </tr>
                       {isExpanded && !p.underConstruction && (
-                        <tr className="bg-[#0f172a]/40 border-b border-[#334155]/50">
+                        <tr className="bg-[#08090b]/40 border-b border-[#1e2228]/50">
                           <td colSpan="5" className="p-4 md:p-6">
                             <div className="flex justify-between items-center mb-3">
                               <h4 className="text-sm font-bold text-slate-300">Trailing 7-Day Realized Yield ({t0?.name})</h4>
@@ -288,22 +288,22 @@ export default function EcosystemView({ data }) {
       {/* TAB 2: HISTORICAL YIELD (No more sea of zeros!) */}
       {/* ========================================================= */}
       {activeTab === 'historical' && (
-        <div className="bg-[#1e293b] border border-[#334155] rounded-2xl p-6 shadow-xl">
+        <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-6 shadow-xl">
           <div className="flex justify-between items-center mb-6">
             <div>
               <h3 className="text-lg font-bold text-white">Historical Protocol ROI Tracking (%)</h3>
               <p className="text-xs text-slate-400 mt-1">Daily Return on Investment trends from recorded history.</p>
             </div>
-            <div className="flex bg-[#0f172a] rounded-lg p-1 border border-[#334155]">
+            <div className="flex bg-[#08090b] rounded-lg p-1 border border-[#1e2228]">
               {['7d', '30d', 'all'].map((tf) => (
-                <button key={tf} onClick={() => setHistTimeframe(tf)} className={`px-4 py-1.5 text-xs font-bold rounded-md transition ${histTimeframe === tf ? 'bg-[#334155] text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>
+                <button key={tf} onClick={() => setHistTimeframe(tf)} className={`px-4 py-1.5 text-xs font-bold rounded-md transition ${histTimeframe === tf ? 'bg-[#1e2228] text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>
                   {tf.toUpperCase()}
                 </button>
               ))}
             </div>
           </div>
           
-          <div className="relative h-96 w-full bg-[#0f172a] p-4 rounded-xl border border-[#334155]">
+          <div className="relative h-96 w-full bg-[#08090b] p-4 rounded-xl border border-[#1e2228]">
             <Line 
               data={{
                 labels: masterHistLabels.slice(-getSliceCount(histTimeframe, masterHistLabels.length)),
@@ -343,9 +343,9 @@ export default function EcosystemView({ data }) {
         <div className="space-y-6">
           <div className="flex justify-between items-center mb-2">
             <h2 className="text-lg md:text-xl font-bold text-white">Ecosystem Revenue Streams</h2>
-            <div className="flex bg-[#1e293b] rounded-lg p-1 border border-[#334155]">
+            <div className="flex bg-[#0e1013] rounded-lg p-1 border border-[#1e2228]">
               {['1d', '7d', '30d', 'all'].map((tf) => (
-                <button key={tf} onClick={() => setRevTimeframe(tf)} className={`px-4 py-1.5 text-xs font-bold rounded-md transition ${revTimeframe === tf ? 'bg-[#334155] text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>
+                <button key={tf} onClick={() => setRevTimeframe(tf)} className={`px-4 py-1.5 text-xs font-bold rounded-md transition ${revTimeframe === tf ? 'bg-[#1e2228] text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>
                   {tf.toUpperCase()}
                 </button>
               ))}
@@ -354,7 +354,7 @@ export default function EcosystemView({ data }) {
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {order.map(k => (
-              <div key={k} className="bg-[#1e293b] border border-[#334155] rounded-xl p-5 shadow-sm">
+              <div key={k} className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm">
                 <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-1">
                   <span className="w-2 h-2 rounded-full" style={{backgroundColor: projectColors[k]}}></span>
                   {projectNames[k]} Revenue
@@ -366,9 +366,9 @@ export default function EcosystemView({ data }) {
             ))}
           </div>
 
-          <div className="bg-[#1e293b] border border-[#334155] rounded-xl p-4 md:p-6">
+          <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-4 md:p-6">
             <h3 className="text-sm font-bold text-white mb-4">Daily Revenue Inflows by Protocol (USD)</h3>
-            <div className="relative h-80 w-full bg-[#0f172a] rounded-xl p-4 border border-[#334155]">
+            <div className="relative h-80 w-full bg-[#08090b] rounded-xl p-4 border border-[#1e2228]">
               <Bar 
                 data={getRevChartData(revTimeframe)} 
                 options={{
@@ -376,8 +376,8 @@ export default function EcosystemView({ data }) {
                   maintainAspectRatio: false,
                   plugins: { legend: { labels: { color: '#cbd5e1' } } },
                   scales: {
-                    x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
-                    y: { min: 0, grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: (v) => `$${v.toLocaleString()}` } }
+                    x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
+                    y: { min: 0, grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: (v) => `$${v.toLocaleString()}` } }
                   }
                 }} 
               />
@@ -406,7 +406,7 @@ export default function EcosystemView({ data }) {
               const nftDeflationPct = maxNft > 0 ? (totalBurnN / maxNft) * 100 : 0;
 
               return (
-                <div key={k} className="bg-[#1e293b] border border-[#334155] rounded-xl p-4 shadow-sm">
+                <div key={k} className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-4 shadow-sm">
                   <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1">
                     <span className="w-2 h-2 rounded-full" style={{backgroundColor: projectColors[k]}}></span>
                     {projectNames[k]} Deflation
@@ -424,22 +424,22 @@ export default function EcosystemView({ data }) {
             })}
           </div>
 
-          <div className="bg-[#1e293b] border border-[#334155] rounded-xl p-4 md:p-6">
+          <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-4 md:p-6">
             <div className="flex justify-between items-center mb-4">
               <div>
                 <h3 className="text-sm font-bold text-white">Cumulative Token Supply Burnt Over Time (%)</h3>
                 <p className="text-xs text-slate-400 mt-0.5">Deflation measured as a percentage of total token supply.</p>
               </div>
-              <div className="flex bg-[#0f172a] rounded-lg p-1 border border-[#334155]">
+              <div className="flex bg-[#08090b] rounded-lg p-1 border border-[#1e2228]">
                 {['7d', '30d', 'all'].map((tf) => (
-                  <button key={tf} onClick={() => setBurnTimeframe(tf)} className={`px-4 py-1.5 text-xs font-bold rounded-md transition ${burnTimeframe === tf ? 'bg-[#334155] text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>
+                  <button key={tf} onClick={() => setBurnTimeframe(tf)} className={`px-4 py-1.5 text-xs font-bold rounded-md transition ${burnTimeframe === tf ? 'bg-[#1e2228] text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>
                     {tf.toUpperCase()}
                   </button>
                 ))}
               </div>
             </div>
             
-            <div className="relative h-80 w-full bg-[#0f172a] p-4 rounded-xl border border-[#334155]">
+            <div className="relative h-80 w-full bg-[#08090b] p-4 rounded-xl border border-[#1e2228]">
               <Line 
                 data={{
                   labels: masterGenesisLabels.slice(-getSliceCount(burnTimeframe, masterGenesisLabels.length)),
@@ -477,11 +477,11 @@ export default function EcosystemView({ data }) {
             </div>
           </div>
 
-          <div className="bg-[#1e293b] border border-[#334155] rounded-xl p-4 md:p-6">
+          <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-4 md:p-6">
             <h3 className="text-sm font-bold text-white mb-1">Equivalent NFT Supply Removed Over Time (%)</h3>
             <p className="text-xs text-slate-400 mb-4">Total NFT supply reduction through token burns and floor mechanics.</p>
             
-            <div className="relative h-80 w-full bg-[#0f172a] p-4 rounded-xl border border-[#334155]">
+            <div className="relative h-80 w-full bg-[#08090b] p-4 rounded-xl border border-[#1e2228]">
               <Line 
                 data={{
                   labels: masterGenesisLabels.slice(-getSliceCount(burnTimeframe, masterGenesisLabels.length)),
@@ -534,7 +534,7 @@ export default function EcosystemView({ data }) {
               const actCount = p?.activation?.activeCount || 0;
               const pct = p?.activation?.percentActivated || 0;
               return (
-                <div key={k} className="bg-[#1e293b] border border-[#334155] rounded-xl p-5 shadow-sm">
+                <div key={k} className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm">
                   <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-1">
                     <span className="w-2 h-2 rounded-full" style={{backgroundColor: projectColors[k]}}></span>
                     {projectNames[k]} Active
@@ -546,7 +546,7 @@ export default function EcosystemView({ data }) {
             })}
           </div>
 
-          <div className="bg-[#1e293b] border border-[#334155] rounded-xl p-4 md:p-6">
+          <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-4 md:p-6">
             <h3 className="text-sm font-bold text-white mb-6">Ecosystem Dominance (Share of Total Active Units)</h3>
             <div className="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-16">
               <div className="relative h-64 md:h-72 w-full md:w-1/2 flex items-center justify-center">
@@ -564,7 +564,7 @@ export default function EcosystemView({ data }) {
               </div>
               <div className="w-full md:w-1/2 flex flex-col gap-3">
                 {order.map(k => (
-                  <div key={k} className="flex justify-between items-center bg-[#0f172a] p-3 rounded-lg border border-[#334155]">
+                  <div key={k} className="flex justify-between items-center bg-[#08090b] p-3 rounded-lg border border-[#1e2228]">
                     <div className="flex items-center gap-3"><div className="w-3 h-3 rounded-md" style={{backgroundColor: projectColors[k]}}></div><span className="text-sm font-bold text-slate-300">{projectNames[k]}</span></div>
                     <span className="text-white font-bold tracking-wide">{formatNumber(data.projects[k]?.activation?.activeCount || 0)}</span>
                   </div>
@@ -573,18 +573,18 @@ export default function EcosystemView({ data }) {
             </div>
           </div>
 
-          <div className="bg-[#1e293b] border border-[#334155] rounded-xl p-4 md:p-6">
+          <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-4 md:p-6">
              <div className="flex justify-between items-center mb-4">
                <h3 className="text-sm font-bold text-white">Network Growth Over Time (Net Active Units)</h3>
-               <div className="flex bg-[#0f172a] rounded-lg p-1 border border-[#334155]">
+               <div className="flex bg-[#08090b] rounded-lg p-1 border border-[#1e2228]">
                  {['7d', '30d', 'all'].map((tf) => (
-                  <button key={tf} onClick={() => setActTimeframe(tf)} className={`px-4 py-1.5 text-xs font-bold rounded-md transition ${actTimeframe === tf ? 'bg-[#334155] text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>
+                  <button key={tf} onClick={() => setActTimeframe(tf)} className={`px-4 py-1.5 text-xs font-bold rounded-md transition ${actTimeframe === tf ? 'bg-[#1e2228] text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>
                     {tf.toUpperCase()}
                   </button>
                 ))}
                </div>
              </div>
-             <div className="relative h-96 w-full bg-[#0f172a] rounded-xl p-4 border border-[#334155]">
+             <div className="relative h-96 w-full bg-[#08090b] rounded-xl p-4 border border-[#1e2228]">
                 <Line 
                   data={{ 
                     labels: masterGenesisLabels.slice(-getSliceCount(actTimeframe, masterGenesisLabels.length)), 
@@ -627,9 +627,9 @@ export default function EcosystemView({ data }) {
           
           <div className="flex justify-between items-center mb-2">
             <h2 className="text-lg md:text-xl font-bold text-white">Ecosystem Holder Distribution</h2>
-            <div className="flex bg-[#1e293b] rounded-lg p-1 border border-[#334155]">
+            <div className="flex bg-[#0e1013] rounded-lg p-1 border border-[#1e2228]">
               {['7d', '30d', 'all'].map((tf) => (
-                <button key={tf} onClick={() => setOwnTimeframe(tf)} className={`px-4 py-1.5 text-xs font-bold rounded-md transition ${ownTimeframe === tf ? 'bg-[#334155] text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>
+                <button key={tf} onClick={() => setOwnTimeframe(tf)} className={`px-4 py-1.5 text-xs font-bold rounded-md transition ${ownTimeframe === tf ? 'bg-[#1e2228] text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>
                   {tf.toUpperCase()}
                 </button>
               ))}
@@ -647,7 +647,7 @@ export default function EcosystemView({ data }) {
               if (tokens === 0 && k === 'mancer') tokens = 4101;
 
               return (
-                <div key={k} className="bg-[#1e293b] border border-[#334155] rounded-xl p-4 shadow-sm">
+                <div key={k} className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-4 shadow-sm">
                   <div className="flex items-center gap-2 mb-3">
                      <span className="w-2 h-2 rounded-full" style={{backgroundColor: projectColors[k]}}></span>
                      <span className="font-bold text-white text-sm">{projectNames[k]}</span>
@@ -665,9 +665,9 @@ export default function EcosystemView({ data }) {
             })}
           </div>
 
-          <div className="bg-[#1e293b] border border-[#334155] rounded-xl p-4 md:p-6">
+          <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-4 md:p-6">
             <h3 className="text-sm font-bold text-white mb-4">Unique NFT Holders Over Time</h3>
-            <div className="relative h-80 w-full bg-[#0f172a] rounded-xl p-4 border border-[#334155]">
+            <div className="relative h-80 w-full bg-[#08090b] rounded-xl p-4 border border-[#1e2228]">
               <Line 
                 data={{
                   labels: masterGenesisLabels.slice(-getSliceCount(ownTimeframe, masterGenesisLabels.length)),
@@ -703,9 +703,9 @@ export default function EcosystemView({ data }) {
             </div>
           </div>
 
-          <div className="bg-[#1e293b] border border-[#334155] rounded-xl p-4 md:p-6">
+          <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-4 md:p-6">
             <h3 className="text-sm font-bold text-white mb-4">Unique Token (ERC-20) Holders Over Time</h3>
-            <div className="relative h-80 w-full bg-[#0f172a] rounded-xl p-4 border border-[#334155]">
+            <div className="relative h-80 w-full bg-[#08090b] rounded-xl p-4 border border-[#1e2228]">
               <Line 
                 data={{
                   labels: masterGenesisLabels.slice(-getSliceCount(ownTimeframe, masterGenesisLabels.length)),
@@ -747,7 +747,7 @@ export default function EcosystemView({ data }) {
       )}
 
       {/* DYNAMIC DISCLAIMER */}
-      <div className="bg-[#1e293b] rounded-xl p-5 md:p-6 border border-[#334155] shadow-lg mt-8">
+      <div className="bg-[#0e1013] rounded-xl p-5 md:p-6 border border-[#1e2228] shadow-lg mt-8">
         <div className="flex items-center gap-2 mb-4">
           <svg className="w-5 h-5 text-blue-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd"></path></svg>
           <h3 className="text-base md:text-lg font-bold text-white">Methodology & Disclaimer</h3>
@@ -755,7 +755,7 @@ export default function EcosystemView({ data }) {
         <div className="text-xs md:text-sm text-slate-300 mb-5 leading-relaxed space-y-4">
           <p><strong className="text-white">Global Ecosystem Analytics:</strong> Metrics shown aggregate live on-chain events across all registered Robinhood Network protocols.</p>
         </div>
-        <p className="text-xs md:text-sm text-slate-400 italic leading-relaxed border-t border-[#334155] pt-5">
+        <p className="text-xs md:text-sm text-slate-400 italic leading-relaxed border-t border-[#1e2228] pt-5">
           <strong className="text-slate-300 not-italic">Disclaimer:</strong> Tracked yield values are calculated using Mark-to-Market spot pricing at the exact time of the dashboard's last automated sync. Yields fluctuate based on network activation weight, market token prices, and community protocol volume. This is a community-built tracking tool and does not guarantee future returns.
         </p>
       </div>

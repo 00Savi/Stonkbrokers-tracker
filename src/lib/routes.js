@@ -1,0 +1,60 @@
+// The URL vocabulary, in one place.
+//
+// URLs and internal keys are deliberately allowed to disagree. The data keys
+// (`stonk`, `historical`) are what data.json and gg-index have always called
+// these things and renaming them would touch every view and the fetcher; the
+// URLs are what a person types and shares, so they get to read the way the
+// project is actually spoken about -- /stonkbrokers/yield, not /stonk/historical.
+//
+// Everything that translates between the two lives here so the two vocabularies
+// can never drift apart across call sites.
+
+/** URL slug -> the key used inside `data.projects`. */
+export const PROJECT_BY_SLUG = {
+  stonkbrokers: 'stonk',
+  mancer: 'mancer',
+  tickeryard: 'tickeryard',
+  cardwall: 'cardwall',
+};
+
+export const SLUG_BY_PROJECT = Object.fromEntries(
+  Object.entries(PROJECT_BY_SLUG).map(([slug, key]) => [key, slug])
+);
+
+/** URL slug -> the `activeTab` id the detail views already switch on. */
+export const TAB_BY_SLUG = {
+  roi: 'roi',
+  yield: 'historical',
+  revenue: 'revenue',
+  burn: 'burn',
+  activation: 'activation',
+  ownership: 'ownership',
+};
+
+export const SLUG_BY_TAB = Object.fromEntries(
+  Object.entries(TAB_BY_SLUG).map(([slug, tab]) => [tab, slug])
+);
+
+/** Ordered for the tab bar. The order is the reading order of the story:
+ *  what you'd earn, what it actually paid, where the money came from,
+ *  what got destroyed, then the two ownership-side views. */
+export const TABS = [
+  { slug: 'roi', label: 'ROI' },
+  { slug: 'yield', label: 'Yield' },
+  { slug: 'revenue', label: 'Revenue' },
+  { slug: 'burn', label: 'Burn' },
+  { slug: 'activation', label: 'Activation' },
+  { slug: 'ownership', label: 'Ownership' },
+];
+
+export const PROJECTS = [
+  { slug: 'stonkbrokers', key: 'stonk', name: 'StonkBrokers', ticker: 'STONK' },
+  { slug: 'mancer', key: 'mancer', name: 'Mancer', ticker: 'MANCER' },
+  { slug: 'tickeryard', key: 'tickeryard', name: 'TickerYard', ticker: 'YARD' },
+  { slug: 'cardwall', key: 'cardwall', name: 'The Card Wall', ticker: 'WALL' },
+];
+
+export const projectPath = (key, tab = 'roi') =>
+  `/${SLUG_BY_PROJECT[key] ?? key}/${SLUG_BY_TAB[tab] ?? tab}`;
+
+export const DEFAULT_TAB = 'roi';

@@ -27,7 +27,7 @@ export default function MemesTokensView({ data, type = 'memes' }) {
   });
 
   return (
-    <div className="bg-[#1e293b] border border-[#334155] rounded-2xl p-4 md:p-6 shadow-xl mt-6">
+    <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl mt-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
           <h2 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
@@ -42,7 +42,7 @@ export default function MemesTokensView({ data, type = 'memes' }) {
       <div className="overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0 pb-2">
         <table className="w-full text-left border-collapse min-w-[950px]">
           <thead>
-            <tr className="text-xs uppercase tracking-wider text-slate-500 border-b border-[#334155] cursor-pointer select-none">
+            <tr className="text-xs uppercase tracking-wider text-slate-500 border-b border-[#1e2228] cursor-pointer select-none">
               <th className="pb-4 pl-2 font-medium hover:text-blue-400" onClick={() => handleSort('name')}>Token Name ↕</th>
               <th className="pb-4 font-medium hover:text-blue-400" onClick={() => handleSort('volume24h')}>Volume (24h) ↕</th>
               <th className="pb-4 font-medium hover:text-blue-400" onClick={() => handleSort('liquidity')}>Liquidity ↕</th>
@@ -53,7 +53,7 @@ export default function MemesTokensView({ data, type = 'memes' }) {
               <th className="pb-4 font-medium text-right pr-4 hover:text-blue-400" onClick={() => handleSort('burnt')}>Burnt ↕</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#334155]/50 text-sm">
+          <tbody className="divide-y divide-[#1e2228]/50 text-sm">
             {sortedTokens.map((token, index) => {
               const roiColor = (token.priceChange24h || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400';
               const roiSign = (token.priceChange24h || 0) >= 0 ? '+' : '';
@@ -65,7 +65,7 @@ export default function MemesTokensView({ data, type = 'memes' }) {
                 <React.Fragment key={token.ca || index}>
                   <tr 
                     onClick={() => setExpandedIndex(isExpanded ? null : index)} 
-                    className="hover:bg-[#334155]/20 transition cursor-pointer group"
+                    className="hover:bg-[#1e2228]/20 transition cursor-pointer group"
                   >
                     <td className="py-4 pl-2 font-bold text-white flex items-center justify-between pr-4">
                       <div className="flex items-center gap-2">
@@ -79,7 +79,7 @@ export default function MemesTokensView({ data, type = 'memes' }) {
                             navigator.clipboard.writeText(token.ca);
                             alert(`Copied CA for ${token.name}:\n${token.ca}`);
                           }}
-                          className="text-[10px] bg-[#334155] hover:bg-slate-600 text-slate-200 px-2 py-0.5 rounded border border-slate-600 ml-2 transition"
+                          className="text-[10px] bg-[#1e2228] hover:bg-slate-600 text-slate-200 px-2 py-0.5 rounded border border-slate-600 ml-2 transition"
                         >
                           Copy CA
                         </button>
@@ -102,7 +102,7 @@ export default function MemesTokensView({ data, type = 'memes' }) {
                   </tr>
 
                   {isExpanded && (
-                    <tr className="bg-[#0f172a]/60 border-b border-[#334155]/50">
+                    <tr className="bg-[#08090b]/60 border-b border-[#1e2228]/50">
                       <td colSpan="8" className="p-4 md:p-6">
                         <div className="flex justify-between items-center mb-3">
                           <h4 className="text-sm font-bold text-white flex items-center gap-2">
@@ -111,7 +111,7 @@ export default function MemesTokensView({ data, type = 'memes' }) {
                           </h4>
                         </div>
                         {token.ca ? (
-                          <div className="relative w-full h-[450px] rounded-xl overflow-hidden border border-[#334155] shadow-inner">
+                          <div className="relative w-full h-[450px] rounded-xl overflow-hidden border border-[#1e2228] shadow-inner">
                             <iframe 
                               src={`https://dexscreener.com/robinhood/${token.ca}?embed=1&theme=dark&trades=0&info=0`} 
                               className="w-full h-full border-0" 
@@ -119,7 +119,7 @@ export default function MemesTokensView({ data, type = 'memes' }) {
                             />
                           </div>
                         ) : (
-                          <div className="p-8 text-center text-slate-400 italic bg-[#1e293b]/40 rounded-xl border border-[#334155]">
+                          <div className="p-8 text-center text-slate-400 italic bg-[#0e1013]/40 rounded-xl border border-[#1e2228]">
                             Interactive chart unavailable (Contract Address pending launch).
                           </div>
                         )}
