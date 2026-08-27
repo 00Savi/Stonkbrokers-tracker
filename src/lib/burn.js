@@ -9,47 +9,18 @@
 //
 // The real series was in `dailySnapshots` the whole time. This reads it.
 //
+// Row validity lives in snapshots.js, because the burn is not the only chart
+// reading these rows and a run that failed did not fail for burn alone.
+//
 // There is no fallback. A chart with no data renders as no chart, because the
 // alternative is what was there before: invented numbers that look exactly like
 // measured ones, drifting further from the truth every day nobody notices.
 
-/**
- * Drop snapshots whose burn total cannot be true.
- *
- * A cumulative burn cannot decrease -- tokens do not come back. So no earlier
- * point may sit above a later one, and any that does is a bad read rather than
- * a real move.
- *
- * This is not hypothetical. `getTrueDeflationStats` derives the burn as
- * `maxSupply * unitValue - currentSupply`, so a supply read that comes back
- * zero reports the *entire supply* as burnt. That is exactly what happened on
- * 8/19: STONK recorded 2,962,663,704, which is 4444 x 666666 to the token,
- * beside a true 564,943,352 the next day. Mancer, TickerYard and CardWall each
- * recorded their own full supply on the same run.
- *
- * The scan runs from the newest row backwards because the newest is the one
- * corroborated by `dualBurn.totalBurnTokens` on the same payload. Anchoring to
- * the oldest would let a poisoned first row set an impossible ceiling and
- * discard the entire real series behind it.
- */
-function usable(snapshots) {
-  const rows = Array.isArray(snapshots) ? snapshots : [];
-  const clean = [];
-  let ceiling = Infinity;
-
-  for (let i = rows.length - 1; i >= 0; i--) {
-    const value = Number(rows[i]?.totalBurn);
-    if (!Number.isFinite(value) || value <= 0 || value > ceiling) continue;
-    ceiling = value;
-    clean.unshift(rows[i]);
-  }
-
-  return clean;
-}
+import { usableSnapshots } from './snapshots';
 
 /** Labels and values for the burn chart, windowed to a timeframe. */
 export function burnSeries(snapshots, timeframe = 'all') {
-  const clean = usable(snapshots);
+  const clean = usableSnapshots(snapshots);
   const window = timeframe === '7d' ? 7 : timeframe === '30d' ? 30 : clean.length;
   const rows = clean.slice(-window);
 
@@ -68,7 +39,7 @@ export function burnSeries(snapshots, timeframe = 'all') {
  * the flywheel looked fine while the cumulative chart above it did not.
  */
 export function burnRateSeries(snapshots) {
-  const clean = usable(snapshots);
+  const clean = usableSnapshots(snapshots);
 
   return {
     labels: clean.map((s) => s.date || ''),

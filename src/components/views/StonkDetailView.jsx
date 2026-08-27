@@ -4,6 +4,7 @@ import {
 } from 'chart.js';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import { burnSeries, burnRateSeries } from '../../lib/burn';
+import { trailingSnapshots } from '../../lib/snapshots';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
@@ -37,17 +38,17 @@ export default function StonkDetailView({ data, activeTab }) {
   // BULLETPROOF CHART DATA FALLBACKS & FIXES
   // ==========================================
 
-  // 1. Historical Yield Chart
+  // 1. Historical Yield Chart -- trailing 14 days of recorded ROI.
   const hasSnaps = Array.isArray(dailySnapshots) && dailySnapshots.length > 0 && dailySnapshots[0].date;
-  const histLabels = hasSnaps ? dailySnapshots.map(s => s.date) : ['Jul 20', 'Jul 25', 'Aug 01', 'Aug 08', 'Aug 15', 'Aug 20'];
+  const roiSnaps = trailingSnapshots(dailySnapshots, 14);
+  const histLabels = roiSnaps.map(s => s.date);
   const histDatasets = tiers.map((t, i) => {
     const tc = floorCostUsd + (t.reqTokens * market.tokenPriceUsd);
     const currentRoi = tc > 0 ? ((t.trackedAnnualYieldUsd / tc) * 100).toFixed(2) : 0;
-    const fallbackData = [0, 40, 110, 180, 230, t.trackedAnnualYieldUsd > 0 ? ((t.trackedAnnualYieldUsd / tc) * 100) : 100];
-    
+
     return {
       label: `${t.tier} ROI (${currentRoi}%)`,
-      data: hasSnaps ? dailySnapshots.map(s => s.tiers?.find(st => st.tier === t.tier)?.roi || 0) : fallbackData,
+      data: roiSnaps.map(s => s.tiers?.find(st => st.tier === t.tier)?.roi || 0),
       borderColor: ['#60a5fa', '#34d399', '#f472b6', '#fbbf24', '#a78bfa'][i % 5],
       tension: 0.3, borderWidth: 2, pointRadius: 2
     };
