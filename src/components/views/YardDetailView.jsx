@@ -4,6 +4,7 @@ import {
 } from 'chart.js';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import { burnSeries, burnRateSeries } from '../../lib/burn';
+import { trailingSnapshots } from '../../lib/snapshots';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
@@ -36,15 +37,16 @@ export default function YardDetailView({ data, activeTab }) {
   const hasSnaps = Array.isArray(dailySnapshots) && dailySnapshots.length > 0 && dailySnapshots[0].date;
   const masterDates = hasSnaps ? dailySnapshots.map(s => s.date) : ['Aug 17', 'Aug 18', 'Aug 19', 'Aug 20', 'Aug 21', 'Aug 22', 'Aug 23'];
 
-  // 1. Historical Yield Chart
+  // 1. Historical Yield Chart -- trailing 14 days of recorded ROI.
+  const roiSnaps = trailingSnapshots(dailySnapshots, 14);
+  const histLabels = roiSnaps.map(s => s.date);
   const histDatasets = tiers.map((t, i) => {
     const tc = floorCostUsd + (t.reqTokens * market.tokenPriceUsd);
     const currentRoi = tc > 0 ? ((t.trackedAnnualYieldUsd / tc) * 100).toFixed(2) : 0;
-    const fallbackData = Array(masterDates.length).fill(0).map((_, idx) => (currentRoi > 0 ? currentRoi * (idx / masterDates.length) : 50));
-    
+
     return {
       label: `${t.tier} ROI (${currentRoi}%)`,
-      data: hasSnaps ? dailySnapshots.map(s => s.tiers?.find(st => st.tier === t.tier)?.roi || 0) : fallbackData,
+      data: roiSnaps.map(s => s.tiers?.find(st => st.tier === t.tier)?.roi || 0),
       borderColor: ['#22d3ee', '#34d399', '#f472b6', '#fbbf24', '#a78bfa'][i % 5],
       tension: 0.3, borderWidth: 2, pointRadius: 2
     };
@@ -235,7 +237,7 @@ export default function YardDetailView({ data, activeTab }) {
           <div className="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6 mt-6">
             <h3 className="text-sm font-bold text-white mb-4">Tier ROI % Trajectory</h3>
             <div className="relative h-72 md:h-80 w-full">
-              <Line data={{ labels: masterDates, datasets: histDatasets }} options={chartOptions} />
+              <Line data={{ labels: histLabels, datasets: histDatasets }} options={chartOptions} />
             </div>
           </div>
         </div>
