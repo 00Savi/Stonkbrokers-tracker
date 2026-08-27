@@ -200,7 +200,7 @@ export default function StonkDetailView({ data, activeTab }) {
                         <tr className="bg-[#0f172a]/40 border-b border-[#334155]/50">
                           <td colSpan="5" className="p-4 md:p-6">
                             <div className="flex justify-between items-center mb-3">
-                              <h4 className="text-sm font-bold text-slate-300">Trailing 7-Day Realized Yield ({t.name})</h4>
+                              <h4 className="text-sm font-bold text-slate-300">Trailing {histLabels.length}-Day Realized Yield ({t.name})</h4>
                               <span className="text-xs text-slate-500">Based on On-Chain Distributions</span>
                             </div>
                             <div className="relative h-32 md:h-40 w-full">

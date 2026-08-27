@@ -214,7 +214,7 @@ export default function CardWallDetailView({ data, activeTab }) {
                                 </div>
                               </div>
                             ) : null}
-                            <h4 className="text-sm font-bold text-slate-300 mb-3">Trailing 7-Day Realized Yield ({t.name})</h4>
+                            <h4 className="text-sm font-bold text-slate-300 mb-3">Trailing {histLabels.length}-Day Realized Yield ({t.name})</h4>
                             <div className="relative h-32 md:h-40 w-full">
                               <Line 
                                 data={{ 
