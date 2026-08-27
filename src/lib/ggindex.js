@@ -120,13 +120,25 @@ async function projectPatch(project, signal) {
 }
 
 /**
+ * The catalog: every project with its contract addresses by kind.
+ *
+ * Shared so the page fetches it once. The price layer needs it too — data.json's
+ * `config` carries each project's NFT address but not its token's, and the
+ * token address is what DexScreener is keyed on.
+ */
+export async function loadProjects(signal) {
+  const { projects = [] } = await get('/projects', signal);
+  return projects;
+}
+
+/**
  * Fetch every project's authoritative figures, keyed by slug.
  *
  * One slow or failing project must not cost the others their correction, so
  * these settle independently.
  */
-export async function loadOverlay(signal) {
-  const { projects = [] } = await get('/projects', signal);
+export async function loadOverlay(signal, known) {
+  const projects = known ?? (await loadProjects(signal));
 
   const results = await Promise.allSettled(
     projects.map((p) => projectPatch(p, signal).then((patch) => [p.slug, patch])),

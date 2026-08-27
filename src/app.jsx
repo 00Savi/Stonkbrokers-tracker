@@ -8,7 +8,8 @@ import MancerDetailView from './components/views/MancerDetailView';
 import YardDetailView from './components/views/YardDetailView';
 import CardWallDetailView from './components/views/CardWallDetailView';
 import MemesTokensView from './components/views/MemesTokensView';
-import { loadOverlay, applyOverlay } from './lib/ggindex';
+import { loadProjects, loadOverlay, applyOverlay } from './lib/ggindex';
+import { loadPrices, applyPrices } from './lib/prices';
 
 export default function App() {
   const [data, setData] = useState(null);
@@ -18,6 +19,7 @@ export default function App() {
 
   useEffect(() => {
     const ac = new AbortController();
+    let priceTimer = null;
 
     (async () => {
       let json;
@@ -36,20 +38,50 @@ export default function App() {
       setData(json);
       setLoading(false);
 
+      // The catalog is shared by both layers below, so fetch it once.
+      let projects = null;
+      try {
+        projects = await loadProjects(ac.signal);
+      } catch (err) {
+        if (!ac.signal.aborted) console.warn('gg-index catalog unavailable', err);
+      }
+
       // Then correct the figures gg-index owns. Holder and activation counts
       // are wrong in the snapshot often enough to matter — see lib/ggindex.js
       // for what each one gets wrong and why.
-      try {
-        const overlay = await loadOverlay(ac.signal);
-        setData((current) => applyOverlay(current, overlay));
-      } catch (err) {
-        if (!ac.signal.aborted) {
-          console.warn('gg-index unavailable; showing data.json figures', err);
+      if (projects) {
+        try {
+          const overlay = await loadOverlay(ac.signal, projects);
+          setData((current) => applyOverlay(current, overlay));
+        } catch (err) {
+          if (!ac.signal.aborted) {
+            console.warn('gg-index unavailable; showing data.json figures', err);
+          }
         }
       }
+
+      // Prices last, and on a timer. data.json is hourly because that is what
+      // its slowest source costs; prices move by the minute, and both feeds are
+      // free, so there is no reason to show an hour-old quote.
+      if (!projects) return;
+
+      const refreshPrices = async () => {
+        try {
+          const prices = await loadPrices(projects, ac.signal);
+          setData((current) => applyPrices(current, prices));
+        } catch (err) {
+          if (!ac.signal.aborted) console.warn('price refresh failed', err);
+        }
+      };
+
+      await refreshPrices();
+      priceTimer = setInterval(refreshPrices, 60_000);
     })();
 
-    return () => ac.abort();
+    return () => {
+      ac.abort();
+      if (priceTimer) clearInterval(priceTimer);
+    };
   }, []);
 
   if (loading) return <div className="min-h-screen bg-[#0f172a] text-white flex items-center justify-center">Syncing Protocol Ledger...</div>;
