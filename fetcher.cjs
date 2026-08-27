@@ -777,22 +777,66 @@ async function fetchActivations(projectKey, conf) {
  * AMM. Lifted out of the branch unchanged so the replacement above reads as one
  * thing rather than being interleaved with the code it replaces.
  */
-async function fetchVaultTokenOutflows(conf, marketData, sevenDaysAgo, oneDay, sink) {
+/**
+ * Page a Blockscout listing newest-first until it crosses `until`.
+ *
+ * Every paged read in this file had the same bug, so the paging lives in one
+ * place now. A short page is NOT the end of the history: Blockscout serves
+ * short pages while its own indexing is behind and flags it in the same
+ * response as `status: "2"`, and reading one as the end silently truncates the
+ * window being summed. It printed stonk's weekly AMM revenue as $10,770 against
+ * $209,037 an hour earlier. Only an empty page terminates a walk.
+ *
+ * Returns null when the window was covered, or a reason string when the result
+ * cannot be trusted. Page exhaustion alone is deliberately not a reason -- an
+ * address whose entire history fits inside the window legitimately runs out of
+ * pages -- so the source's own `status` is what separates the two. Without that
+ * distinction the guard false-positives and blocks every update.
+ *
+ * `onRow` receives each row inside the window, newest first.
+ */
+async function walkPagesBackTo(urlFor, until, onRow) {
   let page = 1;
+  let sawRows = false;
+  let reachedWindow = false;
+  let incomplete = false;
+
   while (true) {
-    const url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokentx&address=${conf.oracleSource}&contractaddress=${conf.tokenCa}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`;
-    const data = await secureFetch(url);
+    const data = await secureFetch(urlFor(page));
+    if (data?.failed) return "request failed";
+    if (data?.status === "2") incomplete = true;
+
     const txs = (data && Array.isArray(data.result)) ? data.result : [];
     if (txs.length === 0) break;
+    sawRows = true;
 
-    let reachedOlder = false;
+    let older = false;
     for (const tx of txs) {
       const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
-      if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
-      if ((tx.from || "").toLowerCase() !== conf.oracleSource.toLowerCase()) continue;
+      if (ts < until) { older = true; continue; }
+      if (tx.isError === "1" || tx.isError === 1) continue;
+      onRow(tx, ts);
+    }
+    if (older) { reachedWindow = true; break; }
+
+    page++;
+    await sleep(200);
+  }
+
+  return (sawRows && !reachedWindow && incomplete)
+    ? "pages ran out before reaching the start of the window"
+    : null;
+}
+
+async function fetchVaultTokenOutflows(conf, marketData, sevenDaysAgo, oneDay, sink) {
+  const reason = await walkPagesBackTo(
+    (page) => `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokentx&address=${conf.oracleSource}&contractaddress=${conf.tokenCa}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`,
+    sevenDaysAgo,
+    (tx, ts) => {
+      if ((tx.from || "").toLowerCase() !== conf.oracleSource.toLowerCase()) return;
 
       const amount = Number(tx.value || 0) / Math.pow(10, parseInt(tx.tokenDecimal || 18, 10));
-      if (amount <= 0) continue;
+      if (amount <= 0) return;
 
       const usdVal = amount * marketData.tokenPriceUsd;
       const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
@@ -801,12 +845,9 @@ async function fetchVaultTokenOutflows(conf, marketData, sevenDaysAgo, oneDay, s
       sink.addSample(usdVal);
       sink.revenueBreakdown.ammFeesUsd += usdVal;
       sink.revenueBreakdown.dailyAmm[dayIdx] += usdVal;
-    }
-
-    if (reachedOlder || txs.length < 1000) break;
-    page++;
-    await sleep(200);
-  }
+    },
+  );
+  if (reason) sink.truncated.push(`tokentx vault outflow: ${reason}`);
 }
 
 async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, marketData) {
@@ -821,205 +862,124 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
     dailyAmm: [0,0,0,0,0,0,0], dailySecurityBox: [0,0,0,0,0,0,0], dailyLaunchpad: [0,0,0,0,0,0,0], dailyDex: [0,0,0,0,0,0,0]
   };
 
+  // Every paged walk in this function reports here. Function scope rather than
+  // block scope because the security-box and launchpad readers are defined
+  // outside the yield-mode branch that used to own this list -- which is how
+  // they ended up unguarded when the rest were fixed.
+  const truncatedWalks = [];
+
   let totalNetworkWeight = 0;
   for (const t of conf.tiers) totalNetworkWeight += ((activationStats.breakdown[t.id] || 0) * t.weight);
   if (totalNetworkWeight === 0) totalNetworkWeight = 1;
 
   async function fetchDirectEthInflows(address, key, dailyKey) {
-      let page = 1;
-      while(true) {
-          let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=txlist&address=${address}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`;
-          let data = await secureFetch(url);
-          const txs = (data && Array.isArray(data.result)) ? data.result : [];
-          if(txs.length === 0) break;
-          let reachedOlder = false;
-          for (const tx of txs) {
-              const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
-              if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
-              if (tx.isError === "1" || tx.isError === 1) continue;
-              
-              if ((tx.to || "").toLowerCase() === address) {
-                  let usdVal = 0;
-                  
-                  if (key === "launchpadUsd") {
-                      const eth = Number(tx.value || 0) / 1e18;
-                      if (eth >= 0.099 && eth <= 0.101) {
-                          usdVal = 0.1 * marketData.ethPriceUsd;
-                      }
-                  } else {
-                      const eth = Number(tx.value || 0) / 1e18;
-                      if (eth > 0) usdVal = eth * marketData.ethPriceUsd;
-                  }
+      const reason = await walkPagesBackTo(
+        (page) => `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=txlist&address=${address}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`,
+        sevenDaysAgo,
+        (tx, ts) => {
+          if ((tx.to || "").toLowerCase() !== address) return;
 
-                  if (usdVal > 0) {
-                      const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
-                      revenueBreakdown[key] += usdVal;
-                      revenueBreakdown[dailyKey][dayIdx] += usdVal;
-                  }
-              }
+          let usdVal = 0;
+          const eth = Number(tx.value || 0) / 1e18;
+
+          if (key === "launchpadUsd") {
+              // Only the launch fee counts, so anything that is not one is not
+              // revenue. The band absorbs gas-rounding around a 0.1 ETH fee.
+              if (eth >= 0.099 && eth <= 0.101) usdVal = 0.1 * marketData.ethPriceUsd;
+          } else if (eth > 0) {
+              usdVal = eth * marketData.ethPriceUsd;
           }
-          if(reachedOlder || txs.length < 1000) break;
-          page++; await sleep(200); 
-      }
+
+          if (usdVal <= 0) return;
+
+          const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
+          revenueBreakdown[key] += usdVal;
+          revenueBreakdown[dailyKey][dayIdx] += usdVal;
+        },
+      );
+      if (reason) truncatedWalks.push(`txlist ${key}: ${reason}`);
   }
+
 
   async function fetchSecurityBoxYield(address) {
-      let page = 1;
-      while(true) {
-          let url = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=txlistinternal&address=${address}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`;
-          let data = await secureFetch(url);
-          const txs = (data && Array.isArray(data.result)) ? data.result : [];
-          if(txs.length === 0) break;
-          let reachedOlder = false;
-          for (const tx of txs) {
-              const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
-              if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
-              if (tx.isError === "1" || tx.isError === 1) continue;
-              
-              if ((tx.to || "").toLowerCase() === address) {
-                  const eth = Number(tx.value || 0) / 1e18;
-                  if (eth > 0) {
-                      const usdVal = eth * marketData.ethPriceUsd;
-                      const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
-                      revenueBreakdown.securityBoxUsd += usdVal;
-                      revenueBreakdown.dailySecurityBox[dayIdx] += usdVal;
-                  }
-              }
-          }
-          if(reachedOlder || txs.length < 1000) break;
-          page++; await sleep(200); 
-      }
+      const reason = await walkPagesBackTo(
+        (page) => `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=txlistinternal&address=${address}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`,
+        sevenDaysAgo,
+        (tx, ts) => {
+          if ((tx.to || "").toLowerCase() !== address) return;
+
+          const eth = Number(tx.value || 0) / 1e18;
+          if (eth <= 0) return;
+
+          const usdVal = eth * marketData.ethPriceUsd;
+          const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
+          revenueBreakdown.securityBoxUsd += usdVal;
+          revenueBreakdown.dailySecurityBox[dayIdx] += usdVal;
+        },
+      );
+      if (reason) truncatedWalks.push(`txlistinternal security box: ${reason}`);
   }
+
 
   if (conf.yieldMode === "oracle_wallet") {
       let oracleAmmSampleUsd = 0;
       let dailyOracleAmmSample = [0,0,0,0,0,0,0];
 
-      // Walks that ended before covering the whole seven days.
-      //
-      // Page exhaustion alone does not prove truncation: a wallet whose entire
-      // history fits inside the window legitimately runs out of pages without
-      // ever seeing an older row. The two are told apart by Blockscout's own
-      // `status` -- "2" means it knows it has more that it has not indexed yet.
-      // So a walk is only suspect when it stopped short AND the source admitted
-      // it was incomplete, or when a request failed outright.
-      const truncatedWalks = [];
 
-      let pageEth = 1;
-      let sawEthRows = false;
-      let ethReachedWindow = false;
-      let ethIncompleteSignalled = false;
-      while(true) {
-          let urlEth = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=txlistinternal&address=${conf.oracleSource}&page=${pageEth}&offset=1000&sort=desc&apikey=${API_KEY}`;
-          let dataEth = await secureFetch(urlEth);
-          if (dataEth?.failed) { truncatedWalks.push("txlistinternal (oracle) - request failed"); break; }
-          if (dataEth?.status === "2") ethIncompleteSignalled = true;
-          const txs = (dataEth && Array.isArray(dataEth.result)) ? dataEth.result : [];
-          if(txs.length === 0) break;
-          sawEthRows = true;
-          let reachedOlder = false;
-          for (const tx of txs) {
-            const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
-            if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
-            if (tx.isError === "1" || tx.isError === 1) continue;
-            
-            const fromAddr = (tx.from || "").toLowerCase();
-            const toAddr = (tx.to || "").toLowerCase();
-            
-            if (PROTOCOL_CONTRACTS.includes(fromAddr) && toAddr === conf.oracleSource.toLowerCase()) {
-              const eth = Number(tx.value || 0) / 1e18;
-              if (eth > 0) {
-                  const usdVal = eth * marketData.ethPriceUsd;
-                  const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
-                  
-                  totalSampleUsd += usdVal;
-                  if (conf.oracleWeight) dailyUsdPerWeight[dayIdx] += (usdVal / conf.oracleWeight);
+      const ethReason = await walkPagesBackTo(
+        (page) => `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=txlistinternal&address=${conf.oracleSource}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`,
+        sevenDaysAgo,
+        (tx, ts) => {
+          const fromAddr = (tx.from || "").toLowerCase();
+          const toAddr = (tx.to || "").toLowerCase();
+          if (!PROTOCOL_CONTRACTS.includes(fromAddr) || toAddr !== conf.oracleSource.toLowerCase()) return;
 
-                  if (fromAddr === conf.streams?.amm) {
-                      oracleAmmSampleUsd += usdVal;
-                      dailyOracleAmmSample[dayIdx] += usdVal;
-                  }
-              }
-            }
+          const eth = Number(tx.value || 0) / 1e18;
+          if (eth <= 0) return;
+
+          const usdVal = eth * marketData.ethPriceUsd;
+          const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
+
+          totalSampleUsd += usdVal;
+          if (conf.oracleWeight) dailyUsdPerWeight[dayIdx] += (usdVal / conf.oracleWeight);
+
+          if (fromAddr === conf.streams?.amm) {
+            oracleAmmSampleUsd += usdVal;
+            dailyOracleAmmSample[dayIdx] += usdVal;
           }
-          if(reachedOlder) { ethReachedWindow = true; break; }
-          // A short page is NOT the end of the history. Blockscout serves short
-          // pages while its own indexing is behind -- it says so in `status: 2`,
-          // "Some internal transactions within this block range have not yet
-          // been processed" -- and treating one as the end silently truncates
-          // the window. Keep paging; an empty page is the only real terminator.
-          pageEth++; await sleep(200);
-      }
-      if (sawEthRows && !ethReachedWindow && ethIncompleteSignalled) {
-        truncatedWalks.push("txlistinternal (oracle)");
-      }
+        },
+      );
+      if (ethReason) truncatedWalks.push(`txlistinternal oracle: ${ethReason}`);
+
 
       for (const tokenAddr of Object.keys(TOKEN_TICKERS)) {
         const price = tokenPrices[tokenAddr.toLowerCase()] || 0;
         if (price <= 0) continue;
         
-        let pageTok = 1;
-        let sawTokRows = false;
-        let tokReachedWindow = false;
-        let tokIncompleteSignalled = false;
-        while(true) {
-            let urlTok = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokentx&address=${conf.oracleSource}&contractaddress=${tokenAddr}&page=${pageTok}&offset=1000&sort=desc&apikey=${API_KEY}`;
-            let dataTok = await secureFetch(urlTok);
-            if (dataTok?.failed) { truncatedWalks.push(`tokentx ${tokenAddr} - request failed`); break; }
-            if (dataTok?.status === "2") tokIncompleteSignalled = true;
-            const txs = (dataTok && Array.isArray(dataTok.result)) ? dataTok.result : [];
-            if(txs.length === 0) break;
-            sawTokRows = true;
+        const tokReason = await walkPagesBackTo(
+          (page) => `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokentx&address=${conf.oracleSource}&contractaddress=${tokenAddr}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`,
+          sevenDaysAgo,
+          (tx, ts) => {
+            const fromAddr = (tx.from || "").toLowerCase();
+            const toAddr = (tx.to || "").toLowerCase();
+            if (!PROTOCOL_CONTRACTS.includes(fromAddr) || toAddr !== conf.oracleSource.toLowerCase()) return;
 
-            let reachedOlder = false;
-            for (const tx of txs) {
-              const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
-              if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
-              if (tx.isError === "1" || tx.isError === 1) continue;
-              
-              const fromAddr = (tx.from || "").toLowerCase();
-              const toAddr = (tx.to || "").toLowerCase();
-              if (PROTOCOL_CONTRACTS.includes(fromAddr) && toAddr === conf.oracleSource.toLowerCase()) {
-                const amount = Number(tx.value || 0) / Math.pow(10, parseInt(tx.tokenDecimal || 18, 10));
-                if (amount > 0) {
-                    const usdVal = amount * price;
-                    const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
-                    
-                    totalSampleUsd += usdVal;
-                    if (conf.oracleWeight) dailyUsdPerWeight[dayIdx] += (usdVal / conf.oracleWeight);
-                    
-                    oracleAmmSampleUsd += usdVal;
-                    dailyOracleAmmSample[dayIdx] += usdVal;
-                }
-              }
-            }
-            if(reachedOlder) { tokReachedWindow = true; break; }
-            pageTok++; await sleep(200);
-        }
-        if (sawTokRows && !tokReachedWindow && tokIncompleteSignalled) {
-          truncatedWalks.push(`tokentx ${tokenAddr}`);
-        }
-      }
+            const amount = Number(tx.value || 0) / Math.pow(10, parseInt(tx.tokenDecimal || 18, 10));
+            if (amount <= 0) return;
 
-      // Refuse to publish a total derived from a window we could not see all of.
-      //
-      // The sum here is scaled by totalNetworkWeight/oracleWeight -- a factor of
-      // ~634 -- so a walk that quietly stops short does not produce a slightly
-      // low number, it produces a confidently wrong one. That is what happened:
-      // ammFeesUsd printed 10,770 against 209,037 an hour earlier, with whole
-      // days sitting at exactly zero, because page 2 came back short and the
-      // loop read that as the end of seven days of history.
-      //
-      // Failing the run leaves the last good data.json in place. Stale and
-      // correct beats fresh and wrong, and it is the same call the gg-index
-      // preflight already makes.
-      if (truncatedWalks.length) {
-        throw new Error(
-          `${projectKey}: Blockscout returned a truncated history for ${truncatedWalks.join(", ")} ` +
-          `-- pages ran out before reaching ${new Date(sevenDaysAgo * 1000).toISOString()}. ` +
-          `Refusing to publish a partial revenue total.`,
+            const usdVal = amount * price;
+            const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
+
+            totalSampleUsd += usdVal;
+            if (conf.oracleWeight) dailyUsdPerWeight[dayIdx] += (usdVal / conf.oracleWeight);
+
+            oracleAmmSampleUsd += usdVal;
+            dailyOracleAmmSample[dayIdx] += usdVal;
+          },
         );
+        if (tokReason) truncatedWalks.push(`tokentx ${tokenAddr}: ${tokReason}`);
       }
+
 
       const scaleMultiplier = totalNetworkWeight / conf.oracleWeight;
       revenueBreakdown.ammFeesUsd = oracleAmmSampleUsd * scaleMultiplier;
@@ -1088,43 +1048,58 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
           revenueBreakdown,
           addSample: (usd) => { totalSampleUsd += usd; },
           totalNetworkWeight,
+          truncated: truncatedWalks,
         });
       }
 
       if (projectKey === "mancer" && conf.streams?.dexCollector) {
-          let pageDex = 1;
-          while(true) {
-              let urlDex = `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokentx&address=${conf.streams.dexCollector}&page=${pageDex}&offset=1000&sort=desc&apikey=${API_KEY}`;
-              let dataDex = await secureFetch(urlDex);
-              const txs = (dataDex && Array.isArray(dataDex.result)) ? dataDex.result : [];
-              if(txs.length === 0) break;
-              let reachedOlder = false;
-              for (const tx of txs) {
-                  const ts = parseInt(tx.timeStamp || tx.timestamp || 0, 10);
-                  if (ts < sevenDaysAgo) { reachedOlder = true; continue; }
-                  
-                  if ((tx.to || "").toLowerCase() === conf.streams.dexCollector) {
-                      const dec = parseInt(tx.tokenDecimal || 18, 10);
-                      const amount = Number(tx.value || 0) / Math.pow(10, dec);
-                      const sym = (tx.tokenSymbol || "").toUpperCase();
-                      
-                      if (amount > 0 && amount < 5 && (sym === "WETH" || sym === "ETH")) {
-                          const usdVal = amount * marketData.ethPriceUsd;
-                          if (usdVal > 0) {
-                              const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
-                              revenueBreakdown.dexFeesUsd += usdVal;
-                              revenueBreakdown.dailyDex[dayIdx] += usdVal;
-                              totalSampleUsd += usdVal;
+          const dexReason = await walkPagesBackTo(
+            (page) => `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokentx&address=${conf.streams.dexCollector}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`,
+            sevenDaysAgo,
+            (tx, ts) => {
+              if ((tx.to || "").toLowerCase() !== conf.streams.dexCollector) return;
 
-                              dailyUsdPerWeight[dayIdx] += (usdVal / totalNetworkWeight);
-                          }
-                      }
-                  }
-              }
-              if(reachedOlder || txs.length < 1000) break;
-              pageDex++; await sleep(200); 
-          }
+              const dec = parseInt(tx.tokenDecimal || 18, 10);
+              const amount = Number(tx.value || 0) / Math.pow(10, dec);
+              const sym = (tx.tokenSymbol || "").toUpperCase();
+
+              // The < 5 bound rejects outliers that are not fee flow.
+              if (!(amount > 0 && amount < 5) || (sym !== "WETH" && sym !== "ETH")) return;
+
+              const usdVal = amount * marketData.ethPriceUsd;
+              if (usdVal <= 0) return;
+
+              const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
+              revenueBreakdown.dexFeesUsd += usdVal;
+              revenueBreakdown.dailyDex[dayIdx] += usdVal;
+              totalSampleUsd += usdVal;
+              dailyUsdPerWeight[dayIdx] += (usdVal / totalNetworkWeight);
+            },
+          );
+          if (dexReason) truncatedWalks.push(`tokentx dex collector: ${dexReason}`);
       }
+  }
+
+  // Refuse to publish a total derived from a window we could not see all of.
+  //
+  // Checked here rather than inside a yield-mode branch, because that is what
+  // went wrong before: the guard lived in the oracle branch and the security-box,
+  // launchpad and dex-collector walks ran outside it, unprotected.
+  //
+  // stonk's sample is scaled by totalNetworkWeight/oracleWeight, roughly 634x,
+  // so a walk that stops short does not produce a slightly low number, it
+  // produces a confidently wrong one -- $10,770 against $209,037 an hour
+  // earlier, with whole days at exactly zero.
+  //
+  // Failing the run leaves the last good data.json in place. Stale and correct
+  // beats fresh and wrong, and holder and activation counts now come from
+  // gg-index in the browser, so they stay live even when the snapshot does not.
+  if (truncatedWalks.length) {
+    throw new Error(
+      `${projectKey}: Blockscout returned a truncated history for ${truncatedWalks.join("; ")} ` +
+      `-- window starts ${new Date(sevenDaysAgo * 1000).toISOString()}. ` +
+      `Refusing to publish a partial revenue total.`,
+    );
   }
 
   const yieldPerWeightUnitAnnual = conf.yieldMode === "oracle_wallet" 
