@@ -20,6 +20,13 @@ export default function App() {
   useEffect(() => {
     const ac = new AbortController();
     let priceTimer = null;
+    let painted = false;
+
+    const paint = (payload) => {
+      painted = true;
+      setData(payload);
+      setLoading(false);
+    };
 
     (async () => {
       let json;
@@ -32,50 +39,64 @@ export default function App() {
         return;
       }
 
-      // Paint from data.json first. It is an hourly snapshot, so it is stale by
-      // up to an hour but it is complete, and showing it immediately beats
-      // holding a blank screen while the index is queried.
-      setData(json);
-      setLoading(false);
+      // data.json is deliberately NOT painted yet.
+      //
+      // It is an hourly snapshot, and the specific figures it gets wrong are the
+      // ones corrected below: holder counts Blockscout truncates, activation
+      // counts a log-only walk overstates, and prices that are an hour stale.
+      // Painting first and correcting a second later showed numbers already
+      // known to be wrong, and showed them as though they were right. A wrong
+      // number that settles is worse than a slow one, because nothing on screen
+      // says which of the two you are looking at.
+      //
+      // The load screen stands until the live figures arrive.
+      const deadline = setTimeout(() => {
+        // Unless they do not. A dashboard that never renders is worse than one
+        // rendering an hour-old snapshot, so the snapshot is the floor rather
+        // than the default.
+        if (!painted) {
+          console.warn('live sources timed out; falling back to the data.json snapshot');
+          paint(json);
+        }
+      }, 6000);
 
-      // The catalog is shared by both layers below, so fetch it once.
-      let projects = null;
+      let enriched = json;
       try {
-        projects = await loadProjects(ac.signal);
+        const projects = await loadProjects(ac.signal);
+
+        // Independent of each other, so they run together rather than in
+        // sequence — this whole block is what the user is waiting on.
+        const [overlay, prices] = await Promise.all([
+          loadOverlay(ac.signal, projects).catch((err) => {
+            if (!ac.signal.aborted) console.warn('gg-index overlay failed', err);
+            return null;
+          }),
+          loadPrices(projects, ac.signal).catch((err) => {
+            if (!ac.signal.aborted) console.warn('price load failed', err);
+            return null;
+          }),
+        ]);
+
+        if (overlay) enriched = applyOverlay(enriched, overlay);
+        if (prices) enriched = applyPrices(enriched, prices);
+
+        if (!ac.signal.aborted) {
+          const refreshPrices = async () => {
+            try {
+              const next = await loadPrices(projects, ac.signal);
+              setData((current) => applyPrices(current, next));
+            } catch (err) {
+              if (!ac.signal.aborted) console.warn('price refresh failed', err);
+            }
+          };
+          priceTimer = setInterval(refreshPrices, 60_000);
+        }
       } catch (err) {
-        if (!ac.signal.aborted) console.warn('gg-index catalog unavailable', err);
+        if (!ac.signal.aborted) console.warn('gg-index unavailable; using snapshot', err);
       }
 
-      // Then correct the figures gg-index owns. Holder and activation counts
-      // are wrong in the snapshot often enough to matter — see lib/ggindex.js
-      // for what each one gets wrong and why.
-      if (projects) {
-        try {
-          const overlay = await loadOverlay(ac.signal, projects);
-          setData((current) => applyOverlay(current, overlay));
-        } catch (err) {
-          if (!ac.signal.aborted) {
-            console.warn('gg-index unavailable; showing data.json figures', err);
-          }
-        }
-      }
-
-      // Prices last, and on a timer. data.json is hourly because that is what
-      // its slowest source costs; prices move by the minute, and both feeds are
-      // free, so there is no reason to show an hour-old quote.
-      if (!projects) return;
-
-      const refreshPrices = async () => {
-        try {
-          const prices = await loadPrices(projects, ac.signal);
-          setData((current) => applyPrices(current, prices));
-        } catch (err) {
-          if (!ac.signal.aborted) console.warn('price refresh failed', err);
-        }
-      };
-
-      await refreshPrices();
-      priceTimer = setInterval(refreshPrices, 60_000);
+      clearTimeout(deadline);
+      if (!ac.signal.aborted) paint(enriched);
     })();
 
     return () => {
