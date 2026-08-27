@@ -370,14 +370,6 @@ export default function StonkDetailView({ data, activeTab }) {
                 </div>
               )}
             </div>
-            {/* The buttons offer 30D before 30 days of snapshots exist. Say what
-                the chart is really covering rather than letting the label imply it. */}
-            {burn.days > 0 && burn.days < 30 && (
-              <p className="text-xs text-slate-500 mt-3">
-                {burn.days} day{burn.days === 1 ? '' : 's'} of recorded history
-                {burn.dropped > 0 && ` — ${burn.dropped} bad reading${burn.dropped === 1 ? '' : 's'} excluded`}
-              </p>
-            )}
           </div>
 
           <div className="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6">

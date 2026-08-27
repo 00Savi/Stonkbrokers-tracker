@@ -339,12 +339,6 @@ export default function CardWallDetailView({ data, activeTab }) {
                 </div>
               )}
             </div>
-            {burn.days > 0 && burn.days < 30 && (
-              <p className="text-xs text-slate-500 mt-3">
-                {burn.days} day{burn.days === 1 ? '' : 's'} of recorded history
-                {burn.dropped > 0 && ` — ${burn.dropped} bad reading${burn.dropped === 1 ? '' : 's'} excluded`}
-              </p>
-            )}
           </div>
 
           <div className="bg-[#0f172a] border border-[#334155] rounded-xl p-4 md:p-6">

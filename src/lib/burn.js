@@ -47,15 +47,7 @@ function usable(snapshots) {
   return clean;
 }
 
-/**
- * Labels and values for the burn chart, windowed to a timeframe.
- *
- * `dropped` and `days` are returned so the view can say what it is actually
- * showing. The timeframe buttons offer 7D/30D/ALL, but the fetcher has only
- * been recording snapshots since 8/19 -- picking 30D cannot conjure 30 days,
- * and a chart that silently shows seven while the button reads 30D is telling
- * a smaller version of the same lie this file exists to remove.
- */
+/** Labels and values for the burn chart, windowed to a timeframe. */
 export function burnSeries(snapshots, timeframe = 'all') {
   const clean = usable(snapshots);
   const window = timeframe === '7d' ? 7 : timeframe === '30d' ? 30 : clean.length;
@@ -64,8 +56,6 @@ export function burnSeries(snapshots, timeframe = 'all') {
   return {
     labels: rows.map((s) => s.date || ''),
     data: rows.map((s) => Number(s.totalBurn)),
-    days: clean.length,
-    dropped: (Array.isArray(snapshots) ? snapshots.length : 0) - clean.length,
   };
 }
 
