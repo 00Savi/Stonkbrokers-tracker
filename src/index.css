@@ -1,8 +1,95 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+
+/* shadcn components are written against a `dark:` variant. This dashboard has
+   no light mode -- every surface is hardcoded slate-900 and always has been --
+   so the variant is wired to the root element and the root is dark. That keeps
+   the generated components unmodified while giving them one theme to render
+   against, rather than a light default nobody ever sees. */
+@custom-variant dark (&:is(.dark *));
+
+/* Tokens are the palette the dashboard already used, not shadcn's defaults:
+   slate-900 surfaces, slate-800 cards, slate-700 borders, slate-300 text. A
+   dropped-in Card should be indistinguishable from the hand-written panels
+   beside it, and it will not be if it arrives with its own greys. */
+:root {
+  --radius: 0.75rem; /* matches the existing rounded-xl panels */
+
+  --background: oklch(0.208 0.042 265.755);          /* #0f172a slate-900 */
+  --foreground: oklch(0.869 0.022 252.894);          /* #cbd5e1 slate-300 */
+
+  --card: oklch(0.279 0.041 260.031);                /* #1e293b slate-800 */
+  --card-foreground: oklch(0.869 0.022 252.894);
+  --popover: oklch(0.279 0.041 260.031);
+  --popover-foreground: oklch(0.869 0.022 252.894);
+
+  --primary: oklch(0.696 0.17 162.48);               /* emerald-500 */
+  --primary-foreground: oklch(0.208 0.042 265.755);
+
+  --secondary: oklch(0.372 0.044 257.287);           /* #334155 slate-700 */
+  --secondary-foreground: oklch(0.869 0.022 252.894);
+
+  --muted: oklch(0.279 0.041 260.031);
+  --muted-foreground: oklch(0.704 0.04 256.788);     /* #94a3b8 slate-400 */
+
+  --accent: oklch(0.372 0.044 257.287);
+  --accent-foreground: oklch(0.869 0.022 252.894);
+
+  --destructive: oklch(0.637 0.237 25.331);          /* red-500 */
+  --destructive-foreground: oklch(0.985 0 0);
+
+  --border: oklch(0.372 0.044 257.287);              /* #334155 slate-700 */
+  --input: oklch(0.372 0.044 257.287);
+  --ring: oklch(0.696 0.17 162.48);
+
+  /* Chart slots reuse the accents already on the page: emerald for value,
+     purple for mancer, amber for mining, sky and rose for the rest. */
+  --chart-1: oklch(0.696 0.17 162.48);
+  --chart-2: oklch(0.627 0.265 303.9);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.685 0.169 237.323);
+  --chart-5: oklch(0.645 0.246 16.439);
+}
+
+.dark {
+  color-scheme: dark;
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+}
 
 body {
-  background-color: #0f172a;
-  color: #cbd5e1;
+  background-color: var(--background);
+  color: var(--foreground);
 }
 
 ::-webkit-scrollbar { height: 6px; width: 6px; }

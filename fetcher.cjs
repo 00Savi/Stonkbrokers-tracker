@@ -545,6 +545,18 @@ async function getTrueDeflationStats(conf) {
   const scale = 10 ** (s.decimals ?? 18);
   const currentSupply = Number(s.supply) / scale;
 
+  // A zero supply is not a 100% burn, it is a failed read that answered.
+  //
+  // The burn below is `maxSupply * unitValue - currentSupply`, so a zero here
+  // reports the entire supply as destroyed. That is not hypothetical: on 8/19
+  // every project recorded exactly its own full supply as burnt -- STONK
+  // 2,962,663,704, which is 4444 x 666666 to the token -- and those rows are
+  // still in the committed snapshot history. The null check above does not
+  // catch it, because the call succeeded and returned a number.
+  if (!(currentSupply > 0)) {
+    throw new Error(`supply read returned zero for ${conf.ticker} (${conf.tokenCa})`);
+  }
+
   // A reverted burn-balance read is unknown, not zero. ERC-721 balanceOf(0x0)
   // reverts by spec, and treating that as a zero balance would understate the
   // burn -- so it is surfaced rather than absorbed.

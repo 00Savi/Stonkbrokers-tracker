@@ -3,6 +3,7 @@ import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, ArcElement, Filler
 } from 'chart.js';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
+import { burnSeries, burnRateSeries } from '../../lib/burn';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
@@ -70,23 +71,15 @@ export default function StonkDetailView({ data, activeTab }) {
     Number(ownership.burntNfts || 0)
   );
   
-  const fullBurnLabels = Array.isArray(ownership.burnLabels) && ownership.burnLabels.length > 0 ? ownership.burnLabels : ['Jul 18', 'Jul 24', 'Jul 30', 'Aug 05', 'Aug 11', 'Aug 17', 'Aug 23'];
-  const fullBurnData = Array.isArray(ownership.burnHistory) && ownership.burnHistory.length > 0 ? ownership.burnHistory : [280000000, 450000000, 470000000, 495000000, 520000000, 567210014, 574100000];
-  let sliceCount = fullBurnLabels.length;
-  if (burnTimeframe === '7d') sliceCount = 7;
-  if (burnTimeframe === '30d') sliceCount = 30;
-  const slicedBurnLabels = fullBurnLabels.slice(-sliceCount);
-  const slicedBurnData = fullBurnData.slice(-sliceCount);
+  const burn = burnSeries(dailySnapshots, burnTimeframe);
+  const slicedBurnLabels = burn.labels;
+  const slicedBurnData = burn.data;
 
   // 4. Flywheel Chart
-  const fwLabels = hasSnaps ? dailySnapshots.map(s => s.date || '') : ['Aug 19', 'Aug 20', 'Aug 21', 'Aug 22', 'Aug 23'];
-  const fwPrices = hasSnaps ? dailySnapshots.map(s => s.tokenPriceUsd || 0) : [0.0011, 0.0013, 0.0012, 0.0014, 0.00142];
-  const fwBurn = hasSnaps ? dailySnapshots.map((s, i) => {
-    if (i === 0) return 0;
-    const prev = dailySnapshots[i-1].totalBurn || 0;
-    const curr = s.totalBurn || 0;
-    return Math.max(0, curr - prev);
-  }) : [1000000, 2500000, 1800000, 3000000, 2400000];
+  const flywheel = burnRateSeries(dailySnapshots);
+  const fwLabels = flywheel.labels;
+  const fwPrices = flywheel.prices;
+  const fwBurn = flywheel.burn;
 
   // 5. Activation Chart
   const actHistory = activation.history || {};
@@ -366,10 +359,16 @@ export default function StonkDetailView({ data, activeTab }) {
               </div>
             </div>
             <div className="relative h-72 md:h-80 w-full">
-              <Line 
-                data={{ labels: slicedBurnLabels, datasets: [{ label: 'Cumulative Burnt', data: slicedBurnData, borderColor: '#fb923c', backgroundColor: 'rgba(251, 146, 60, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] }} 
-                options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: (v) => (v >= 1000000 ? (v / 1000000).toFixed(1) + 'M' : v) } } } }} 
-              />
+              {slicedBurnData.length > 0 ? (
+                <Line
+                  data={{ labels: slicedBurnLabels, datasets: [{ label: 'Cumulative Burnt', data: slicedBurnData, borderColor: '#fb923c', backgroundColor: 'rgba(251, 146, 60, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] }}
+                  options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#334155', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: (v) => (v >= 1000000 ? (v / 1000000).toFixed(1) + 'M' : v) } } } }}
+                />
+              ) : (
+                <div className="h-full flex items-center justify-center text-sm text-slate-500">
+                  No burn history recorded yet
+                </div>
+              )}
             </div>
           </div>
 
