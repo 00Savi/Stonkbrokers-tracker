@@ -115,7 +115,7 @@ export default function PortfolioView({ data }) {
   };
 
   return (
-    <div className="bg-[#1e293b] border border-[#334155] rounded-2xl p-6 shadow-xl mt-6">
+    <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-6 shadow-xl mt-6">
       <div className="mb-6">
         <h2 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
           <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
@@ -130,7 +130,7 @@ export default function PortfolioView({ data }) {
           value={inputVal}
           onChange={(e) => setInputVal(e.target.value)}
           placeholder="Paste Wallet Address (e.g. 0x123..., 0x456...)" 
-          className="bg-[#0f172a] border border-[#334155] text-white px-4 py-2.5 rounded-lg text-sm flex-1 focus:outline-none focus:border-blue-500"
+          className="bg-[#08090b] border border-[#1e2228] text-white px-4 py-2.5 rounded-lg text-sm flex-1 focus:outline-none focus:border-blue-500"
         />
         <button 
           onClick={handleScan}
@@ -146,37 +146,37 @@ export default function PortfolioView({ data }) {
       {scanComplete && (
         <div>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            <div className="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
               <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Total Floor Value</p>
               <p className="text-xl md:text-2xl font-extrabold text-white">{formatCurrency(results.floorUsd)}</p>
             </div>
-            <div className="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
               <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Forecasted Annual Cash-Flow</p>
               <p className={`text-xl md:text-2xl font-extrabold ${results.hasErrors ? 'text-rose-400' : 'text-emerald-400'}`}>
                 {results.hasErrors ? 'ERROR' : `${formatCurrency(results.yieldUsd)} /yr`}
               </p>
             </div>
-            <div className="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
               <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Combined Portfolio ROI</p>
               <p className={`text-xl md:text-2xl font-extrabold ${results.hasErrors ? 'text-rose-400' : 'text-blue-400'}`}>
                 {results.hasErrors ? 'ERROR' : `${(results.floorUsd > 0 ? (results.yieldUsd / results.floorUsd) * 100 : 0).toFixed(2)}%`}
               </p>
             </div>
-            <div className="bg-[#0f172a] border border-[#334155] rounded-xl p-5 shadow-inner">
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
               <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Total Active Units</p>
               <p className="text-xl md:text-2xl font-extrabold text-purple-400">{results.totalUnits} Units</p>
             </div>
           </div>
 
-          <h3 className="text-sm font-bold text-white mb-4 border-b border-[#334155] pb-2">Owned Asset Breakdown</h3>
+          <h3 className="text-sm font-bold text-white mb-4 border-b border-[#1e2228] pb-2">Owned Asset Breakdown</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {results.ownedAssets.length === 0 ? (
               <p className="text-xs text-slate-400">No ecosystem NFTs found in the provided wallet(s).</p>
             ) : (
               results.ownedAssets.map((asset, idx) => (
-                <div key={idx} className="bg-[#0f172a] border border-[#334155] rounded-xl p-4 flex items-center justify-between shadow-inner hover:border-slate-500 transition">
+                <div key={idx} className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 flex items-center justify-between shadow-inner hover:border-slate-500 transition">
                   <div className="flex items-center gap-3">
-                    <img src={`/${asset.logo}`} className="w-10 h-10 rounded-lg object-cover border border-[#334155] bg-[#1e293b]" alt={asset.ticker} />
+                    <img src={`/${asset.logo}`} className="w-10 h-10 rounded-lg object-cover border border-[#1e2228] bg-[#0e1013]" alt={asset.ticker} />
                     <div>
                       <h4 className="text-sm font-bold text-white">{asset.ticker} Units ({asset.balance} Owned)</h4>
                       <p className="text-[10px] text-slate-400 font-mono">{asset.wallet.slice(0,6)}...{asset.wallet.slice(-4)}</p>
