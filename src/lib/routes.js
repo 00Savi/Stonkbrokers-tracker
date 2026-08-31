@@ -15,6 +15,7 @@ export const PROJECT_BY_SLUG = {
   mancer: 'mancer',
   tickeryard: 'tickeryard',
   cardwall: 'cardwall',
+  bonus: 'bonus',
 };
 
 export const SLUG_BY_PROJECT = Object.fromEntries(
@@ -52,9 +53,27 @@ export const PROJECTS = [
   { slug: 'mancer', key: 'mancer', name: 'Mancer', ticker: 'MANCER' },
   { slug: 'tickeryard', key: 'tickeryard', name: 'TickerYard', ticker: 'YARD' },
   { slug: 'cardwall', key: 'cardwall', name: 'The Card Wall', ticker: 'WALL' },
+  {
+    slug: 'bonus',
+    key: 'bonus',
+    name: '$Bonus',
+    ticker: 'BONUS',
+    kind: 'token',
+    logo: 'Bonus.png',
+    live: false,
+  },
 ];
 
-export const projectPath = (key, tab = 'roi') =>
-  `/${SLUG_BY_PROJECT[key] ?? key}/${SLUG_BY_TAB[tab] ?? tab}`;
+/** Flip `live` on the bonus project when the token launches. */
+export const BONUS_LIVE = PROJECTS.some((p) => p.key === 'bonus' && p.live);
+
+/** NFT yield projects — rankings, ecosystem, and the ROI tab bar. */
+export const NFT_PROJECTS = PROJECTS.filter((p) => p.kind !== 'token');
+
+export const projectPath = (key, tab = 'roi') => {
+  const meta = PROJECTS.find((p) => p.key === key);
+  if (meta?.kind === 'token') return `/${meta.slug}`;
+  return `/${SLUG_BY_PROJECT[key] ?? key}/${SLUG_BY_TAB[tab] ?? tab}`;
+};
 
 export const DEFAULT_TAB = 'roi';

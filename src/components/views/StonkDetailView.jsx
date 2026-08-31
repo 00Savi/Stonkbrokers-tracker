@@ -55,11 +55,15 @@ export default function StonkDetailView({ data, activeTab }) {
   });
 
   // 2. Revenue Chart
+  const zeros = [0, 0, 0, 0, 0, 0, 0];
   const hasRevData = Array.isArray(revenue.dailyAmm) && revenue.dailyAmm.length > 0;
-  const revDates = hasRevData && tiers[0]?.dailyDates?.length ? tiers[0].dailyDates : ['8/15', '8/16', '8/17', '8/18', '8/19', '8/20', '8/21'];
-  const revData1 = hasRevData ? revenue.dailyAmm : [50000, 20000, 150000, 60000, 140000, 140000, 25000];
-  const revData2 = hasRevData && revenue.dailySecurityBox?.length ? revenue.dailySecurityBox : [2000, 1000, 3000, 1500, 4000, 3000, 1000];
-  const revData3 = hasRevData && revenue.dailyLaunchpad?.length ? revenue.dailyLaunchpad : [5000, 2000, 75000, 28000, 110000, 44000, 8000];
+  const revDates = hasRevData && tiers[0]?.dailyDates?.length ? tiers[0].dailyDates : zeros.map((_, i) => `${i}`);
+  const revData1 = hasRevData ? revenue.dailyAmm : zeros;
+  const revData2 = revenue.dailySecurityBox?.length === 7 ? revenue.dailySecurityBox : zeros;
+  const revDataTax = revenue.dailyBondingTax?.length === 7 ? revenue.dailyBondingTax : zeros;
+  const revDataVol = revenue.dailyLaunchpad?.length === 7 ? revenue.dailyLaunchpad : zeros;
+  const feeChartOpts = { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true, grid: { color: '#1e2228', borderDash: [4, 4] } }, y: { stacked: true, grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: v => '$' + v } } }, plugins: { legend: { labels: { color: '#cbd5e1' } } } };
+  const volChartOpts = { ...feeChartOpts, scales: { ...feeChartOpts.scales, x: { ...feeChartOpts.scales.x, stacked: false }, y: { ...feeChartOpts.scales.y, stacked: false } } };
 
   // 3. Burn Tracker Data
   const realBurntTokens = Math.max(
@@ -90,8 +94,11 @@ export default function StonkDetailView({ data, activeTab }) {
   const actDAct = (hasActHist && actHistory.dailyActivations?.length) ? actHistory.dailyActivations : [20, 30, 40, 10, 25, 15, 22];
   const actDDeact = (hasActHist && actHistory.dailyDeactivations?.length) ? actHistory.dailyDeactivations : [0, 0, 10, 0, 5, 8, 15];
 
-  let breakdownArr = tiers.map(t => activation.tierStats?.[t.tier]?.allTime?.act || 0);
-  if (breakdownArr.reduce((a, b) => a + b, 0) === 0) breakdownArr = [1589, 201, 127, 70, 60]; 
+  let breakdownArr = tiers.map((t) => {
+    if (activation.breakdown && activation.breakdown[t.tier] != null) return activation.breakdown[t.tier];
+    const s = activation.tierStats?.[t.tier]?.allTime || {};
+    return Math.max(0, (s.act || 0) - (s.deact || 0));
+  }); 
 
   // 6. Ownership Fields & Charts (Anomaly filtered to prevent RPC crashes)
   const ownHistGrowth = ownership.historicalGrowth || {};
@@ -262,7 +269,7 @@ export default function StonkDetailView({ data, activeTab }) {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div>
               <h2 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">Protocol Revenue & Ecosystem Liquidity</h2>
-              <p className="text-xs text-slate-400 mt-1">Multi-stream on-chain fee generation, launchpad revenue, and locked LP assets.</p>
+              <p className="text-xs text-slate-400 mt-1">AMM and Clock-In are protocol fees. Launch + Bonding is create fees plus quote volume traded while tokens are still on the curve.</p>
             </div>
           </div>
 
@@ -276,24 +283,48 @@ export default function StonkDetailView({ data, activeTab }) {
               <p className="text-2xl font-extrabold text-blue-400">{formatCurrency(revenue.securityBoxUsd || 0)}</p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
-              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Safe Launchpad Deployments (7D)</p>
+              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Launch Fees + Bonding Volume (7D)</p>
               <p className="text-2xl font-extrabold text-purple-400">{formatCurrency(revenue.launchpadUsd || 0)}</p>
+              <p className="text-[10px] text-slate-500 mt-1.5">
+                Create {formatCurrency(revenue.launchCreateUsd || 0)}
+                <span className="mx-1.5 text-slate-700">·</span>
+                Volume {formatCurrency(revenue.bondingVolumeUsd || 0)}
+                <span className="mx-1.5 text-slate-700">·</span>
+                Curve tax {formatCurrency(revenue.bondingFeesUsd || 0)}
+              </p>
             </div>
           </div>
 
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
-            <h3 className="text-sm font-bold text-white mb-4">Daily Revenue Inflows by Stream (USD)</h3>
+            <h3 className="text-sm font-bold text-white mb-4">Daily protocol fees (USD)</h3>
+            <p className="text-[10px] text-slate-500 -mt-3 mb-4">AMM, Safety Deposit Clock In, and bonding-curve tax. Not volume.</p>
             <div className="relative h-72 md:h-80 w-full">
               <Bar 
                 data={{
                   labels: revDates,
                   datasets: [
-                    { label: "AMM & Swaps", data: revData1, backgroundColor: "#00a804", borderRadius: 4 },
-                    { label: "Clock-In Box", data: revData2, backgroundColor: "#8b5cf6", borderRadius: 4 },
-                    { label: "Safe Launchpad", data: revData3, backgroundColor: "#38bdf8", borderRadius: 4 }
+                    { label: "AMM & Swaps", data: revData1, backgroundColor: "#00a804" },
+                    { label: "Clock-In Box", data: revData2, backgroundColor: "#8b5cf6" },
+                    { label: "Curve tax", data: revDataTax, backgroundColor: "#f472b6" }
                   ]
                 }} 
-                options={{ responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true, grid: { color: '#1e2228', borderDash: [4, 4] } }, y: { stacked: true, grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: v => '$' + v } } }, plugins: { legend: { labels: { color: '#cbd5e1' } } } }} 
+                options={feeChartOpts} 
+              />
+            </div>
+          </div>
+
+          <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
+            <h3 className="text-sm font-bold text-white mb-4">Daily bonding-curve volume (USD)</h3>
+            <p className="text-[10px] text-slate-500 -mt-3 mb-4">Quote notional traded on Smart Launch while still on the curve.</p>
+            <div className="relative h-56 md:h-64 w-full">
+              <Bar 
+                data={{
+                  labels: revDates,
+                  datasets: [
+                    { label: "Bonding volume", data: revDataVol, backgroundColor: "#38bdf8" }
+                  ]
+                }} 
+                options={volChartOpts} 
               />
             </div>
           </div>
@@ -430,7 +461,7 @@ export default function StonkDetailView({ data, activeTab }) {
           </div>
 
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
-            <h3 className="text-sm font-bold text-white mb-6">Tier Distribution Breakdown</h3>
+            <h3 className="text-sm font-bold text-white mb-6">Current Tier Mix (net of deactivations)</h3>
             <div className="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-16">
               <div className="relative h-64 md:h-72 w-full md:w-1/2 flex items-center justify-center">
                 <Doughnut data={{ labels: tiers.map(t => t.name), datasets: [{ data: breakdownArr, backgroundColor: ['#00a804', '#8b5cf6', '#38bdf8', '#f5b700', '#f472b6'], borderWidth: 0 }] }} options={{ responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { display: false } } }} />

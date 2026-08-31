@@ -80,8 +80,11 @@ export default function YardDetailView({ data, activeTab }) {
   const actDAct = (hasActHist && actHistory.dailyActivations?.length) ? actHistory.dailyActivations : [20, 30, 40, 10, 25, 15, 22];
   const actDDeact = (hasActHist && actHistory.dailyDeactivations?.length) ? actHistory.dailyDeactivations : [0, 0, 10, 0, 5, 8, 15];
 
-  let breakdownArr = tiers.map(t => activation.tierStats?.[t.tier]?.allTime?.act || 0);
-  if (breakdownArr.reduce((a, b) => a + b, 0) === 0) breakdownArr = [980, 260, 115, 45, 20]; 
+  let breakdownArr = tiers.map((t) => {
+    if (activation.breakdown && activation.breakdown[t.tier] != null) return activation.breakdown[t.tier];
+    const s = activation.tierStats?.[t.tier]?.allTime || {};
+    return Math.max(0, (s.act || 0) - (s.deact || 0));
+  }); 
 
   // 6. Ownership Fields & Charts (Smoothed + Anomaly Filtered)
   const ownHistGrowth = ownership.historicalGrowth || {};
@@ -416,7 +419,7 @@ export default function YardDetailView({ data, activeTab }) {
           </div>
 
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
-            <h3 className="text-sm font-bold text-white mb-6">Tier Distribution Breakdown</h3>
+            <h3 className="text-sm font-bold text-white mb-6">Current Tier Mix (net of deactivations)</h3>
             <div className="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-16">
               <div className="relative h-64 md:h-72 w-full md:w-1/2 flex items-center justify-center">
                 <Doughnut data={{ labels: tiers.map(t => t.name), datasets: [{ data: breakdownArr, backgroundColor: ['#00a804', '#8b5cf6', '#38bdf8', '#f5b700', '#f472b6'], borderWidth: 0 }] }} options={{ responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { display: false } } }} />

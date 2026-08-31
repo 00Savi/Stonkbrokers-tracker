@@ -1,7 +1,50 @@
-import React from 'react';
-import { NavLink, useParams } from 'react-router-dom';
-import { PROJECTS, TABS, PROJECT_BY_SLUG } from '../lib/routes';
+import React, { useEffect, useRef, useState } from 'react';
+import { NavLink, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { PROJECTS, TABS, BONUS_LIVE } from '../lib/routes';
 import { Value, price, usd, eth } from './kit';
+
+export const LAUNCHER_REF = 'https://stonkbrokers.wtf/?ref=savi';
+const CLOCK_IN_CARD_REF = 'https://stonkbrokers.io/safe-launch?ref=SAVI';
+
+const NAV_ITEMS = [
+  { to: '/ecosystem', label: 'Ecosystem Overview', group: 'overview', dot: 'bg-muted' },
+  { to: '/stonkbrokers/roi', label: 'StonkBrokers', group: 'project', dot: 'bg-[#60a5fa]' },
+  { to: '/mancer/roi', label: 'Mancer', group: 'project', dot: 'bg-[#a78bfa]' },
+  { to: '/tickeryard/roi', label: 'TickerYard', group: 'project', dot: 'bg-[#22d3ee]' },
+  { to: '/cardwall/roi', label: 'The Card Wall', group: 'project', dot: 'bg-[#fbbf24]' },
+  { to: '/bonus', label: '$Bonus', group: 'project', dot: 'bg-[#e8c547]' },
+  { to: '/portfolio', label: 'Portfolio Tracker', group: 'tools', dot: 'bg-accent' },
+  { to: '/rankings', label: 'Rankings', group: 'lists', dot: 'bg-muted' },
+  { to: '/tokens', label: 'Robinhood Tokens', group: 'lists', dot: 'bg-accent' },
+  { to: '/stocks', label: 'Robinhood Stocks', group: 'lists', dot: 'bg-[#60a5fa]' },
+].filter((item) => item.to !== '/bonus' || BONUS_LIVE);
+
+function titleForPath(pathname) {
+  const first = pathname.split('/').filter(Boolean)[0];
+  if (first === 'ecosystem') return 'Full Ecosystem Overview';
+  if (first === 'portfolio') return 'Portfolio Tracker';
+  if (first === 'rankings') return 'Rankings';
+  if (first === 'tokens') return 'Robinhood Tokens';
+  if (first === 'stocks') return 'Robinhood Stock Tokens';
+  const project = PROJECTS.find((p) => p.slug === first);
+  if (project?.kind === 'token') return project.name;
+  return project ? `${project.name} Tracker` : 'StonkBrokers Tracker';
+}
+
+function logoForPath(pathname, data) {
+  const first = pathname.split('/').filter(Boolean)[0];
+  const project = PROJECTS.find((p) => p.slug === first);
+  if (project?.logo) return project.logo;
+  if (project) return data?.projects?.[project.key]?.config?.logo || 'Stonkbroker.png';
+  return 'Stonkbroker.png';
+}
+
+function itemIsActive(pathname, to) {
+  const dest = to.split('/')[1];
+  const here = pathname.split('/').filter(Boolean)[0];
+  if (!here) return dest === 'stonkbrokers';
+  return here === dest;
+}
 
 /**
  * The chrome: nav bar, project tabs, market strip.
@@ -14,61 +57,138 @@ import { Value, price, usd, eth } from './kit';
  * sign matters.
  */
 
-function BrandMark() {
-  return (
-    <NavLink to="/" className="flex shrink-0 items-center gap-2.5">
-      <img
-        src="/Stonkbroker.png"
-        alt=""
-        className="h-7 w-7 rounded-lg border border-line object-cover"
-      />
-      <span className="hidden text-[15px] tracking-tight sm:inline">
-        Stonk<em className="font-semibold not-italic">brokers</em>
-      </span>
-    </NavLink>
-  );
-}
+export function TopNav({ live, data, pending }) {
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef(null);
+  const logo = logoForPath(pathname, data);
+  const title = titleForPath(pathname);
+  const first = pathname.split('/').filter(Boolean)[0];
+  const project = PROJECTS.find((p) => p.slug === first);
+  const marketKey = project?.key || 'stonk';
+  const market = data?.projects?.[marketKey]?.market || {};
+  const ticker = project?.ticker || 'STONK';
+  const ethUsd = data?.projects?.stonk?.market?.ethPriceUsd;
 
-const pill = (active) =>
-  `rounded-full px-3 py-1.5 text-[13px] transition-colors ${
-    active ? 'bg-panel-2 text-ink' : 'text-muted hover:text-ink'
-  }`;
+  useEffect(() => {
+    function onPointerDown(event) {
+      if (menuRef.current && !menuRef.current.contains(event.target)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onPointerDown);
+    return () => document.removeEventListener('mousedown', onPointerDown);
+  }, []);
 
-export function TopNav({ live }) {
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
+  const groups = ['overview', 'project', 'tools', 'lists'];
+
   return (
     <div className="sticky top-0 z-30 px-4 pt-4">
-      <nav className="mx-auto flex max-w-[1500px] items-center gap-3 rounded-full border border-line bg-panel/95 px-4 py-2.5 backdrop-blur-xl">
-        <BrandMark />
-
-        <div className="ml-2 flex min-w-0 items-center gap-1 overflow-x-auto">
-          {PROJECTS.map((p) => (
-            <NavLink
-              key={p.slug}
-              to={`/${p.slug}/roi`}
-              className={({ isActive }) => `${pill(isActive)} whitespace-nowrap`}
+      <nav className="mx-auto flex max-w-[1500px] items-center gap-3 rounded-full border border-line bg-panel/95 px-3 py-2 backdrop-blur-xl sm:px-4 sm:py-2.5">
+        <div className="relative min-w-0 flex-1" ref={menuRef}>
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="flex max-w-full items-center gap-3 rounded-full py-0.5 pr-2 text-left hover:bg-panel-2"
+            aria-haspopup="listbox"
+            aria-expanded={open}
+          >
+            <img
+              src={`/${logo}`}
+              alt=""
+              className="h-9 w-9 shrink-0 rounded-xl border border-line object-cover sm:h-10 sm:w-10"
+            />
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="truncate text-[15px] font-semibold tracking-tight text-ink sm:text-[17px]">
+                {title}
+              </span>
+              <svg
+                className={`h-4 w-4 shrink-0 text-muted transition-transform ${open ? 'rotate-180' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </span>
+          </button>
+          <p className="ml-12 hidden font-mono text-[11px] text-faint sm:block">
+            Robinhood Chain ·{' '}
+            <a
+              href="https://x.com/savicrypto"
+              target="_blank"
+              rel="noreferrer"
+              className="text-muted underline-offset-2 hover:text-ink hover:underline"
             >
-              {p.name}
-            </NavLink>
-          ))}
-          <span className="mx-1 h-4 w-px shrink-0 bg-line" />
-          <NavLink to="/rankings" className={({ isActive }) => `${pill(isActive)} whitespace-nowrap`}>
-            Rankings
-          </NavLink>
-          <NavLink to="/ecosystem" className={({ isActive }) => `${pill(isActive)} whitespace-nowrap`}>
-            Ecosystem
-          </NavLink>
-          <NavLink to="/portfolio" className={({ isActive }) => `${pill(isActive)} whitespace-nowrap`}>
-            Portfolio
-          </NavLink>
-          <NavLink to="/tokens" className={({ isActive }) => `${pill(isActive)} whitespace-nowrap`}>
-            Tokens
-          </NavLink>
-          <NavLink to="/stocks" className={({ isActive }) => `${pill(isActive)} whitespace-nowrap`}>
-            Stocks
-          </NavLink>
+              @savicrypto
+            </a>
+          </p>
+
+          {open && (
+            <div
+              role="listbox"
+              className="absolute left-0 top-[calc(100%+8px)] z-50 w-64 overflow-hidden rounded-xl border border-line bg-panel py-1 shadow-none"
+            >
+              {groups.map((group, gi) => (
+                <React.Fragment key={group}>
+                  {gi > 0 && <div className="my-1 border-t border-line" />}
+                  {NAV_ITEMS.filter((item) => item.group === group).map((item) => {
+                    const active = itemIsActive(pathname, item.to);
+                    return (
+                      <button
+                        key={item.to}
+                        type="button"
+                        role="option"
+                        aria-selected={active}
+                        onClick={() => navigate(item.to)}
+                        className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-[13px] font-medium transition-colors hover:bg-panel-2 ${
+                          active ? 'text-ink' : 'text-muted'
+                        }`}
+                      >
+                        <span className={`h-2 w-2 shrink-0 rounded-full ${item.dot}`} />
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </React.Fragment>
+              ))}
+            </div>
+          )}
         </div>
 
-        <div className="ml-auto flex shrink-0 items-center gap-2">
+        <div className="ml-auto flex min-w-0 shrink-0 items-center gap-2 sm:gap-3">
+          <div className="hidden items-center gap-3 font-mono text-[11px] sm:flex lg:gap-4">
+            <div className="text-right">
+              <div className="text-[9px] uppercase tracking-wider text-faint">ETH</div>
+              <div className="text-[12px] text-ink">
+                <Value pending={pending} ch={6}>
+                  {usd(ethUsd, 0)}
+                </Value>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-[9px] uppercase tracking-wider text-faint">${ticker}</div>
+              <div className="text-[12px] text-ink">
+                <Value pending={pending} ch={8}>
+                  {price(market.tokenPriceUsd)}
+                </Value>
+              </div>
+            </div>
+            {project?.kind !== 'token' && (
+              <div className="text-right">
+                <div className="text-[9px] uppercase tracking-wider text-faint">Floor</div>
+                <div className="text-[12px] text-ink">
+                  <Value pending={pending} ch={6}>
+                    {eth(market.nftFloorEth, 3)} Ξ
+                  </Value>
+                </div>
+              </div>
+            )}
+          </div>
           <span className="hidden items-center gap-1.5 rounded-full border border-line px-2.5 py-1 font-mono text-[10px] text-faint md:flex">
             <span
               className={`inline-block h-1.5 w-1.5 rounded-full ${
@@ -78,12 +198,21 @@ export function TopNav({ live }) {
             {live ? 'LIVE' : 'SYNCING'}
           </span>
           <a
-            href="https://www.stonkbrokers.cash/marketplace"
+            href={CLOCK_IN_CARD_REF}
+            target="_blank"
+            rel="noreferrer"
+            title="Trade Safe Launch with Savi's Clock In Card"
+            className="whitespace-nowrap rounded-full border border-line px-3 py-1.5 text-[12px] font-medium text-ink transition-colors hover:bg-panel-2"
+          >
+            Clock In Card ↗
+          </a>
+          <a
+            href={LAUNCHER_REF}
             target="_blank"
             rel="noreferrer"
             className="whitespace-nowrap rounded-full bg-brand px-3.5 py-1.5 text-[12px] font-medium text-black transition-opacity hover:opacity-90"
           >
-            Marketplace ↗
+            Stonklauncher ↗
           </a>
         </div>
       </nav>
@@ -95,7 +224,7 @@ export function TopNav({ live }) {
 export function TabBar() {
   const { project } = useParams();
   return (
-    <div className="flex gap-1 overflow-x-auto border-b border-line pb-3">
+    <div className="flex gap-1 overflow-x-auto border-b border-line pb-3 pt-4">
       {TABS.map((t) => (
         <NavLink
           key={t.slug}
@@ -110,76 +239,5 @@ export function TabBar() {
         </NavLink>
       ))}
     </div>
-  );
-}
-
-/** Title block + the three market figures, per project. */
-export function PageHeader({ data, pending }) {
-  const { project: slug } = useParams();
-  const key = PROJECT_BY_SLUG[slug];
-  const meta = PROJECTS.find((p) => p.key === key);
-  const p = data?.projects?.[key];
-  const market = p?.market || {};
-
-  // Each project ships its own artwork in data.json (`Stonkbroker.png`,
-  // `logo.png`, `Yardkeepers.png`, `wall.png`) and it has always been the
-  // icon beside the title. It is the project's identity, so it is read from
-  // the data rather than hardcoded here -- adding a project should not mean
-  // editing this file.
-  const logo = p?.config?.logo || 'Stonkbroker.png';
-
-  return (
-    <header className="flex flex-col gap-4 pb-5 pt-6 md:flex-row md:items-end md:justify-between">
-      <div className="flex items-center gap-4">
-        <img
-          src={`/${logo}`}
-          alt=""
-          className="h-12 w-12 shrink-0 rounded-xl border border-line bg-panel object-cover md:h-14 md:w-14"
-        />
-        <div>
-          <h1 className="text-[26px] font-semibold tracking-tight text-ink md:text-[30px]">
-            {meta?.name ?? 'Tracker'}
-          </h1>
-          <p className="mt-1 font-mono text-[11px] text-faint">
-            Robinhood Chain · built by{' '}
-            <a
-              href="https://x.com/savicrypto"
-              target="_blank"
-              rel="noreferrer"
-              className="text-muted underline-offset-2 hover:text-ink hover:underline"
-            >
-              @savicrypto
-            </a>
-          </p>
-        </div>
-      </div>
-
-      <div className="flex gap-6 rounded-xl border border-line bg-panel px-5 py-3">
-        <div>
-          <div className="eyebrow text-faint">ETH</div>
-          <div className="num mt-0.5 text-[15px] text-ink">
-            <Value pending={pending} ch={8}>
-              {usd(data?.projects?.stonk?.market?.ethPriceUsd, 0)}
-            </Value>
-          </div>
-        </div>
-        <div>
-          <div className="eyebrow text-faint">${meta?.ticker ?? '—'}</div>
-          <div className="num mt-0.5 text-[15px] text-ink">
-            <Value pending={pending} ch={9}>
-              {price(market.tokenPriceUsd)}
-            </Value>
-          </div>
-        </div>
-        <div>
-          <div className="eyebrow text-faint">Floor</div>
-          <div className="num mt-0.5 text-[15px] text-ink">
-            <Value pending={pending} ch={7}>
-              {eth(market.nftFloorEth, 3)} Ξ
-            </Value>
-          </div>
-        </div>
-      </div>
-    </header>
   );
 }

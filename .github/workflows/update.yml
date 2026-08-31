@@ -2,19 +2,18 @@ name: Fetch Protocol Data
 
 on:
   schedule:
-    - cron: '0 * * * *' # Runs every hour
+    # Every 4 hours. Yield still walks Blockscout txlist/tokentx; hourly runs
+    # burned Pro credits into HTTP 402 and froze the snapshot.
+    - cron: '0 */4 * * *'
   workflow_dispatch:
 
 permissions:
   contents: write
 
-# The job checks out, spends ~6 minutes indexing, then pushes. Two runs
-# overlapping in that window both commit a rewritten data.json against the same
-# base, and whichever pushes second is rejected as non-fast-forward. That is
-# exactly what happened when a manual dispatch landed 19 seconds before the
-# hourly cron fired. cancel-in-progress lets a manual run supersede an in-flight
-# one rather than queue behind it -- the fetcher rebuilds the data payload from scratch
-# every time, so there is nothing to lose by dropping the older run.
+# The job checks out, indexes, then pushes. Two runs overlapping in that
+# window both commit a rewritten data.json against the same base, and
+# whichever pushes second is rejected as non-fast-forward. cancel-in-progress
+# lets a manual run supersede an in-flight one rather than queue behind it.
 concurrency:
   group: fetch-protocol-data
   cancel-in-progress: true

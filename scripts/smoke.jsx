@@ -26,6 +26,7 @@ import StonkDetailView from '../src/components/views/StonkDetailView';
 import MancerDetailView from '../src/components/views/MancerDetailView';
 import YardDetailView from '../src/components/views/YardDetailView';
 import CardWallDetailView from '../src/components/views/CardWallDetailView';
+import BonusDetailView from '../src/components/views/BonusDetailView';
 
 const snapshot = JSON.parse(fs.readFileSync('public/data.json', 'utf8'));
 
@@ -52,6 +53,8 @@ const ROUTES = [
   '/mancer/yield',
   '/tickeryard/revenue',
   '/cardwall/burn',
+  '/bonus',
+  '/bonus/roi',
   '/stonkbrokers',
   '/bogus',
   '/stonkbrokers/not-a-tab',
@@ -91,6 +94,7 @@ const VIEWS = [
   ['PortfolioView', PortfolioView, { data: snapshot }],
   ['MemesTokensView·memes', MemesTokensView, { data: snapshot, type: 'memes' }],
   ['MemesTokensView·stocks', MemesTokensView, { data: snapshot, type: 'stocks' }],
+  ['BonusDetailView', BonusDetailView, { data: snapshot }],
 ];
 
 const TABS = ['roi', 'historical', 'revenue', 'burn', 'activation', 'ownership'];

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { PROJECTS } from '../../lib/routes';
+import { NFT_PROJECTS } from '../../lib/routes';
 import { Card, Figure, Stat, SplitBar, Tag, Value, Skeleton, usd, num, pct } from '../kit';
 
 /**
@@ -26,7 +26,7 @@ import { Card, Figure, Stat, SplitBar, Tag, Value, Skeleton, usd, num, pct } fro
  */
 function tierRows(data) {
   const rows = [];
-  for (const meta of PROJECTS) {
+  for (const meta of NFT_PROJECTS) {
     const p = data?.projects?.[meta.key];
     if (!p) continue;
     const floorUsd = (p.market?.nftFloorEth || 0) * (p.market?.ethPriceUsd || 0);
@@ -140,7 +140,7 @@ export default function OverviewView({ data, pending }) {
 
   // Ecosystem totals. Every project contributes what it has; a project missing
   // a field contributes nothing rather than a zero that would drag an average.
-  const projects = PROJECTS.map((m) => data?.projects?.[m.key]).filter(Boolean);
+  const projects = NFT_PROJECTS.map((m) => data?.projects?.[m.key]).filter(Boolean);
 
   const revenue = projects.reduce(
     (acc, p) => {
@@ -261,7 +261,7 @@ export default function OverviewView({ data, pending }) {
         {/* Per-project jump-off, and a place the tier count is visible. */}
         <Card eyebrow="Projects" sub="Open any project for its ROI, yield, revenue and burn">
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {PROJECTS.map((m) => {
+            {NFT_PROJECTS.map((m) => {
               const p = data?.projects?.[m.key];
               const bestForProject = rows.find((r) => r.project.key === m.key);
               return (

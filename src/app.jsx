@@ -1,6 +1,6 @@
 import React from 'react';
 import { Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom';
-import { TopNav, TabBar, PageHeader } from './components/Shell';
+import { TopNav, TabBar } from './components/Shell';
 import OverviewView from './components/views/OverviewView';
 import EcosystemView from './components/views/EcosystemView';
 import PortfolioView from './components/views/PortfolioView';
@@ -8,9 +8,10 @@ import StonkDetailView from './components/views/StonkDetailView';
 import MancerDetailView from './components/views/MancerDetailView';
 import YardDetailView from './components/views/YardDetailView';
 import CardWallDetailView from './components/views/CardWallDetailView';
+import BonusDetailView from './components/views/BonusDetailView';
 import MemesTokensView from './components/views/MemesTokensView';
 import { useDashboard } from './lib/useDashboard';
-import { PROJECT_BY_SLUG, TAB_BY_SLUG, DEFAULT_TAB } from './lib/routes';
+import { PROJECT_BY_SLUG, TAB_BY_SLUG, DEFAULT_TAB, BONUS_LIVE } from './lib/routes';
 import { SkeletonCard } from './components/kit';
 
 const DETAIL_VIEWS = {
@@ -32,19 +33,19 @@ const DETAIL_VIEWS = {
  * An unknown project or tab redirects rather than rendering blank -- a typo in
  * a shared link should land somewhere real.
  */
-function ProjectPage({ data, sources }) {
+function ProjectPage({ data }) {
   const { project, tab } = useParams();
   const key = PROJECT_BY_SLUG[project];
   const activeTab = TAB_BY_SLUG[tab];
 
   if (!key) return <Navigate to="/" replace />;
+  if (key === 'bonus') return <Navigate to={BONUS_LIVE ? '/bonus' : '/'} replace />;
   if (!activeTab) return <Navigate to={`/${project}/${DEFAULT_TAB}`} replace />;
 
   const View = DETAIL_VIEWS[key];
 
   return (
     <>
-      <PageHeader data={data} pending={sources.snapshot === 'loading'} />
       <TabBar />
       <div className="pt-5">
         {data ? (
@@ -91,7 +92,7 @@ export default function App() {
   return (
     <div className="flex min-h-full flex-col">
       <ScrollToTop />
-      <TopNav live={sources.prices === 'ready'} />
+      <TopNav live={sources.prices === 'ready'} data={data} pending={booting} />
 
       <main className="mx-auto w-full max-w-[1500px] px-4">
         <Routes>
@@ -137,8 +138,20 @@ export default function App() {
             }
           />
           <Route
+            path="/bonus"
+            element={
+              BONUS_LIVE ? (
+                <div className="pt-5">
+                  <BonusDetailView data={data} />
+                </div>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
             path="/:project/:tab"
-            element={<ProjectPage data={data} sources={sources} />}
+            element={<ProjectPage data={data} />}
           />
           <Route path="/:project" element={<RedirectToDefaultTab />} />
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -151,18 +164,10 @@ export default function App() {
 function RedirectToDefaultTab() {
   const { project } = useParams();
   if (!PROJECT_BY_SLUG[project]) return <Navigate to="/" replace />;
+  if (project === 'bonus') return <Navigate to={BONUS_LIVE ? '/bonus' : '/'} replace />;
   return <Navigate to={`/${project}/${DEFAULT_TAB}`} replace />;
 }
 
-function Section({ title, children }) {
-  return (
-    <div className="pb-16">
-      <header className="pb-5 pt-6">
-        <h1 className="text-[26px] font-semibold tracking-tight text-ink md:text-[30px]">
-          {title}
-        </h1>
-      </header>
-      {children}
-    </div>
-  );
+function Section({ children }) {
+  return <div className="pb-16 pt-6">{children}</div>;
 }

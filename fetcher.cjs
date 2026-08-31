@@ -57,7 +57,7 @@ const CHAIN_ID = 4663;
 //
 // Set GG_INDEX_URL to point at a different deployment.
 const { GgIndex } = require("./lib/ggindex.cjs");
-const { Rpc } = require("./lib/rpc.cjs");
+const { Rpc, TOPIC, addrTopic, decodeUint, topicAddr } = require("./lib/rpc.cjs");
 const { fetchLogsWithTimestamps } = require("./lib/chain.cjs");
 const { BlockTime } = require("./lib/blocktime.cjs");
 
@@ -91,6 +91,37 @@ const TOKEN_TICKERS = {
   "0xb03058b8a39f3967df08d833682c1c99b29821b1": "WALL",
   "0x193674b72b6aa1905fc47bdbc19b30a53b666666": "SLEUTH"
 };
+
+const WETH = "0x0bd7d308f8e1639fab988df18a8011f41eacad73";
+const LP_LOCKER = "0xa6bff814fc8ee3e1f134c767d384d0d9d94147c8";
+const LAUNCH_FEE_ROUTER = "0x74f161cfd4035be8f1606e6604a34548c89447a5";
+const LAUNCHER_FACTORY = "0x80a77001456bc986083678f9a112b1ec2aa07281";
+const LEGACY_LAUNCHPAD = "0xeca5726dae1e53365c37ffc02369d947a91d71f9";
+// SafeBuy / SafeSell on StonkSafeLaunchpadV2 — keccak of the 7-arg signatures.
+const SAFE_BUY_TOPIC = "0xba22b06917da96d20a8f4f80d45cbdaaf3294856de78268558edcce22e4298df";
+const SAFE_SELL_TOPIC = "0x2de6d6d1573ee69658d3daae2e752379e6eb0676622a5ade2812088d7cb56581";
+const SMART_LAUNCH_PADS = [
+  // V2
+  { pad: "0xfcd61b25bbf3abd6cf0070d6328e351cc30eec9f", quote: WETH },
+  { pad: "0x8f6782c5aa37804d08a9b7bf3984ff3245fd6cd4", quote: "0xe934e36a439c94017b64a3fece66af12099abf50" },
+  { pad: "0xd4f20033586977a2511f4a2db4af7c79a340d70a", quote: "usdg" },
+  { pad: "0x4b9dcd6ccfaef0f6d23065dd78e79d5e20ec8cfd", quote: "0x1b0e319c6a659f002271b69db8a7df2f911c153e" },
+  { pad: "0xee96d955d5634813374ece4c74f2c0ff71b1f9fb", quote: "0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec" },
+  { pad: "0xb0453a81cbf963903409fff18ad92941e1c7a864", quote: "0xaf3d76f1834a1d425780943c99ea8a608f8a93f9" },
+  { pad: "0x0c3b4eded41696eff0ed70841f132b519d81c947", quote: "0x4a0e65a3eccec6dbe60ae065f2e7bb85fae35eea" },
+  { pad: "0xdb3c81c841ff88db6cdfbddb0ee049d162a6053b", quote: "0xa30fa36db767ad9ed3f7a60fc79526fb4d56d344" },
+  { pad: "0x472a1ab6aeb77e3479193fbe83b718f9bf5f8604", quote: "ybtc" },
+  // V3
+  { pad: "0x5bceefba6fdf437a7388adc5c9056c827baca3b3", quote: WETH },
+  { pad: "0x406fd0b957bb8cf1dd57c78540d009578e971131", quote: "0xe934e36a439c94017b64a3fece66af12099abf50" },
+  { pad: "0xf0a06ac7bbb0cc3049b68c257c3ee27ccea40eea", quote: "usdg" },
+  { pad: "0x5b21f8a5ef81586627b4725844ad447325d0992b", quote: "0x1b0e319c6a659f002271b69db8a7df2f911c153e" },
+  { pad: "0xdf03953dca8db733345278a0c5fd2e81fa2a9b54", quote: "0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec" },
+  { pad: "0xc522dfae0d1a140257702392b665183a6de7657f", quote: "0xaf3d76f1834a1d425780943c99ea8a608f8a93f9" },
+  { pad: "0xd82da1d8ef59959b170b59147283ab1f2f1ca86a", quote: "0x4a0e65a3eccec6dbe60ae065f2e7bb85fae35eea" },
+  { pad: "0x644b19512052a1b6d38d7b16c6c3fb1d3f7270d2", quote: "0xa30fa36db767ad9ed3f7a60fc79526fb4d56d344" },
+  { pad: "0x2bd7f90cca4660da82aa693cf352ddb6275c76da", quote: "ybtc" },
+];
 
 const MEMES = [
   { name: "StonkBroker", ca: "0xe934e36a439c94017b64a3fece66af12099abf50" },
@@ -147,7 +178,9 @@ const PROJECTS = {
     streams: {
       amm: "0x1f12fe622c11947f93f53d63f68f7f46b6d081c9".toLowerCase(),
       securityBox: "0x55642a3f10f1af5145d3d59021b1d6b03bb8692c".toLowerCase(),
-      launchpad: "0xEcA5726dae1e53365c37fFc02369d947A91d71f9".toLowerCase()
+      // Launch Fee Router (Stonk Launcher). Smart Launch bonding tax is
+      // counted separately via Clock In Card — see fetchLaunchpadRevenue.
+      launchpad: LAUNCH_FEE_ROUTER
     },
     tiers: [
       { id: "T0", name: "Floor Trader", reqTokens: 66666, weight: 100 },
@@ -200,12 +233,9 @@ const PROJECTS = {
     ticker: "YARD",
     logo: "Yardkeepers.png", 
     yieldMode: "protocol_vault",
-    // Same contract generation as mancer and also reporting 0 deactivations,
-    // so this is very likely wrong in the same way. Left off until someone
-    // confirms with the Yardkeepers team that a transfer clears a tier here
-    // too -- flipping it on without that would swap one wrong number for
-    // another. Everything else needed is already in place.
-    deactivateOnTransfer: false,
+    // Same contract generation as Mancer: no Deactivated event, tier bound to
+    // the NFT. Reconstruct exits from ERC-721 Transfer, same as mancer.
+    deactivateOnTransfer: true,
     oracleSource: "0xEf5f726990442bC3207d72D1F9DcF8677Cf02358".toLowerCase(), 
     underConstruction: false, 
     teamWallets: 0,
@@ -246,9 +276,9 @@ const PROJECTS = {
 };
 
 const PROTOCOL_CONTRACTS = [
-  "0x1f12fe622c11947f93f53d63f68f7f46b6d081c9", 
+  "0x1f12fe622c11947f93f53d63f68f7f46b6d081c9",
   "0x55642a3f10f1af5145d3d59021b1d6b03bb8692c",
-  "0xEcA5726dae1e53365c37fFc02369d947A91d71f9"
+  "0xeca5726dae1e53365c37ffc02369d947a91d71f9"
 ];
 
 const ACTIVATION_ABI = [
@@ -314,10 +344,12 @@ async function secureFetch(url) {
     try {
       const res = await fetch(url, { headers });
       
-      // FATAL ERROR: Immediately exit the process to protect data.json from being overwritten
+      // Do not kill the run. Holders/activations now come from gg-index, and
+      // yield walks already refuse a truncated window via `failed: true`.
+      // Exiting here froze lastUpdated until someone refilled the key.
       if (res.status === 402) {
-          console.error("\n[CRITICAL ERROR] HTTP 402: Payment Required. Key out of credits! Halting script to protect data.json.");
-          process.exit(1); 
+          console.error("[warn] HTTP 402: Blockscout credits exhausted. Yield will be carried forward from the last good snapshot.");
+          return { result: [], failed: true };
       }
       
       if (res.status === 429) { await sleep(3000); continue; }
@@ -333,8 +365,8 @@ async function secureFetch(url) {
           
           // EXTRA FAILSAFE: Catch JSON body errors regarding exhausted limits if HTTP status is technically 200
           if (resultStr.includes("credit") || resultStr.includes("exhausted") || resultStr.includes("payment")) {
-              console.error("\n[CRITICAL ERROR] Blockscout API out of credits! Halting script to protect data.json.");
-              process.exit(1);
+              console.error("[warn] Blockscout API out of credits. Yield will be carried forward from the last good snapshot.");
+              return { result: [], failed: true };
           }
       }
       return data;
@@ -871,7 +903,9 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
   const dailyUsdPerWeight = [0, 0, 0, 0, 0, 0, 0];
   const revenueBreakdown = {
     ammFeesUsd: 0, securityBoxUsd: 0, launchpadUsd: 0, dexFeesUsd: 0,
-    dailyAmm: [0,0,0,0,0,0,0], dailySecurityBox: [0,0,0,0,0,0,0], dailyLaunchpad: [0,0,0,0,0,0,0], dailyDex: [0,0,0,0,0,0,0]
+    launchCreateUsd: 0, bondingFeesUsd: 0, bondingVolumeUsd: 0,
+    dailyAmm: [0,0,0,0,0,0,0], dailySecurityBox: [0,0,0,0,0,0,0], dailyLaunchpad: [0,0,0,0,0,0,0], dailyDex: [0,0,0,0,0,0,0],
+    dailyBondingTax: [0,0,0,0,0,0,0]
   };
 
   // Every paged walk in this function reports here. Function scope rather than
@@ -884,52 +918,118 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
   for (const t of conf.tiers) totalNetworkWeight += ((activationStats.breakdown[t.id] || 0) * t.weight);
   if (totalNetworkWeight === 0) totalNetworkWeight = 1;
 
-  async function fetchDirectEthInflows(address, key, dailyKey) {
-      const reason = await walkPagesBackTo(
-        (page) => `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=txlist&address=${address}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`,
-        sevenDaysAgo,
-        (tx, ts) => {
-          if ((tx.to || "").toLowerCase() !== address) return;
+  function launchpadDay(ts) {
+    return Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
+  }
 
-          let usdVal = 0;
-          const eth = Number(tx.value || 0) / 1e18;
+  function creditLaunchpad(usdVal, ts, bucket) {
+    if (!(usdVal > 0)) return;
+    const i = launchpadDay(ts);
+    if (bucket === "tax") {
+      revenueBreakdown.bondingFeesUsd += usdVal;
+      revenueBreakdown.dailyBondingTax[i] += usdVal;
+      return;
+    }
+    // Headline is launch fees + bonding-phase quote volume.
+    revenueBreakdown.launchpadUsd += usdVal;
+    revenueBreakdown.dailyLaunchpad[i] += usdVal;
+    if (bucket === "create") revenueBreakdown.launchCreateUsd += usdVal;
+    else revenueBreakdown.bondingVolumeUsd += usdVal;
+  }
 
-          if (key === "launchpadUsd") {
-              // Only the launch fee counts, so anything that is not one is not
-              // revenue. The band absorbs gas-rounding around a 0.1 ETH fee.
-              if (eth >= 0.099 && eth <= 0.101) usdVal = 0.1 * marketData.ethPriceUsd;
-          } else if (eth > 0) {
-              usdVal = eth * marketData.ethPriceUsd;
-          }
+  function quotePriceUsd(quote) {
+    if (!quote || quote === "ybtc") return 0;
+    if (quote === WETH) return marketData.ethPriceUsd || 0;
+    if (quote === "usdg") return 1;
+    return tokenPrices[quote] || 0;
+  }
 
-          if (usdVal <= 0) return;
+  async function fetchLaunchpadRevenue() {
+    const fromBlock = blockTime.blockAt(sevenDaysAgo);
+    const toBlock = await rpc.blockNumber();
+    const padByAddr = new Map(SMART_LAUNCH_PADS.map((p) => [p.pad, p]));
 
-          const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
-          revenueBreakdown[key] += usdVal;
-          revenueBreakdown[dailyKey][dayIdx] += usdVal;
-        },
-      );
-      if (reason) truncatedWalks.push(`txlist ${key}: ${reason}`);
+    const tradeLogs = await rpc.getLogs({
+      address: SMART_LAUNCH_PADS.map((p) => p.pad),
+      fromBlock,
+      toBlock,
+      topics: [[SAFE_BUY_TOPIC, SAFE_SELL_TOPIC]],
+    });
+
+    for (const log of tradeLogs) {
+      const pad = padByAddr.get((log.address || "").toLowerCase());
+      if (!pad) continue;
+      const topic0 = (log.topics && log.topics[0] || "").toLowerCase();
+      const quoteWei = topic0 === SAFE_BUY_TOPIC
+        ? decodeUint(log.data, 0)
+        : decodeUint(log.data, 3);
+      if (quoteWei == null || quoteWei <= 0n) continue;
+      const taxBps = decodeUint(log.data, 2) || 0n;
+      const taxWei = (quoteWei * taxBps) / 10000n;
+      const price = quotePriceUsd(pad.quote);
+      if (!(price > 0)) continue;
+      const ts = blockTime.at(parseInt(log.blockNumber, 16));
+      if (ts < sevenDaysAgo) continue;
+      const quoteUsd = (Number(quoteWei) / 1e18) * price;
+      creditLaunchpad(quoteUsd, ts, "volume");
+      creditLaunchpad((Number(taxWei) / 1e18) * price, ts, "tax");
+    }
+
+    // Stonk Launcher bonding: WETH arriving at the fee router, excluding
+    // graduation transfers from the LP locker.
+    const wethIn = await rpc.getLogs({
+      address: WETH,
+      fromBlock,
+      toBlock,
+      topics: [TOPIC.transfer, null, addrTopic(LAUNCH_FEE_ROUTER)],
+    });
+    for (const log of wethIn) {
+      const from = topicAddr(log.topics && log.topics[1]);
+      if (from === LP_LOCKER || from === LAUNCH_FEE_ROUTER) continue;
+      const amount = decodeUint(log.data, 0);
+      if (amount == null || amount <= 0n) continue;
+      const ts = blockTime.at(parseInt(log.blockNumber, 16));
+      if (ts < sevenDaysAgo) continue;
+      creditLaunchpad((Number(amount) / 1e18) * (marketData.ethPriceUsd || 0), ts, "tax");
+    }
   }
 
 
   async function fetchSecurityBoxYield(address) {
-      const reason = await walkPagesBackTo(
-        (page) => `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=txlistinternal&address=${address}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`,
-        sevenDaysAgo,
-        (tx, ts) => {
-          if ((tx.to || "").toLowerCase() !== address) return;
+    const box = address.toLowerCase();
+    const fromBlock = blockTime.blockAt(sevenDaysAgo);
+    const toBlock = await rpc.blockNumber();
+    const tokens = [WETH, ...Object.keys(TOKEN_TICKERS)];
+    const seen = new Set();
 
-          const eth = Number(tx.value || 0) / 1e18;
-          if (eth <= 0) return;
+    for (const tokenAddr of tokens) {
+      const token = tokenAddr.toLowerCase();
+      if (seen.has(token)) continue;
+      seen.add(token);
+      const price = token === WETH
+        ? (marketData.ethPriceUsd || 0)
+        : (token === (conf.tokenCa || "").toLowerCase()
+            ? (marketData.tokenPriceUsd || tokenPrices[token] || 0)
+            : (tokenPrices[token] || 0));
+      if (!(price > 0)) continue;
 
-          const usdVal = eth * marketData.ethPriceUsd;
-          const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
-          revenueBreakdown.securityBoxUsd += usdVal;
-          revenueBreakdown.dailySecurityBox[dayIdx] += usdVal;
-        },
-      );
-      if (reason) truncatedWalks.push(`txlistinternal security box: ${reason}`);
+      const logs = await rpc.getLogs({
+        address: token,
+        fromBlock,
+        toBlock,
+        topics: [TOPIC.transfer, null, addrTopic(box)],
+      });
+      for (const log of logs) {
+        const amount = decodeUint(log.data, 0);
+        if (amount == null || amount <= 0n) continue;
+        const ts = blockTime.at(parseInt(log.blockNumber, 16));
+        if (ts < sevenDaysAgo) continue;
+        const usdVal = (Number(amount) / 1e18) * price;
+        const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
+        revenueBreakdown.securityBoxUsd += usdVal;
+        revenueBreakdown.dailySecurityBox[dayIdx] += usdVal;
+      }
+    }
   }
 
 
@@ -1000,7 +1100,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
       }
 
       if (projectKey === "stonk" && conf.streams?.securityBox) await fetchSecurityBoxYield(conf.streams.securityBox);
-      if (projectKey === "stonk" && conf.streams?.launchpad) await fetchDirectEthInflows(conf.streams.launchpad, "launchpadUsd", "dailyLaunchpad");
+      if (projectKey === "stonk") await fetchLaunchpadRevenue();
   } 
   else if (conf.yieldMode === "protocol_vault") {
       // Yield paid out of the protocol vault, from the index's RewardPaid
@@ -1093,25 +1193,15 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
   }
 
   // Refuse to publish a total derived from a window we could not see all of.
-  //
-  // Checked here rather than inside a yield-mode branch, because that is what
-  // went wrong before: the guard lived in the oracle branch and the security-box,
-  // launchpad and dex-collector walks ran outside it, unprotected.
-  //
-  // stonk's sample is scaled by totalNetworkWeight/oracleWeight, roughly 634x,
-  // so a walk that stops short does not produce a slightly low number, it
-  // produces a confidently wrong one -- $10,770 against $209,037 an hour
-  // earlier, with whole days at exactly zero.
-  //
-  // Failing the run leaves the last good data.json in place. Stale and correct
-  // beats fresh and wrong, and holder and activation counts now come from
-  // gg-index in the browser, so they stay live even when the snapshot does not.
+  // stonk's sample is scaled by totalNetworkWeight/oracleWeight (~600x), so a
+  // short walk is not slightly low -- it is confidently wrong. Carry the last
+  // good yield/revenue instead of aborting the whole payload.
   if (truncatedWalks.length) {
-    throw new Error(
-      `${projectKey}: Blockscout returned a truncated history for ${truncatedWalks.join("; ")} ` +
-      `-- window starts ${new Date(sevenDaysAgo * 1000).toISOString()}. ` +
-      `Refusing to publish a partial revenue total.`,
+    console.warn(
+      `[warn] ${projectKey}: Blockscout truncated ${truncatedWalks.join("; ")} ` +
+      `(window starts ${new Date(sevenDaysAgo * 1000).toISOString()}). Carrying prior yield.`,
     );
+    return { unavailable: true };
   }
 
   const yieldPerWeightUnitAnnual = conf.yieldMode === "oracle_wallet" 
@@ -1237,7 +1327,8 @@ async function loadTokenListPrices(tokenList) {
           liquidity = pair.liquidity?.usd || 0;
       }
       
-      tokenPrices[item.ca.toLowerCase()] = priceUsd;
+      const ca = item.ca.toLowerCase();
+      if (priceUsd > 0) tokenPrices[ca] = priceUsd;
       
       // Read from the batch fetched above rather than two calls per token.
       const s = supplyByToken.get(item.ca.toLowerCase());
@@ -1313,26 +1404,61 @@ async function run() {
       
       const activationStats = await fetchActivations(projectKey, conf);
       const ownershipStats = await getOwnershipStats(conf, activationStats.dualBurn.equivalentBrokersBurnt, prevProjData);
-      
+
       const yieldData = await getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, markets[projectKey]);
+      const yieldCarried = !!(yieldData && yieldData.unavailable);
 
       let totalNetworkWeight = 0;
       for (const t of conf.tiers) totalNetworkWeight += ((activationStats.breakdown[t.id] || 0) * t.weight);
-      
-      const yieldPerWeightUnitAnnual = totalNetworkWeight > 0 ? (yieldData.globalAnnualYield / totalNetworkWeight) : 0;
-      
-      const mappedTiers = [];
-      for (const t of conf.tiers) {
-        mappedTiers.push({
-          tier: t.id,
-          name: t.name,
-          reqTokens: t.reqTokens,
-          multiplier: `${(t.weight/100).toFixed(2)}x`, 
-          weight: t.weight,
-          trackedAnnualYieldUsd: t.weight * yieldPerWeightUnitAnnual,
-          dailyDates: yieldData.dailyDates,
-          dailyYields: yieldData.dailyUsdPerWeight.map(val => val * t.weight)
-        });
+
+      let mappedTiers;
+      let revenueBreakdown;
+      let dailySnapshots = prevProjData.dailySnapshots || [];
+
+      if (yieldCarried && Array.isArray(prevProjData.tiers) && prevProjData.tiers.length) {
+        console.warn(`[warn] ${projectKey}: using previous yield/revenue (Blockscout window incomplete).`);
+        mappedTiers = prevProjData.tiers;
+        revenueBreakdown = prevProjData.revenue || {};
+      } else {
+        if (yieldCarried) {
+          throw new Error(`${projectKey}: Blockscout yield unavailable and no previous snapshot to carry forward.`);
+        }
+        const yieldPerWeightUnitAnnual = totalNetworkWeight > 0 ? (yieldData.globalAnnualYield / totalNetworkWeight) : 0;
+        mappedTiers = [];
+        for (const t of conf.tiers) {
+          mappedTiers.push({
+            tier: t.id,
+            name: t.name,
+            reqTokens: t.reqTokens,
+            multiplier: `${(t.weight/100).toFixed(2)}x`,
+            weight: t.weight,
+            trackedAnnualYieldUsd: t.weight * yieldPerWeightUnitAnnual,
+            dailyDates: yieldData.dailyDates,
+            dailyYields: yieldData.dailyUsdPerWeight.map(val => val * t.weight)
+          });
+        }
+        revenueBreakdown = yieldData.revenueBreakdown;
+
+        const todayStr = new Date().toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
+        const floorCostUsd = markets[projectKey].nftFloorEth * markets[projectKey].ethPriceUsd;
+        const currentSnapshot = {
+            date: todayStr,
+            timestamp: Date.now(),
+            tokenPriceUsd: markets[projectKey].tokenPriceUsd,
+            totalBurn: (activationStats.dualBurn || {}).totalBurnTokens || 0,
+            tiers: mappedTiers.map(t => {
+                const actCost = t.reqTokens * markets[projectKey].tokenPriceUsd;
+                const totalCost = floorCostUsd + actCost;
+                const roi = totalCost > 0 ? (t.trackedAnnualYieldUsd / totalCost) * 100 : 0;
+                return { tier: t.tier, roi: roi, yieldUsd: t.trackedAnnualYieldUsd };
+            })
+        };
+        if (dailySnapshots.length > 0 && dailySnapshots[dailySnapshots.length - 1].date === todayStr) {
+            dailySnapshots[dailySnapshots.length - 1] = currentSnapshot;
+        } else {
+            dailySnapshots.push(currentSnapshot);
+        }
+        if (dailySnapshots.length > 90) dailySnapshots.shift();
       }
 
       let lockedLpData = null;
@@ -1340,36 +1466,12 @@ async function run() {
           lockedLpData = scanLockedStonkLiquidity(conf.tokenCa, markets[projectKey].tokenPriceUsd);
       }
 
-      let dailySnapshots = prevProjData.dailySnapshots || [];
-      const todayStr = new Date().toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
-      const floorCostUsd = markets[projectKey].nftFloorEth * markets[projectKey].ethPriceUsd;
-
-      const currentSnapshot = {
-          date: todayStr,
-          timestamp: Date.now(),
-          tokenPriceUsd: markets[projectKey].tokenPriceUsd,
-          totalBurn: (activationStats.dualBurn || {}).totalBurnTokens || 0,
-          tiers: mappedTiers.map(t => {
-              const actCost = t.reqTokens * markets[projectKey].tokenPriceUsd;
-              const totalCost = floorCostUsd + actCost;
-              const roi = totalCost > 0 ? (t.trackedAnnualYieldUsd / totalCost) * 100 : 0;
-              return { tier: t.tier, roi: roi, yieldUsd: t.trackedAnnualYieldUsd };
-          })
-      };
-
-      if (dailySnapshots.length > 0 && dailySnapshots[dailySnapshots.length - 1].date === todayStr) {
-          dailySnapshots[dailySnapshots.length - 1] = currentSnapshot;
-      } else {
-          dailySnapshots.push(currentSnapshot);
-      }
-      if (dailySnapshots.length > 90) dailySnapshots.shift();
-
       finalJson.projects[projectKey] = {
         market: markets[projectKey],
         activation: activationStats,
         ownership: ownershipStats,
         tiers: mappedTiers,
-        revenue: yieldData.revenueBreakdown,
+        revenue: revenueBreakdown,
         lockedLp: lockedLpData,
         underConstruction: conf.underConstruction,
         dailySnapshots: dailySnapshots,

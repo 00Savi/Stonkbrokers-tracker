@@ -41,6 +41,12 @@ export default defineConfig({
       '@': path.resolve(process.cwd(), './src'),
     },
   },
+  define: {
+    'process.env.VITE_BONUS_TOKEN': JSON.stringify(process.env.VITE_BONUS_TOKEN || ''),
+    'process.env.VITE_BONUS_AIRDROP_ENGINE': JSON.stringify(
+      process.env.VITE_BONUS_AIRDROP_ENGINE || ''
+    ),
+  },
   build: {
     outDir: 'docs',
   },
