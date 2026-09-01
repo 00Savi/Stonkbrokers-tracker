@@ -2,9 +2,11 @@ name: Fetch Protocol Data
 
 on:
   schedule:
-    # Every 4 hours. Yield still walks Blockscout txlist/tokentx; hourly runs
-    # burned Pro credits into HTTP 402 and froze the snapshot.
-    - cron: '0 */4 * * *'
+    # Hourly. This was 0 */4 * * * while yield still walked Blockscout
+    # txlist/tokentx enough to burn Pro credits into HTTP 402; after moving
+    # holders, supplies, logs, and most balances onto gg-index/RPC, a run
+    # is a few hundred credits against a 100k/day free cap.
+    - cron: '0 * * * *'
   workflow_dispatch:
 
 permissions:

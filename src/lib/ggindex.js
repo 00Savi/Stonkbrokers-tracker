@@ -90,13 +90,14 @@ async function projectPatch(project, signal) {
     ownership.erc20Holders = tokenHolders;
     ownership[`${slug}Holders`] = tokenHolders;
     if (slug === 'tickeryard') ownership.yardHolders = tokenHolders;
+    if (slug === 'cardwall') ownership.wallHolders = tokenHolders;
   }
   if (nftHolders !== null) ownership.nftHolders = nftHolders;
   if (Object.keys(ownership).length) patch.ownership = ownership;
 
-  // Cardwall has no activation contract, so this 404s for it. That is a real
-  // answer about the project rather than a failure, and it must not discard the
-  // holder counts fetched above.
+  // Cardwall has no activation contract *in the index catalog* yet, so this
+  // 404s for it. Holder counts must still land. Once gg-index lists
+  // SoftStakingVault 0xb3f6… the overlay will start correcting activeCount.
   try {
     const a = await get(`/projects/${slug}/activations`, signal);
     const activation = {};

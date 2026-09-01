@@ -145,7 +145,7 @@ export function applyPrices(base, prices) {
       tokenPriceUsd: tokenPrice,
     };
 
-    if (unitValue > 0) {
+    if (unitValue > 0 && p.market?.floorSource !== 'opensea') {
       // Straight from the pool where the pair quotes in ETH; otherwise fall
       // back to the dollar round trip, which is the same number by a longer
       // route and only differs in rounding.

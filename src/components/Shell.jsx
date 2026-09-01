@@ -4,9 +4,10 @@ import { PROJECTS, TABS, BONUS_LIVE } from '../lib/routes';
 import { Value, price, usd, eth } from './kit';
 
 export const LAUNCHER_REF = 'https://stonkbrokers.wtf/?ref=savi';
+export const SAVI_X = 'https://x.com/savicrypto';
 const CLOCK_IN_CARD_REF = 'https://stonkbrokers.io/safe-launch?ref=SAVI';
 
-const NAV_ITEMS = [
+export const NAV_ITEMS = [
   { to: '/ecosystem', label: 'Ecosystem Overview', group: 'overview', dot: 'bg-muted' },
   { to: '/stonkbrokers/roi', label: 'StonkBrokers', group: 'project', dot: 'bg-[#60a5fa]' },
   { to: '/mancer/roi', label: 'Mancer', group: 'project', dot: 'bg-[#a78bfa]' },
@@ -39,10 +40,10 @@ function logoForPath(pathname, data) {
   return 'Stonkbroker.png';
 }
 
-function itemIsActive(pathname, to) {
+export function itemIsActive(pathname, to) {
   const dest = to.split('/')[1];
   const here = pathname.split('/').filter(Boolean)[0];
-  if (!here) return dest === 'stonkbrokers';
+  if (!here) return dest === 'portfolio';
   return here === dest;
 }
 
@@ -119,7 +120,7 @@ export function TopNav({ live, data, pending }) {
           <p className="ml-12 hidden font-mono text-[11px] text-faint sm:block">
             Robinhood Chain ·{' '}
             <a
-              href="https://x.com/savicrypto"
+              href={SAVI_X}
               target="_blank"
               rel="noreferrer"
               className="text-muted underline-offset-2 hover:text-ink hover:underline"
@@ -239,5 +240,42 @@ export function TabBar() {
         </NavLink>
       ))}
     </div>
+  );
+}
+
+/**
+ * Bottom chrome: the same destinations as the title dropdown, as one-tap
+ * buttons. The dropdown is the map; this is the shortcut between projects
+ * after you have scrolled the page.
+ *
+ * Brand orange is the top rule only -- chrome, not a data mark.
+ */
+export function SiteFooter() {
+  const { pathname } = useLocation();
+
+  return (
+    <footer className="mt-auto border-t border-brand/50 bg-panel/95">
+      <nav
+        aria-label="Quick navigation"
+        className="mx-auto flex max-w-[1500px] flex-wrap items-center justify-center gap-1.5 px-4 py-3 sm:px-6"
+      >
+        {NAV_ITEMS.map((item) => {
+          const active = itemIsActive(pathname, item.to);
+          return (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={`rounded-full border px-3 py-1 text-[11px] font-medium transition-colors ${
+                active
+                  ? 'border-line bg-panel-2 text-ink'
+                  : 'border-line text-muted hover:bg-panel-2 hover:text-ink'
+              }`}
+            >
+              {item.label}
+            </NavLink>
+          );
+        })}
+      </nav>
+    </footer>
   );
 }

@@ -4,12 +4,11 @@ import { NFT_PROJECTS } from '../../lib/routes';
 import { Card, Figure, Stat, SplitBar, Tag, Value, Skeleton, usd, num, pct } from '../kit';
 
 /**
- * The front page.
+ * Rankings: of everything on the board, what is worth buying right now.
  *
- * Built around the question the dashboard exists to answer: of everything on
- * the board, what is worth buying right now? Clockwork opens on the snipe
- * premium for the same reason -- one number that decides the trade, then the
- * evidence for it underneath.
+ * Clockwork opens on the snipe premium for the same reason -- one number that
+ * decides the trade, then the evidence for it underneath. The site itself
+ * lands on the portfolio scanner; this page is the cross-project answer.
  *
  * Every tier across every project is put on one ranked table, because a tier's
  * yield is only meaningful against what the others pay. Four separate project

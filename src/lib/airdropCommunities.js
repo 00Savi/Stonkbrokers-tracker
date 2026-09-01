@@ -17,6 +17,7 @@ export const AIRDROP_COMMUNITIES = [
     mintedSupply: 4444,
     firstTokenId: 1,
     nftCa: '0x539CdD042c2f3d93EbC5BE7DfFf0c79F3B4fAbF0',
+    tokenCa: '0xe934e36a439c94017b64a3fece66af12099abf50',
   },
   {
     id: 'mancer',
@@ -26,6 +27,7 @@ export const AIRDROP_COMMUNITIES = [
     mintedSupply: 5000,
     firstTokenId: 1,
     nftCa: '0x797a2e030b7e49107c8f07bf0300ea9cae88ca57',
+    tokenCa: '0xc72F232a6869e6CF34dC06129AfFD07F8a2a246A',
   },
   {
     id: 'tickeryard',
@@ -35,6 +37,7 @@ export const AIRDROP_COMMUNITIES = [
     mintedSupply: 3333,
     firstTokenId: 1,
     nftCa: '0x2756bffc4cccb0cbebeb675a8593ca80c8db8a97',
+    tokenCa: '0xE3FA12dA7fa026B21817f16622E8AE48fA785166',
   },
   {
     id: 'cardwall',
@@ -44,6 +47,7 @@ export const AIRDROP_COMMUNITIES = [
     mintedSupply: 4444,
     firstTokenId: 1,
     nftCa: '0x890215157dbec26d67605324271b34ba05ee9e58',
+    tokenCa: '0xb03058b8a39f3967df08d833682c1c99b29821b1',
   },
 ];
 

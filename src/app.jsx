@@ -1,6 +1,6 @@
 import React from 'react';
 import { Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom';
-import { TopNav, TabBar } from './components/Shell';
+import { TopNav, TabBar, SiteFooter } from './components/Shell';
 import OverviewView from './components/views/OverviewView';
 import EcosystemView from './components/views/EcosystemView';
 import PortfolioView from './components/views/PortfolioView';
@@ -96,11 +96,9 @@ export default function App() {
 
       <main className="mx-auto w-full max-w-[1500px] px-4">
         <Routes>
-          {/* Home is the StonkBrokers ROI page, which is where the app has
-              always opened -- `activeProject` and `activeTab` defaulted to
-              'stonk' and 'roi'. Routing made that default visible as a URL;
-              it did not licence changing it. */}
-          <Route path="/" element={<Navigate to="/stonkbrokers/roi" replace />} />
+          {/* Home is the portfolio scanner: one wallet paste, no project
+              vocabulary to learn first. Project pages stay one click away. */}
+          <Route path="/" element={<Navigate to="/portfolio" replace />} />
           <Route
             path="/rankings"
             element={<OverviewView data={data} pending={booting} />}
@@ -157,6 +155,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+      <SiteFooter />
     </div>
   );
 }

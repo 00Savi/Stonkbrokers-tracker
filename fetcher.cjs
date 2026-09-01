@@ -57,7 +57,7 @@ const CHAIN_ID = 4663;
 //
 // Set GG_INDEX_URL to point at a different deployment.
 const { GgIndex } = require("./lib/ggindex.cjs");
-const { Rpc, TOPIC, addrTopic, decodeUint, topicAddr } = require("./lib/rpc.cjs");
+const { Rpc, TOPIC, addrTopic, decodeUint, decodeAddr, encodeUint, topicAddr } = require("./lib/rpc.cjs");
 const { fetchLogsWithTimestamps } = require("./lib/chain.cjs");
 const { BlockTime } = require("./lib/blocktime.cjs");
 
@@ -254,23 +254,37 @@ const PROJECTS = {
     genesisBlock: 38000000, 
     tokenCa: "0xb03058b8a39f3967df08d833682c1c99b29821b1".toLowerCase(),
     nftCa: "0x890215157dbec26d67605324271b34ba05ee9e58".toLowerCase(),
-    activationCa: "0x0000000000000000000000000000000000000000",
+    // SoftStakingVault — same Anvil family as Mancer/Yard. Confirmed on
+    // Blockscout as holding the activated $WALL (not the AMM).
+    activationCa: "0xb3f6f0fad13b0b60873ac2a90281ebe431fdb6ed".toLowerCase(),
     ammCa: "0xdd59536f394c4b589e695f5921723b89ea479379".toLowerCase(),
+    vaultLedger: "0x0e12931e7b7a6a68c82dfdaf4e98d9c8959720a9".toLowerCase(),
+    slabNftCa: "0x8565507566c6a79b57e4eaa70b8232a64003d352".toLowerCase(),
+    openseaSlug: "thecardwall-nft",
     maxSupply: 4444,
     unitValue: 500000,
     ticker: "WALL",
     logo: "wall.png",
     yieldMode: "protocol_vault",
-    oracleSource: "0xdd59536f394c4b589e695f5921723b89ea479379".toLowerCase(),
-    underConstruction: true,
+    // Same contract generation as Mancer: no Deactivated event; sale of the
+    // membership clears the stage. ActivationVoided exists for explicit
+    // voids; Transfer still has to cover a flip.
+    deactivateOnTransfer: true,
+    oracleSource: "0xb3f6f0fad13b0b60873ac2a90281ebe431fdb6ed".toLowerCase(),
+    underConstruction: false,
     teamWallets: 0,
-    streams: {},
+    streams: {
+      vault: "0xb3f6f0fad13b0b60873ac2a90281ebe431fdb6ed".toLowerCase()
+    },
+    // ROI ranks are OpenSea rarity (rarityOf 0–4 = ★–★★★★★). Cost is that
+    // rarity's listing floor plus the $WALL to activate the matching wall
+    // stage (Foundation → Fortress). rainWeight is the rarity rain-queue leg.
     tiers: [
-      { id: "T0", name: "1-Star Member (★)", reqTokens: 500000, weight: 100 },
-      { id: "T1", name: "2-Star Member (★★)", reqTokens: 500000, weight: 125 },
-      { id: "T2", name: "3-Star Member (★★★)", reqTokens: 500000, weight: 160 },
-      { id: "T3", name: "4-Star Member (★★★★)", reqTokens: 500000, weight: 200 },
-      { id: "T4", name: "5-Star Member (★★★★★)", reqTokens: 500000, weight: 333 }
+      { id: "T0", name: "1-Star", reqTokens: 50000, weight: 100, rainWeight: 1 },
+      { id: "T1", name: "2-Star", reqTokens: 110000, weight: 125, rainWeight: 2 },
+      { id: "T2", name: "3-Star", reqTokens: 225000, weight: 160, rainWeight: 3 },
+      { id: "T3", name: "4-Star", reqTokens: 450000, weight: 200, rainWeight: 4 },
+      { id: "T4", name: "5-Star", reqTokens: 1200000, weight: 333, rainWeight: 5 }
     ]
   }
 };
@@ -299,7 +313,11 @@ const ACTIVATION_ABI = [
   "event Deactivated(uint256 tokenId, address owner, uint8 tier)",
   "event ActivationCleared(uint256 indexed tokenId, address indexed owner)",
   "event ActivationCleared(uint256 indexed tokenId)",
-  "event ActivationCleared(uint256 tokenId)"
+  "event ActivationCleared(uint256 tokenId)",
+  // SoftStakingVault (Mancer / Yard / Card Wall): upgrade and void names
+  // differ from Stonk's ActivationUpgraded / Deactivated.
+  "event TierUpgraded(uint256 indexed tokenId, address indexed owner, uint8 fromTier, uint8 toTier, uint256 feePaid)",
+  "event ActivationVoided(uint256 indexed tokenId, address indexed owner)"
 ];
 const iface = new ethers.Interface(ACTIVATION_ABI);
 
@@ -450,6 +468,16 @@ async function loadMarketPrices() {
       tokenPrices[conf.tokenCa.toLowerCase()] = markets[key].tokenPriceUsd;
       await sleep(250);
   }
+
+  if (PROJECTS.cardwall) {
+    const os = await fetchCardWallStarFloors(PROJECTS.cardwall);
+    if (os.collectionEth > 0) {
+      markets.cardwall.nftFloorEth = +os.collectionEth.toFixed(3);
+      markets.cardwall.floorSource = "opensea";
+    }
+    markets.cardwall.starFloorEth = os.byRarity;
+  }
+
   return markets;
 }
 
@@ -735,7 +763,7 @@ async function fetchActivations(projectKey, conf) {
 
           tokenId = parsed.args.tokenId.toString();
           isAct = parsed.name === "Activated" || parsed.name === "ActivationUpgraded" || parsed.name.includes("Upgraded");
-          isDeact = parsed.name === "ActivationCleared" || parsed.name === "Deactivated" || parsed.name.includes("Deact");
+          isDeact = parsed.name === "ActivationCleared" || parsed.name === "Deactivated" || parsed.name === "ActivationVoided" || parsed.name.includes("Deact") || parsed.name.includes("Void");
 
           if (isAct) {
             const tierVal = parsed.args.toTier !== undefined ? parsed.args.toTier : (parsed.args.newTier !== undefined ? parsed.args.newTier : parsed.args.tier);
@@ -813,13 +841,323 @@ async function fetchActivations(projectKey, conf) {
   };
 }
 
+const RARITY_OF_SEL = ethers.id("rarityOf(uint256)").slice(0, 10);
+const ACTIVATIONS_SEL = ethers.id("activations(uint256)").slice(0, 10);
+const ACTIVE_COUNT_SEL = ethers.id("activeCount()").slice(0, 10);
+
+/**
+ * Card Wall SoftStakingVault does not emit the Anvil Activated topic this
+ * fetcher walks for Mancer/Yard — recent windows returned 0 logs while
+ * activeCount() was 837. rarityOf on the membership NFT is 0–4 (★–★★★★★).
+ * activations(id) is the owner when that id is in the vault, else address(0).
+ */
+async function fetchCardWallLiveActivations(conf) {
+  const n = conf.maxSupply;
+  const calls = [];
+  for (let id = 1; id <= n; id++) {
+    const arg = encodeUint(id);
+    calls.push({ to: conf.nftCa, data: RARITY_OF_SEL + arg });
+    calls.push({ to: conf.activationCa, data: ACTIVATIONS_SEL + arg });
+  }
+  console.log(`  cardwall: scanning ${n} memberships for rarity + vault...`);
+  const raw = await rpc.calls(calls);
+
+  const breakdown = { T0: 0, T1: 0, T2: 0, T3: 0, T4: 0 };
+  const raritySupply = { T0: 0, T1: 0, T2: 0, T3: 0, T4: 0 };
+  const tokenRarity = {};
+  const activeTokenTiers = {};
+  let active = 0;
+
+  for (let i = 0; i < n; i++) {
+    const rarity = Number(decodeUint(raw[i * 2]) ?? 0n);
+    const tierId = `T${Math.min(4, Math.max(0, rarity))}`;
+    const tokenId = String(i + 1);
+    tokenRarity[tokenId] = tierId;
+    raritySupply[tierId]++;
+    const owner = decodeAddr(raw[i * 2 + 1]);
+    if (owner && owner !== ZERO_ADDR) {
+      active++;
+      breakdown[tierId]++;
+      activeTokenTiers[tokenId] = { t: tierId, ts: 0 };
+    }
+  }
+
+  const countRaw = await rpc.calls([{ to: conf.activationCa, data: ACTIVE_COUNT_SEL }]);
+  const contractCount = Number(decodeUint(countRaw[0]) ?? 0n);
+  if (contractCount && Math.abs(contractCount - active) > 5) {
+    console.warn(`[warn] cardwall activeCount()=${contractCount} scan=${active}`);
+  }
+
+  const dualBurn = await getTrueDeflationStats(conf);
+  const { tierStats, history } = await cardWallTransferDeacts(conf, activeTokenTiers, tokenRarity, breakdown);
+
+  const useCount = contractCount > 0 ? contractCount : active;
+  console.log(`  cardwall vault: ${useCount} active (${breakdown.T0}/${breakdown.T1}/${breakdown.T2}/${breakdown.T3}/${breakdown.T4} by star)`);
+
+  return {
+    activeCount: useCount,
+    breakdown,
+    raritySupply,
+    percentActivated: +((useCount / conf.maxSupply) * 100).toFixed(2),
+    totalSupply: conf.maxSupply,
+    tierStats,
+    history,
+    dualBurn,
+    activeTokenTiers,
+  };
+}
+
+/**
+ * Mancer-style deactivation: the vault does not emit Deactivated, so a
+ * membership leaving the current vault set via ERC-721 Transfer is the close.
+ *
+ * Walk transfers newest-first from the live vault set. Each transfer of a
+ * token that is (reconstructed) active is a deactivation of the previous
+ * holder; the current holder activated after they received it.
+ */
+async function cardWallTransferDeacts(conf, activeTokenTiers, tokenRarity, breakdown) {
+  const emptyStats = () => ({ act: 0, deact: 0 });
+  const tierStats = {
+    T0: { '24h': emptyStats(), '7d': emptyStats(), '30d': emptyStats(), 'allTime': { act: breakdown.T0, deact: 0 } },
+    T1: { '24h': emptyStats(), '7d': emptyStats(), '30d': emptyStats(), 'allTime': { act: breakdown.T1, deact: 0 } },
+    T2: { '24h': emptyStats(), '7d': emptyStats(), '30d': emptyStats(), 'allTime': { act: breakdown.T2, deact: 0 } },
+    T3: { '24h': emptyStats(), '7d': emptyStats(), '30d': emptyStats(), 'allTime': { act: breakdown.T3, deact: 0 } },
+    T4: { '24h': emptyStats(), '7d': emptyStats(), '30d': emptyStats(), 'allTime': { act: breakdown.T4, deact: 0 } },
+  };
+
+  const transferLogs = await fetchAllLogs("cardwall_nft", conf.nftCa, conf.genesisBlock, TRANSFER_TOPIC);
+  const now = Math.floor(Date.now() / 1000);
+  const oneDay = 86400;
+  const events = [];
+  for (const log of transferLogs) {
+    const topics = log.topics && Array.isArray(log.topics) ? log.topics.filter((t) => t !== null) : [];
+    if (topics.length !== 4) continue;
+    const from = topicToAddr(topics[1]);
+    const to = topicToAddr(topics[2]);
+    if (from === ZERO_ADDR) continue;
+    if (from === conf.activationCa || to === conf.activationCa) continue;
+    let ts = log.timeStamp || log.timestamp;
+    ts = ts ? (String(ts).startsWith("0x") ? parseInt(ts, 16) : parseInt(ts, 10)) : 0;
+    events.push({ tokenId: BigInt(topics[3]).toString(), from, to, ts });
+  }
+  events.sort((a, b) => b.ts - a.ts || 0);
+
+  const reconstructed = new Set(Object.keys(activeTokenTiers));
+  const dailyData = {};
+  let deactTotal = 0;
+
+  const bumpDeact = (tierId, ts) => {
+    if (!tierStats[tierId]) return;
+    deactTotal++;
+    tierStats[tierId].allTime.deact++;
+    const age = now - ts;
+    if (age <= oneDay) tierStats[tierId]["24h"].deact++;
+    if (age <= 7 * oneDay) tierStats[tierId]["7d"].deact++;
+    if (age <= 30 * oneDay) tierStats[tierId]["30d"].deact++;
+    if (ts > 0) {
+      const d = new Date(ts * 1000);
+      const dateStr = `${d.getMonth() + 1}/${d.getDate()}`;
+      if (!dailyData[dateStr]) dailyData[dateStr] = { activated: 0, deactivated: 0, timestamp: ts };
+      dailyData[dateStr].deactivated++;
+    }
+  };
+
+  for (const ev of events) {
+    if (!reconstructed.has(ev.tokenId)) continue;
+    const tierId = tokenRarity[ev.tokenId] || activeTokenTiers[ev.tokenId]?.t || "T0";
+    bumpDeact(tierId, ev.ts);
+    reconstructed.delete(ev.tokenId);
+  }
+
+  console.log(`  cardwall transfers: ${events.length} moves, ${deactTotal} vault deactivations`);
+
+  const sortedDates = Object.keys(dailyData).sort((a, b) => dailyData[a].timestamp - dailyData[b].timestamp);
+  const history = { labels: [], dailyActivations: [], dailyDeactivations: [], cumulative: [], cumulativeGross: [] };
+  let running = Object.keys(activeTokenTiers).length + deactTotal;
+  for (const dateStr of sortedDates) {
+    const d = dailyData[dateStr];
+    history.labels.push(dateStr);
+    history.dailyActivations.push(0);
+    history.dailyDeactivations.push(d.deactivated);
+    running -= d.deactivated;
+    history.cumulative.push(Math.max(0, running));
+    history.cumulativeGross.push(Object.keys(activeTokenTiers).length + deactTotal);
+  }
+
+  return { tierStats, history };
+}
+
+async function fetchCardWallStarFloors(conf) {
+  const empty = { collectionEth: 0, byRarity: [null, null, null, null, null] };
+  const slug = conf.openseaSlug;
+  if (!slug) return empty;
+
+  const headers = { accept: "application/json" };
+  const key = process.env.OPENSEA_API_KEY;
+  if (key) headers["x-api-key"] = key;
+  // Without OPENSEA_API_KEY OpenSea allows one unauthenticated "best listing"
+  // and 401s trait pagination, so only the collection floor lands.
+
+  const listed = [];
+  let next = null;
+  const maxPages = key ? 15 : 1;
+  const limit = key ? 50 : 1;
+
+  try {
+    for (let page = 0; page < maxPages; page++) {
+      const q = new URL(`https://api.opensea.io/api/v2/listings/collection/${slug}/best`);
+      q.searchParams.set("limit", String(limit));
+      if (next) q.searchParams.set("next", next);
+      const res = await fetch(q, { headers });
+      if (!res.ok) {
+        if (page === 0) console.warn(`[warn] OpenSea listings ${res.status}; Card Wall floors stay derived`);
+        break;
+      }
+      const j = await res.json();
+      const rows = Array.isArray(j.listings) ? j.listings : [];
+      for (const L of rows) {
+        const id = L.protocol_data?.parameters?.offer?.[0]?.identifierOrCriteria;
+        const wei = L.price?.current?.value;
+        if (id == null || !wei) continue;
+        listed.push({ id: Number(id), eth: Number(wei) / 1e18 });
+      }
+      next = j.next || null;
+      if (!next || rows.length === 0) break;
+      await sleep(250);
+    }
+  } catch (e) {
+    console.warn(`[warn] OpenSea floors: ${e.message}`);
+    return empty;
+  }
+
+  if (!listed.length) return empty;
+
+  const rarityCalls = listed.map((row) => ({
+    to: conf.nftCa,
+    data: RARITY_OF_SEL + encodeUint(row.id),
+  }));
+  const raw = await rpc.calls(rarityCalls);
+  const byRarity = [null, null, null, null, null];
+  listed.forEach((row, i) => {
+    const r = Number(decodeUint(raw[i]) ?? 0n);
+    if (r < 0 || r > 4) return;
+    if (byRarity[r] == null || row.eth < byRarity[r]) byRarity[r] = row.eth;
+  });
+
+  const collectionEth = Math.min(...listed.map((r) => r.eth));
+  console.log(`  cardwall OpenSea floors ETH: ${byRarity.map((v) => (v == null ? "—" : v.toFixed(3))).join(" / ")}`);
+  return { collectionEth, byRarity };
+}
+
+const VAULT_LEDGER_ABI = [
+  "function count() view returns (uint256)",
+  "function slabOf(uint256 slabId) view returns (tuple(string name, string cert, uint64 costCents, uint40 recordedAt, uint8 custody))",
+];
+
+/**
+ * Cash-accounting totals from VaultLedger: landed cost in USD cents, custody
+ * 0 = still in vault, 1 = delivered to a member, 2 = removed (excluded).
+ *
+ * Rain ROI uses `deliveredUsd` annualized over the span of delivered slabs
+ * and split by rarity rainWeight. That ignores wall-stage and the early-build
+ * bonus -- those need the dropper -- so the figure is rarity-only.
+ */
+async function fetchVaultLedger(address, sevenDaysAgo) {
+  const emptyDaily = [0, 0, 0, 0, 0, 0, 0];
+  const empty = {
+    count: 0, vaultedCount: 0, deliveredCount: 0, removedCount: 0,
+    volumeUsd: 0, vaultedUsd: 0, deliveredUsd: 0, firstRecordedAt: 0, firstDeliveredAt: 0,
+    dailyDelivered: [...emptyDaily], dailyVaulted: [...emptyDaily], dailyDates: [],
+    historyDates: [], historyDelivered: [], historyVaulted: [], historyTs: [],
+  };
+  if (!address || address === ZERO_ADDR) return empty;
+
+  const provider = new ethers.JsonRpcProvider("https://rpc.mainnet.chain.robinhood.com");
+  const ledger = new ethers.Contract(address, VAULT_LEDGER_ABI, provider);
+  const n = Number(await ledger.count());
+  if (!(n > 0) || n > 5000) {
+    if (n > 5000) console.warn(`[warn] VaultLedger count ${n} looks unusable; skipping`);
+    return { ...empty, count: n };
+  }
+
+  const out = { ...empty, count: n, dailyDelivered: [...emptyDaily], dailyVaulted: [...emptyDaily] };
+  let firstRecorded = Infinity;
+  let firstDelivered = Infinity;
+  const nowSec = Math.floor(Date.now() / 1000);
+  const windowStart = sevenDaysAgo || (nowSec - 7 * 86400);
+  const oneDay = 86400;
+  const hist = new Map();
+
+  const bumpHist = (ts, custody, usd) => {
+    if (!(ts > 0)) return;
+    const d = new Date(ts * 1000);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    if (!hist.has(key)) hist.set(key, { delivered: 0, vaulted: 0, ts });
+    const row = hist.get(key);
+    if (custody === 1) row.delivered += usd;
+    else if (custody === 0) row.vaulted += usd;
+  };
+
+  const batch = 40;
+  for (let start = 1; start <= n; start += batch) {
+    const ids = [];
+    for (let id = start; id < start + batch && id <= n; id++) ids.push(id);
+    const rows = await Promise.all(ids.map((id) => ledger.slabOf(id)));
+    for (const s of rows) {
+      const cents = Number(s.costCents);
+      const usd = cents / 100;
+      const recordedAt = Number(s.recordedAt);
+      const custody = Number(s.custody);
+      if (recordedAt > 0 && recordedAt < firstRecorded) firstRecorded = recordedAt;
+      if (custody === 2) {
+        out.removedCount++;
+        continue;
+      }
+      out.volumeUsd += usd;
+      if (custody === 1) {
+        out.deliveredCount++;
+        out.deliveredUsd += usd;
+        if (recordedAt > 0 && recordedAt < firstDelivered) firstDelivered = recordedAt;
+      } else {
+        out.vaultedCount++;
+        out.vaultedUsd += usd;
+      }
+      bumpHist(recordedAt, custody, usd);
+      if (recordedAt >= windowStart) {
+        const dayIdx = Math.max(0, Math.min(6, Math.floor((recordedAt - windowStart) / oneDay)));
+        if (custody === 1) out.dailyDelivered[dayIdx] += usd;
+        else if (custody === 0) out.dailyVaulted[dayIdx] += usd;
+      }
+    }
+  }
+
+  out.volumeUsd = +out.volumeUsd.toFixed(2);
+  out.vaultedUsd = +out.vaultedUsd.toFixed(2);
+  out.deliveredUsd = +out.deliveredUsd.toFixed(2);
+  out.dailyDelivered = out.dailyDelivered.map((v) => +v.toFixed(2));
+  out.dailyVaulted = out.dailyVaulted.map((v) => +v.toFixed(2));
+  out.dailyDates = emptyDaily.map((_, i) => {
+    const d = new Date((windowStart + i * oneDay) * 1000);
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+  });
+  const histKeys = [...hist.keys()].sort();
+  out.historyDates = histKeys.map((k) => {
+    const [y, m, d] = k.split("-");
+    return `${Number(m)}/${Number(d)}`;
+  });
+  out.historyDelivered = histKeys.map((k) => +hist.get(k).delivered.toFixed(2));
+  out.historyVaulted = histKeys.map((k) => +hist.get(k).vaulted.toFixed(2));
+  out.historyTs = histKeys.map((k) => hist.get(k).ts);
+  out.firstRecordedAt = firstRecorded === Infinity ? 0 : firstRecorded;
+  out.firstDeliveredAt = firstDelivered === Infinity ? 0 : firstDelivered;
+  return out;
+}
+
 /**
  * Legacy path: token transfers OUT of a project's vault/AMM, via Blockscout.
  *
- * Only reached by a project with no activation contract -- cardwall today --
- * where there are no RewardPaid events to read and `oracleSource` points at the
- * AMM. Lifted out of the branch unchanged so the replacement above reads as one
- * thing rather than being interleaved with the code it replaces.
+ * Only reached by a project with no activation contract, where there are no
+ * RewardPaid events to read. Card Wall no longer takes this path.
  */
 /**
  * Page a Blockscout listing newest-first until it crosses `until`.
@@ -1120,39 +1458,43 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
       // timestamps -- see BlockTime.blockAt.
       // Only where the project HAS an activation contract.
       //
-      // Cardwall does not -- its activationCa is the zero address -- and its
-      // oracleSource points at the AMM instead, so the legacy walk there sums
-      // token transfers out of the AMM rather than reward payouts. Those are
-      // different quantities, and swapping one for the other because both land
-      // in ammFeesUsd would silently change what the figure means. Cardwall
-      // keeps the old path until it has an activation contract to read.
+      // Card Wall has a SoftStakingVault now. gg-index still 404s its
+      // activations until the catalog lists that vault, so RewardPaid is
+      // skipped rather than walked as AMM tokentx -- those are different
+      // quantities (pool outflow vs holder yield / rain).
       const hasActivation = conf.activationCa && conf.activationCa !== ZERO_ADDR;
 
       if (hasActivation) {
-        const cumulative = [];
-        for (let i = 0; i <= 7; i++) {
-          const fromBlock = blockTime.blockAt(sevenDaysAgo + i * oneDay);
-          const t = await gg.activations(projectKey, { fromBlock });
-          const paid = (t.totals || []).filter(
-            (x) => x.kind === "reward_paid" &&
-                   (x.reward_token || "").toLowerCase() === conf.tokenCa.toLowerCase(),
-          );
-          // Totals are base-unit strings; BigInt then scale, never a raw double.
-          const sum = paid.reduce((acc, x) => acc + BigInt(x.total || "0"), 0n);
-          cumulative.push(Number(sum) / 1e18);
-        }
+        try {
+          const cumulative = [];
+          for (let i = 0; i <= 7; i++) {
+            const fromBlock = blockTime.blockAt(sevenDaysAgo + i * oneDay);
+            const t = await gg.activations(projectKey, { fromBlock });
+            const paid = (t.totals || []).filter(
+              (x) => x.kind === "reward_paid" &&
+                     (x.reward_token || "").toLowerCase() === conf.tokenCa.toLowerCase(),
+            );
+            // Totals are base-unit strings; BigInt then scale, never a raw double.
+            const sum = paid.reduce((acc, x) => acc + BigInt(x.total || "0"), 0n);
+            cumulative.push(Number(sum) / 1e18);
+          }
 
-        // cumulative[i] counts everything after dayBlocks[i], so day i is the
-        // difference between consecutive reads.
-        for (let i = 0; i < 7; i++) {
-          const amount = Math.max(0, cumulative[i] - cumulative[i + 1]);
-          if (amount <= 0) continue;
-          const usdVal = amount * marketData.tokenPriceUsd;
+          // cumulative[i] counts everything after dayBlocks[i], so day i is the
+          // difference between consecutive reads.
+          for (let i = 0; i < 7; i++) {
+            const amount = Math.max(0, cumulative[i] - cumulative[i + 1]);
+            if (amount <= 0) continue;
+            const usdVal = amount * marketData.tokenPriceUsd;
 
-          dailyUsdPerWeight[i] += (usdVal / totalNetworkWeight);
-          totalSampleUsd += usdVal;
-          revenueBreakdown.ammFeesUsd += usdVal;
-          revenueBreakdown.dailyAmm[i] += usdVal;
+            dailyUsdPerWeight[i] += (usdVal / totalNetworkWeight);
+            totalSampleUsd += usdVal;
+            revenueBreakdown.ammFeesUsd += usdVal;
+            revenueBreakdown.dailyAmm[i] += usdVal;
+          }
+        } catch (e) {
+          const msg = String(e.message || e);
+          if (!msg.includes("gg-index 404") && !msg.includes("gg-index 400")) throw e;
+          console.warn(`[warn] ${projectKey}: gg-index activations unavailable; RewardPaid skipped`);
         }
       } else {
         await fetchVaultTokenOutflows(conf, marketData, sevenDaysAgo, oneDay, {
@@ -1401,12 +1743,27 @@ async function run() {
   for (const [projectKey, conf] of Object.entries(PROJECTS)) {
       console.log(`\n--- Processing ${projectKey.toUpperCase()} ---`);
       const prevProjData = previousData.projects ? previousData.projects[projectKey] : {};
-      
-      const activationStats = await fetchActivations(projectKey, conf);
+      const fetchOnly = (process.env.FETCH_ONLY || "").toLowerCase();
+      if (fetchOnly && projectKey !== fetchOnly) {
+        if (prevProjData && Object.keys(prevProjData).length) {
+          finalJson.projects[projectKey] = prevProjData;
+          console.log(`  skipped (FETCH_ONLY=${fetchOnly})`);
+        }
+        continue;
+      }
+
+      const activationStats = projectKey === "cardwall"
+        ? await fetchCardWallLiveActivations(conf)
+        : await fetchActivations(projectKey, conf);
       const ownershipStats = await getOwnershipStats(conf, activationStats.dualBurn.equivalentBrokersBurnt, prevProjData);
 
+      const ledger = conf.vaultLedger ? await fetchVaultLedger(conf.vaultLedger, sevenDaysAgo) : null;
+      if (ledger) {
+        console.log(`  vault ledger: ${ledger.count} slabs, $${ledger.deliveredUsd} delivered, $${ledger.vaultedUsd} in vault`);
+      }
+
       const yieldData = await getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, markets[projectKey]);
-      const yieldCarried = !!(yieldData && yieldData.unavailable);
+      const yieldCarried = !!(yieldData && yieldData.unavailable) && projectKey !== "cardwall";
 
       let totalNetworkWeight = 0;
       for (const t of conf.tiers) totalNetworkWeight += ((activationStats.breakdown[t.id] || 0) * t.weight);
@@ -1423,42 +1780,104 @@ async function run() {
         if (yieldCarried) {
           throw new Error(`${projectKey}: Blockscout yield unavailable and no previous snapshot to carry forward.`);
         }
-        const yieldPerWeightUnitAnnual = totalNetworkWeight > 0 ? (yieldData.globalAnnualYield / totalNetworkWeight) : 0;
+        let yieldPerWeightUnitAnnual = totalNetworkWeight > 0 ? (yieldData.globalAnnualYield / totalNetworkWeight) : 0;
+
+        // When Anvil RewardPaid is not indexed yet, attribute rain by rarity
+        // rainWeight so ROI is not stuck at zero with a live vault.
+        let rainYieldByTier = null;
+        if (ledger && ledger.deliveredUsd > 0 && !(yieldPerWeightUnitAnnual > 0)) {
+          const nowSec = Math.floor(Date.now() / 1000);
+          const start = ledger.firstDeliveredAt || ledger.firstRecordedAt || nowSec;
+          const days = Math.max(1, (nowSec - start) / 86400);
+          const annualDelivered = ledger.deliveredUsd * (365 / days);
+          let rainNetwork = 0;
+          for (const t of conf.tiers) {
+            rainNetwork += (activationStats.breakdown[t.id] || 0) * (t.rainWeight || 0);
+          }
+          if (rainNetwork <= 0) rainNetwork = conf.tiers.reduce((s, t) => s + (t.rainWeight || 0), 0) || 1;
+          const perPoint = annualDelivered / rainNetwork;
+          rainYieldByTier = {};
+          for (const t of conf.tiers) rainYieldByTier[t.id] = (t.rainWeight || 0) * perPoint;
+          yieldData.revenueBreakdown.ammFeesUsd = ledger.deliveredUsd;
+          yieldData.revenueBreakdown.dailyAmm = ledger.historyDelivered?.length ? ledger.historyDelivered : (ledger.dailyDelivered || yieldData.revenueBreakdown.dailyAmm);
+          yieldData.revenueBreakdown.dailyDex = ledger.historyVaulted?.length ? ledger.historyVaulted : (ledger.dailyVaulted || yieldData.revenueBreakdown.dailyDex);
+          console.log(`  rain yield (rarity): $${annualDelivered.toFixed(0)}/yr over ${days.toFixed(1)}d, ${rainNetwork} rain-weight`);
+        }
+
+        let rainNetworkForDaily = 0;
+        for (const t of conf.tiers) {
+          rainNetworkForDaily += (activationStats.breakdown[t.id] || 0) * (t.rainWeight || t.weight / 100 || 0);
+        }
+        if (rainNetworkForDaily <= 0) rainNetworkForDaily = conf.tiers.reduce((s, t) => s + (t.rainWeight || 1), 0) || 1;
+
+        const histDates = ledger?.historyDates?.length ? ledger.historyDates : (ledger?.dailyDates || yieldData.dailyDates);
+        const histDelivered = ledger?.historyDelivered?.length ? ledger.historyDelivered : (ledger?.dailyDelivered || []);
+
+        const starFloors = markets[projectKey].starFloorEth || [];
         mappedTiers = [];
         for (const t of conf.tiers) {
+          const annual = rainYieldByTier
+            ? (rainYieldByTier[t.id] || 0)
+            : t.weight * yieldPerWeightUnitAnnual;
+          const rarityIdx = Number(String(t.id).replace("T", ""));
+          const floorEth = (starFloors[rarityIdx] > 0 ? starFloors[rarityIdx] : markets[projectKey].nftFloorEth) || 0;
+          const share = (t.rainWeight || 0) / rainNetworkForDaily;
           mappedTiers.push({
             tier: t.id,
             name: t.name,
             reqTokens: t.reqTokens,
             multiplier: `${(t.weight/100).toFixed(2)}x`,
             weight: t.weight,
-            trackedAnnualYieldUsd: t.weight * yieldPerWeightUnitAnnual,
-            dailyDates: yieldData.dailyDates,
-            dailyYields: yieldData.dailyUsdPerWeight.map(val => val * t.weight)
+            rainWeight: t.rainWeight || null,
+            floorEth,
+            trackedAnnualYieldUsd: annual,
+            dailyDates: histDates,
+            dailyYields: histDelivered.length
+              ? histDelivered.map((usd) => usd * share)
+              : yieldData.dailyUsdPerWeight.map((val) => val * t.weight)
           });
         }
         revenueBreakdown = yieldData.revenueBreakdown;
 
-        const todayStr = new Date().toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
-        const floorCostUsd = markets[projectKey].nftFloorEth * markets[projectKey].ethPriceUsd;
-        const currentSnapshot = {
-            date: todayStr,
-            timestamp: Date.now(),
+        const snapshotRow = (date, timestamp, annualByTier) => ({
+            date,
+            timestamp,
             tokenPriceUsd: markets[projectKey].tokenPriceUsd,
             totalBurn: (activationStats.dualBurn || {}).totalBurnTokens || 0,
             tiers: mappedTiers.map(t => {
+                const floorUsd = (t.floorEth || markets[projectKey].nftFloorEth) * markets[projectKey].ethPriceUsd;
                 const actCost = t.reqTokens * markets[projectKey].tokenPriceUsd;
-                const totalCost = floorCostUsd + actCost;
-                const roi = totalCost > 0 ? (t.trackedAnnualYieldUsd / totalCost) * 100 : 0;
-                return { tier: t.tier, roi: roi, yieldUsd: t.trackedAnnualYieldUsd };
+                const totalCost = floorUsd + actCost;
+                const annual = annualByTier ? annualByTier[t.tier] : t.trackedAnnualYieldUsd;
+                const roi = totalCost > 0 ? (annual / totalCost) * 100 : 0;
+                return { tier: t.tier, roi: roi, yieldUsd: annual };
             })
-        };
-        if (dailySnapshots.length > 0 && dailySnapshots[dailySnapshots.length - 1].date === todayStr) {
-            dailySnapshots[dailySnapshots.length - 1] = currentSnapshot;
+        });
+
+        const todayStr = new Date().toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
+        if (projectKey === "cardwall" && histDates.length && histDelivered.length) {
+          let cum = 0;
+          const start = ledger.firstDeliveredAt || ledger.firstRecordedAt || Math.floor(Date.now() / 1000);
+          dailySnapshots = histDates.map((date, i) => {
+            cum += histDelivered[i] || 0;
+            const dayTs = (ledger.historyTs && ledger.historyTs[i]) || (start + i * 86400);
+            const elapsed = Math.max(1, (dayTs - start) / 86400);
+            const annualNet = cum * (365 / elapsed);
+            const annualByTier = {};
+            for (const t of mappedTiers) {
+              annualByTier[t.tier] = annualNet * ((t.rainWeight || 0) / rainNetworkForDaily);
+            }
+            return snapshotRow(date, dayTs * 1000, annualByTier);
+          });
         } else {
-            dailySnapshots.push(currentSnapshot);
+          const currentSnapshot = snapshotRow(todayStr, Date.now());
+          if (dailySnapshots.length > 0 && dailySnapshots[dailySnapshots.length - 1].date === todayStr) {
+              dailySnapshots[dailySnapshots.length - 1] = currentSnapshot;
+          } else {
+              dailySnapshots.push(currentSnapshot);
+          }
+          if (dailySnapshots.length > 90) dailySnapshots.shift();
         }
-        if (dailySnapshots.length > 90) dailySnapshots.shift();
       }
 
       let lockedLpData = null;
@@ -1473,9 +1892,10 @@ async function run() {
         tiers: mappedTiers,
         revenue: revenueBreakdown,
         lockedLp: lockedLpData,
+        ledger: ledger,
         underConstruction: conf.underConstruction,
         dailySnapshots: dailySnapshots,
-        config: { ticker: conf.ticker, unitValue: conf.unitValue, logo: conf.logo, nftCa: conf.nftCa }
+        config: { ticker: conf.ticker, unitValue: conf.unitValue, logo: conf.logo, nftCa: conf.nftCa, tokenCa: conf.tokenCa }
       };
   }
 

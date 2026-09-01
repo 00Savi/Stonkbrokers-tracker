@@ -18,12 +18,17 @@ export default function CardWallDetailView({ data, activeTab }) {
   const project = data?.projects?.cardwall || data?.projects?.card;
   if (!project) return <div className="text-center text-slate-400 p-12">The Card Wall Data Loading...</div>;
 
-  const { config = {}, market = {}, tiers = [], activation = {}, ownership = {}, revenue = {}, dailySnapshots = [] } = project;
+  const { config = {}, market = {}, tiers = [], activation = {}, ownership = {}, revenue = {}, dailySnapshots = [], ledger = null } = project;
 
   const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val || 0);
   const formatNumber = (val, decimals = 0) => new Intl.NumberFormat('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val || 0);
 
   const floorCostUsd = (market.nftFloorEth || 0) * (market.ethPriceUsd || 0);
+
+  const tierFloorUsd = (t, i) => {
+    const eth = t.floorEth > 0 ? t.floorEth : (market.starFloorEth?.[i] > 0 ? market.starFloorEth[i] : market.nftFloorEth);
+    return (eth || 0) * (market.ethPriceUsd || 0);
+  };
 
   const chartOptions = {
     responsive: true, maintainAspectRatio: false,
@@ -36,10 +41,12 @@ export default function CardWallDetailView({ data, activeTab }) {
 
   const hasSnaps = Array.isArray(dailySnapshots) && dailySnapshots.length > 0 && dailySnapshots[0].date;
   // Trailing 14 days of recorded ROI.
-  const roiSnaps = trailingSnapshots(dailySnapshots, 14);
+  const roiSnaps = trailingSnapshots(dailySnapshots, 14).filter((s) =>
+    Array.isArray(s.tiers) && s.tiers.some((t) => (t.yieldUsd || 0) > 0 || (t.roi || 0) > 0)
+  );
   const histLabels = roiSnaps.map(s => s.date);
   const histDatasets = tiers.map((t, i) => {
-    const tc = floorCostUsd + (t.reqTokens * market.tokenPriceUsd);
+    const tc = tierFloorUsd(t, i) + (t.reqTokens * market.tokenPriceUsd);
     const currentRoi = tc > 0 ? ((t.trackedAnnualYieldUsd / tc) * 100).toFixed(2) : 0;
 
     return {
@@ -50,11 +57,11 @@ export default function CardWallDetailView({ data, activeTab }) {
     };
   });
 
-  const hasRevData = Array.isArray(revenue.dailyAmm) && revenue.dailyAmm.length > 0;
-  const revDates = hasRevData && tiers[0]?.dailyDates?.length ? tiers[0].dailyDates : ['8/15', '8/16', '8/17', '8/18', '8/19', '8/20', '8/21'];
-  const revData1 = hasRevData ? revenue.dailyAmm : [2000, 2500, 1500, 3000, 2000, 1500, 1730];
-  const revData2 = hasRevData && revenue.dailyDex?.length ? revenue.dailyDex : [4000, 4500, 3500, 5000, 4000, 3500, 4400];
-  const revData3 = hasRevData && revenue.dailyLaunchpad?.length ? revenue.dailyLaunchpad : [1000, 1200, 1000, 1500, 1200, 1000, 1500];
+  const zeros = [0, 0, 0, 0, 0, 0, 0];
+  const histDates = ledger?.historyDates?.length ? ledger.historyDates : (ledger?.dailyDates || []);
+  const revDates = histDates.length ? histDates : (tiers[0]?.dailyDates?.length ? tiers[0].dailyDates : zeros.map((_, i) => `${i}`));
+  const revData1 = ledger?.historyDelivered?.length ? ledger.historyDelivered : (ledger?.dailyDelivered?.length ? ledger.dailyDelivered : zeros);
+  const revData2 = ledger?.historyVaulted?.length ? ledger.historyVaulted : (ledger?.dailyVaulted?.length ? ledger.dailyVaulted : zeros);
 
   const realBurntTokens = Math.max(Number(activation.dualBurn?.totalBurnTokens || 0), Number(ownership.permanentlyBurntTokens || 0));
   const realBurntUnits = Math.max(Number(activation.dualBurn?.equivalentBrokersBurnt || 0), Number(ownership.permanentlyBurntUnits || 0), Number(ownership.burntNfts || 0));
@@ -69,10 +76,10 @@ export default function CardWallDetailView({ data, activeTab }) {
 
   const actHistory = activation.history || {};
   const hasActHist = Array.isArray(actHistory.labels) && actHistory.labels.length > 0;
-  const actLabels = hasActHist ? actHistory.labels : ['Aug 14', 'Aug 15', 'Aug 16', 'Aug 17', 'Aug 18', 'Aug 19', 'Aug 20'];
-  const actCum = (hasActHist && actHistory.cumulative?.length) ? actHistory.cumulative : [1700, 1720, 1750, 1780, 1790, 1805, 1812];
-  const actDAct = (hasActHist && actHistory.dailyActivations?.length) ? actHistory.dailyActivations : [15, 25, 30, 10, 20, 15, 18];
-  const actDDeact = (hasActHist && actHistory.dailyDeactivations?.length) ? actHistory.dailyDeactivations : [0, 0, 5, 0, 2, 4, 10];
+  const actLabels = hasActHist ? actHistory.labels : zeros.map((_, i) => `${i}`);
+  const actCum = (hasActHist && actHistory.cumulative?.length) ? actHistory.cumulative : zeros;
+  const actDAct = (hasActHist && actHistory.dailyActivations?.length) ? actHistory.dailyActivations : zeros;
+  const actDDeact = (hasActHist && actHistory.dailyDeactivations?.length) ? actHistory.dailyDeactivations : zeros;
 
   let breakdownArr = tiers.map((t) => {
     if (activation.breakdown && activation.breakdown[t.tier] != null) return activation.breakdown[t.tier];
@@ -82,8 +89,8 @@ export default function CardWallDetailView({ data, activeTab }) {
 
   const ownHistGrowth = ownership.historicalGrowth || {};
   const hasOwnHist = Array.isArray(ownHistGrowth.labels) && ownHistGrowth.labels.length > 0;
-  const ownLabels = hasOwnHist ? ownHistGrowth.labels : ['8/14', '8/15', '8/16', '8/17', '8/18', '8/19', '8/20'];
-  const rawOwnData = hasOwnHist ? ownHistGrowth.data : [550, 580, 600, 610, 625, 635, 642];
+  const ownLabels = hasOwnHist ? ownHistGrowth.labels : zeros.map((_, i) => `${i}`);
+  const rawOwnData = hasOwnHist ? ownHistGrowth.data : zeros;
   
   let lastValidOwn = 0;
   const ownData = rawOwnData.map((v, i) => {
@@ -94,26 +101,19 @@ export default function CardWallDetailView({ data, activeTab }) {
   });
 
   const chartLastValue = ownData.length > 0 ? ownData[ownData.length - 1] : 0;
-  let wallHolders = Number(ownership.wallHolders) || Number(ownership.tokenHolders) || Number(ownership.erc20Holders) || chartLastValue;
+  let wallHolders = Number(ownership.wallHolders) || Number(ownership.tokenHolders) || Number(ownership.erc20Holders) || Number(ownership.stonkHolders) || chartLastValue;
   if (wallHolders > 0 && wallHolders < chartLastValue * 0.7) wallHolders = chartLastValue;
 
   return (
     <div className="space-y-6 relative">
-      
-      {/* BETA / UNDER CONSTRUCTION NOTICE BANNER */}
-      <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex items-center gap-3 text-amber-400">
-        <svg className="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd"></path></svg>
-        <div className="text-xs">
-          <strong className="font-bold uppercase tracking-wider">Beta / Under Construction:</strong> The Card Wall metrics and vault structures are currently initializing. Data streams and features are actively deploying.
-        </div>
-      </div>
 
-      {/* TAB 1: ROI BENCHMARKS WITH SLAB GALLERY */}
+      {/* TAB 1: ROI BENCHMARKS */}
       {activeTab === 'roi' && (
         <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-6 shadow-xl">
           <div className="flex justify-between items-center mb-6">
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
-              <span>🎴</span> The Card Wall Tier ROI Benchmarks
+              <svg className="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20"><path d="M3 12v3c0 1.657 3.134 3 7 3s7-1.343 7-3v-3c0 1.657-3.134 3-7 3s-7-1.343-7-3z"></path><path d="M3 7v3c0 1.657 3.134 3 7 3s7-1.343 7-3V7c0 1.657-3.134 3-7 3S3 8.657 3 7z"></path><path d="M17 5c0 1.657-3.134 3-7 3S3 6.657 3 5s3.134-3 7-3 7 1.343 7 3z"></path></svg>
+              The Card Wall Global Yield ROI Benchmarks
             </h3>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-lg px-4 py-2.5 text-sm shadow-inner flex items-center">
               <span className="text-slate-400 mr-2">Floor Entry Cost:</span> 
@@ -124,7 +124,7 @@ export default function CardWallDetailView({ data, activeTab }) {
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
             <div className="flex justify-between items-center mb-2">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg> 
+                <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
                 "What-If" Volume Simulator
               </h3>
               <span className="text-xs font-bold text-purple-400 bg-purple-900/30 px-2 py-1 rounded border border-purple-800/50">{parseFloat(volumeMultiplier).toFixed(1)}x Protocol Volume</span>
@@ -145,9 +145,10 @@ export default function CardWallDetailView({ data, activeTab }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#1e2228]/50 text-sm">
-                {tiers.map((t) => {
+                {tiers.map((t, i) => {
                   const actCost = t.reqTokens * market.tokenPriceUsd;
-                  const totalCost = floorCostUsd + actCost;
+                  const rowFloor = tierFloorUsd(t, i);
+                  const totalCost = rowFloor + actCost;
                   const simulatedYield = t.trackedAnnualYieldUsd * volumeMultiplier;
                   const roi = totalCost > 0 ? (simulatedYield / totalCost) * 100 : 0;
                   const isExpanded = expandedTier === t.tier;
@@ -164,25 +165,25 @@ export default function CardWallDetailView({ data, activeTab }) {
                             </div>
                           </div>
                         </td>
-                        <td className="py-5"><span className="text-white font-bold">{formatNumber(t.reqTokens)}</span> ${config.ticker}</td>
                         <td className="py-5">
-                          <div className="font-bold text-white">{formatCurrency(totalCost)}</div>
-                          <div className="text-xs text-slate-500 mt-0.5">Floor + {formatCurrency(actCost)} Act.</div>
+                          {t.reqTokens > 0 ? (
+                            <><span className="text-white font-bold">{formatNumber(t.reqTokens)}</span> ${config.ticker}</>
+                          ) : (
+                            <span className="text-slate-500">—</span>
+                          )}
                         </td>
                         <td className="py-5">
-                          {project.underConstruction ? (
-                            <span className="text-slate-500 italic text-sm">Initializing...</span>
-                          ) : (
-                            <><span className="text-white font-bold text-base">{formatCurrency(simulatedYield)}</span> <span className="text-slate-500">/yr</span></>
-                          )}
+                          <div className="font-bold text-white">{formatCurrency(totalCost)}</div>
+                          <div className="text-xs text-slate-500 mt-0.5">
+                            {t.reqTokens > 0 ? `Floor + ${formatCurrency(actCost)} Act.` : 'OpenSea rarity floor'}
+                          </div>
+                        </td>
+                        <td className="py-5">
+                          <span className="text-white font-bold text-base">{formatCurrency(simulatedYield)}</span> <span className="text-slate-500">/yr</span>
                         </td>
                         <td className="py-5 text-right pr-4">
                           <div className="flex items-center justify-end gap-3">
-                            {project.underConstruction ? (
-                              <span className="bg-amber-900/20 text-amber-400 border border-amber-800/50 px-2.5 py-1 rounded text-sm font-bold shadow-sm">TBD / BUILDING</span>
-                            ) : (
-                              <span className="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-2.5 py-1 rounded text-sm font-bold shadow-sm">{roi.toFixed(2)}%</span>
-                            )}
+                            <span className="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-2.5 py-1 rounded text-sm font-bold shadow-sm">{roi.toFixed(2)}%</span>
                             <svg className={`w-4 h-4 text-slate-500 transition-transform duration-200 group-hover:text-white ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
                           </div>
                         </td>
@@ -222,7 +223,7 @@ export default function CardWallDetailView({ data, activeTab }) {
                               <Line 
                                 data={{ 
                                   labels: t.dailyDates?.length ? t.dailyDates : revDates, 
-                                  datasets: [{ label: 'Daily Yield (USD)', data: t.dailyYields?.length ? t.dailyYields : [5, 10, 8, 15, 12, 10, 14], borderColor: '#f5b700', backgroundColor: 'rgba(245, 183, 0, 0.1)', borderWidth: 2, fill: true, tension: 0.4, pointRadius: 3 }] 
+                                  datasets: [{ label: 'Daily Yield (USD)', data: t.dailyYields?.length ? t.dailyYields : zeros, borderColor: '#f5b700', backgroundColor: 'rgba(245, 183, 0, 0.1)', borderWidth: 2, fill: true, tension: 0.4, pointRadius: 3 }] 
                                 }} 
                                 options={chartOptions} 
                               />
@@ -245,12 +246,12 @@ export default function CardWallDetailView({ data, activeTab }) {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
               <h2 className="text-xl font-bold text-white flex items-center gap-2">Historical Yield & Payback Horizon</h2>
-              <p className="text-xs md:text-sm text-slate-400 mt-1">Track capital recovery timelines and ROI trajectory mapped over time.</p>
+              <p className="text-xs md:text-sm text-slate-400 mt-1">Payback uses the live annualized rain rate. The ROI chart starts on the first VaultLedger rain day — earlier zeros are omitted, not invented.</p>
             </div>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            {tiers.map((t) => {
-              const tc = floorCostUsd + (t.reqTokens * market.tokenPriceUsd);
+            {tiers.map((t, i) => {
+              const tc = tierFloorUsd(t, i) + (t.reqTokens * market.tokenPriceUsd);
               const years = t.trackedAnnualYieldUsd > 0 ? (tc / t.trackedAnnualYieldUsd).toFixed(1) + ' Years' : 'N/A';
               return (
                 <div key={t.tier} className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 shadow-inner">
@@ -263,7 +264,11 @@ export default function CardWallDetailView({ data, activeTab }) {
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mt-6">
             <h3 className="text-sm font-bold text-white mb-4">Tier ROI % Trajectory</h3>
             <div className="relative h-72 md:h-80 w-full">
-              <Line data={{ labels: histLabels, datasets: histDatasets }} options={chartOptions} />
+              {histLabels.length ? (
+                <Line data={{ labels: histLabels, datasets: histDatasets }} options={chartOptions} />
+              ) : (
+                <div className="h-full flex items-center justify-center text-sm text-slate-500">No rain-backed ROI days recorded yet</div>
+              )}
             </div>
           </div>
         </div>
@@ -272,31 +277,34 @@ export default function CardWallDetailView({ data, activeTab }) {
       {/* TAB 3: REVENUE */}
       {activeTab === 'revenue' && (
         <div className="space-y-6">
+          <p className="text-sm text-slate-400 leading-relaxed max-w-3xl">
+            This page is the slab vault, not AMM fees. Each card is a real PSA 10 the protocol bought: <strong className="text-slate-300">total volume</strong> is landed cost of every slab ever recorded, <strong className="text-slate-300">on the wall</strong> is still in custody, and <strong className="text-slate-300">with members</strong> has already rained or sold. The chart is that landed cost by the day it was written to VaultLedger — green when it went to a member, amber when it was still sitting in the vault that day.
+          </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
-              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Gacha Marketing Pool (7D)</p>
-              <p className="text-2xl font-extrabold text-emerald-400">{formatCurrency(revenue.ammFeesUsd || 0)}</p>
+              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Total volume (landed cost)</p>
+              <p className="text-2xl font-extrabold text-emerald-400">{formatCurrency(ledger?.volumeUsd || 0)}</p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
-              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">PSA 10 Slabs / Physical (7D)</p>
-              <p className="text-2xl font-extrabold text-amber-400">{formatCurrency(revenue.dexFeesUsd || 0)}</p>
+              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">On the wall</p>
+              <p className="text-2xl font-extrabold text-amber-400">{formatCurrency(ledger?.vaultedUsd || 0)}</p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
-              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Anvil Market Fees (7D)</p>
-              <p className="text-2xl font-extrabold text-purple-400">{formatCurrency(revenue.launchpadUsd || 0)}</p>
+              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">With members</p>
+              <p className="text-2xl font-extrabold text-purple-400">{formatCurrency(ledger?.deliveredUsd || 0)}</p>
             </div>
           </div>
 
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
-            <h3 className="text-sm font-bold text-white mb-4">Daily Revenue Inflows by Stream (USD)</h3>
+            <h3 className="text-sm font-bold text-white mb-1">Slab landed cost by day</h3>
+            <p className="text-xs text-slate-500 mb-4">From the first vault record through today. Days with no new slabs are omitted.</p>
             <div className="relative h-72 md:h-80 w-full">
               <Bar 
                 data={{
                   labels: revDates,
                   datasets: [
-                    { label: "Gacha Pool (33%)", data: revData1, backgroundColor: "#00a804", borderRadius: 4 },
-                    { label: "Physical Commerce", data: revData2, backgroundColor: "#f5b700", borderRadius: 4 },
-                    { label: "Anvil Trades", data: revData3, backgroundColor: "#8b5cf6", borderRadius: 4 }
+                    { label: "Delivered to members", data: revData1, backgroundColor: "#00a804", borderRadius: 4 },
+                    { label: "Still on the wall", data: revData2, backgroundColor: "#f5b700", borderRadius: 4 }
                   ]
                 }} 
                 options={{ responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true, grid: { color: '#1e2228', borderDash: [4, 4] } }, y: { stacked: true, grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: v => '$' + v } } }, plugins: { legend: { labels: { color: '#cbd5e1' } } } }} 
@@ -494,10 +502,10 @@ export default function CardWallDetailView({ data, activeTab }) {
           <h3 className="text-base md:text-lg font-bold text-white">Methodology & Disclaimer</h3>
         </div>
         <div className="text-xs md:text-sm text-slate-300 mb-5 leading-relaxed space-y-4">
-          {activeTab === 'roi' && <p><strong className="text-white">Yield & ROI (Global Network Oracle) Methodology:</strong> Cash-on-Cash (CoC) returns are calculated dynamically based on the selected project's architecture and active network weight.</p>}
+          {activeTab === 'roi' && <p><strong className="text-white">Yield & ROI Methodology:</strong> Each rank is an OpenSea rarity (1-Star through 5-Star). Cost is that rarity's listing floor. Expected yield is annualized VaultLedger delivered landed-cost, split by rarity rain weight among currently vault-activated memberships. Wall-stage and the early-build bonus are not in this table.</p>}
           {activeTab === 'historical' && <p><strong className="text-white">Historical Yield & Payback Horizon Methodology:</strong> Capital recovery timelines are calculated by dividing the total entry cost by annualized trailing yield rates. ROI trajectories map historical performance over rolling epochs.</p>}
           {activeTab === 'ownership' && <p><strong className="text-white">Protocol Ownership & Distribution Methodology:</strong> Wallet concentration metrics evaluate unique human holders against true circulating supply, subtracting protocol treasury allocations.</p>}
-          {['revenue', 'burn', 'activation'].includes(activeTab) && <p><strong className="text-white">Protocol Analytics:</strong> Metrics shown aggregate live on-chain events across registered smart contracts.</p>}
+          {['revenue', 'burn', 'activation'].includes(activeTab) && <p><strong className="text-white">Protocol Analytics:</strong> Revenue is VaultLedger landed cost (delivered vs still on the wall), not AMM swap fees. Activations are a live SoftStakingVault scan by rarityOf, not a log replay of Anvil Activated events.</p>}
         </div>
         <p className="text-xs md:text-sm text-slate-400 italic leading-relaxed border-t border-[#1e2228] pt-5">
           <strong className="text-slate-300 not-italic">Disclaimer:</strong> Tracked yield values are calculated using Mark-to-Market spot pricing at the exact time of the dashboard's last automated sync, rather than the historical price at the time of the drop. Yields fluctuate based on network activation weight, market token prices, and community protocol volume. This is a community-built tracking tool and does not guarantee future returns.
