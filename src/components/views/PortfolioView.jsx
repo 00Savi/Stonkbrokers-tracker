@@ -194,6 +194,46 @@ export default function PortfolioView({ data }) {
         }
       }
 
+      const erc20Abi = ['function balanceOf(address) view returns (uint256)', 'function decimals() view returns (uint8)'];
+      for (const [pKey, pData] of Object.entries(data.projects || {})) {
+        const kind = pData.config?.kind;
+        if (kind !== 'cashflow' && kind !== 'vault') continue;
+        const ca = pData.config?.tokenCa;
+        if (!ca) continue;
+        const token = new ethers.Contract(ca, erc20Abi, provider);
+        let decimals = 18;
+        try { decimals = Number(await token.decimals()); } catch { /* 18 */ }
+        const circulating = pData.ownership?.circulatingSupply || 0;
+        const annual = pData.cashflow?.holdersAnnualized || pData.cashflow?.revenueAnnualized || 0;
+        const price = pData.market?.tokenPriceUsd || 0;
+
+        for (const wallet of wallets) {
+          try {
+            const raw = await token.balanceOf(wallet);
+            const amount = Number(ethers.formatUnits(raw, decimals));
+            if (!(amount > 0)) continue;
+            const value = amount * price;
+            const share = circulating > 0 ? amount / circulating : 0;
+            const yieldValue = annual * share;
+            totalFloorUsd += value;
+            totalYieldUsd += yieldValue;
+            ownedAssets.push({
+              projectKey: pKey,
+              project: projectName(pKey, pData.config.ticker),
+              ticker: pData.config.ticker,
+              logo: pData.config.logo || 'Stonkbroker.png',
+              wallet,
+              balance: amount,
+              floorValue: value,
+              yieldValue,
+              hasError: false,
+              nfts: [],
+              tokenPosition: true,
+            });
+          } catch (e) { console.error('Token read error', e); }
+        }
+      }
+
       setResults({ floorUsd: totalFloorUsd, yieldUsd: totalYieldUsd, totalUnits, hasErrors: portfolioHasErrors, ownedAssets });
       loadInventories(resolvedNfts);
     } catch (err) {
@@ -238,7 +278,7 @@ export default function PortfolioView({ data }) {
 
       <div className="mb-8 max-w-2xl border-t border-[#1e2228] pt-5">
         <p className="text-sm text-slate-300 leading-relaxed">
-          Welcome to Savi's Dashboard. We are committing to delivering the best data possible on a growing assortment of Robinhood Chain yield projects. Currently supported projects are StonkBrokers, Mancer, The Card Wall, TickerYard, and a dedicated token and stock page.
+          Welcome to Savi's Dashboard. Currently supported: StonkBrokers, Mancer, TickerYard, The Card Wall, The Index, RH Machines, Oakmont Vault, plus the token and stock lists.
         </p>
         <p className="mt-3 text-sm text-slate-300 leading-relaxed">
           We will continue to add more support for the growing ecosystem. Make sure to{' '}

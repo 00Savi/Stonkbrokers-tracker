@@ -95,9 +95,17 @@ async function priceToken(tokenCa, signal) {
  * `projects` comes from gg-index's catalog, which is where the token addresses
  * live — data.json's `config` carries the NFT address but not the token's.
  */
-export async function loadPrices(projects, signal) {
+export async function loadPrices(projects, signal, snapshot) {
+  const extra = [];
+  for (const [slug, p] of Object.entries(snapshot?.projects || {})) {
+    if (projects?.some((c) => c.slug === slug)) continue;
+    const token = p.config?.tokenCa;
+    if (token) extra.push({ slug, contracts: [{ kind: 'token', address: token }] });
+  }
+  const list = [...(projects || []), ...extra];
+
   const entries = await Promise.allSettled(
-    projects.map(async (p) => {
+    list.map(async (p) => {
       const token = p.contracts?.find((c) => c.kind === 'token')?.address;
       if (!token) return null;
       const priced = await priceToken(token, signal);
@@ -145,7 +153,7 @@ export function applyPrices(base, prices) {
       tokenPriceUsd: tokenPrice,
     };
 
-    if (unitValue > 0 && p.market?.floorSource !== 'opensea') {
+    if (unitValue > 0 && p.config?.nftCa && p.market?.floorSource !== 'opensea') {
       // Straight from the pool where the pair quotes in ETH; otherwise fall
       // back to the dollar round trip, which is the same number by a longer
       // route and only differs in rounding.

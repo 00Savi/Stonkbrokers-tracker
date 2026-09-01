@@ -60,6 +60,7 @@ const { GgIndex } = require("./lib/ggindex.cjs");
 const { Rpc, TOPIC, addrTopic, decodeUint, decodeAddr, encodeUint, topicAddr } = require("./lib/rpc.cjs");
 const { fetchLogsWithTimestamps } = require("./lib/chain.cjs");
 const { BlockTime } = require("./lib/blocktime.cjs");
+const { buildSpecialProject, isSpecial } = require("./lib/specials.cjs");
 
 const gg = new GgIndex();
 const rpc = new Rpc();
@@ -89,7 +90,11 @@ const TOKEN_TICKERS = {
   "0xc72f232a6869e6cf34dc06129affd07f8a2a246a": "MANCER", 
   "0xe3fa12da7fa026b21817f16622e8ae48fa785166": "YARD",
   "0xb03058b8a39f3967df08d833682c1c99b29821b1": "WALL",
-  "0x193674b72b6aa1905fc47bdbc19b30a53b666666": "SLEUTH"
+  "0x193674b72b6aa1905fc47bdbc19b30a53b666666": "SLEUTH",
+  "0x39dbed3a2bd333467115de45665cc57f813c4571": "PONS",
+  "0x85a574f2ff0795685f58d1d7b0d4b51f148ac489": "PRINTER",
+  "0x5aed379a72bd2533371d153135c47d5eb61babc8": "STRIKE",
+  "0x8d6ff05c40899bfbc618e203052a8cd02d0e9581": "RESERVE"
 };
 
 const WETH = "0x0bd7d308f8e1639fab988df18a8011f41eacad73";
@@ -141,7 +146,8 @@ const MEMES = [
   { name: "Yolo", ca: "0x62C71cd34a52c30d894419CBcc55Db2aFA8032eA" },
   { name: "Wojak", ca: "0xaCE55FE98Bab14366dD49aB5AA5dF76aA11A3c6f" },
   { name: "Juggernaut", ca: "0xD7321801CAae694090694Ff55A9323139F043B88" },
-  { name: "Sleuth", ca: "0x193674b72B6aA1905FC47BdbC19b30A53b666666" }
+  { name: "Sleuth", ca: "0x193674b72B6aA1905FC47BdbC19b30A53b666666" },
+  { name: "Pons", ca: "0x39dBED3a2bd333467115dE45665cC57F813C4571" }
 ];
 
 const STOCKS = [
@@ -286,7 +292,53 @@ const PROJECTS = {
       { id: "T3", name: "4-Star", reqTokens: 450000, weight: 200, rainWeight: 4 },
       { id: "T4", name: "5-Star", reqTokens: 1200000, weight: 333, rainWeight: 5 }
     ]
-  }
+  },
+  index: {
+    kind: "cashflow",
+    genesisBlock: 40000000,
+    tokenCa: "0x56910d4409f3a0c78c64dd8d0545ff0705389870".toLowerCase(),
+    maxSupply: 1_000_000_000,
+    unitValue: 1,
+    ticker: "INDEX",
+    logo: "Index.png",
+    llamaSlug: "the-index",
+    eligibleMin: 10000,
+    site: "https://theindex.finance/",
+    underConstruction: false,
+    teamWallets: 0,
+    tiers: [],
+  },
+  printer: {
+    kind: "machines",
+    genesisBlock: 40000000,
+    tokenCa: "0x85a574f2ff0795685f58d1d7b0d4b51f148ac489".toLowerCase(),
+    nftCa: "0x8c71d170fbd94bcba93bb08fc2cfd0e8620cd9ce".toLowerCase(),
+    collectionSupply: 10000,
+    maxSupply: 200_000_000,
+    unitValue: 4250,
+    opsFee: 1.15,
+    ticker: "PRINTER",
+    logo: "Printer.png",
+    openseaSlug: "rh-machines",
+    site: "https://www.rhmachines.com/",
+    underConstruction: false,
+    teamWallets: 0,
+    tiers: [],
+  },
+  oakmont: {
+    kind: "vault",
+    genesisBlock: 40000000,
+    tokenCa: "0x5aed379a72bd2533371d153135c47d5eb61babc8".toLowerCase(),
+    reserveCa: "0x8d6ff05c40899bfbc618e203052a8cd02d0e9581".toLowerCase(),
+    maxSupply: 100_000_000,
+    unitValue: 1,
+    ticker: "STRIKE",
+    logo: "Oakmont.png",
+    site: "https://oakmontvault.xyz/",
+    underConstruction: false,
+    teamWallets: 0,
+    tiers: [],
+  },
 };
 
 const PROTOCOL_CONTRACTS = [
@@ -464,7 +516,9 @@ async function loadMarketPrices() {
         }
       } catch {}
       
-      markets[key].nftFloorEth = +((conf.unitValue * markets[key].tokenPriceUsd * 1.10) / ethPriceUsd).toFixed(3);
+      if (conf.nftCa && conf.unitValue > 1) {
+        markets[key].nftFloorEth = +((conf.unitValue * markets[key].tokenPriceUsd * 1.10) / ethPriceUsd).toFixed(3);
+      }
       tokenPrices[conf.tokenCa.toLowerCase()] = markets[key].tokenPriceUsd;
       await sleep(250);
   }
@@ -1715,7 +1769,9 @@ async function run() {
   // 24h bucket. On a warm cache the chain has only moved ~36k blocks since the
   // last run, so this adds an anchor or two.
   const chainHead = await rpc.blockNumber();
-  const earliestGenesis = Math.min(...Object.values(PROJECTS).map(p => p.genesisBlock));
+  const earliestGenesis = Math.min(
+    ...Object.values(PROJECTS).filter((p) => !isSpecial(p)).map((p) => p.genesisBlock)
+  );
   await blockTime.ensureRange(rpc, earliestGenesis, chainHead, (done, total) => {
     process.stdout.write(`\r  block-time anchors: ${done}/${total}   `);
   });
@@ -1749,6 +1805,19 @@ async function run() {
           finalJson.projects[projectKey] = prevProjData;
           console.log(`  skipped (FETCH_ONLY=${fetchOnly})`);
         }
+        continue;
+      }
+
+      if (isSpecial(conf)) {
+        console.log(`  special (${conf.kind})`);
+        finalJson.projects[projectKey] = await buildSpecialProject({
+          key: projectKey,
+          conf,
+          market: markets[projectKey],
+          prev: prevProjData,
+          gg,
+          dexPairs: allDexPairs,
+        });
         continue;
       }
 

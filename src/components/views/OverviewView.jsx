@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { NFT_PROJECTS } from '../../lib/routes';
+import { NFT_PROJECTS, RANKING_PROJECTS } from '../../lib/routes';
 import { Card, Figure, Stat, SplitBar, Tag, Value, Skeleton, usd, num, pct } from '../kit';
 
 /**
@@ -25,14 +25,15 @@ import { Card, Figure, Stat, SplitBar, Tag, Value, Skeleton, usd, num, pct } fro
  */
 function tierRows(data) {
   const rows = [];
-  for (const meta of NFT_PROJECTS) {
+  for (const meta of RANKING_PROJECTS) {
     const p = data?.projects?.[meta.key];
     if (!p) continue;
     const floorUsd = (p.market?.nftFloorEth || 0) * (p.market?.ethPriceUsd || 0);
     const tokenUsd = p.market?.tokenPriceUsd || 0;
+    const nft = !meta.kind || meta.kind === 'machines';
 
     for (const t of p.tiers || []) {
-      const cost = floorUsd + (t.reqTokens || 0) * tokenUsd;
+      const cost = t.entryUsd || (nft ? floorUsd + (t.reqTokens || 0) * tokenUsd : (t.reqTokens || 0) * tokenUsd);
       const annual = t.trackedAnnualYieldUsd || 0;
       rows.push({
         key: `${meta.key}-${t.tier}`,
@@ -42,9 +43,12 @@ function tierRows(data) {
         reqTokens: t.reqTokens,
         cost,
         annual,
-        roi: cost > 0 ? (annual / cost) * 100 : null,
+        roi: cost > 0 && annual > 0 ? (annual / cost) * 100 : null,
         payback: annual > 0 ? cost / annual : null,
         underConstruction: !!p.underConstruction,
+        requires: nft
+          ? `1 NFT + ${t.reqTokens || 0} $${meta.ticker}`
+          : `${t.reqTokens || 0} $${meta.ticker}`,
       });
     }
   }
@@ -122,7 +126,7 @@ function RankTable({ rows, pending }) {
                   {r.payback == null ? '—' : `${r.payback.toFixed(1)}y`}
                 </td>
                 <td className="num px-5 py-2.5 text-[12px] text-faint">
-                  1 NFT + {num(r.reqTokens)} ${r.project.ticker}
+                  {r.requires}
                 </td>
               </tr>
             );
@@ -217,7 +221,7 @@ export default function OverviewView({ data, pending }) {
         </Card>
 
         {/* Where the money comes from -- one split, two named sources. */}
-        <Card eyebrow="Protocol revenue · all sources" sub="Cumulative, across all four projects">
+        <Card eyebrow="Protocol revenue · all sources" sub="Cumulative, across tracked projects">
           <Figure value={usd(totalRevenue)} pending={pending} />
           <div className="mt-5">
             <SplitBar

@@ -21,10 +21,10 @@ export default function EcosystemView({ data }) {
   const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val || 0);
   const formatNumber = (val, decimals = 0) => new Intl.NumberFormat('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val || 0);
 
-  const order = ['stonk', 'mancer', 'tickeryard', 'cardwall'];
-  const projectNames = { stonk: 'StonkBrokers', mancer: 'Mancer', tickeryard: 'TickerYard', cardwall: 'The Card Wall' };
-  const projectColors = { stonk: '#00a804', mancer: '#8b5cf6', tickeryard: '#38bdf8', cardwall: '#f5b700' };
-  const projectLogos = { stonk: 'Stonkbroker.png', mancer: 'logo.png', tickeryard: 'Yardkeepers.png', cardwall: 'wall.png' };
+  const order = ['stonk', 'mancer', 'tickeryard', 'cardwall', 'index', 'printer', 'oakmont'];
+  const projectNames = { stonk: 'StonkBrokers', mancer: 'Mancer', tickeryard: 'TickerYard', cardwall: 'The Card Wall', index: 'The Index', printer: 'RH Machines', oakmont: 'Oakmont' };
+  const projectColors = { stonk: '#00a804', mancer: '#8b5cf6', tickeryard: '#38bdf8', cardwall: '#f5b700', index: '#34d399', printer: '#fb923c', oakmont: '#a3e635' };
+  const projectLogos = { stonk: 'Stonkbroker.png', mancer: 'logo.png', tickeryard: 'Yardkeepers.png', cardwall: 'wall.png', index: 'Index.png', printer: 'Printer.png', oakmont: 'Oakmont.png' };
 
   const chartOptions = {
     responsive: true,

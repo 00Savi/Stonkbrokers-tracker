@@ -23239,6 +23239,188 @@
         "nftCa": "0x890215157dbec26d67605324271b34ba05ee9e58",
         "tokenCa": "0xb03058b8a39f3967df08d833682c1c99b29821b1"
       }
+    },
+    "index": {
+      "market": {
+        "ethPriceUsd": 2500,
+        "tokenPriceUsd": 0,
+        "nftFloorEth": 0
+      },
+      "cashflow": {
+        "fees24h": 0,
+        "fees7d": 0,
+        "revenue24h": 0,
+        "revenue7d": 0,
+        "holdersAnnualized": 0,
+        "dailyDates": [],
+        "dailyFees": [],
+        "dailyRevenue": []
+      },
+      "activation": {
+        "activeCount": 0,
+        "totalSupply": 0,
+        "percentActivated": 0,
+        "dualBurn": {
+          "totalBurnTokens": 0,
+          "equivalentBrokersBurnt": 0
+        },
+        "breakdown": {},
+        "history": {},
+        "tierStats": {}
+      },
+      "ownership": {
+        "tokenHolders": 0,
+        "stonkHolders": 0,
+        "nftHolders": 0,
+        "circulatingSupply": 0,
+        "historicalGrowth": {
+          "labels": [],
+          "data": []
+        }
+      },
+      "tiers": [],
+      "revenue": {
+        "ammFeesUsd": 0,
+        "dexFeesUsd": 0,
+        "dailyAmm": [],
+        "dailyDex": []
+      },
+      "lockedLp": {
+        "totalLpUsd": 0,
+        "pools": []
+      },
+      "dailySnapshots": [],
+      "underConstruction": false,
+      "config": {
+        "ticker": "INDEX",
+        "kind": "cashflow",
+        "tokenCa": "0x56910d4409f3a0c78c64dd8d0545ff0705389870",
+        "logo": "Index.png",
+        "eligibleMin": 10000,
+        "unitValue": 1,
+        "site": "https://theindex.finance/"
+      }
+    },
+    "printer": {
+      "market": {
+        "ethPriceUsd": 2500,
+        "tokenPriceUsd": 0,
+        "nftFloorEth": 0
+      },
+      "cashflow": {
+        "fees24h": 0,
+        "fees7d": 0,
+        "revenue24h": 0,
+        "revenue7d": 0,
+        "holdersAnnualized": 0,
+        "dailyDates": [],
+        "dailyFees": [],
+        "dailyRevenue": []
+      },
+      "activation": {
+        "activeCount": 0,
+        "totalSupply": 0,
+        "percentActivated": 0,
+        "dualBurn": {
+          "totalBurnTokens": 0,
+          "equivalentBrokersBurnt": 0
+        },
+        "breakdown": {},
+        "history": {},
+        "tierStats": {}
+      },
+      "ownership": {
+        "tokenHolders": 0,
+        "stonkHolders": 0,
+        "nftHolders": 0,
+        "circulatingSupply": 0,
+        "historicalGrowth": {
+          "labels": [],
+          "data": []
+        }
+      },
+      "tiers": [],
+      "revenue": {
+        "ammFeesUsd": 0,
+        "dexFeesUsd": 0,
+        "dailyAmm": [],
+        "dailyDex": []
+      },
+      "lockedLp": {
+        "totalLpUsd": 0,
+        "pools": []
+      },
+      "dailySnapshots": [],
+      "underConstruction": false,
+      "config": {
+        "ticker": "PRINTER",
+        "kind": "machines",
+        "tokenCa": "0x85a574f2ff0795685f58d1d7b0d4b51f148ac489",
+        "nftCa": "0x8c71d170fbd94bcba93bb08fc2cfd0e8620cd9ce",
+        "logo": "Printer.png",
+        "unitValue": 4250
+      }
+    },
+    "oakmont": {
+      "market": {
+        "ethPriceUsd": 2500,
+        "tokenPriceUsd": 0,
+        "nftFloorEth": 0
+      },
+      "cashflow": {
+        "fees24h": 0,
+        "fees7d": 0,
+        "revenue24h": 0,
+        "revenue7d": 0,
+        "holdersAnnualized": 0,
+        "dailyDates": [],
+        "dailyFees": [],
+        "dailyRevenue": []
+      },
+      "activation": {
+        "activeCount": 0,
+        "totalSupply": 0,
+        "percentActivated": 0,
+        "dualBurn": {
+          "totalBurnTokens": 0,
+          "equivalentBrokersBurnt": 0
+        },
+        "breakdown": {},
+        "history": {},
+        "tierStats": {}
+      },
+      "ownership": {
+        "tokenHolders": 0,
+        "stonkHolders": 0,
+        "nftHolders": 0,
+        "circulatingSupply": 0,
+        "historicalGrowth": {
+          "labels": [],
+          "data": []
+        }
+      },
+      "tiers": [],
+      "revenue": {
+        "ammFeesUsd": 0,
+        "dexFeesUsd": 0,
+        "dailyAmm": [],
+        "dailyDex": []
+      },
+      "lockedLp": {
+        "totalLpUsd": 0,
+        "pools": []
+      },
+      "dailySnapshots": [],
+      "underConstruction": false,
+      "config": {
+        "ticker": "STRIKE",
+        "kind": "vault",
+        "tokenCa": "0x5aed379a72bd2533371d153135c47d5eb61babc8",
+        "reserveCa": "0x8d6ff05c40899bfbc618e203052a8cd02d0e9581",
+        "logo": "Oakmont.png",
+        "unitValue": 1,
+        "site": "https://oakmontvault.xyz/"
+      }
     }
   },
   "memes": [
@@ -23457,6 +23639,18 @@
       "burnt": 13,
       "totalSupply": 100000000,
       "roi": "0.00%"
+    },
+    {
+      "name": "Pons",
+      "ca": "0x39dBED3a2bd333467115dE45665cC57F813C4571",
+      "volume24h": 28256773,
+      "liquidity": 4164917,
+      "priceChange24h": 38.58,
+      "fdv": 304139713,
+      "marketCap": 304139713,
+      "burnt": 0,
+      "totalSupply": 1000000000,
+      "roi": "38.58%"
     }
   ],
   "stocks": [

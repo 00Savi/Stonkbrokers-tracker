@@ -54,16 +54,35 @@ export default function StonkDetailView({ data, activeTab }) {
     };
   });
 
-  // 2. Revenue Chart
-  const zeros = [0, 0, 0, 0, 0, 0, 0];
-  const hasRevData = Array.isArray(revenue.dailyAmm) && revenue.dailyAmm.length > 0;
-  const revDates = hasRevData && tiers[0]?.dailyDates?.length ? tiers[0].dailyDates : zeros.map((_, i) => `${i}`);
-  const revData1 = hasRevData ? revenue.dailyAmm : zeros;
-  const revData2 = revenue.dailySecurityBox?.length === 7 ? revenue.dailySecurityBox : zeros;
-  const revDataTax = revenue.dailyBondingTax?.length === 7 ? revenue.dailyBondingTax : zeros;
-  const revDataVol = revenue.dailyLaunchpad?.length === 7 ? revenue.dailyLaunchpad : zeros;
-  const feeChartOpts = { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true, grid: { color: '#1e2228', borderDash: [4, 4] } }, y: { stacked: true, grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: v => '$' + v } } }, plugins: { legend: { labels: { color: '#cbd5e1' } } } };
-  const volChartOpts = { ...feeChartOpts, scales: { ...feeChartOpts.scales, x: { ...feeChartOpts.scales.x, stacked: false }, y: { ...feeChartOpts.scales.y, stacked: false } } };
+  // 2. Revenue Chart — one grouped series per stream, colors locked to the boxes.
+  const padSeries = (arr, len) => Array.from({ length: len }, (_, i) => Number(arr?.[i]) || 0);
+  const revLen = Math.max(
+    7,
+    revenue.dailyAmm?.length || 0,
+    revenue.dailySecurityBox?.length || 0,
+    revenue.dailyLaunchpad?.length || 0,
+    revenue.dailyBondingTax?.length || 0,
+    tiers[0]?.dailyDates?.length || 0,
+  );
+  const revDates = tiers[0]?.dailyDates?.length === revLen
+    ? tiers[0].dailyDates
+    : Array.from({ length: revLen }, (_, i) => `${i + 1}`);
+  const REV_STREAMS = [
+    { label: 'AMM & Swaps', color: '#00a804', data: padSeries(revenue.dailyAmm, revLen), total: revenue.ammFeesUsd || 0 },
+    { label: 'Clock-In Box', color: '#38bdf8', data: padSeries(revenue.dailySecurityBox, revLen), total: revenue.securityBoxUsd || 0 },
+    { label: 'Launch + Bonding volume', color: '#8b5cf6', data: padSeries(revenue.dailyLaunchpad, revLen), total: revenue.launchpadUsd || 0 },
+    { label: 'Curve tax', color: '#f472b6', data: padSeries(revenue.dailyBondingTax, revLen), total: revenue.bondingFeesUsd || 0 },
+  ];
+  const revChartOpts = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    scales: {
+      x: { stacked: false, grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
+      y: { stacked: false, beginAtZero: true, grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: (v) => '$' + v } },
+    },
+    plugins: { legend: { labels: { color: '#cbd5e1', usePointStyle: true, pointStyle: 'rect' } } },
+  };
 
   // 3. Burn Tracker Data
   const realBurntTokens = Math.max(
@@ -275,56 +294,52 @@ export default function StonkDetailView({ data, activeTab }) {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
-              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">AMM & Swap Protocol Fees (7D)</p>
-              <p className="text-2xl font-extrabold text-emerald-400">{formatCurrency(revenue.ammFeesUsd || 0)}</p>
+              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-2">
+                <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: REV_STREAMS[0].color }} />
+                AMM & Swap Protocol Fees (7D)
+              </p>
+              <p className="text-2xl font-extrabold" style={{ color: REV_STREAMS[0].color }}>{formatCurrency(REV_STREAMS[0].total)}</p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
-              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Clock-In Security Box (7D)</p>
-              <p className="text-2xl font-extrabold text-blue-400">{formatCurrency(revenue.securityBoxUsd || 0)}</p>
+              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-2">
+                <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: REV_STREAMS[1].color }} />
+                Clock-In Security Box (7D)
+              </p>
+              <p className="text-2xl font-extrabold" style={{ color: REV_STREAMS[1].color }}>{formatCurrency(REV_STREAMS[1].total)}</p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
-              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Launch Fees + Bonding Volume (7D)</p>
-              <p className="text-2xl font-extrabold text-purple-400">{formatCurrency(revenue.launchpadUsd || 0)}</p>
+              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-2">
+                <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: REV_STREAMS[2].color }} />
+                Launch Fees + Bonding Volume (7D)
+              </p>
+              <p className="text-2xl font-extrabold" style={{ color: REV_STREAMS[2].color }}>{formatCurrency(REV_STREAMS[2].total)}</p>
               <p className="text-[10px] text-slate-500 mt-1.5">
                 Create {formatCurrency(revenue.launchCreateUsd || 0)}
                 <span className="mx-1.5 text-slate-700">·</span>
                 Volume {formatCurrency(revenue.bondingVolumeUsd || 0)}
                 <span className="mx-1.5 text-slate-700">·</span>
-                Curve tax {formatCurrency(revenue.bondingFeesUsd || 0)}
+                <span className="inline-block h-1.5 w-1.5 rounded-sm align-middle mr-1" style={{ backgroundColor: REV_STREAMS[3].color }} />
+                Curve tax {formatCurrency(REV_STREAMS[3].total)}
               </p>
             </div>
           </div>
 
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
-            <h3 className="text-sm font-bold text-white mb-4">Daily protocol fees (USD)</h3>
-            <p className="text-[10px] text-slate-500 -mt-3 mb-4">AMM, Safety Deposit Clock In, and bonding-curve tax. Not volume.</p>
+            <h3 className="text-sm font-bold text-white mb-4">Daily revenue streams (USD)</h3>
+            <p className="text-[10px] text-slate-500 -mt-3 mb-4">Grouped bars: AMM fees, Clock-In, launch/bonding quote volume, and curve tax. Same colors as the boxes.</p>
             <div className="relative h-72 md:h-80 w-full">
-              <Bar 
+              <Bar
                 data={{
                   labels: revDates,
-                  datasets: [
-                    { label: "AMM & Swaps", data: revData1, backgroundColor: "#00a804" },
-                    { label: "Clock-In Box", data: revData2, backgroundColor: "#8b5cf6" },
-                    { label: "Curve tax", data: revDataTax, backgroundColor: "#f472b6" }
-                  ]
-                }} 
-                options={feeChartOpts} 
-              />
-            </div>
-          </div>
-
-          <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
-            <h3 className="text-sm font-bold text-white mb-4">Daily bonding-curve volume (USD)</h3>
-            <p className="text-[10px] text-slate-500 -mt-3 mb-4">Quote notional traded on Smart Launch while still on the curve.</p>
-            <div className="relative h-56 md:h-64 w-full">
-              <Bar 
-                data={{
-                  labels: revDates,
-                  datasets: [
-                    { label: "Bonding volume", data: revDataVol, backgroundColor: "#38bdf8" }
-                  ]
-                }} 
-                options={volChartOpts} 
+                  datasets: REV_STREAMS.map((s) => ({
+                    label: s.label,
+                    data: s.data,
+                    backgroundColor: s.color,
+                    borderRadius: 3,
+                    maxBarThickness: 28,
+                  })),
+                }}
+                options={revChartOpts}
               />
             </div>
           </div>

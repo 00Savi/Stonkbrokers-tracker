@@ -13,6 +13,9 @@ export const NAV_ITEMS = [
   { to: '/mancer/roi', label: 'Mancer', group: 'project', dot: 'bg-[#a78bfa]' },
   { to: '/tickeryard/roi', label: 'TickerYard', group: 'project', dot: 'bg-[#22d3ee]' },
   { to: '/cardwall/roi', label: 'The Card Wall', group: 'project', dot: 'bg-[#fbbf24]' },
+  { to: '/index/roi', label: 'The Index', group: 'project', dot: 'bg-[#34d399]' },
+  { to: '/rhmachines/roi', label: 'RH Machines', group: 'project', dot: 'bg-[#fb923c]' },
+  { to: '/oakmont/roi', label: 'Oakmont Vault', group: 'project', dot: 'bg-[#a3e635]' },
   { to: '/bonus', label: '$Bonus', group: 'project', dot: 'bg-[#e8c547]' },
   { to: '/portfolio', label: 'Portfolio Tracker', group: 'tools', dot: 'bg-accent' },
   { to: '/rankings', label: 'Rankings', group: 'lists', dot: 'bg-muted' },
@@ -98,7 +101,7 @@ export function TopNav({ live, data, pending }) {
             aria-expanded={open}
           >
             <img
-              src={`/${logo}`}
+              src={logo.startsWith('http') ? logo : `/${logo}`}
               alt=""
               className="h-9 w-9 shrink-0 rounded-xl border border-line object-cover sm:h-10 sm:w-10"
             />
@@ -179,7 +182,7 @@ export function TopNav({ live, data, pending }) {
                 </Value>
               </div>
             </div>
-            {project?.kind !== 'token' && (
+            {project?.kind !== 'token' && project?.kind !== 'cashflow' && project?.kind !== 'vault' && (
               <div className="text-right">
                 <div className="text-[9px] uppercase tracking-wider text-faint">Floor</div>
                 <div className="text-[12px] text-ink">

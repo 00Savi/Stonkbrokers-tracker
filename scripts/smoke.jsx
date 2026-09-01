@@ -27,6 +27,7 @@ import MancerDetailView from '../src/components/views/MancerDetailView';
 import YardDetailView from '../src/components/views/YardDetailView';
 import CardWallDetailView from '../src/components/views/CardWallDetailView';
 import BonusDetailView from '../src/components/views/BonusDetailView';
+import SpecialDetailView from '../src/components/views/SpecialDetailView';
 
 const snapshot = JSON.parse(fs.readFileSync('public/data.json', 'utf8'));
 
@@ -53,6 +54,9 @@ const ROUTES = [
   '/mancer/yield',
   '/tickeryard/revenue',
   '/cardwall/burn',
+  '/index/roi',
+  '/rhmachines/revenue',
+  '/oakmont/roi',
   '/bonus',
   '/bonus/roi',
   '/stonkbrokers',
@@ -95,6 +99,9 @@ const VIEWS = [
   ['MemesTokensView·memes', MemesTokensView, { data: snapshot, type: 'memes' }],
   ['MemesTokensView·stocks', MemesTokensView, { data: snapshot, type: 'stocks' }],
   ['BonusDetailView', BonusDetailView, { data: snapshot }],
+  ['Index·roi', SpecialDetailView, { data: snapshot, projectKey: 'index', activeTab: 'roi' }],
+  ['Printer·revenue', SpecialDetailView, { data: snapshot, projectKey: 'printer', activeTab: 'revenue' }],
+  ['Oakmont·roi', SpecialDetailView, { data: snapshot, projectKey: 'oakmont', activeTab: 'roi' }],
 ];
 
 const TABS = ['roi', 'historical', 'revenue', 'burn', 'activation', 'ownership'];

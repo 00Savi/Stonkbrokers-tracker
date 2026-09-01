@@ -112,7 +112,7 @@ export function useDashboard() {
       const pullPrices = async () => {
         const mine = ++seq.current;
         try {
-          const prices = await loadPrices(catalog, ac.signal);
+          const prices = await loadPrices(catalog, ac.signal, snapshot);
           if (ac.signal.aborted || mine !== seq.current) return;
           setData((current) => applyPrices(current, prices));
           mark('prices', 'ready');

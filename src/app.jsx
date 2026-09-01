@@ -10,6 +10,7 @@ import YardDetailView from './components/views/YardDetailView';
 import CardWallDetailView from './components/views/CardWallDetailView';
 import BonusDetailView from './components/views/BonusDetailView';
 import MemesTokensView from './components/views/MemesTokensView';
+import SpecialDetailView from './components/views/SpecialDetailView';
 import { useDashboard } from './lib/useDashboard';
 import { PROJECT_BY_SLUG, TAB_BY_SLUG, DEFAULT_TAB, BONUS_LIVE } from './lib/routes';
 import { SkeletonCard } from './components/kit';
@@ -19,6 +20,9 @@ const DETAIL_VIEWS = {
   mancer: MancerDetailView,
   tickeryard: YardDetailView,
   cardwall: CardWallDetailView,
+  index: (props) => <SpecialDetailView {...props} projectKey="index" />,
+  printer: (props) => <SpecialDetailView {...props} projectKey="printer" />,
+  oakmont: (props) => <SpecialDetailView {...props} projectKey="oakmont" />,
 };
 
 /**
@@ -43,6 +47,7 @@ function ProjectPage({ data }) {
   if (!activeTab) return <Navigate to={`/${project}/${DEFAULT_TAB}`} replace />;
 
   const View = DETAIL_VIEWS[key];
+  if (!View) return <Navigate to="/" replace />;
 
   return (
     <>

@@ -49,6 +49,16 @@ export const AIRDROP_COMMUNITIES = [
     nftCa: '0x890215157dbec26d67605324271b34ba05ee9e58',
     tokenCa: '0xb03058b8a39f3967df08d833682c1c99b29821b1',
   },
+  {
+    id: 'rhmachines',
+    key: 'printer',
+    name: 'RH Machines',
+    ticker: 'PRINTER',
+    mintedSupply: 10000,
+    firstTokenId: 1,
+    nftCa: '0x8C71D170fBd94BCba93bB08FC2CFD0e8620cD9cE',
+    tokenCa: '0x85a574f2fF0795685F58d1D7B0D4b51F148Ac489',
+  },
 ];
 
 export const DEFAULT_TBA = {
