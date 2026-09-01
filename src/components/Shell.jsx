@@ -1,26 +1,34 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { PROJECTS, TABS, BONUS_LIVE } from '../lib/routes';
-import { Value, price, usd, eth } from './kit';
+import { Value, price, usd, eth, BetaTag } from './kit';
 
 export const LAUNCHER_REF = 'https://stonkbrokers.wtf/?ref=savi';
 export const SAVI_X = 'https://x.com/savicrypto';
 const CLOCK_IN_CARD_REF = 'https://stonkbrokers.io/safe-launch?ref=SAVI';
 
+export const NAV_GROUPS = [
+  { id: 'tools', label: 'Tools' },
+  { id: 'ecosystem', label: 'Stonkbrokers Ecosystem' },
+  { id: 'yield-tokens', label: 'Yield Tokens' },
+  { id: 'yield-nfts', label: 'Yield NFTs' },
+  { id: 'chain', label: 'Robinhood Chain' },
+];
+
 export const NAV_ITEMS = [
-  { to: '/ecosystem', label: 'Ecosystem Overview', group: 'overview', dot: 'bg-muted' },
-  { to: '/stonkbrokers/roi', label: 'StonkBrokers', group: 'project', dot: 'bg-[#60a5fa]' },
-  { to: '/mancer/roi', label: 'Mancer', group: 'project', dot: 'bg-[#a78bfa]' },
-  { to: '/tickeryard/roi', label: 'TickerYard', group: 'project', dot: 'bg-[#22d3ee]' },
-  { to: '/cardwall/roi', label: 'The Card Wall', group: 'project', dot: 'bg-[#fbbf24]' },
-  { to: '/index/roi', label: 'The Index', group: 'project', dot: 'bg-[#34d399]' },
-  { to: '/rhmachines/roi', label: 'RH Machines', group: 'project', dot: 'bg-[#fb923c]' },
-  { to: '/oakmont/roi', label: 'Oakmont Vault', group: 'project', dot: 'bg-[#a3e635]' },
-  { to: '/bonus', label: '$Bonus', group: 'project', dot: 'bg-[#e8c547]' },
   { to: '/portfolio', label: 'Portfolio Tracker', group: 'tools', dot: 'bg-accent' },
-  { to: '/rankings', label: 'Rankings', group: 'lists', dot: 'bg-muted' },
-  { to: '/tokens', label: 'Robinhood Tokens', group: 'lists', dot: 'bg-accent' },
-  { to: '/stocks', label: 'Robinhood Stocks', group: 'lists', dot: 'bg-[#60a5fa]' },
+  { to: '/ecosystem', label: 'Ecosystem Overview', group: 'tools', dot: 'bg-muted' },
+  { to: '/rankings', label: 'Rankings', group: 'tools', dot: 'bg-muted' },
+  { to: '/stonkbrokers/roi', label: 'StonkBrokers', group: 'ecosystem', dot: 'bg-[#60a5fa]' },
+  { to: '/mancer/roi', label: 'Mancer', group: 'ecosystem', dot: 'bg-[#a78bfa]' },
+  { to: '/tickeryard/roi', label: 'TickerYard', group: 'ecosystem', dot: 'bg-[#22d3ee]' },
+  { to: '/cardwall/roi', label: 'The Card Wall', group: 'ecosystem', dot: 'bg-[#fbbf24]' },
+  { to: '/oakmont/roi', label: 'Oakmont Vault', group: 'ecosystem', dot: 'bg-[#a3e635]' },
+  { to: '/index/roi', label: 'Index', group: 'yield-tokens', dot: 'bg-[#34d399]' },
+  { to: '/bonus', label: '$Bonus', group: 'yield-tokens', dot: 'bg-[#e8c547]' },
+  { to: '/rhmachines/roi', label: 'RH Machines', group: 'yield-nfts', dot: 'bg-[#fb923c]' },
+  { to: '/tokens', label: 'Tokens', group: 'chain', dot: 'bg-accent' },
+  { to: '/stocks', label: 'Stocks', group: 'chain', dot: 'bg-[#60a5fa]' },
 ].filter((item) => item.to !== '/bonus' || BONUS_LIVE);
 
 function titleForPath(pathname) {
@@ -87,8 +95,6 @@ export function TopNav({ live, data, pending }) {
     setOpen(false);
   }, [pathname]);
 
-  const groups = ['overview', 'project', 'tools', 'lists'];
-
   return (
     <div className="sticky top-0 z-30 px-4 pt-4">
       <nav className="mx-auto flex max-w-[1500px] items-center gap-3 rounded-full border border-line bg-panel/95 px-3 py-2 backdrop-blur-xl sm:px-4 sm:py-2.5">
@@ -109,6 +115,7 @@ export function TopNav({ live, data, pending }) {
               <span className="truncate text-[15px] font-semibold tracking-tight text-ink sm:text-[17px]">
                 {title}
               </span>
+              {project?.beta && <BetaTag />}
               <svg
                 className={`h-4 w-4 shrink-0 text-muted transition-transform ${open ? 'rotate-180' : ''}`}
                 fill="none"
@@ -135,31 +142,41 @@ export function TopNav({ live, data, pending }) {
           {open && (
             <div
               role="listbox"
-              className="absolute left-0 top-[calc(100%+8px)] z-50 w-64 overflow-hidden rounded-xl border border-line bg-panel py-1 shadow-none"
+              className="absolute left-0 top-[calc(100%+8px)] z-50 max-h-[min(70vh,32rem)] w-72 overflow-y-auto rounded-xl border border-line bg-panel py-1 shadow-none"
             >
-              {groups.map((group, gi) => (
-                <React.Fragment key={group}>
-                  {gi > 0 && <div className="my-1 border-t border-line" />}
-                  {NAV_ITEMS.filter((item) => item.group === group).map((item) => {
-                    const active = itemIsActive(pathname, item.to);
-                    return (
-                      <button
-                        key={item.to}
-                        type="button"
-                        role="option"
-                        aria-selected={active}
-                        onClick={() => navigate(item.to)}
-                        className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-[13px] font-medium transition-colors hover:bg-panel-2 ${
-                          active ? 'text-ink' : 'text-muted'
-                        }`}
-                      >
-                        <span className={`h-2 w-2 shrink-0 rounded-full ${item.dot}`} />
-                        {item.label}
-                      </button>
-                    );
-                  })}
-                </React.Fragment>
-              ))}
+              {NAV_GROUPS.map((group, gi) => {
+                const items = NAV_ITEMS.filter((item) => item.group === group.id);
+                if (items.length === 0) return null;
+                return (
+                  <React.Fragment key={group.id}>
+                    {gi > 0 && <div className="my-1 border-t border-line" />}
+                    <div className="px-4 pb-0.5 pt-2 text-[11px] font-bold tracking-tight text-ink">
+                      {group.label}
+                    </div>
+                    {items.map((item) => {
+                      const active = itemIsActive(pathname, item.to);
+                      const slug = item.to.split('/')[1];
+                      const beta = PROJECTS.find((p) => p.slug === slug)?.beta;
+                      return (
+                        <button
+                          key={item.to}
+                          type="button"
+                          role="option"
+                          aria-selected={active}
+                          onClick={() => navigate(item.to)}
+                          className={`flex w-full items-center gap-3 px-4 py-2 text-left text-[13px] font-medium transition-colors hover:bg-panel-2 ${
+                            active ? 'text-ink' : 'text-muted'
+                          }`}
+                        >
+                          <span className={`h-2 w-2 shrink-0 rounded-full ${item.dot}`} />
+                          <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                          {beta && <BetaTag />}
+                        </button>
+                      );
+                    })}
+                  </React.Fragment>
+                );
+              })}
             </div>
           )}
         </div>
@@ -227,8 +244,9 @@ export function TopNav({ live, data, pending }) {
 /** Project tab bar. Every tab is a real link, so each is refresh-safe. */
 export function TabBar() {
   const { project } = useParams();
+  const meta = PROJECTS.find((p) => p.slug === project);
   return (
-    <div className="flex gap-1 overflow-x-auto border-b border-line pb-3 pt-4">
+    <div className="flex items-center gap-1 overflow-x-auto border-b border-line pb-3 pt-4">
       {TABS.map((t) => (
         <NavLink
           key={t.slug}
@@ -242,6 +260,11 @@ export function TabBar() {
           {t.label}
         </NavLink>
       ))}
+      {meta?.beta && (
+        <span className="ml-auto shrink-0 pl-2">
+          <BetaTag />
+        </span>
+      )}
     </div>
   );
 }
@@ -275,6 +298,7 @@ export function SiteFooter() {
               }`}
             >
               {item.label}
+              {PROJECTS.find((p) => p.slug === item.to.split('/')[1])?.beta ? ' · beta' : ''}
             </NavLink>
           );
         })}

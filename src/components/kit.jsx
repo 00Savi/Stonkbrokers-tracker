@@ -188,6 +188,14 @@ export function Tag({ tone = 'good', children, title }) {
   );
 }
 
+export function BetaTag() {
+  return (
+    <Tag tone="plain" title="This tracker is in beta">
+      beta
+    </Tag>
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /* Formatting                                                                 */
 /* -------------------------------------------------------------------------- */

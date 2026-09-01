@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { NFT_PROJECTS, RANKING_PROJECTS } from '../../lib/routes';
-import { Card, Figure, Stat, SplitBar, Tag, Value, Skeleton, usd, num, pct } from '../kit';
+import { Card, Figure, Stat, SplitBar, Tag, BetaTag, Value, Skeleton, usd, num, pct } from '../kit';
 
 /**
  * Rankings: of everything on the board, what is worth buying right now.
@@ -103,6 +103,7 @@ function RankTable({ rows, pending }) {
                       {r.project.name}
                     </Link>
                     <span className="font-mono text-[11px] text-faint">{r.name}</span>
+                    {r.project.beta && <BetaTag />}
                     {leader && <Tag tone="good">best</Tag>}
                     {r.underConstruction && (
                       <Tag tone="warn" title="Project has not started distributing yet">

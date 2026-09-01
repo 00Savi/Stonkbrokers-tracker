@@ -5,6 +5,7 @@ import {
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import { burnSeries, burnRateSeries } from '../../lib/burn';
 import { trailingSnapshots } from '../../lib/snapshots';
+import { BetaTag } from '../kit';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
@@ -114,6 +115,7 @@ export default function CardWallDetailView({ data, activeTab }) {
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
               <svg className="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20"><path d="M3 12v3c0 1.657 3.134 3 7 3s7-1.343 7-3v-3c0 1.657-3.134 3-7 3s-7-1.343-7-3z"></path><path d="M3 7v3c0 1.657 3.134 3 7 3s7-1.343 7-3V7c0 1.657-3.134 3-7 3S3 8.657 3 7z"></path><path d="M17 5c0 1.657-3.134 3-7 3S3 6.657 3 5s3.134-3 7-3 7 1.343 7 3z"></path></svg>
               The Card Wall Global Yield ROI Benchmarks
+              <BetaTag />
             </h3>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-lg px-4 py-2.5 text-sm shadow-inner flex items-center">
               <span className="text-slate-400 mr-2">Floor Entry Cost:</span> 

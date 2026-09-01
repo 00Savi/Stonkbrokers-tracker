@@ -5,6 +5,7 @@ import {
 import { Line, Bar } from 'react-chartjs-2';
 import { trailingSnapshots } from '../../lib/snapshots';
 import { PROJECTS } from '../../lib/routes';
+import { BetaTag } from '../kit';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler);
 
@@ -54,7 +55,10 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
     <div className="space-y-6 relative">
       {activeTab === 'roi' && (
         <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-6 shadow-xl">
-          <h3 className="text-lg font-bold text-white mb-2">{meta?.name} cash-on-cash</h3>
+          <h3 className="mb-2 flex items-center gap-2 text-lg font-bold text-white">
+            {meta?.name} cash-on-cash
+            {meta?.beta && <BetaTag />}
+          </h3>
           <p className="text-xs text-slate-400 mb-6">
             {kind === 'cashflow' && 'DefiLlama holders revenue annualized against circulating $INDEX. Eligible wallets hold at least 10,000 INDEX.'}
             {kind === 'machines' && 'Stock-pot estimate from the documented 5% PRINTER sell tax (80% to holders), split across the 10,000-machine fleet. Ink cost is 4,250 PRINTER plus the 15% ops fee. Floor is ink × 1.10.'}
