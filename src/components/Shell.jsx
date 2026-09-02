@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { PROJECTS, TABS, BONUS_LIVE } from '../lib/routes';
+import { PROJECTS, BONUS_LIVE, tabsForProject } from '../lib/routes';
 import { Value, price, usd, eth, BetaTag } from './kit';
 
 export const LAUNCHER_REF = 'https://stonkbrokers.wtf/?ref=savi';
@@ -18,7 +18,6 @@ export const NAV_GROUPS = [
 export const NAV_ITEMS = [
   { to: '/portfolio', label: 'Portfolio Tracker', group: 'tools', dot: 'bg-accent' },
   { to: '/ecosystem', label: 'Ecosystem Overview', group: 'tools', dot: 'bg-muted' },
-  { to: '/rankings', label: 'Rankings', group: 'tools', dot: 'bg-muted' },
   { to: '/stonkbrokers/roi', label: 'StonkBrokers', group: 'ecosystem', dot: 'bg-[#60a5fa]' },
   { to: '/mancer/roi', label: 'Mancer', group: 'ecosystem', dot: 'bg-[#a78bfa]' },
   { to: '/tickeryard/roi', label: 'TickerYard', group: 'ecosystem', dot: 'bg-[#22d3ee]' },
@@ -245,9 +244,10 @@ export function TopNav({ live, data, pending }) {
 export function TabBar() {
   const { project } = useParams();
   const meta = PROJECTS.find((p) => p.slug === project);
+  const tabs = tabsForProject(meta);
   return (
     <div className="flex items-center gap-1 overflow-x-auto border-b border-line pb-3 pt-4">
-      {TABS.map((t) => (
+      {tabs.map((t) => (
         <NavLink
           key={t.slug}
           to={`/${project}/${t.slug}`}

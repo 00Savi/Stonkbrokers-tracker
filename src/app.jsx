@@ -1,7 +1,6 @@
 import React from 'react';
 import { Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom';
 import { TopNav, TabBar, SiteFooter } from './components/Shell';
-import OverviewView from './components/views/OverviewView';
 import EcosystemView from './components/views/EcosystemView';
 import PortfolioView from './components/views/PortfolioView';
 import StonkDetailView from './components/views/StonkDetailView';
@@ -104,15 +103,12 @@ export default function App() {
           {/* Home is the portfolio scanner: one wallet paste, no project
               vocabulary to learn first. Project pages stay one click away. */}
           <Route path="/" element={<Navigate to="/portfolio" replace />} />
-          <Route
-            path="/rankings"
-            element={<OverviewView data={data} pending={booting} />}
-          />
+          <Route path="/rankings" element={<Navigate to="/ecosystem?tab=rankings" replace />} />
           <Route
             path="/ecosystem"
             element={
               <Section title="Ecosystem Overview">
-                {data ? <EcosystemView data={data} /> : <SkeletonCard rows={6} />}
+                {data ? <EcosystemView data={data} pending={booting} /> : <SkeletonCard rows={6} />}
               </Section>
             }
           />

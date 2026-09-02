@@ -41,6 +41,7 @@ const ROUTES = [
   '/',
   '/rankings',
   '/ecosystem',
+  '/ecosystem?tab=rankings',
   '/portfolio',
   '/tokens',
   '/stocks',
@@ -102,6 +103,11 @@ const VIEWS = [
   ['Index·roi', SpecialDetailView, { data: snapshot, projectKey: 'index', activeTab: 'roi' }],
   ['Printer·revenue', SpecialDetailView, { data: snapshot, projectKey: 'printer', activeTab: 'revenue' }],
   ['Oakmont·roi', SpecialDetailView, { data: snapshot, projectKey: 'oakmont', activeTab: 'roi' }],
+  ['Oakmont·yield', SpecialDetailView, { data: snapshot, projectKey: 'oakmont', activeTab: 'historical' }],
+  ['Oakmont·revenue', SpecialDetailView, { data: snapshot, projectKey: 'oakmont', activeTab: 'revenue' }],
+  ['Oakmont·burn', SpecialDetailView, { data: snapshot, projectKey: 'oakmont', activeTab: 'burn' }],
+  ['Oakmont·wrap', SpecialDetailView, { data: snapshot, projectKey: 'oakmont', activeTab: 'activation' }],
+  ['Oakmont·holders', SpecialDetailView, { data: snapshot, projectKey: 'oakmont', activeTab: 'ownership' }],
 ];
 
 const TABS = ['roi', 'historical', 'revenue', 'burn', 'activation', 'ownership'];

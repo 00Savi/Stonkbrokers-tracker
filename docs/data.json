@@ -23491,9 +23491,9 @@
         "dailyRevenue": []
       },
       "activation": {
-        "activeCount": 0,
+        "activeCount": 7458,
         "totalSupply": 10000,
-        "percentActivated": 0,
+        "percentActivated": 74.58,
         "eligibleWallets": null,
         "eligibleMin": null,
         "dualBurn": {
@@ -23501,7 +23501,7 @@
           "equivalentBrokersBurnt": 11231.554205743882
         },
         "breakdown": {
-          "T0": 0
+          "T0": 7458
         },
         "history": {
           "labels": [],
@@ -23530,10 +23530,10 @@
       "tiers": [
         {
           "tier": "T0",
-          "name": "Inked Machine (1×)",
+          "name": "Awake Machine (1×)",
           "reqTokens": 4250,
           "weight": 100,
-          "trackedAnnualYieldUsd": 662.7805123,
+          "trackedAnnualYieldUsd": 888.68,
           "dailyDates": [],
           "dailyYields": [],
           "floorEth": 0.029,
@@ -23648,34 +23648,54 @@
         "reservePriceUsd": 0.00522,
         "wrapRatio": 0.9682804674457429,
         "strikeFdvUsd": 538919.8687648138,
-        "reserveFdvUsd": 165711.74175690077,
-        "reserveSupply": 31745544.39787371,
-        "navCoverage": 0.3074886478702418
+        "reserveFdvUsd": 163419.86672758844,
+        "reserveSupply": 31306487.87884836,
+        "navCoverage": 0.3074886478702418,
+        "wrappedPct": 0.3131695191377787,
+        "poolVolume24h": 190494.98,
+        "reserveHolders": 694,
+        "strikeHolders": 3719,
+        "protocolExchangeRate": 1.0081348115805304,
+        "vaultNavUsdg": 32262.82000678884,
+        "reservePriceUsdg": 0.000322733794007707,
+        "claimApyPct": 17.074659574524087,
+        "wraps24h": 10,
+        "unwraps24h": 22,
+        "navToFdv": 0.05986570894247069
       },
       "cashflow": {
-        "source": null,
+        "source": "oakmont-api",
         "fees24h": 0,
         "fees7d": 0,
         "fees30d": 0,
-        "feesAllTime": 0,
-        "feesAnnualized": 0,
+        "feesAllTime": 5198.858538122913,
+        "feesAnnualized": 59156.51720506247,
         "revenue24h": 0,
         "revenue7d": 0,
         "revenue30d": 0,
         "revenueAllTime": 0,
-        "revenueAnnualized": 0,
+        "revenueAnnualized": 59156.51720506247,
         "holders24h": 0,
         "holders7d": 0,
         "holders30d": 0,
-        "holdersAnnualized": 0,
-        "dailyDates": [],
-        "dailyFees": [],
-        "dailyRevenue": []
+        "holdersAnnualized": 59156.51720506247,
+        "dailyDates": [
+          "08-01",
+          "09-01"
+        ],
+        "dailyFees": [
+          5043.090102788927,
+          155.76843533398682
+        ],
+        "dailyRevenue": [
+          5043.090102788927,
+          155.76843533398682
+        ]
       },
       "activation": {
-        "activeCount": 0,
+        "activeCount": 31306488,
         "totalSupply": 99966586.67497936,
-        "percentActivated": 0,
+        "percentActivated": 31.32,
         "eligibleWallets": null,
         "eligibleMin": null,
         "dualBurn": {
@@ -23694,7 +23714,7 @@
         "tierStats": {}
       },
       "ownership": {
-        "tokenHolders": 0,
+        "tokenHolders": 3719,
         "stonkHolders": 0,
         "nftHolders": 0,
         "currentMaxSupply": 99966586.67497936,
@@ -23712,12 +23732,36 @@
       "tiers": [
         {
           "tier": "T0",
-          "name": "Wrap STRIKE → RESERVE",
+          "name": "Hold $STRIKE",
+          "reqTokens": 1,
+          "weight": 0,
+          "trackedAnnualYieldUsd": 0.0005917628997116569,
+          "entryUsd": 0.005391,
+          "dailyDates": [
+            "08-01",
+            "09-01"
+          ],
+          "dailyYields": [
+            5043.090102788927,
+            155.76843533398682
+          ]
+        },
+        {
+          "tier": "T1",
+          "name": "Hold $RESERVE",
           "reqTokens": 1,
           "weight": 100,
-          "trackedAnnualYieldUsd": 0,
-          "dailyDates": [],
-          "dailyYields": []
+          "trackedAnnualYieldUsd": 0.001889592899528997,
+          "entryUsd": 0.00522,
+          "claimApyPct": 17.074659574524087,
+          "dailyDates": [
+            "08-01",
+            "09-01"
+          ],
+          "dailyYields": [
+            5043.090102788927,
+            155.76843533398682
+          ]
         }
       ],
       "revenue": {
@@ -23759,6 +23803,9 @@
           "date": "9/1",
           "timestamp": 1788234598475,
           "tokenPriceUsd": 0.005391,
+          "reservePriceUsd": 0.00522,
+          "wrapRatio": 0.9682804674457429,
+          "navCoverage": 0.3074886478702418,
           "totalBurn": 33413.32502064109,
           "fdv": 538919.8687648138,
           "annualYield": 0,
@@ -23781,7 +23828,257 @@
         "reserveCa": "0x8d6ff05c40899bfbc618e203052a8cd02d0e9581",
         "kind": "vault",
         "eligibleMin": null,
-        "site": "https://oakmontvault.xyz/"
+        "site": "https://dapp.oakmontvault.xyz/"
+      },
+      "vault": {
+        "exchangeRate": 1.0081348115805304,
+        "vaultNavUsdg": 32262.82000678884,
+        "reservePriceUsdg": 0.000322733794007707,
+        "soakSupply": 31306487.87884836,
+        "oakSupply": 99966586.67497936,
+        "wraps24h": 10,
+        "unwraps24h": 22,
+        "claimApyPct": 17.074659574524087,
+        "ethFeesAll": 2.0968973376152693,
+        "feeDays": 32.07733409722222,
+        "history": [
+          {
+            "ts": "2026-08-15T06:53:32.000Z",
+            "date": "8/15",
+            "exchangeRate": 1.0004542203674396,
+            "nav": 0,
+            "reservePrice": 0
+          },
+          {
+            "ts": "2026-08-15T07:26:09.000Z",
+            "date": "8/15",
+            "exchangeRate": 1.0004826845552626,
+            "nav": 0,
+            "reservePrice": 0
+          },
+          {
+            "ts": "2026-08-15T08:14:43.000Z",
+            "date": "8/15",
+            "exchangeRate": 1.0004903547360016,
+            "nav": 0,
+            "reservePrice": 0
+          },
+          {
+            "ts": "2026-08-15T08:44:29.000Z",
+            "date": "8/15",
+            "exchangeRate": 1.0004909773586859,
+            "nav": 0,
+            "reservePrice": 0
+          },
+          {
+            "ts": "2026-08-15T08:50:40.000Z",
+            "date": "8/15",
+            "exchangeRate": 1.0004938560788066,
+            "nav": 0,
+            "reservePrice": 0
+          },
+          {
+            "ts": "2026-08-15T08:54:12.000Z",
+            "date": "8/15",
+            "exchangeRate": 1.0004960544041652,
+            "nav": 0,
+            "reservePrice": 0
+          },
+          {
+            "ts": "2026-08-15T09:31:09.000Z",
+            "date": "8/15",
+            "exchangeRate": 1.0005132336799512,
+            "nav": 0,
+            "reservePrice": 0
+          },
+          {
+            "ts": "2026-08-15T09:34:19.000Z",
+            "date": "8/15",
+            "exchangeRate": 1.0005213824159864,
+            "nav": 0,
+            "reservePrice": 0
+          },
+          {
+            "ts": "2026-08-15T09:53:34.000Z",
+            "date": "8/15",
+            "exchangeRate": 1.0005245556651554,
+            "nav": 0,
+            "reservePrice": 0
+          },
+          {
+            "ts": "2026-08-15T10:27:32.000Z",
+            "date": "8/15",
+            "exchangeRate": 1.0005268278134063,
+            "nav": 0,
+            "reservePrice": 0
+          },
+          {
+            "ts": "2026-08-15T10:51:27.000Z",
+            "date": "8/15",
+            "exchangeRate": 1.0005335975437901,
+            "nav": 0,
+            "reservePrice": 0
+          },
+          {
+            "ts": "2026-08-15T11:17:23.000Z",
+            "date": "8/15",
+            "exchangeRate": 1.0005335975437901,
+            "nav": 0,
+            "reservePrice": 0
+          },
+          {
+            "ts": "2026-08-15T11:39:18.000Z",
+            "date": "8/15",
+            "exchangeRate": 1.0005361996930098,
+            "nav": 0,
+            "reservePrice": 0
+          },
+          {
+            "ts": "2026-08-15T12:05:03.000Z",
+            "date": "8/15",
+            "exchangeRate": 1.0005361996930098,
+            "nav": 0,
+            "reservePrice": 0
+          },
+          {
+            "ts": "2026-08-15T12:08:03.000Z",
+            "date": "8/15",
+            "exchangeRate": 1.0005361996930098,
+            "nav": 0,
+            "reservePrice": 0
+          },
+          {
+            "ts": "2026-08-15T12:34:08.000Z",
+            "date": "8/15",
+            "exchangeRate": 1.00056663319712,
+            "nav": 0,
+            "reservePrice": 0
+          },
+          {
+            "ts": "2026-08-15T12:36:20.000Z",
+            "date": "8/15",
+            "exchangeRate": 1.00056663319712,
+            "nav": 0,
+            "reservePrice": 0
+          },
+          {
+            "ts": "2026-08-15T13:30:58.000Z",
+            "date": "8/15",
+            "exchangeRate": 1.0005717908742215,
+            "nav": 0,
+            "reservePrice": 0
+          },
+          {
+            "ts": "2026-08-16T04:09:22.000Z",
+            "date": "8/16",
+            "exchangeRate": 1.0011623358748942,
+            "nav": 9247.23616615931,
+            "reservePrice": 0.000092481822827738
+          },
+          {
+            "ts": "2026-08-16T18:18:49.000Z",
+            "date": "8/16",
+            "exchangeRate": 1.0011982326160107,
+            "nav": 10948.063254049366,
+            "reservePrice": 0.00010949253765347
+          },
+          {
+            "ts": "2026-08-17T15:28:58.000Z",
+            "date": "8/17",
+            "exchangeRate": 1.0013084187459382,
+            "nav": 11416.386903730652,
+            "reservePrice": 0.000114175549536358
+          },
+          {
+            "ts": "2026-08-18T20:03:46.000Z",
+            "date": "8/18",
+            "exchangeRate": 1.0020580175558738,
+            "nav": 15084.030681221308,
+            "reservePrice": 0.000150855739804065
+          },
+          {
+            "ts": "2026-08-20T08:05:27.000Z",
+            "date": "8/20",
+            "exchangeRate": 1.00239489426469,
+            "nav": 16159.178632642777,
+            "reservePrice": 0.000161608319339217
+          },
+          {
+            "ts": "2026-08-23T12:13:42.000Z",
+            "date": "8/23",
+            "exchangeRate": 1.0032389749565,
+            "nav": 17029.442429246505,
+            "reservePrice": 0.000170351181832312
+          },
+          {
+            "ts": "2026-08-25T05:01:24.000Z",
+            "date": "8/25",
+            "exchangeRate": 1.0039949364109382,
+            "nav": 29104.08406143184,
+            "reservePrice": 0.000291138119540459
+          },
+          {
+            "ts": "2026-08-26T18:21:03.000Z",
+            "date": "8/26",
+            "exchangeRate": 1.0043496287391442,
+            "nav": 28727.962542385412,
+            "reservePrice": 0.000287375647182877
+          },
+          {
+            "ts": "2026-08-27T09:59:48.000Z",
+            "date": "8/27",
+            "exchangeRate": 1.004608925999131,
+            "nav": 29803.70695331456,
+            "reservePrice": 0.000298136686913349
+          },
+          {
+            "ts": "2026-08-28T11:55:39.000Z",
+            "date": "8/28",
+            "exchangeRate": 1.0049175072711465,
+            "nav": 29746.732932634393,
+            "reservePrice": 0.000297566756273771
+          },
+          {
+            "ts": "2026-08-29T06:06:46.000Z",
+            "date": "8/29",
+            "exchangeRate": 1.0053181066669135,
+            "nav": 29723.95544322118,
+            "reservePrice": 0.000297338905247034
+          },
+          {
+            "ts": "2026-08-30T03:37:41.000Z",
+            "date": "8/29",
+            "exchangeRate": 1.0060026188581401,
+            "nav": 30437.21274549655,
+            "reservePrice": 0.000304473862296177
+          },
+          {
+            "ts": "2026-09-01T00:36:36.000Z",
+            "date": "8/31",
+            "exchangeRate": 1.0078638007343421,
+            "nav": 32540.82090012527,
+            "reservePrice": 0.000325516975046122
+          },
+          {
+            "ts": "2026-09-01T15:14:29.000Z",
+            "date": "9/1",
+            "exchangeRate": 1.0081348115805304,
+            "nav": 32262.82000678884,
+            "reservePrice": 0.000322733794007707
+          }
+        ],
+        "revenue": [
+          {
+            "date": "2026-08-01",
+            "eth": 2.0340700044725857,
+            "reserveBurned": 130745.18014397152
+          },
+          {
+            "date": "2026-09-01",
+            "eth": 0.06282733314268357,
+            "reserveBurned": 7136.521052300591
+          }
+        ]
       }
     }
   },

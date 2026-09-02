@@ -138,7 +138,7 @@ function RankTable({ rows, pending }) {
   );
 }
 
-export default function OverviewView({ data, pending }) {
+export default function OverviewView({ data, pending, compact = false }) {
   const rows = tierRows(data);
   const top = rows[0];
 
@@ -175,7 +175,8 @@ export default function OverviewView({ data, pending }) {
   );
 
   return (
-    <div className="space-y-4 pb-16">
+    <div className={`space-y-4 ${compact ? '' : 'pb-16'}`}>
+      {!compact && (
       <header className="pb-2 pt-6">
         <h1 className="text-[26px] font-semibold tracking-tight text-ink md:text-[32px]">
           What is worth buying
@@ -186,6 +187,7 @@ export default function OverviewView({ data, pending }) {
           repriced live.
         </p>
       </header>
+      )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* The single hero: the best return available anywhere on the board. */}

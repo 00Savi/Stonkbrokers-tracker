@@ -1,14 +1,29 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, ArcElement, Filler
 } from 'chart.js';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
+import OverviewView from './OverviewView';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
-export default function EcosystemView({ data }) {
-  const [activeTab, setActiveTab] = useState('roi');
+const ECO_TABS = [
+  { id: 'roi', label: 'ROI Benchmarks' },
+  { id: 'historical', label: 'Historical Yield' },
+  { id: 'revenue', label: 'Revenue & LPs' },
+  { id: 'burn', label: 'Burn Tracker' },
+  { id: 'activation', label: 'Activation' },
+  { id: 'ownership', label: 'Ownership' },
+  { id: 'rankings', label: 'Rankings' },
+];
+
+export default function EcosystemView({ data, pending = false }) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabFromUrl = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(ECO_TABS.some((t) => t.id === tabFromUrl) ? tabFromUrl : 'roi');
   const [expandedProject, setExpandedProject] = useState(null);
+  const [yieldPeriod, setYieldPeriod] = useState('Y');
   
   const [revTimeframe, setRevTimeframe] = useState('7d');
   const [histTimeframe, setHistTimeframe] = useState('all');
@@ -16,15 +31,38 @@ export default function EcosystemView({ data }) {
   const [actTimeframe, setActTimeframe] = useState('all');
   const [ownTimeframe, setOwnTimeframe] = useState('all');
 
+  useEffect(() => {
+    if (tabFromUrl && ECO_TABS.some((t) => t.id === tabFromUrl) && tabFromUrl !== activeTab) {
+      setActiveTab(tabFromUrl);
+    }
+  }, [tabFromUrl, activeTab]);
+
+  const selectTab = (id) => {
+    setActiveTab(id);
+    setSearchParams(id === 'roi' ? {} : { tab: id }, { replace: true });
+  };
+
   if (!data || !data.projects) return <div className="text-center text-slate-400 p-12">Loading Ecosystem...</div>;
 
   const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val || 0);
   const formatNumber = (val, decimals = 0) => new Intl.NumberFormat('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val || 0);
 
   const order = ['stonk', 'mancer', 'tickeryard', 'cardwall', 'index', 'printer', 'oakmont'];
+  const activationOrder = order.filter((k) => {
+    const kind = data.projects[k]?.config?.kind;
+    return kind !== 'cashflow' && kind !== 'vault';
+  });
   const projectNames = { stonk: 'StonkBrokers', mancer: 'Mancer', tickeryard: 'TickerYard', cardwall: 'The Card Wall', index: 'The Index', printer: 'RH Machines', oakmont: 'Oakmont' };
   const projectColors = { stonk: '#00a804', mancer: '#8b5cf6', tickeryard: '#38bdf8', cardwall: '#f5b700', index: '#34d399', printer: '#fb923c', oakmont: '#a3e635' };
   const projectLogos = { stonk: 'Stonkbroker.png', mancer: 'logo.png', tickeryard: 'Yardkeepers.png', cardwall: 'wall.png', index: 'Index.png', printer: 'Printer.png', oakmont: 'Oakmont.png' };
+
+  const scaleYield = (annual) => {
+    if (yieldPeriod === 'D') return (annual || 0) / 365;
+    if (yieldPeriod === 'M') return (annual || 0) / 12;
+    return annual || 0;
+  };
+  const yieldPeriodLabel = yieldPeriod === 'D' ? 'Daily' : yieldPeriod === 'M' ? 'Monthly' : 'Annualized';
+  const yieldSuffix = yieldPeriod === 'D' ? '/day' : yieldPeriod === 'M' ? '/mo' : '/yr';
 
   const chartOptions = {
     responsive: true,
@@ -105,6 +143,63 @@ export default function EcosystemView({ data }) {
     return totalLen;
   };
 
+  const labelSortKey = (label) => {
+    const m = String(label || '').match(/^(\d{1,2})\/(\d{1,2})$/);
+    if (!m) return 0;
+    const month = Number(m[1]);
+    const day = Number(m[2]);
+    const year = month >= 7 ? 2026 : 2026;
+    return Date.UTC(year, month - 1, day);
+  };
+
+  const burnCaps = (p) => {
+    const kind = p?.config?.kind;
+    const tokenOnly = kind === 'cashflow' || kind === 'vault';
+    const nftSupply = Number(p?.ownership?.currentMaxSupply || p?.config?.maxSupply || 0);
+    const circ = Number(p?.ownership?.circulatingSupply || 0);
+    const burntTok = Math.max(
+      Number(p?.activation?.dualBurn?.totalBurnTokens || 0),
+      Number(p?.ownership?.permanentlyBurntTokens || 0)
+    );
+    let maxToken = Number(p?.config?.maxTokenSupply) || 0;
+    if (!maxToken) {
+      if (tokenOnly) maxToken = nftSupply || circ + burntTok;
+      else {
+        const unit = Number(p?.config?.unitValue);
+        if (kind === 'machines' && (circ > 0 || burntTok > 0)) maxToken = circ + burntTok;
+        else if (unit > 0 && nftSupply > 0) maxToken = nftSupply * unit;
+        else maxToken = nftSupply * 1000000;
+      }
+    }
+    const tokenPct = maxToken > 0 ? Math.min(100, (burntTok / maxToken) * 100) : 0;
+    let nftPct = null;
+    if (!tokenOnly && nftSupply > 0) {
+      const realNft = Number(p?.ownership?.burntNfts || 0);
+      const units = Number(p?.ownership?.permanentlyBurntUnits || 0);
+      const equiv = Number(p?.activation?.dualBurn?.equivalentBrokersBurnt || 0);
+      const nftBurned = kind === 'machines' ? realNft : Math.max(realNft, units, equiv);
+      nftPct = Math.min(100, (nftBurned / nftSupply) * 100);
+    }
+    return { tokenPct, nftPct, maxToken, burntTok, tokenOnly };
+  };
+
+  const cashflowRoiByDate = (p) => {
+    const dates = p?.cashflow?.dailyDates || [];
+    const revs = p?.cashflow?.dailyRevenue || [];
+    const circ = Number(p?.ownership?.circulatingSupply) || 0;
+    const price = Number(p?.market?.tokenPriceUsd) || 0;
+    const req = Number(p?.tiers?.[0]?.reqTokens) || 0;
+    const map = {};
+    if (!dates.length || !(price > 0)) return map;
+    dates.forEach((date, i) => {
+      const day = Number(revs[i]) || 0;
+      const cost = req > 0 ? req * price : circ * price;
+      const annualForStake = circ > 0 && req > 0 ? day * (req / circ) * 365 : day * 365;
+      map[date] = cost > 0 ? (annualForStake / cost) * 100 : null;
+    });
+    return map;
+  };
+
   // =========================================================
   // REVENUE CALCULATIONS
   // =========================================================
@@ -147,22 +242,69 @@ export default function EcosystemView({ data }) {
     return { labels: slicedLabels, datasets };
   };
 
+  const getHistChartData = (timeframe) => {
+    const labelSet = new Set();
+    const roiMaps = {};
+    for (const k of order) {
+      const p = data.projects[k];
+      const t0 = p?.tiers?.[0];
+      const map = { ...cashflowRoiByDate(p) };
+      for (const s of p?.dailySnapshots || []) {
+        const row = s.tiers?.find((st) => st.tier === (t0?.tier || 'T0'));
+        const roi = row?.roi != null ? Number(row.roi) : (s.roi != null ? Number(s.roi) : null);
+        if (Number.isFinite(roi)) map[s.date] = roi;
+      }
+      roiMaps[k] = map;
+      Object.keys(map).forEach((d) => labelSet.add(d));
+    }
+    const labels = [...labelSet]
+      .sort((a, b) => labelSortKey(a) - labelSortKey(b))
+      .filter((d) => labelSortKey(d) >= labelSortKey('8/20'));
+    const sliceCount = getSliceCount(timeframe, labels.length);
+    const slicedLabels = labels.slice(-sliceCount);
+
+    const datasets = order.map((k) => {
+      const raw = slicedLabels.map((d) => {
+        const v = roiMaps[k][d];
+        return Number.isFinite(v) ? v : null;
+      });
+      let started = false;
+      let last = null;
+      const dataPts = raw.map((v) => {
+        if (!started) {
+          if (v == null || v === 0) return null;
+          started = true;
+          last = v;
+          return v;
+        }
+        if (v == null) return last;
+        last = v;
+        return v;
+      });
+      return {
+        label: projectNames[k],
+        data: dataPts,
+        borderColor: projectColors[k],
+        backgroundColor: `${projectColors[k]}10`,
+        borderWidth: 2.5,
+        tension: 0.3,
+        pointRadius: 2,
+        spanGaps: false,
+      };
+    });
+
+    return { labels: slicedLabels, datasets };
+  };
+
   return (
     <div className="space-y-6 pt-4 relative">
       
       {/* ECOSYSTEM TAB NAVIGATION */}
       <div className="flex flex-wrap gap-2 md:gap-3 w-full mb-6">
-        {[
-          { id: 'roi', label: 'ROI Benchmarks' },
-          { id: 'historical', label: 'Historical Yield' },
-          { id: 'revenue', label: 'Revenue & LPs' },
-          { id: 'burn', label: 'Burn Tracker' },
-          { id: 'activation', label: 'Activation' },
-          { id: 'ownership', label: 'Ownership' }
-        ].map(tab => (
+        {ECO_TABS.map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => selectTab(tab.id)}
             className={`flex-1 sm:flex-none justify-center px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm ${
               activeTab === tab.id
                 ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25'
@@ -179,7 +321,7 @@ export default function EcosystemView({ data }) {
       {/* ========================================================= */}
       {activeTab === 'roi' && (
         <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-6 shadow-xl">
-          <div className="flex justify-between items-start mb-6">
+          <div className="flex justify-between items-start mb-6 gap-4">
             <div>
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <svg className="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z"></path></svg>
@@ -196,7 +338,25 @@ export default function EcosystemView({ data }) {
                   <th className="pb-4 font-medium pl-2">Project</th>
                   <th className="pb-4 font-medium">Base Tier (T0) Req.</th>
                   <th className="pb-4 font-medium">Total Entry Cost</th>
-                  <th className="pb-4 font-medium">Expected Yield <span className="normal-case">(Annualized)</span></th>
+                  <th className="pb-4 font-medium">
+                    <div className="flex items-center gap-2">
+                      <span>Expected Yield <span className="normal-case">({yieldPeriodLabel})</span></span>
+                      <div className="flex bg-[#08090b] rounded-md p-0.5 border border-[#1e2228] normal-case">
+                        {['D', 'M', 'Y'].map((p) => (
+                          <button
+                            key={p}
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setYieldPeriod(p); }}
+                            className={`px-2 py-0.5 text-[10px] font-bold rounded ${
+                              yieldPeriod === p ? 'bg-[#1e2228] text-white' : 'text-slate-400 hover:text-white'
+                            }`}
+                          >
+                            {p}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </th>
                   <th className="pb-4 font-medium text-right pr-4">Est. ROI (CoC)</th>
                 </tr>
               </thead>
@@ -236,7 +396,7 @@ export default function EcosystemView({ data }) {
                           {p.underConstruction ? (
                             <span className="text-slate-500 italic text-sm">Initializing...</span>
                           ) : (
-                            <><span className="text-white font-bold text-base">{formatCurrency(t0?.trackedAnnualYieldUsd || 0)}</span> <span className="text-slate-500">/yr</span></>
+                            <><span className="text-white font-bold text-base">{formatCurrency(scaleYield(t0?.trackedAnnualYieldUsd || 0))}</span> <span className="text-slate-500">{yieldSuffix}</span></>
                           )}
                         </td>
                         <td className="py-5 text-right pr-4">
@@ -292,7 +452,7 @@ export default function EcosystemView({ data }) {
           <div className="flex justify-between items-center mb-6">
             <div>
               <h3 className="text-lg font-bold text-white">Historical Protocol ROI Tracking (%)</h3>
-              <p className="text-xs text-slate-400 mt-1">Daily Return on Investment trends from recorded history.</p>
+              <p className="text-xs text-slate-400 mt-1">Daily CoC from 8/20 onward — the first day every NFT-yield line has a recorded print.</p>
             </div>
             <div className="flex bg-[#08090b] rounded-lg p-1 border border-[#1e2228]">
               {['7d', '30d', 'all'].map((tf) => (
@@ -305,32 +465,11 @@ export default function EcosystemView({ data }) {
           
           <div className="relative h-96 w-full bg-[#08090b] p-4 rounded-xl border border-[#1e2228]">
             <Line 
-              data={{
-                labels: masterHistLabels.slice(-getSliceCount(histTimeframe, masterHistLabels.length)),
-                datasets: order.map(k => {
-                  const p = data.projects[k];
-                  const t0 = p?.tiers?.[0];
-                  const floorCost = (p?.market?.nftFloorEth || 0) * (p?.market?.ethPriceUsd || 0);
-                  const actCost = (t0?.reqTokens || 0) * (p?.market?.tokenPriceUsd || 0);
-                  const currentRoi = floorCost + actCost > 0 && t0 ? ((t0.trackedAnnualYieldUsd || 0) / (floorCost + actCost)) * 100 : 0;
-
-                  const rawData = Array.isArray(p?.dailySnapshots) 
-                    ? p.dailySnapshots.map(s => s.tiers?.find(st => st.tier === (t0?.tier || 'T0'))?.roi || 0)
-                    : [];
-                  
-                  const alignedData = rightAlignArray(rawData, masterHistLabels.length, 0);
-                  const slicedData = alignedData.slice(-getSliceCount(histTimeframe, masterHistLabels.length));
-
-                  return {
-                    label: `${projectNames[k]} ROI (${currentRoi.toFixed(2)}%)`,
-                    data: slicedData,
-                    borderColor: projectColors[k],
-                    backgroundColor: `${projectColors[k]}10`,
-                    borderWidth: 2.5, tension: 0.3, pointRadius: 2
-                  };
-                })
+              data={getHistChartData(histTimeframe)} 
+              options={{
+                ...percentChartOptions,
+                spanGaps: false,
               }} 
-              options={percentChartOptions} 
             />
           </div>
         </div>
@@ -394,16 +533,7 @@ export default function EcosystemView({ data }) {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {order.map(k => {
               const p = data.projects[k];
-              const maxNft = p?.ownership?.currentMaxSupply || p?.config?.maxSupply || 3592;
-              
-              // Dynamic token supply. Fallback matches StonkBrokers actual logic (NFT Max * 1 Million)
-              const maxToken = p?.config?.maxTokenSupply || (maxNft * 1000000); 
-              
-              const totalBurnT = Math.max(Number(p?.activation?.dualBurn?.totalBurnTokens || 0), Number(p?.ownership?.permanentlyBurntTokens || 0));
-              const tokenDeflationPct = maxToken > 0 ? (totalBurnT / maxToken) * 100 : 0;
-
-              const totalBurnN = Math.max(Number(p?.activation?.dualBurn?.equivalentBrokersBurnt || 0), Number(p?.ownership?.permanentlyBurntUnits || 0), Number(p?.ownership?.burntNfts || 0));
-              const nftDeflationPct = maxNft > 0 ? (totalBurnN / maxNft) * 100 : 0;
+              const { tokenPct, nftPct } = burnCaps(p);
 
               return (
                 <div key={k} className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-4 shadow-sm">
@@ -413,11 +543,11 @@ export default function EcosystemView({ data }) {
                   </p>
                   <div className="flex justify-between items-end mb-1">
                     <span className="text-xs text-slate-400">Token Burn</span>
-                    <span className="text-emerald-400 font-bold">{tokenDeflationPct.toFixed(2)}%</span>
+                    <span className="text-emerald-400 font-bold">{tokenPct.toFixed(2)}%</span>
                   </div>
                   <div className="flex justify-between items-end">
                     <span className="text-xs text-slate-400">NFT Burn</span>
-                    <span className="text-blue-400 font-bold">{nftDeflationPct.toFixed(2)}%</span>
+                    <span className="text-blue-400 font-bold">{nftPct == null ? '—' : `${nftPct.toFixed(2)}%`}</span>
                   </div>
                 </div>
               );
@@ -445,20 +575,19 @@ export default function EcosystemView({ data }) {
                   labels: masterGenesisLabels.slice(-getSliceCount(burnTimeframe, masterGenesisLabels.length)),
                   datasets: order.map((k) => {
                     const p = data.projects[k];
-                    const maxNft = p?.ownership?.currentMaxSupply || p?.config?.maxSupply || 3592;
-                    const maxTokenSupply = p?.config?.maxTokenSupply || (maxNft * 1000000); 
+                    const { maxToken, burntTok } = burnCaps(p);
+                    const maxTokenSupply = maxToken || 1;
                     
                     const rawTokensBurnt = Array.isArray(p?.ownership?.burnHistory) ? p.ownership.burnHistory : [];
                     
                     let tokenBurnPctArray = [];
                     if (rawTokensBurnt.length > 0) {
                       const padded = rightAlignArray(rawTokensBurnt, masterGenesisLabels.length, 0);
-                      tokenBurnPctArray = padded.map(v => Number(((v / maxTokenSupply) * 100).toFixed(2)));
+                      tokenBurnPctArray = padded.map(v => Number((Math.min(100, (v / maxTokenSupply) * 100)).toFixed(2)));
                     } else {
-                      const targetTotal = Math.max(Number(p?.activation?.dualBurn?.totalBurnTokens || 0), Number(p?.ownership?.permanentlyBurntTokens || 0));
-                      const targetPct = Number(((targetTotal / maxTokenSupply) * 100).toFixed(2));
+                      const targetPct = Number(((burntTok / maxTokenSupply) * 100).toFixed(2));
                       const launchOffsets = { stonk: 0, mancer: 4, tickeryard: 8, cardwall: 14 };
-                      tokenBurnPctArray = interpolateData(targetPct, masterGenesisLabels.length, launchOffsets[k] || 0);
+                      tokenBurnPctArray = interpolateData(Math.min(100, targetPct), masterGenesisLabels.length, launchOffsets[k] || 0);
                     }
 
                     const slicedData = tokenBurnPctArray.slice(-getSliceCount(burnTimeframe, masterGenesisLabels.length));
@@ -485,24 +614,23 @@ export default function EcosystemView({ data }) {
               <Line 
                 data={{
                   labels: masterGenesisLabels.slice(-getSliceCount(burnTimeframe, masterGenesisLabels.length)),
-                  datasets: order.map((k) => {
+                  datasets: order.filter((k) => burnCaps(data.projects[k]).nftPct != null).map((k) => {
                     const p = data.projects[k];
                     const maxNftSupply = p?.ownership?.currentMaxSupply || p?.config?.maxSupply || 3592;
+                    const { nftPct } = burnCaps(p);
                     
                     const finalBurntTokens = Math.max(...(p?.ownership?.burnHistory || [1]));
-                    const finalBurntNfts = Math.max(Number(p?.activation?.dualBurn?.equivalentBrokersBurnt || 0), Number(p?.ownership?.permanentlyBurntUnits || 0), Number(p?.ownership?.burntNfts || 0));
+                    const nftBurned = (nftPct / 100) * maxNftSupply;
                     
-                    const ratio = finalBurntTokens > 0 ? (finalBurntNfts / finalBurntTokens) : 0;
+                    const ratio = finalBurntTokens > 0 ? (nftBurned / finalBurntTokens) : 0;
                     const rawTokensBurnt = Array.isArray(p?.ownership?.burnHistory) ? p.ownership.burnHistory : [];
 
                     let nftBurnPctArray = [];
                     if (rawTokensBurnt.length > 0) {
                       const padded = rightAlignArray(rawTokensBurnt, masterGenesisLabels.length, 0);
-                      nftBurnPctArray = padded.map(v => Number((((v * ratio) / maxNftSupply) * 100).toFixed(2)));
+                      nftBurnPctArray = padded.map(v => Number((Math.min(100, ((v * ratio) / maxNftSupply) * 100)).toFixed(2)));
                     } else {
-                      const targetPct = Number(((finalBurntNfts / maxNftSupply) * 100).toFixed(2));
-                      const launchOffsets = { stonk: 0, mancer: 4, tickeryard: 8, cardwall: 14 };
-                      nftBurnPctArray = interpolateData(targetPct, masterGenesisLabels.length, launchOffsets[k] || 0);
+                      nftBurnPctArray = interpolateData(nftPct || 0, masterGenesisLabels.length, 0);
                     }
 
                     const slicedData = nftBurnPctArray.slice(-getSliceCount(burnTimeframe, masterGenesisLabels.length));
@@ -529,7 +657,7 @@ export default function EcosystemView({ data }) {
       {activeTab === 'activation' && (
         <div className="space-y-6">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {order.map(k => {
+            {activationOrder.map(k => {
               const p = data.projects[k];
               const actCount = p?.activation?.activeCount || 0;
               const pct = p?.activation?.percentActivated || 0;
@@ -552,10 +680,10 @@ export default function EcosystemView({ data }) {
               <div className="relative h-64 md:h-72 w-full md:w-1/2 flex items-center justify-center">
                 <Doughnut 
                   data={{ 
-                    labels: order.map(k => projectNames[k]), 
+                    labels: activationOrder.map(k => projectNames[k]), 
                     datasets: [{ 
-                      data: order.map(k => data.projects[k]?.activation?.activeCount || 0), 
-                      backgroundColor: order.map(k => projectColors[k]), 
+                      data: activationOrder.map(k => data.projects[k]?.activation?.activeCount || 0), 
+                      backgroundColor: activationOrder.map(k => projectColors[k]), 
                       borderWidth: 0 
                     }] 
                   }} 
@@ -563,7 +691,7 @@ export default function EcosystemView({ data }) {
                 />
               </div>
               <div className="w-full md:w-1/2 flex flex-col gap-3">
-                {order.map(k => (
+                {activationOrder.map(k => (
                   <div key={k} className="flex justify-between items-center bg-[#08090b] p-3 rounded-lg border border-[#1e2228]">
                     <div className="flex items-center gap-3"><div className="w-3 h-3 rounded-md" style={{backgroundColor: projectColors[k]}}></div><span className="text-sm font-bold text-slate-300">{projectNames[k]}</span></div>
                     <span className="text-white font-bold tracking-wide">{formatNumber(data.projects[k]?.activation?.activeCount || 0)}</span>
@@ -588,7 +716,7 @@ export default function EcosystemView({ data }) {
                 <Line 
                   data={{ 
                     labels: masterGenesisLabels.slice(-getSliceCount(actTimeframe, masterGenesisLabels.length)), 
-                    datasets: order.map(k => {
+                    datasets: activationOrder.map(k => {
                       const p = data.projects[k];
                       const rawData = Array.isArray(p?.activation?.history?.cumulative) ? p.activation.history.cumulative : [];
                       
@@ -744,6 +872,10 @@ export default function EcosystemView({ data }) {
             </div>
           </div>
         </div>
+      )}
+
+      {activeTab === 'rankings' && (
+        <OverviewView data={data} pending={pending} compact />
       )}
 
       {/* DYNAMIC DISCLAIMER */}

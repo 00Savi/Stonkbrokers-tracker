@@ -51,6 +51,20 @@ export const TABS = [
   { slug: 'ownership', label: 'Ownership' },
 ];
 
+/** Same URL slugs as TABS; labels match wrap/credit rather than NFT CoC. */
+export const VAULT_TABS = [
+  { slug: 'roi', label: 'Protocol' },
+  { slug: 'yield', label: 'Markets' },
+  { slug: 'revenue', label: 'Fees & LP' },
+  { slug: 'burn', label: 'Supply' },
+  { slug: 'activation', label: 'Wrap' },
+  { slug: 'ownership', label: 'Holders' },
+];
+
+export function tabsForProject(meta) {
+  return meta?.kind === 'vault' ? VAULT_TABS : TABS;
+}
+
 export const PROJECTS = [
   { slug: 'stonkbrokers', key: 'stonk', name: 'StonkBrokers', ticker: 'STONK' },
   { slug: 'mancer', key: 'mancer', name: 'Mancer', ticker: 'MANCER' },
