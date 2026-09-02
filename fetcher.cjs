@@ -928,6 +928,7 @@ async function fetchCardWallLiveActivations(conf) {
     calls.push({ to: conf.activationCa, data: ACTIVATIONS_SEL + arg });
   }
   console.log(`  cardwall: scanning ${n} memberships for rarity + vault...`);
+  await sleep(2_000);
   const raw = await rpc.calls(calls);
 
   const breakdown = { T0: 0, T1: 0, T2: 0, T3: 0, T4: 0 };
@@ -1405,36 +1406,34 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
     const box = address.toLowerCase();
     const fromBlock = blockTime.blockAt(sevenDaysAgo);
     const toBlock = await rpc.blockNumber();
-    const tokens = [WETH, ...Object.keys(TOKEN_TICKERS)];
-    const seen = new Set();
-
-    for (const tokenAddr of tokens) {
-      const token = tokenAddr.toLowerCase();
-      if (seen.has(token)) continue;
-      seen.add(token);
-      const price = token === WETH
-        ? (marketData.ethPriceUsd || 0)
-        : (token === (conf.tokenCa || "").toLowerCase()
-            ? (marketData.tokenPriceUsd || tokenPrices[token] || 0)
-            : (tokenPrices[token] || 0));
-      if (!(price > 0)) continue;
-
-      const logs = await rpc.getLogs({
-        address: token,
-        fromBlock,
-        toBlock,
-        topics: [TOPIC.transfer, null, addrTopic(box)],
-      });
-      for (const log of logs) {
-        const amount = decodeUint(log.data, 0);
-        if (amount == null || amount <= 0n) continue;
-        const ts = blockTime.at(parseInt(log.blockNumber, 16));
-        if (ts < sevenDaysAgo) continue;
-        const usdVal = (Number(amount) / 1e18) * price;
-        const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
-        revenueBreakdown.securityBoxUsd += usdVal;
-        revenueBreakdown.dailySecurityBox[dayIdx] += usdVal;
+    const priceOf = (token) => {
+      const t = token.toLowerCase();
+      if (t === WETH) return marketData.ethPriceUsd || 0;
+      if (t === (conf.tokenCa || "").toLowerCase()) {
+        return marketData.tokenPriceUsd || tokenPrices[t] || 0;
       }
+      return tokenPrices[t] || 0;
+    };
+    const tokens = [...new Set([WETH, ...Object.keys(TOKEN_TICKERS)].map((a) => a.toLowerCase()))]
+      .filter((t) => priceOf(t) > 0);
+
+    const logs = await rpc.getLogs({
+      address: tokens,
+      fromBlock,
+      toBlock,
+      topics: [TOPIC.transfer, null, addrTopic(box)],
+    });
+    for (const log of logs) {
+      const price = priceOf(log.address);
+      if (!(price > 0)) continue;
+      const amount = decodeUint(log.data, 0);
+      if (amount == null || amount <= 0n) continue;
+      const ts = blockTime.at(parseInt(log.blockNumber, 16));
+      if (ts < sevenDaysAgo) continue;
+      const usdVal = (Number(amount) / 1e18) * price;
+      const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
+      revenueBreakdown.securityBoxUsd += usdVal;
+      revenueBreakdown.dailySecurityBox[dayIdx] += usdVal;
     }
   }
 
@@ -1995,7 +1994,7 @@ async function run() {
       projectsOk++;
       } catch (e) {
         projectsFailed++;
-        console.error(`[error] ${projectKey}: ${e.stack || e.message}`);
+        console.error(`[error] ${projectKey}: ${e.message}`);
         if (prevProjData && Object.keys(prevProjData).length) {
           finalJson.projects[projectKey] = prevProjData;
           console.warn(`[warn] ${projectKey}: carrying previous snapshot`);
