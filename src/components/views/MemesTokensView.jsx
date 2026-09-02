@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 
+import { compactUsd } from '../kit';
+
 export default function MemesTokensView({ data, type = 'memes' }) {
   const isStocks = type === 'stocks';
   const tokensList = isStocks ? (data?.stocks || []) : (data?.memes || []);
@@ -8,7 +10,7 @@ export default function MemesTokensView({ data, type = 'memes' }) {
   const [sortCol, setSortCol] = useState('volume24h');
   const [sortAsc, setSortAsc] = useState(false);
 
-  const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val || 0);
+  const formatCurrency = compactUsd;
 
   const handleSort = (col) => {
     if (sortCol === col) {
@@ -111,7 +113,7 @@ export default function MemesTokensView({ data, type = 'memes' }) {
                           </h4>
                         </div>
                         {token.ca ? (
-                          <div className="relative w-full h-[450px] rounded-xl overflow-hidden border border-[#1e2228] shadow-inner">
+                          <div className="relative w-full h-[260px] sm:h-[450px] rounded-xl overflow-hidden border border-[#1e2228] shadow-inner">
                             <iframe 
                               src={`https://dexscreener.com/robinhood/${token.ca}?embed=1&theme=dark&trades=0&info=0`} 
                               className="w-full h-full border-0" 

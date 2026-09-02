@@ -26,8 +26,7 @@ import {
   clearStoredCampaign,
   sliceTbaBatches,
 } from '../../lib/bonusEngine';
-
-const LAUNCHER_REF = 'https://stonkbrokers.wtf/?ref=savi';
+import { LAUNCHER_REF } from '../../lib/share';
 
 const ROADMAP = [
   {
@@ -300,7 +299,7 @@ export default function BonusDetailView({ data }) {
             rel="noreferrer"
             className="whitespace-nowrap rounded-full bg-brand px-3 py-1.5 text-[12px] font-medium text-black hover:opacity-90"
           >
-            Trade on Stonklauncher ↗
+            Trade on Launchpad ↗
           </a>
         }
       >

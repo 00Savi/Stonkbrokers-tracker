@@ -70,7 +70,7 @@ export function Card({ eyebrow, sub, corner, children, flush = false, className 
   return (
     <section className={`card overflow-hidden ${className}`}>
       {(eyebrow || corner) && (
-        <header className="flex items-start justify-between gap-3 px-5 pb-4 pt-5">
+        <header className="flex items-start justify-between gap-3 px-4 pb-4 pt-4 sm:px-5 sm:pt-5">
           <div>
             {eyebrow && <h2 className="eyebrow text-muted">{eyebrow}</h2>}
             {sub && <p className="mt-1 font-mono text-[11px] leading-relaxed text-faint">{sub}</p>}
@@ -78,7 +78,7 @@ export function Card({ eyebrow, sub, corner, children, flush = false, className 
           {corner}
         </header>
       )}
-      <div className={flush ? '' : 'px-5 pb-5'}>{children}</div>
+      <div className={flush ? '' : 'px-4 pb-4 sm:px-5 sm:pb-5'}>{children}</div>
     </section>
   );
 }
@@ -89,7 +89,7 @@ export function Figure({
   unit,
   after,
   tone = 'ink',
-  size = 'text-[44px]',
+  size = 'text-[28px] sm:text-[36px] md:text-[44px]',
   pending = false,
 }) {
   const toneClass = { ink: 'text-ink', accent: 'text-accent', danger: 'text-danger' }[tone];
@@ -110,7 +110,7 @@ export function Stat({ label, value, tone = 'ink', pending = false, ch = 6, note
   return (
     <div>
       <div className="eyebrow text-faint">{label}</div>
-      <div className={`num mt-1 text-[18px] ${toneClass}`}>
+      <div className={`num mt-1 text-[15px] leading-tight sm:text-[18px] ${toneClass}`}>
         <Value pending={pending} ch={ch}>
           {value}
         </Value>
@@ -209,6 +209,31 @@ export const usd = (v, digits = 0) =>
         minimumFractionDigits: digits,
         maximumFractionDigits: digits,
       }).format(Number(v));
+
+/** Short USD for table cells and mobile stat tiles. Full value stays in `title`. */
+export function compactUsd(v) {
+  const n = Number(v);
+  if (v == null || !Number.isFinite(n)) return '—';
+  const abs = Math.abs(n);
+  const sign = n < 0 ? '-' : '';
+  if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(2)}M`;
+  if (abs >= 1e4) return `${sign}$${(abs / 1e3).toFixed(1)}k`;
+  if (abs >= 1) return `${sign}$${Math.round(abs).toLocaleString('en-US')}`;
+  return usd(n, abs < 0.01 ? 6 : 4);
+}
+
+export function compactNum(v, decimals = 0) {
+  const n = Number(v);
+  if (v == null || !Number.isFinite(n)) return '—';
+  const abs = Math.abs(n);
+  const sign = n < 0 ? '-' : '';
+  if (abs >= 1e6) return `${sign}${(abs / 1e6).toFixed(1).replace(/\.0$/, '')}M`;
+  if (abs >= 1e4) return `${sign}${(abs / 1e3).toFixed(1).replace(/\.0$/, '')}k`;
+  return n.toLocaleString('en-US', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
 
 /** Sub-dollar prices need their significant digits; dollar prices do not. */
 export const price = (v) => {

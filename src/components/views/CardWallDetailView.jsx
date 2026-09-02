@@ -5,7 +5,8 @@ import {
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import { burnSeries, burnRateSeries } from '../../lib/burn';
 import { trailingSnapshots } from '../../lib/snapshots';
-import { BetaTag } from '../kit';
+import { BetaTag, compactUsd, compactNum } from '../kit';
+import { baseChartOptions, compactTick, compactUsdTick } from '../../lib/charts';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
@@ -21,8 +22,8 @@ export default function CardWallDetailView({ data, activeTab }) {
 
   const { config = {}, market = {}, tiers = [], activation = {}, ownership = {}, revenue = {}, dailySnapshots = [], ledger = null } = project;
 
-  const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val || 0);
-  const formatNumber = (val, decimals = 0) => new Intl.NumberFormat('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val || 0);
+  const formatCurrency = compactUsd;
+  const formatNumber = compactNum;
 
   const floorCostUsd = (market.nftFloorEth || 0) * (market.ethPriceUsd || 0);
 
@@ -31,14 +32,7 @@ export default function CardWallDetailView({ data, activeTab }) {
     return (eth || 0) * (market.ethPriceUsd || 0);
   };
 
-  const chartOptions = {
-    responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { labels: { color: '#cbd5e1' } } },
-    scales: { 
-      y: { ticks: { color: '#cbd5e1' }, grid: { color: '#1e2228', borderDash: [4, 4] } }, 
-      x: { ticks: { color: '#cbd5e1' }, grid: { color: '#1e2228', borderDash: [4, 4] } } 
-    }
-  };
+  const chartOptions = baseChartOptions();
 
   const hasSnaps = Array.isArray(dailySnapshots) && dailySnapshots.length > 0 && dailySnapshots[0].date;
   // Trailing 14 days of recorded ROI.
@@ -110,8 +104,8 @@ export default function CardWallDetailView({ data, activeTab }) {
 
       {/* TAB 1: ROI BENCHMARKS */}
       {activeTab === 'roi' && (
-        <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-6 shadow-xl">
-          <div className="flex justify-between items-center mb-6">
+        <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6">
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
               <svg className="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20"><path d="M3 12v3c0 1.657 3.134 3 7 3s7-1.343 7-3v-3c0 1.657-3.134 3-7 3s-7-1.343-7-3z"></path><path d="M3 7v3c0 1.657 3.134 3 7 3s7-1.343 7-3V7c0 1.657-3.134 3-7 3S3 8.657 3 7z"></path><path d="M17 5c0 1.657-3.134 3-7 3S3 6.657 3 5s3.134-3 7-3 7 1.343 7 3z"></path></svg>
               The Card Wall Global Yield ROI Benchmarks
@@ -124,7 +118,7 @@ export default function CardWallDetailView({ data, activeTab }) {
           </div>
 
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
-            <div className="flex justify-between items-center mb-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-2">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
                 <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
                 "What-If" Volume Simulator
@@ -135,7 +129,7 @@ export default function CardWallDetailView({ data, activeTab }) {
             <input type="range" min="0.1" max="10" step="0.1" value={volumeMultiplier} onChange={(e) => setVolumeMultiplier(e.target.value)} className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-500" />
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto -mx-1 sm:mx-0">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-[#1e2228] text-slate-500 text-xs uppercase tracking-wider">
@@ -225,7 +219,7 @@ export default function CardWallDetailView({ data, activeTab }) {
                               <Line 
                                 data={{ 
                                   labels: t.dailyDates?.length ? t.dailyDates : revDates, 
-                                  datasets: [{ label: 'Daily Yield (USD)', data: t.dailyYields?.length ? t.dailyYields : zeros, borderColor: '#f5b700', backgroundColor: 'rgba(245, 183, 0, 0.1)', borderWidth: 2, fill: true, tension: 0.4, pointRadius: 3 }] 
+                                  datasets: [{ label: 'Daily Yield (USD)', data: t.dailyYields?.length ? t.dailyYields : zeros, borderColor: '#f5b700', backgroundColor: 'rgba(245, 183, 0, 0.1)', borderWidth: 2, fill: true, tension: 0.4, pointRadius: 0 }] 
                                 }} 
                                 options={chartOptions} 
                               />
@@ -244,7 +238,7 @@ export default function CardWallDetailView({ data, activeTab }) {
 
       {/* TAB 2: HISTORICAL YIELD */}
       {activeTab === 'historical' && (
-        <div className="bg-[#0e1013] border border-[#1e2228] p-6 rounded-2xl shadow-lg space-y-6">
+        <div className="bg-[#0e1013] border border-[#1e2228] p-4 md:p-6 rounded-2xl shadow-lg space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
               <h2 className="text-xl font-bold text-white flex items-center gap-2">Historical Yield & Payback Horizon</h2>
@@ -265,7 +259,7 @@ export default function CardWallDetailView({ data, activeTab }) {
           </div>
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mt-6">
             <h3 className="text-sm font-bold text-white mb-4">Tier ROI % Trajectory</h3>
-            <div className="relative h-72 md:h-80 w-full">
+            <div className="relative h-52 sm:h-64 md:h-80 w-full">
               {histLabels.length ? (
                 <Line data={{ labels: histLabels, datasets: histDatasets }} options={chartOptions} />
               ) : (
@@ -300,7 +294,7 @@ export default function CardWallDetailView({ data, activeTab }) {
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
             <h3 className="text-sm font-bold text-white mb-1">Slab landed cost by day</h3>
             <p className="text-xs text-slate-500 mb-4">From the first vault record through today. Days with no new slabs are omitted.</p>
-            <div className="relative h-72 md:h-80 w-full">
+            <div className="relative h-52 sm:h-64 md:h-80 w-full">
               <Bar 
                 data={{
                   labels: revDates,
@@ -309,7 +303,7 @@ export default function CardWallDetailView({ data, activeTab }) {
                     { label: "Still on the wall", data: revData2, backgroundColor: "#f5b700", borderRadius: 4 }
                   ]
                 }} 
-                options={{ responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true, grid: { color: '#1e2228', borderDash: [4, 4] } }, y: { stacked: true, grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: v => '$' + v } } }, plugins: { legend: { labels: { color: '#cbd5e1' } } } }} 
+                options={{ responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true, grid: { color: '#1e2228', borderDash: [4, 4] } }, y: { stacked: true, grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactUsdTick } } }, plugins: { legend: { labels: { color: '#cbd5e1' } } } }} 
               />
             </div>
           </div>
@@ -323,16 +317,16 @@ export default function CardWallDetailView({ data, activeTab }) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
               <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Total ${config.ticker} Burnt</p>
-              <p className="text-2xl md:text-3xl font-extrabold text-orange-400">{formatNumber(realBurntTokens)} {config.ticker}</p>
+              <p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-orange-400">{formatNumber(realBurntTokens)} {config.ticker}</p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
               <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Equivalent Units Removed</p>
-              <p className="text-2xl md:text-3xl font-extrabold text-blue-400">{formatNumber(realBurntUnits, 2)} Units</p>
+              <p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-blue-400">{formatNumber(realBurntUnits, 2)} Units</p>
             </div>
           </div>
 
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6">
               <h3 className="text-sm font-bold text-white hidden sm:block">Cumulative Token Burn Over Time</h3>
               <div className="flex bg-[#0e1013] rounded-lg p-1 border border-[#1e2228]">
                 {['7d', '30d', 'all'].map((tf) => (
@@ -342,11 +336,11 @@ export default function CardWallDetailView({ data, activeTab }) {
                 ))}
               </div>
             </div>
-            <div className="relative h-72 md:h-80 w-full">
+            <div className="relative h-52 sm:h-64 md:h-80 w-full">
               {slicedBurnData.length > 0 ? (
                 <Line
                   data={{ labels: slicedBurnLabels, datasets: [{ label: 'Cumulative Burnt', data: slicedBurnData, borderColor: '#fb923c', backgroundColor: 'rgba(251, 146, 60, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] }}
-                  options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: (v) => (v >= 1000000 ? (v / 1000000).toFixed(1) + 'M' : v) } } } }}
+                  options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactTick } } } }}
                 />
               ) : (
                 <div className="h-full flex items-center justify-center text-sm text-slate-500">
@@ -359,16 +353,16 @@ export default function CardWallDetailView({ data, activeTab }) {
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
             <h3 className="text-sm font-bold text-white mb-1">The Deflationary Flywheel</h3>
             <p className="text-xs text-slate-400 mb-4">Tracks the correlation between token spot price and daily burn rate.</p>
-            <div className="relative h-72 md:h-80 w-full">
+            <div className="relative h-52 sm:h-64 md:h-80 w-full">
               <Bar 
                 data={{
                   labels: flywheel.labels.slice(-5),
                   datasets: [
-                    { type: 'line', label: 'Token Price ($)', data: fwPrices.slice(-5), borderColor: '#f5b700', backgroundColor: '#f5b700', borderWidth: 2, tension: 0.3, pointRadius: 3, yAxisID: 'y1' },
+                    { type: 'line', label: 'Token Price ($)', data: fwPrices.slice(-5), borderColor: '#f5b700', backgroundColor: '#f5b700', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y1' },
                     { type: 'bar', label: 'Daily Burn Velocity', data: fwBurn.slice(-5), backgroundColor: 'rgba(249, 115, 22, 0.8)', borderRadius: 4, yAxisID: 'y' }
                   ]
                 }} 
-                options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#cbd5e1' } } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { type: 'linear', position: 'left', grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: (v) => (v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v) } }, y1: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#f5b700', callback: v => '$' + v } } } }} 
+                options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#cbd5e1' } } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { type: 'linear', position: 'left', grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactTick } }, y1: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#f5b700', callback: compactUsdTick } } } }} 
               />
             </div>
           </div>
@@ -380,8 +374,8 @@ export default function CardWallDetailView({ data, activeTab }) {
         <div className="space-y-6">
           <h2 className="text-lg md:text-xl font-bold text-white mb-6">Ecosystem Activation Metrics</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Activated Supply Ratio</p><p className="text-2xl md:text-3xl font-extrabold text-emerald-400">{(activation.percentActivated || 0).toFixed(2)}%</p></div>
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Total Active Units</p><p className="text-2xl md:text-3xl font-extrabold text-blue-400">{formatNumber(activation.activeCount || 0)} Units</p></div>
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Activated Supply Ratio</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-emerald-400">{(activation.percentActivated || 0).toFixed(2)}%</p></div>
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Total Active Units</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-blue-400">{formatNumber(activation.activeCount || 0)} Units</p></div>
           </div>
 
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-4 gap-4 mt-8">
@@ -428,7 +422,7 @@ export default function CardWallDetailView({ data, activeTab }) {
 
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
              <h3 className="text-sm font-bold text-white mb-4">Historical Activity (Net vs. Daily)</h3>
-             <div className="relative h-72 md:h-80 w-full">
+             <div className="relative h-52 sm:h-64 md:h-80 w-full">
                 <Bar 
                   data={{
                     labels: actLabels,
@@ -457,14 +451,14 @@ export default function CardWallDetailView({ data, activeTab }) {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Unique NFT Holders</p><p className="text-2xl md:text-3xl font-extrabold text-purple-400">{formatNumber(ownership.nftHolders || 0)} Wallets</p></div>
-            <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm ring-1 ring-emerald-500/20"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Ownership Concentration</p><p className="text-2xl md:text-3xl font-extrabold text-emerald-400">{(ownership.ownershipRatio || 0).toFixed(2)}%</p></div>
-            <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Unique ${config.ticker} Holders</p><p className="text-2xl md:text-3xl font-extrabold text-purple-400">{formatNumber(wallHolders)} Wallets</p></div>
+            <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Unique NFT Holders</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-purple-400">{formatNumber(ownership.nftHolders || 0)} Wallets</p></div>
+            <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm ring-1 ring-emerald-500/20"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Ownership Concentration</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-emerald-400">{(ownership.ownershipRatio || 0).toFixed(2)}%</p></div>
+            <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Unique ${config.ticker} Holders</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-purple-400">{formatNumber(wallHolders)} Wallets</p></div>
           </div>
 
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
             <h3 className="text-sm font-bold text-white mb-4">True Active Token Holders Over Time</h3>
-            <div className="relative h-72 md:h-80 w-full">
+            <div className="relative h-52 sm:h-64 md:h-80 w-full">
               <Line 
                 data={{ labels: ownLabels, datasets: [{ label: 'Active Holders', data: ownData, borderColor: '#f5b700', backgroundColor: 'rgba(245, 183, 0, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] }} 
                 options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } } } }} 

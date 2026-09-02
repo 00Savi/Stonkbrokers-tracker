@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { ethers } from 'ethers';
 import { SAVI_X } from '../Shell';
+import { compactUsd } from '../kit';
 import { PROJECTS } from '../../lib/routes';
 import {
   aggregateTbaHoldings,
@@ -105,8 +106,7 @@ export default function PortfolioView({ data }) {
   const [forecastYears, setForecastYears] = useState(1);
   const [scanProgress, setScanProgress] = useState('');
 
-  const formatCurrency = (val) =>
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val || 0);
+  const formatCurrency = compactUsd;
   const priceIndex = buildPriceIndex(data);
   const ethUsd = data?.projects?.stonk?.market?.ethPriceUsd || 0;
 
@@ -456,7 +456,7 @@ export default function PortfolioView({ data }) {
     results.floorUsd > 0 ? ((mode === 'history' ? results.earnedUsd : forecastUsd) / results.floorUsd) * 100 : 0;
 
   return (
-    <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-6 shadow-xl mt-6">
+    <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl mt-6">
       <div className="mb-6">
         <h2 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
           <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -554,17 +554,17 @@ export default function PortfolioView({ data }) {
           </div>
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3 sm:p-5 shadow-inner">
               <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Total Floor Value</p>
               <p className="text-xl md:text-2xl font-extrabold text-white">{formatCurrency(results.floorUsd)}</p>
             </div>
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3 sm:p-5 shadow-inner">
               <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">{cashLabel}</p>
               <p className={`text-xl md:text-2xl font-extrabold ${results.hasErrors ? 'text-rose-400' : 'text-emerald-400'}`}>
                 {results.hasErrors ? 'ERROR' : formatCurrency(cashValue)}
               </p>
             </div>
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3 sm:p-5 shadow-inner">
               <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">
                 {mode === 'history' ? 'Realized vs floor' : 'Combined Portfolio ROI'}
               </p>
@@ -572,7 +572,7 @@ export default function PortfolioView({ data }) {
                 {results.hasErrors ? 'ERROR' : `${roiPct.toFixed(2)}%`}
               </p>
             </div>
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3 sm:p-5 shadow-inner">
               <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Total Active Units</p>
               <p className="text-xl md:text-2xl font-extrabold text-purple-400">{results.totalUnits} Units</p>
             </div>

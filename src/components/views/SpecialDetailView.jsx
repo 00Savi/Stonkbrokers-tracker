@@ -5,11 +5,12 @@ import {
 import { Line, Bar } from 'react-chartjs-2';
 import { trailingSnapshots } from '../../lib/snapshots';
 import { PROJECTS } from '../../lib/routes';
-import { BetaTag } from '../kit';
+import { BetaTag, compactUsd, compactNum } from '../kit';
 import {
   OAKMONT_ACTIONS, OAKMONT_BASKET, OAKMONT_DOCS, OAKMONT_DAPP, OAKMONT_FEES,
   fetchGeckoTokenHolders,
 } from '../../lib/oakmont';
+import { baseChartOptions, compactUsdTick } from '../../lib/charts';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler);
 
@@ -25,8 +26,8 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
   const { config = {}, market = {}, tiers = [], activation = {}, ownership = {}, cashflow = {}, lockedLp = null, dailySnapshots = [], vault = null } = project;
   const kind = config.kind || meta?.kind;
   const ticker = config.ticker || meta?.ticker;
-  const fmt = (v) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v || 0);
-  const num = (v, d = 0) => new Intl.NumberFormat('en-US', { maximumFractionDigits: d }).format(v || 0);
+  const fmt = compactUsd;
+  const num = compactNum;
 
   const floorUsd = (market.nftFloorEth || 0) * (market.ethPriceUsd || 0);
   const tokenUsd = market.tokenPriceUsd || 0;
@@ -43,15 +44,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
     ? snaps.map((s) => s.roi || s.tiers?.[0]?.roi || 0)
     : [];
 
-  const chartOpts = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: { legend: { labels: { color: '#cbd5e1' } } },
-    scales: {
-      y: { ticks: { color: '#94a3b8' }, grid: { color: '#1e2228', borderDash: [4, 4] } },
-      x: { ticks: { color: '#94a3b8' }, grid: { color: '#1e2228', borderDash: [4, 4] } },
-    },
-  };
+  const chartOpts = baseChartOptions();
 
   const burnTokens = activation.dualBurn?.totalBurnTokens || ownership.permanentlyBurntTokens || 0;
   const wrapPct = market.wrappedPct ?? (circulating > 0 ? (market.reserveSupply || 0) / circulating : 0);
@@ -88,7 +81,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
   return (
     <div className="space-y-6 relative">
       {activeTab === 'roi' && (
-        <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-6 shadow-xl">
+        <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl">
           <h3 className="mb-2 flex items-center gap-2 text-lg font-bold text-white">
             {meta?.name} cash-on-cash
             {meta?.beta && <BetaTag />}
@@ -161,7 +154,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
           <h2 className="text-xl font-bold text-white">Historical yield & payback</h2>
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
             <h3 className="text-sm font-bold text-white mb-4">ROI trajectory</h3>
-            <div className="relative h-72 w-full">
+            <div className="relative h-52 sm:h-64 md:h-72 w-full">
               {histLabels.length && (histRoi.length || cashflow.dailyRevenue?.length) ? (
                 <Line
                   data={{
@@ -199,7 +192,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
           </div>
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
             <h3 className="text-sm font-bold text-white mb-4">Daily fees vs holders revenue</h3>
-            <div className="relative h-72 w-full">
+            <div className="relative h-52 sm:h-64 md:h-72 w-full">
               {(cashflow.dailyDates || []).length ? (
                 <Bar
                   data={{
@@ -209,7 +202,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
                       { label: 'Holders revenue', data: cashflow.dailyRevenue, backgroundColor: MARK.violet },
                     ],
                   }}
-                  options={{ ...chartOpts, scales: { ...chartOpts.scales, x: { ...chartOpts.scales.x, stacked: false }, y: { ...chartOpts.scales.y, stacked: false, ticks: { ...chartOpts.scales.y.ticks, callback: (v) => '$' + v } } } }}
+                  options={{ ...chartOpts, scales: { ...chartOpts.scales, x: { ...chartOpts.scales.x, stacked: false }, y: { ...chartOpts.scales.y, stacked: false, ticks: { ...chartOpts.scales.y.ticks, callback: compactUsdTick } } } }}
                 />
               ) : (
                 <div className="h-72 flex items-center justify-center text-sm text-slate-500">
@@ -364,7 +357,7 @@ function VaultView({
     <div className="space-y-6 relative">
       {activeTab === 'roi' && (
         <div className="space-y-6">
-          <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-6 shadow-xl">
+          <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl">
             <h3 className="mb-2 flex items-center gap-2 text-lg font-bold text-white">
               {meta?.name}
               {meta?.beta && <BetaTag />}
@@ -472,7 +465,7 @@ function VaultView({
           {rateHist.length > 1 && (
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
               <h3 className="text-sm font-bold text-white mb-4">STRIKE per $RESERVE (claim rate)</h3>
-              <div className="relative h-72 w-full">
+              <div className="relative h-52 sm:h-64 md:h-72 w-full">
                 <Line
                   data={{
                     labels: rateHist.map((r) => r.date || r.ts),
@@ -495,7 +488,7 @@ function VaultView({
           )}
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
             <h3 className="text-sm font-bold text-white mb-4">Wrap ratio & liquid-claim coverage</h3>
-            <div className="relative h-72 w-full">
+            <div className="relative h-52 sm:h-64 md:h-72 w-full">
               {histLabels.length && hasWrapSeries ? (
                 <Line
                   data={{
@@ -639,7 +632,7 @@ function VaultView({
           {rateHist.length > 1 && (
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
               <h3 className="text-sm font-bold text-white mb-4">Claim rate & vault NAV</h3>
-              <div className="relative h-72 w-full">
+              <div className="relative h-52 sm:h-64 md:h-72 w-full">
                 <Line
                   data={{
                     labels: rateHist.map((r) => r.date || r.ts),

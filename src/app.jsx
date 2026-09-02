@@ -1,6 +1,8 @@
 import React from 'react';
 import { Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom';
 import { TopNav, TabBar, SiteFooter } from './components/Shell';
+import ChartShareLayer from './components/ChartShareLayer';
+import { ChartMobileSync } from './lib/charts';
 import EcosystemView from './components/views/EcosystemView';
 import PortfolioView from './components/views/PortfolioView';
 import StonkDetailView from './components/views/StonkDetailView';
@@ -97,8 +99,10 @@ export default function App() {
     <div className="flex min-h-full flex-col">
       <ScrollToTop />
       <TopNav live={sources.prices === 'ready'} data={data} pending={booting} />
+      <ChartMobileSync />
+      <ChartShareLayer />
 
-      <main className="mx-auto w-full max-w-[1500px] px-4">
+      <main className="mx-auto w-full max-w-[1500px] px-3 sm:px-4">
         <Routes>
           {/* Home is the portfolio scanner: one wallet paste, no project
               vocabulary to learn first. Project pages stay one click away. */}

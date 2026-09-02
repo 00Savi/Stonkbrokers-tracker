@@ -5,6 +5,8 @@ import {
 } from 'chart.js';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import OverviewView from './OverviewView';
+import { compactUsd, compactNum } from '../kit';
+import { baseChartOptions, compactTick, compactUsdTick } from '../../lib/charts';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
@@ -44,8 +46,8 @@ export default function EcosystemView({ data, pending = false }) {
 
   if (!data || !data.projects) return <div className="text-center text-slate-400 p-12">Loading Ecosystem...</div>;
 
-  const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val || 0);
-  const formatNumber = (val, decimals = 0) => new Intl.NumberFormat('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val || 0);
+  const formatCurrency = compactUsd;
+  const formatNumber = compactNum;
 
   const order = ['stonk', 'mancer', 'tickeryard', 'cardwall', 'index', 'printer', 'oakmont'];
   const activationOrder = order.filter((k) => {
@@ -64,24 +66,13 @@ export default function EcosystemView({ data, pending = false }) {
   const yieldPeriodLabel = yieldPeriod === 'D' ? 'Daily' : yieldPeriod === 'M' ? 'Monthly' : 'Annualized';
   const yieldSuffix = yieldPeriod === 'D' ? '/day' : yieldPeriod === 'M' ? '/mo' : '/yr';
 
-  const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { labels: { color: '#cbd5e1', boxWidth: 14 } },
-      tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${typeof ctx.raw === 'number' ? ctx.raw.toLocaleString() : ctx.raw}` } }
-    },
-    scales: { 
-      y: { min: 0, ticks: { color: '#cbd5e1' }, grid: { color: '#1e2228', borderDash: [4, 4] } }, 
-      x: { ticks: { color: '#cbd5e1' }, grid: { color: '#1e2228', borderDash: [4, 4] } } 
-    }
-  };
+  const chartOptions = baseChartOptions();
 
   const percentChartOptions = {
     ...chartOptions,
     scales: {
       ...chartOptions.scales,
-      y: { min: 0, ticks: { color: '#cbd5e1', callback: (v) => `${v}%` }, grid: { color: '#1e2228', borderDash: [4, 4] } }
+      y: { min: 0, ticks: { color: '#cbd5e1', callback: (v) => `${compactTick(v)}%` }, grid: { color: '#1e2228', borderDash: [4, 4] } }
     }
   };
 
@@ -300,12 +291,12 @@ export default function EcosystemView({ data, pending = false }) {
     <div className="space-y-6 pt-4 relative">
       
       {/* ECOSYSTEM TAB NAVIGATION */}
-      <div className="flex flex-wrap gap-2 md:gap-3 w-full mb-6">
+      <div className="-mx-1 mb-6 flex w-full gap-2 overflow-x-auto px-1 pb-1">
         {ECO_TABS.map((tab) => (
           <button
             key={tab.id}
             onClick={() => selectTab(tab.id)}
-            className={`flex-1 sm:flex-none justify-center px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition text-xs md:text-sm ${
+            className={`shrink-0 px-3 py-2 rounded-lg font-semibold transition text-xs md:text-sm ${
               activeTab === tab.id
                 ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25'
                 : 'bg-transparent border border-[#1e2228] hover:bg-[#0e1013] text-slate-300'
@@ -320,7 +311,7 @@ export default function EcosystemView({ data, pending = false }) {
       {/* TAB 1: ROI BENCHMARKS */}
       {/* ========================================================= */}
       {activeTab === 'roi' && (
-        <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-6 shadow-xl">
+        <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl">
           <div className="flex justify-between items-start mb-6 gap-4">
             <div>
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
@@ -331,7 +322,7 @@ export default function EcosystemView({ data, pending = false }) {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto -mx-1 sm:mx-0">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-[#1e2228] text-slate-500 text-xs uppercase tracking-wider">
@@ -426,7 +417,7 @@ export default function EcosystemView({ data, pending = false }) {
                                     data: t0?.dailyYields?.length ? t0.dailyYields : [0,0,0,0,0,0,0], 
                                     borderColor: projectColors[k], 
                                     backgroundColor: `${projectColors[k]}15`, 
-                                    borderWidth: 2, fill: true, tension: 0.4, pointRadius: 3 
+                                    borderWidth: 2, fill: true, tension: 0.4, pointRadius: 0 
                                   }] 
                                 }} 
                                 options={chartOptions} 
@@ -448,8 +439,8 @@ export default function EcosystemView({ data, pending = false }) {
       {/* TAB 2: HISTORICAL YIELD (No more sea of zeros!) */}
       {/* ========================================================= */}
       {activeTab === 'historical' && (
-        <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-6 shadow-xl">
-          <div className="flex justify-between items-center mb-6">
+        <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6">
             <div>
               <h3 className="text-lg font-bold text-white">Historical Protocol ROI Tracking (%)</h3>
               <p className="text-xs text-slate-400 mt-1">Daily CoC from 8/20 onward — the first day every NFT-yield line has a recorded print.</p>
@@ -463,7 +454,7 @@ export default function EcosystemView({ data, pending = false }) {
             </div>
           </div>
           
-          <div className="relative h-96 w-full bg-[#08090b] p-4 rounded-xl border border-[#1e2228]">
+          <div className="relative h-56 sm:h-80 md:h-96 w-full bg-[#08090b] p-4 rounded-xl border border-[#1e2228]">
             <Line 
               data={getHistChartData(histTimeframe)} 
               options={{
@@ -516,7 +507,7 @@ export default function EcosystemView({ data, pending = false }) {
                   plugins: { legend: { labels: { color: '#cbd5e1' } } },
                   scales: {
                     x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
-                    y: { min: 0, grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: (v) => `$${v.toLocaleString()}` } }
+                    y: { min: 0, grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactUsdTick } }
                   }
                 }} 
               />
@@ -712,7 +703,7 @@ export default function EcosystemView({ data, pending = false }) {
                 ))}
                </div>
              </div>
-             <div className="relative h-96 w-full bg-[#08090b] rounded-xl p-4 border border-[#1e2228]">
+             <div className="relative h-56 sm:h-80 md:h-96 w-full bg-[#08090b] rounded-xl p-4 border border-[#1e2228]">
                 <Line 
                   data={{ 
                     labels: masterGenesisLabels.slice(-getSliceCount(actTimeframe, masterGenesisLabels.length)), 

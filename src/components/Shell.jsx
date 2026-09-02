@@ -1,11 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { PROJECTS, BONUS_LIVE, tabsForProject } from '../lib/routes';
+import { LAUNCHER_REF, SAVI_X } from '../lib/share';
 import { Value, price, usd, eth, BetaTag } from './kit';
 
-export const LAUNCHER_REF = 'https://stonkbrokers.wtf/?ref=savi';
-export const SAVI_X = 'https://x.com/savicrypto';
-const CLOCK_IN_CARD_REF = 'https://stonkbrokers.io/safe-launch?ref=SAVI';
+export { LAUNCHER_REF, SAVI_X };
 
 export const NAV_GROUPS = [
   { id: 'tools', label: 'Tools' },
@@ -32,14 +31,14 @@ export const NAV_ITEMS = [
 
 function titleForPath(pathname) {
   const first = pathname.split('/').filter(Boolean)[0];
-  if (first === 'ecosystem') return 'Full Ecosystem Overview';
-  if (first === 'portfolio') return 'Portfolio Tracker';
+  if (first === 'ecosystem') return 'Ecosystem';
+  if (first === 'portfolio') return 'Portfolio';
   if (first === 'rankings') return 'Rankings';
   if (first === 'tokens') return 'Robinhood Tokens';
   if (first === 'stocks') return 'Robinhood Stock Tokens';
   const project = PROJECTS.find((p) => p.slug === first);
   if (project?.kind === 'token') return project.name;
-  return project ? `${project.name} Tracker` : 'StonkBrokers Tracker';
+  return project ? project.name : 'StonkBrokers Tracker';
 }
 
 function logoForPath(pathname, data) {
@@ -95,8 +94,8 @@ export function TopNav({ live, data, pending }) {
   }, [pathname]);
 
   return (
-    <div className="sticky top-0 z-30 px-4 pt-4">
-      <nav className="mx-auto flex max-w-[1500px] items-center gap-3 rounded-full border border-line bg-panel/95 px-3 py-2 backdrop-blur-xl sm:px-4 sm:py-2.5">
+    <div className="sticky top-0 z-30 px-2 pt-2 sm:px-4 sm:pt-4">
+      <nav className="mx-auto flex max-w-[1500px] items-center gap-2 rounded-2xl border border-line bg-panel/95 px-2 py-2 backdrop-blur-xl sm:gap-3 sm:rounded-full sm:px-4 sm:py-2.5">
         <div className="relative min-w-0 flex-1" ref={menuRef}>
           <button
             type="button"
@@ -111,7 +110,7 @@ export function TopNav({ live, data, pending }) {
               className="h-9 w-9 shrink-0 rounded-xl border border-line object-cover sm:h-10 sm:w-10"
             />
             <span className="flex min-w-0 items-center gap-2">
-              <span className="truncate text-[15px] font-semibold tracking-tight text-ink sm:text-[17px]">
+              <span className="truncate text-[14px] font-semibold tracking-tight text-ink sm:text-[17px]">
                 {title}
               </span>
               {project?.beta && <BetaTag />}
@@ -218,11 +217,11 @@ export function TopNav({ live, data, pending }) {
             {live ? 'LIVE' : 'SYNCING'}
           </span>
           <a
-            href={CLOCK_IN_CARD_REF}
+            href={LAUNCHER_REF}
             target="_blank"
             rel="noreferrer"
             title="Trade Safe Launch with Savi's Clock In Card"
-            className="whitespace-nowrap rounded-full border border-line px-3 py-1.5 text-[12px] font-medium text-ink transition-colors hover:bg-panel-2"
+            className="hidden whitespace-nowrap rounded-full border border-line px-3 py-1.5 text-[12px] font-medium text-ink transition-colors hover:bg-panel-2 lg:inline-flex"
           >
             Clock In Card ↗
           </a>
@@ -230,9 +229,10 @@ export function TopNav({ live, data, pending }) {
             href={LAUNCHER_REF}
             target="_blank"
             rel="noreferrer"
-            className="whitespace-nowrap rounded-full bg-brand px-3.5 py-1.5 text-[12px] font-medium text-black transition-opacity hover:opacity-90"
+            className="whitespace-nowrap rounded-full bg-brand px-2.5 py-1.5 text-[11px] font-medium text-black transition-opacity hover:opacity-90 sm:px-3.5 sm:text-[12px]"
           >
-            Stonklauncher ↗
+            <span className="sm:hidden">Launch</span>
+            <span className="hidden sm:inline">Launchpad ↗</span>
           </a>
         </div>
       </nav>
@@ -246,13 +246,13 @@ export function TabBar() {
   const meta = PROJECTS.find((p) => p.slug === project);
   const tabs = tabsForProject(meta);
   return (
-    <div className="flex items-center gap-1 overflow-x-auto border-b border-line pb-3 pt-4">
+    <div className="-mx-1 flex items-center gap-1 overflow-x-auto border-b border-line px-1 pb-3 pt-4 sm:mx-0 sm:px-0">
       {tabs.map((t) => (
         <NavLink
           key={t.slug}
           to={`/${project}/${t.slug}`}
           className={({ isActive }) =>
-            `whitespace-nowrap rounded-lg px-3 py-1.5 text-[13px] transition-colors ${
+            `shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-[13px] transition-colors ${
               isActive ? 'bg-panel-2 text-ink' : 'text-muted hover:text-ink'
             }`
           }
