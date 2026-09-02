@@ -73,6 +73,20 @@ const blockTime = new BlockTime().load();
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
+async function withRetries(fn, attempts, label) {
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      console.warn(`[warn] ${label} attempt ${i + 1}/${attempts}: ${e.message}`);
+      await sleep(2000 * (i + 1) * (i + 1));
+    }
+  }
+  throw lastErr;
+}
+
 const TOKEN_TICKERS = {
   "0xe934e36a439c94017b64a3fece66af12099abf50": "STONK", 
   "0xaf3d76f1834a1d425780943c99ea8a608f8a93f9": "AAPL",
@@ -412,7 +426,7 @@ async function secureFetch(url) {
   const headers = { "Accept": "application/json" };
   for (let i = 0; i < 5; i++) {
     try {
-      const res = await fetch(url, { headers });
+      const res = await fetch(url, { headers, signal: AbortSignal.timeout(25_000) });
       
       // Do not kill the run. Holders/activations now come from gg-index, and
       // yield walks already refuse a truncated window via `failed: true`.
@@ -1768,20 +1782,27 @@ async function run() {
   // from the current hour would all share one stale time and land in the wrong
   // 24h bucket. On a warm cache the chain has only moved ~36k blocks since the
   // last run, so this adds an anchor or two.
-  const chainHead = await rpc.blockNumber();
   const earliestGenesis = Math.min(
     ...Object.values(PROJECTS).filter((p) => !isSpecial(p)).map((p) => p.genesisBlock)
   );
-  await blockTime.ensureRange(rpc, earliestGenesis, chainHead, (done, total) => {
-    process.stdout.write(`\r  block-time anchors: ${done}/${total}   `);
-  });
+  let chainHead;
+  try {
+    chainHead = await withRetries(() => rpc.blockNumber(), 4, "eth_blockNumber");
+    await blockTime.ensureRange(rpc, earliestGenesis, chainHead, (done, total) => {
+      process.stdout.write(`\r  block-time anchors: ${done}/${total}   `);
+    });
+  } catch (e) {
+    if (!blockTime.anchors.length) throw e;
+    chainHead = blockTime.anchors[blockTime.anchors.length - 1][0];
+    console.warn(`[warn] block-time refresh failed (${e.message}); using cached anchors to block ${chainHead}`);
+  }
   console.log(`\r  block-time anchors: ${blockTime.anchors.length} covering to block ${chainHead}`.padEnd(70));
 
   // The index has to be reachable and current before we overwrite data.json.
   // Checking here means an outage fails the run in the first second with a
   // clear message, rather than part-way through after several projects have
   // already been rebuilt.
-  const idx = await gg.status();
+  const idx = await withRetries(() => gg.status(), 4, "gg-index status");
   console.log(`  gg-index: head ${idx.chain_head}, ${idx.cursors.length} cursors`);
 
   const markets = await loadMarketPrices();
@@ -1796,6 +1817,9 @@ async function run() {
     stocks: stockData 
   };
 
+  let projectsOk = 0;
+  let projectsFailed = 0;
+
   for (const [projectKey, conf] of Object.entries(PROJECTS)) {
       console.log(`\n--- Processing ${projectKey.toUpperCase()} ---`);
       const prevProjData = previousData.projects ? previousData.projects[projectKey] : {};
@@ -1808,6 +1832,7 @@ async function run() {
         continue;
       }
 
+      try {
       if (isSpecial(conf)) {
         console.log(`  special (${conf.kind})`);
         finalJson.projects[projectKey] = await buildSpecialProject({
@@ -1818,6 +1843,7 @@ async function run() {
           gg,
           dexPairs: allDexPairs,
         });
+        projectsOk++;
         continue;
       }
 
@@ -1966,6 +1992,22 @@ async function run() {
         dailySnapshots: dailySnapshots,
         config: { ticker: conf.ticker, unitValue: conf.unitValue, logo: conf.logo, nftCa: conf.nftCa, tokenCa: conf.tokenCa }
       };
+      projectsOk++;
+      } catch (e) {
+        projectsFailed++;
+        console.error(`[error] ${projectKey}: ${e.stack || e.message}`);
+        if (prevProjData && Object.keys(prevProjData).length) {
+          finalJson.projects[projectKey] = prevProjData;
+          console.warn(`[warn] ${projectKey}: carrying previous snapshot`);
+        }
+      }
+  }
+
+  if (!projectsOk) {
+    throw new Error(`every project failed (${projectsFailed}); refusing to rewrite data.json`);
+  }
+  if (projectsFailed) {
+    console.warn(`[warn] ${projectsFailed} project(s) carried forward; ${projectsOk} rebuilt`);
   }
 
   const written = writeData(finalJson);

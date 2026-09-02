@@ -14,15 +14,20 @@ permissions:
 
 # The job checks out, indexes, then pushes. Two runs overlapping in that
 # window both commit a rewritten data.json against the same base, and
-# whichever pushes second is rejected as non-fast-forward. cancel-in-progress
-# lets a manual run supersede an in-flight one rather than queue behind it.
+# whichever pushes second is rejected as non-fast-forward.
+#
+# cancel-in-progress MUST NOT apply to the hourly schedule. GitHub cron is
+# often delayed, so a 1:00 run that is still going at 2:00 used to be killed
+# before it could commit -- that looked like "the fetcher skipped an hour".
+# Manual dispatch still cancels an in-flight scheduled run.
 concurrency:
   group: fetch-protocol-data
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' }}
 
 jobs:
   update-data:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
 
     steps:
       - name: Checkout Repository
@@ -62,7 +67,9 @@ jobs:
       - name: Restore indexer cache
         uses: actions/cache@v4
         with:
-          path: cache_*.json
+          path: |
+            cache_*.json
+            cache/blocktime.json
           key: indexer-cache-${{ github.run_id }}
           restore-keys: |
             indexer-cache-
