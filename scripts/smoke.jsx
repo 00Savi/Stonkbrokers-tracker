@@ -58,6 +58,7 @@ const ROUTES = [
   '/index/roi',
   '/rhmachines/revenue',
   '/oakmont/roi',
+  '/coattail/roi',
   '/bonus',
   '/bonus/roi',
   '/stonkbrokers',
@@ -108,6 +109,9 @@ const VIEWS = [
   ['Oakmont·burn', SpecialDetailView, { data: snapshot, projectKey: 'oakmont', activeTab: 'burn' }],
   ['Oakmont·wrap', SpecialDetailView, { data: snapshot, projectKey: 'oakmont', activeTab: 'activation' }],
   ['Oakmont·holders', SpecialDetailView, { data: snapshot, projectKey: 'oakmont', activeTab: 'ownership' }],
+  ['Coattail·roi', SpecialDetailView, { data: snapshot, projectKey: 'coattail', activeTab: 'roi' }],
+  ['Coattail·yield', SpecialDetailView, { data: snapshot, projectKey: 'coattail', activeTab: 'historical' }],
+  ['Coattail·activation', SpecialDetailView, { data: snapshot, projectKey: 'coattail', activeTab: 'activation' }],
 ];
 
 const TABS = ['roi', 'historical', 'revenue', 'burn', 'activation', 'ownership'];

@@ -25,6 +25,7 @@ export const NAV_ITEMS = [
   { to: '/index/roi', label: 'Index', group: 'yield-tokens', dot: 'bg-[#34d399]' },
   { to: '/bonus', label: '$Bonus', group: 'yield-tokens', dot: 'bg-[#e8c547]' },
   { to: '/rhmachines/roi', label: 'RH Machines', group: 'yield-nfts', dot: 'bg-[#fb923c]' },
+  { to: '/coattail/roi', label: 'Coattail Brokers', group: 'yield-nfts', dot: 'bg-[#f43f5e]' },
   { to: '/tokens', label: 'Tokens', group: 'chain', dot: 'bg-accent' },
   { to: '/stocks', label: 'Stocks', group: 'chain', dot: 'bg-[#60a5fa]' },
 ].filter((item) => item.to !== '/bonus' || BONUS_LIVE);

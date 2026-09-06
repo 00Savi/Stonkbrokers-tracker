@@ -24,6 +24,7 @@ const DETAIL_VIEWS = {
   index: (props) => <SpecialDetailView {...props} projectKey="index" />,
   printer: (props) => <SpecialDetailView {...props} projectKey="printer" />,
   oakmont: (props) => <SpecialDetailView {...props} projectKey="oakmont" />,
+  coattail: (props) => <SpecialDetailView {...props} projectKey="coattail" />,
 };
 
 /**

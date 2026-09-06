@@ -11,6 +11,7 @@ import {
   resolveTbaAddress,
   tbaRegistry,
 } from '../../lib/tba';
+import { fetchWalletBrokers } from '../../lib/coattail';
 import {
   earningStartTs,
   earnedUsdForNft,
@@ -173,6 +174,7 @@ export default function PortfolioView({ data }) {
           const floorUsd = (pData.market?.nftFloorEth || 0) * (pData.market?.ethPriceUsd || 0);
           const displayName = projectName(pKey, pData.config.ticker);
           const isMachine = pData.config?.kind === 'machines';
+          const isBroker = pData.config?.kind === 'brokers';
           try {
             const bal = Number(await nftContract.balanceOf(wallet));
             if (!(bal > 0)) return null;
@@ -205,6 +207,12 @@ export default function PortfolioView({ data }) {
             }
             if (ownedTokenIds.size !== bal) idsPartial = true;
 
+            let brokerById = new Map();
+            if (isBroker) {
+              const list = await fetchWalletBrokers(wallet);
+              for (const b of list) brokerById.set(Number(b.id), b);
+            }
+
             let exactYieldUsd = 0;
             let earnedForProject = 0;
             const nfts = [];
@@ -220,7 +228,8 @@ export default function PortfolioView({ data }) {
             for (const tokenId of ids) {
               const tokenData = activeMap[tokenId];
               const machine = machineMeta.get(tokenId);
-              const earning = isMachine ? !!machine?.inked : !!tokenData;
+              const broker = brokerById.get(Number(tokenId));
+              const earning = isBroker ? !!broker?.active : isMachine ? !!machine?.inked : !!tokenData;
               const tierId = tokenData?.t || 'T0';
               const tierObj = pData.tiers.find((t) => t.tier === tierId) || pData.tiers[0];
               const yieldValue = isMachine
@@ -253,13 +262,15 @@ export default function PortfolioView({ data }) {
                   ? (earning
                     ? `Awake · ${Number(machine?.multiplier || machine?.weight / 100 || 1).toFixed(1)}×`
                     : 'Dormant')
+                  : isBroker
+                    ? (earning ? 'Active Broker' : 'Inactive (shell)')
                   : earning
                     ? (tierObj?.name || tierId)
                     : 'Inactive',
                 yieldValue,
                 earnedValue,
                 floorValue: floorUsd,
-                tba: null,
+                tba: broker?.wallet || null,
                 wallet,
                 lastTransferTs: lastIn?.ts || 0,
                 lastTransferHash: lastIn?.hash || null,
@@ -420,11 +431,18 @@ export default function PortfolioView({ data }) {
     });
     try {
       const provider = new ethers.JsonRpcProvider('https://rpc.mainnet.chain.robinhood.com');
-      const registry = tbaRegistry(provider);
+      const cfg = data?.projects?.[projectKey]?.config || {};
+      const registry = tbaRegistry(provider, {
+        tbaRegistry: cfg.tbaRegistry,
+      });
       await mapLimited(nfts, 8, async (nft) => {
         if (nft.tba) return;
         try {
-          nft.tba = await resolveTbaAddress(registry, nft.nftCa, nft.tokenId);
+          nft.tba = await resolveTbaAddress(registry, nft.nftCa, nft.tokenId, {
+            tbaImplementation: cfg.tbaImplementation,
+            tbaChainId: cfg.tbaChainId,
+            tbaSalt: cfg.tbaSalt,
+          });
         } catch (e) {
           console.error('TBA resolve failed', e);
         }

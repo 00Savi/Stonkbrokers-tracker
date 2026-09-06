@@ -18,6 +18,7 @@ export const PROJECT_BY_SLUG = {
   index: 'index',
   rhmachines: 'printer',
   oakmont: 'oakmont',
+  coattail: 'coattail',
   bonus: 'bonus',
 };
 
@@ -72,6 +73,7 @@ export const PROJECTS = [
   { slug: 'cardwall', key: 'cardwall', name: 'The Card Wall', ticker: 'WALL', beta: true },
   { slug: 'index', key: 'index', name: 'The Index', ticker: 'INDEX', kind: 'cashflow', logo: 'Index.png', beta: true },
   { slug: 'rhmachines', key: 'printer', name: 'RH Machines', ticker: 'PRINTER', kind: 'machines', logo: 'Printer.png', beta: true },
+  { slug: 'coattail', key: 'coattail', name: 'Coattail Brokers', ticker: 'COAT', kind: 'brokers', logo: 'Coattail.svg', beta: true },
   { slug: 'oakmont', key: 'oakmont', name: 'Oakmont Vault', ticker: 'STRIKE', kind: 'vault', logo: 'Oakmont.png', beta: true },
   {
     slug: 'bonus',
@@ -88,7 +90,7 @@ export const PROJECTS = [
 export const BONUS_LIVE = PROJECTS.some((p) => p.key === 'bonus' && p.live);
 
 /** NFT yield projects — rankings, ecosystem, and the ROI tab bar. */
-export const NFT_PROJECTS = PROJECTS.filter((p) => !p.kind || p.kind === 'machines');
+export const NFT_PROJECTS = PROJECTS.filter((p) => !p.kind || p.kind === 'machines' || p.kind === 'brokers');
 
 /** Everything shown in the ranked table: NFT units plus cash-flow tokens/vaults. */
 export const RANKING_PROJECTS = PROJECTS.filter((p) => p.kind !== 'token');

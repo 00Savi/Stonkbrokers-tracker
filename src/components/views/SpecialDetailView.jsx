@@ -35,8 +35,13 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
   const annual = cashflow.holdersAnnualized || cashflow.revenueAnnualized || 0;
   const perToken = circulating > 0 ? annual / circulating : 0;
   const fdv = circulating * tokenUsd;
-  const roi = tokenUsd > 0 ? (perToken / tokenUsd) * 100 : 0;
-  const payback = perToken > 0 ? tokenUsd / perToken : null;
+  const tokenRoi = tokenUsd > 0 ? (perToken / tokenUsd) * 100 : 0;
+  const brokerCost = kind === 'brokers' ? (tiers[0]?.entryUsd || 0) : 0;
+  const brokerYield = kind === 'brokers' ? (tiers[0]?.trackedAnnualYieldUsd || 0) : 0;
+  const roi = kind === 'brokers' && brokerCost > 0 ? (brokerYield / brokerCost) * 100 : tokenRoi;
+  const payback = kind === 'brokers'
+    ? (brokerYield > 0 ? brokerCost / brokerYield : null)
+    : (perToken > 0 ? tokenUsd / perToken : null);
 
   const snaps = trailingSnapshots(dailySnapshots, 14);
   const histLabels = snaps.length ? snaps.map((s) => s.date) : (cashflow.dailyDates || []);
@@ -89,6 +94,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
           <p className="text-xs text-slate-400 mb-6">
             {kind === 'cashflow' && 'DefiLlama holders revenue annualized against circulating $INDEX. Eligible wallets hold at least 10,000 INDEX.'}
             {kind === 'machines' && 'Only awake (inked) Machines earn. Base ink is 4,250 $PRINTER to wake at 1× weight; more ink or a Proton fuse raises weight. The pot (fees → daily USDG+WETH during the test, else weekly stock) is split by weight across the awake fleet. See rhmachines.com/dashboard.'}
+            {kind === 'brokers' && 'One active Broker earns one equal share of Booster stock buys. Cost is NFT floor plus 36,750 $COAT burned on activate(). Transfer turns the Broker off; the buyer must burn again. Yield is volume-funded from the Uniswap v4 hook — not guaranteed. Unclaimed salary stays in the Booster by token id.'}
           </p>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
@@ -124,6 +130,8 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
                 {tiers.map((t) => {
                   const cost = t.entryUsd || (kind === 'machines'
                     ? floorUsd + (t.reqTokens || 0) * tokenUsd * 1.15
+                    : kind === 'brokers'
+                      ? floorUsd + (t.reqTokens || 0) * tokenUsd
                     : (t.reqTokens || 0) * tokenUsd);
                   const y = t.trackedAnnualYieldUsd || 0;
                   const r = cost > 0 ? (y / cost) * 100 : 0;
@@ -206,7 +214,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
                 />
               ) : (
                 <div className="h-72 flex items-center justify-center text-sm text-slate-500">
-                  {kind === 'machines' ? `24h stock-pot estimate ${fmt(cashflow.revenue24h)}. Daily series starts after Llama or on-chain drops are wired.` : 'No daily series yet.'}
+                  {kind === 'machines' ? `24h stock-pot estimate ${fmt(cashflow.revenue24h)}. Daily series starts after Llama or on-chain drops are wired.` : kind === 'brokers' ? 'Purchase series from coattail.cash/api/stats (CDN, up to 1h).' : 'No daily series yet.'}
                 </div>
               )}
             </div>
@@ -250,17 +258,17 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
       {activeTab === 'activation' && (
         <div className="space-y-6">
           <h2 className="text-xl font-bold text-white">
-            {kind === 'cashflow' ? 'Eligible wallets' : 'Inked machines'}
+            {kind === 'cashflow' ? 'Eligible wallets' : kind === 'brokers' ? 'Active Brokers' : 'Inked machines'}
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5">
               <p className="text-xs uppercase text-slate-400 mb-1">
-                {kind === 'cashflow' ? `Wallets ≥ ${num(activation.eligibleMin || 10000)} INDEX` : 'Awake machines'}
+                {kind === 'cashflow' ? `Wallets ≥ ${num(activation.eligibleMin || 10000)} INDEX` : kind === 'brokers' ? 'Active & earning' : 'Awake machines'}
               </p>
               <p className="text-2xl font-extrabold text-emerald-400">{num(activation.activeCount || activation.eligibleWallets || 0)}</p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5">
-              <p className="text-xs uppercase text-slate-400 mb-1">{kind === 'cashflow' ? 'Token holders' : 'Collection / holders'}</p>
+              <p className="text-xs uppercase text-slate-400 mb-1">{kind === 'cashflow' ? 'Token holders' : kind === 'brokers' ? 'Collection' : 'Collection / holders'}</p>
               <p className="text-2xl font-extrabold text-blue-400">{num(activation.totalSupply || ownership.tokenHolders || 0)}</p>
             </div>
           </div>
@@ -268,6 +276,11 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
             <p className="text-xs text-slate-500">
               Awake count uses the live fleet figure from the RH Machines dashboard ({num(activation.activeCount || 7458)} earning)
               until the Mine/ink controller is indexed. Payouts are weight-weighted, not 1-per-NFT.
+            </p>
+          )}
+          {kind === 'brokers' && (
+            <p className="text-xs text-slate-500">
+              {num(activation.percentActivated || 0)}% of 1,776 Brokers are ON. A transfer deactivates that token; unclaimed Booster claims and TBA holdings follow the NFT. Equal share per active Broker — no tiers.
             </p>
           )}
         </div>
@@ -287,6 +300,12 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
                 <p className="text-2xl font-extrabold text-purple-400">{num(ownership.nftHolders)}</p>
               </div>
             )}
+            {kind === 'brokers' && (
+              <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5">
+                <p className="text-xs uppercase text-slate-400 mb-1">Broker holders</p>
+                <p className="text-2xl font-extrabold text-purple-400">{num(ownership.nftHolders)}</p>
+              </div>
+            )}
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5">
               <p className="text-xs uppercase text-slate-400 mb-1">FDV</p>
               <p className="text-2xl font-extrabold text-white">{fmt(fdv)}</p>
@@ -300,6 +319,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
         <p className="text-xs text-slate-300 leading-relaxed">
           {kind === 'cashflow' && 'Fees and holders revenue are DefiLlama The Index (original INDEX swap tax settled into tokenized stocks). CoC is annualized holders revenue ÷ circulating supply ÷ token price. That is cash-flow against INDEX cost basis, not a points program.'}
           {kind === 'machines' && 'PRINTER burn is max supply minus live totalSupply plus dead/zero balances. Yield is the fee pot split across awake Machines by on-chain weight (ink + Proton fuses). Floor uses 4,250 ink × 1.10. Dormant (un-inked) Machines do not earn.'}
+          {kind === 'brokers' && 'Stock buys are from coattail.cash/api/stats (Booster purchases, CDN-cached up to 1h). Annual yield is all-time USD spent on the Congress basket annualized by days live, split equally across active Brokers. Cost is OpenSea floor plus 36,750 $COAT. Activate burns and v4 buy-side burns both shrink $COAT; they are not the same number. Rewards are trading-volume funded and never guaranteed.'}
         </p>
         {config.site && (
           <p className="text-xs text-slate-500 mt-3">

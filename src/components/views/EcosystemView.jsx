@@ -49,14 +49,14 @@ export default function EcosystemView({ data, pending = false }) {
   const formatCurrency = compactUsd;
   const formatNumber = compactNum;
 
-  const order = ['stonk', 'mancer', 'tickeryard', 'cardwall', 'index', 'printer', 'oakmont'];
+  const order = ['stonk', 'mancer', 'tickeryard', 'cardwall', 'index', 'printer', 'oakmont', 'coattail'];
   const activationOrder = order.filter((k) => {
     const kind = data.projects[k]?.config?.kind;
     return kind !== 'cashflow' && kind !== 'vault';
   });
-  const projectNames = { stonk: 'StonkBrokers', mancer: 'Mancer', tickeryard: 'TickerYard', cardwall: 'The Card Wall', index: 'The Index', printer: 'RH Machines', oakmont: 'Oakmont' };
-  const projectColors = { stonk: '#00a804', mancer: '#8b5cf6', tickeryard: '#38bdf8', cardwall: '#f5b700', index: '#34d399', printer: '#fb923c', oakmont: '#a3e635' };
-  const projectLogos = { stonk: 'Stonkbroker.png', mancer: 'logo.png', tickeryard: 'Yardkeepers.png', cardwall: 'wall.png', index: 'Index.png', printer: 'Printer.png', oakmont: 'Oakmont.png' };
+  const projectNames = { stonk: 'StonkBrokers', mancer: 'Mancer', tickeryard: 'TickerYard', cardwall: 'The Card Wall', index: 'The Index', printer: 'RH Machines', oakmont: 'Oakmont', coattail: 'Coattail Brokers' };
+  const projectColors = { stonk: '#00a804', mancer: '#8b5cf6', tickeryard: '#38bdf8', cardwall: '#f5b700', index: '#34d399', printer: '#fb923c', oakmont: '#a3e635', coattail: '#f43f5e' };
+  const projectLogos = { stonk: 'Stonkbroker.png', mancer: 'logo.png', tickeryard: 'Yardkeepers.png', cardwall: 'wall.png', index: 'Index.png', printer: 'Printer.png', oakmont: 'Oakmont.png', coattail: 'Coattail.svg' };
 
   const scaleYield = (annual) => {
     if (yieldPeriod === 'D') return (annual || 0) / 365;
@@ -157,7 +157,7 @@ export default function EcosystemView({ data, pending = false }) {
       if (tokenOnly) maxToken = nftSupply || circ + burntTok;
       else {
         const unit = Number(p?.config?.unitValue);
-        if (kind === 'machines' && (circ > 0 || burntTok > 0)) maxToken = circ + burntTok;
+        if ((kind === 'machines' || kind === 'brokers') && (circ > 0 || burntTok > 0)) maxToken = circ + burntTok;
         else if (unit > 0 && nftSupply > 0) maxToken = nftSupply * unit;
         else maxToken = nftSupply * 1000000;
       }
@@ -168,7 +168,7 @@ export default function EcosystemView({ data, pending = false }) {
       const realNft = Number(p?.ownership?.burntNfts || 0);
       const units = Number(p?.ownership?.permanentlyBurntUnits || 0);
       const equiv = Number(p?.activation?.dualBurn?.equivalentBrokersBurnt || 0);
-      const nftBurned = kind === 'machines' ? realNft : Math.max(realNft, units, equiv);
+      const nftBurned = (kind === 'machines' || kind === 'brokers') ? realNft : Math.max(realNft, units, equiv);
       nftPct = Math.min(100, (nftBurned / nftSupply) * 100);
     }
     return { tokenPct, nftPct, maxToken, burntTok, tokenOnly };

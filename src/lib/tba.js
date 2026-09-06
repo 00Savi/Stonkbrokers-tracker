@@ -64,6 +64,11 @@ function knownAssets(data) {
   for (const t of [...(data?.memes || []), ...(data?.stocks || [])]) {
     if (t.ca) erc20.push({ ca: t.ca, symbol: t.name, name: t.name });
   }
+  for (const p of Object.values(data?.projects || {})) {
+    const cfg = p?.config || {};
+    if (cfg.tokenCa) erc20.push({ ca: cfg.tokenCa, symbol: cfg.ticker || 'TOKEN', name: cfg.ticker || 'token' });
+    if (cfg.nftCa) erc721.push({ ca: cfg.nftCa, symbol: `${cfg.ticker || 'NFT'} NFT`, name: cfg.ticker || 'nft' });
+  }
   return { erc20: uniqByCa(erc20), erc721: uniqByCa(erc721) };
 }
 

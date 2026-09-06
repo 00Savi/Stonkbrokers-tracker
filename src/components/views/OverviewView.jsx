@@ -30,7 +30,7 @@ function tierRows(data) {
     if (!p) continue;
     const floorUsd = (p.market?.nftFloorEth || 0) * (p.market?.ethPriceUsd || 0);
     const tokenUsd = p.market?.tokenPriceUsd || 0;
-    const nft = !meta.kind || meta.kind === 'machines';
+    const nft = !meta.kind || meta.kind === 'machines' || meta.kind === 'brokers';
 
     for (const t of p.tiers || []) {
       const cost = t.entryUsd || (nft ? floorUsd + (t.reqTokens || 0) * tokenUsd : (t.reqTokens || 0) * tokenUsd);

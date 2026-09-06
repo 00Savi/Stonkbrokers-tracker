@@ -108,7 +108,8 @@ const TOKEN_TICKERS = {
   "0x39dbed3a2bd333467115de45665cc57f813c4571": "PONS",
   "0x85a574f2ff0795685f58d1d7b0d4b51f148ac489": "PRINTER",
   "0x5aed379a72bd2533371d153135c47d5eb61babc8": "STRIKE",
-  "0x8d6ff05c40899bfbc618e203052a8cd02d0e9581": "RESERVE"
+  "0x8d6ff05c40899bfbc618e203052a8cd02d0e9581": "RESERVE",
+  "0x93a887beda77a9e2f6d6ed0c9742f04ccebc8833": "COAT"
 };
 
 const WETH = "0x0bd7d308f8e1639fab988df18a8011f41eacad73";
@@ -161,7 +162,8 @@ const MEMES = [
   { name: "Wojak", ca: "0xaCE55FE98Bab14366dD49aB5AA5dF76aA11A3c6f" },
   { name: "Juggernaut", ca: "0xD7321801CAae694090694Ff55A9323139F043B88" },
   { name: "Sleuth", ca: "0x193674b72B6aA1905FC47BdbC19b30A53b666666" },
-  { name: "Pons", ca: "0x39dBED3a2bd333467115dE45665cC57F813C4571" }
+  { name: "Pons", ca: "0x39dBED3a2bd333467115dE45665cC57F813C4571" },
+  { name: "Coat", ca: "0x93a887Beda77a9E2F6D6ed0C9742f04CcEBc8833" }
 ];
 
 const STOCKS = [
@@ -349,6 +351,25 @@ const PROJECTS = {
     ticker: "STRIKE",
     logo: "Oakmont.png",
     site: "https://dapp.oakmontvault.xyz/",
+    underConstruction: false,
+    teamWallets: 0,
+    tiers: [],
+  },
+  coattail: {
+    kind: "brokers",
+    genesisBlock: 39600000,
+    tokenCa: "0x93a887beda77a9e2f6d6ed0c9742f04ccebc8833".toLowerCase(),
+    nftCa: "0x1122db21998707f8c2ed8182734356c947fa5e98".toLowerCase(),
+    boosterCa: "0x7baf435847a4b45c2e22a7fd13549c3192c95953".toLowerCase(),
+    tbaRegistry: "0x000000006551c19487814612e58fe06813775758".toLowerCase(),
+    tbaImplementation: "0x32a055d504840e69b7a0b2136264eef643f6312c".toLowerCase(),
+    maxSupply: 1_000_000_000,
+    collectionSupply: 1776,
+    unitValue: 36750,
+    ticker: "COAT",
+    logo: "Coattail.svg",
+    openseaSlug: "coattailbrokers",
+    site: "https://www.coattail.cash/",
     underConstruction: false,
     teamWallets: 0,
     tiers: [],
@@ -544,6 +565,14 @@ async function loadMarketPrices() {
       markets.cardwall.floorSource = "opensea";
     }
     markets.cardwall.starFloorEth = os.byRarity;
+  }
+
+  if (PROJECTS.coattail) {
+    const os = await fetchCardWallStarFloors(PROJECTS.coattail);
+    if (os.collectionEth > 0) {
+      markets.coattail.nftFloorEth = +os.collectionEth.toFixed(3);
+      markets.coattail.floorSource = "opensea";
+    }
   }
 
   return markets;
