@@ -70,6 +70,7 @@ jobs:
             cache_*.json
             cache/blocktime.json
             cache/yield_days.json
+            cache/vault_flow.json
           key: indexer-cache-${{ github.run_id }}
           restore-keys: |
             indexer-cache-

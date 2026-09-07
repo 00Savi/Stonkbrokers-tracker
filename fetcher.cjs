@@ -127,6 +127,7 @@ const { fetchLogsWithTimestamps } = require("./lib/chain.cjs");
 const { BlockTime } = require("./lib/blocktime.cjs");
 const { buildSpecialProject, isSpecial } = require("./lib/specials.cjs");
 const yieldDays = require("./lib/yieldDays.cjs");
+const vaultFlow = require("./lib/vaultFlow.cjs");
 
 const gg = new GgIndex();
 const rpc = new Rpc();
@@ -978,8 +979,13 @@ const ACTIVE_COUNT_SEL = ethers.id("activeCount()").slice(0, 10);
  * fetcher walks for Mancer/Yard — recent windows returned 0 logs while
  * activeCount() was 837. rarityOf on the membership NFT is 0–4 (★–★★★★★).
  * activations(id) is the owner when that id is in the vault, else address(0).
+ *
+ * 24h/7d/30d ACT+DEACT come from hourly diffs of that vault set (see
+ * lib/vaultFlow.cjs). Transfer-log reconstruction is not used: it cannot see
+ * an activate-in-place, and it treated later sales of currently-active tokens
+ * as the only clock.
  */
-async function fetchCardWallLiveActivations(conf) {
+async function fetchCardWallLiveActivations(conf, prevActivation = {}) {
   const n = conf.maxSupply;
   const calls = [];
   for (let id = 1; id <= n; id++) {
@@ -993,7 +999,6 @@ async function fetchCardWallLiveActivations(conf) {
 
   const breakdown = { T0: 0, T1: 0, T2: 0, T3: 0, T4: 0 };
   const raritySupply = { T0: 0, T1: 0, T2: 0, T3: 0, T4: 0 };
-  const tokenRarity = {};
   const activeTokenTiers = {};
   let active = 0;
 
@@ -1001,7 +1006,6 @@ async function fetchCardWallLiveActivations(conf) {
     const rarity = Number(decodeUint(raw[i * 2]) ?? 0n);
     const tierId = `T${Math.min(4, Math.max(0, rarity))}`;
     const tokenId = String(i + 1);
-    tokenRarity[tokenId] = tierId;
     raritySupply[tierId]++;
     const owner = decodeAddr(raw[i * 2 + 1]);
     if (owner && owner !== ZERO_ADDR) {
@@ -1018,10 +1022,20 @@ async function fetchCardWallLiveActivations(conf) {
   }
 
   const dualBurn = await getTrueDeflationStats(conf);
-  const { tierStats, history } = await cardWallTransferDeacts(conf, activeTokenTiers, tokenRarity, breakdown);
-
   const useCount = contractCount > 0 ? contractCount : active;
-  console.log(`  cardwall vault: ${useCount} active (${breakdown.T0}/${breakdown.T1}/${breakdown.T2}/${breakdown.T3}/${breakdown.T4} by star)`);
+  const now = Math.floor(Date.now() / 1000);
+  const { added, flow, tierStats, history } = vaultFlow.observe({
+    projectKey: "cardwall",
+    prevSet: prevActivation.activeTokenTiers,
+    prevFlow: prevActivation.flow,
+    currSet: activeTokenTiers,
+    liveBreakdown: breakdown,
+    liveCount: useCount,
+    now,
+  });
+  const actN = added.filter((e) => e.type === "act").length;
+  const deactN = added.filter((e) => e.type === "deact").length;
+  console.log(`  cardwall vault: ${useCount} active (${breakdown.T0}/${breakdown.T1}/${breakdown.T2}/${breakdown.T3}/${breakdown.T4} by star); hour +${actN}/-${deactN}`);
 
   return {
     activeCount: useCount,
@@ -1033,87 +1047,8 @@ async function fetchCardWallLiveActivations(conf) {
     history,
     dualBurn,
     activeTokenTiers,
+    flow,
   };
-}
-
-/**
- * Mancer-style deactivation: the vault does not emit Deactivated, so a
- * membership leaving the current vault set via ERC-721 Transfer is the close.
- *
- * Walk transfers newest-first from the live vault set. Each transfer of a
- * token that is (reconstructed) active is a deactivation of the previous
- * holder; the current holder activated after they received it.
- */
-async function cardWallTransferDeacts(conf, activeTokenTiers, tokenRarity, breakdown) {
-  const emptyStats = () => ({ act: 0, deact: 0 });
-  const tierStats = {
-    T0: { '24h': emptyStats(), '7d': emptyStats(), '30d': emptyStats(), 'allTime': { act: breakdown.T0, deact: 0 } },
-    T1: { '24h': emptyStats(), '7d': emptyStats(), '30d': emptyStats(), 'allTime': { act: breakdown.T1, deact: 0 } },
-    T2: { '24h': emptyStats(), '7d': emptyStats(), '30d': emptyStats(), 'allTime': { act: breakdown.T2, deact: 0 } },
-    T3: { '24h': emptyStats(), '7d': emptyStats(), '30d': emptyStats(), 'allTime': { act: breakdown.T3, deact: 0 } },
-    T4: { '24h': emptyStats(), '7d': emptyStats(), '30d': emptyStats(), 'allTime': { act: breakdown.T4, deact: 0 } },
-  };
-
-  const transferLogs = await fetchAllLogs("cardwall_nft", conf.nftCa, conf.genesisBlock, TRANSFER_TOPIC);
-  const now = Math.floor(Date.now() / 1000);
-  const oneDay = 86400;
-  const events = [];
-  for (const log of transferLogs) {
-    const topics = log.topics && Array.isArray(log.topics) ? log.topics.filter((t) => t !== null) : [];
-    if (topics.length !== 4) continue;
-    const from = topicToAddr(topics[1]);
-    const to = topicToAddr(topics[2]);
-    if (from === ZERO_ADDR) continue;
-    if (from === conf.activationCa || to === conf.activationCa) continue;
-    let ts = log.timeStamp || log.timestamp;
-    ts = ts ? (String(ts).startsWith("0x") ? parseInt(ts, 16) : parseInt(ts, 10)) : 0;
-    events.push({ tokenId: BigInt(topics[3]).toString(), from, to, ts });
-  }
-  events.sort((a, b) => b.ts - a.ts || 0);
-
-  const reconstructed = new Set(Object.keys(activeTokenTiers));
-  const dailyData = {};
-  let deactTotal = 0;
-
-  const bumpDeact = (tierId, ts) => {
-    if (!tierStats[tierId]) return;
-    deactTotal++;
-    tierStats[tierId].allTime.deact++;
-    const age = now - ts;
-    if (age <= oneDay) tierStats[tierId]["24h"].deact++;
-    if (age <= 7 * oneDay) tierStats[tierId]["7d"].deact++;
-    if (age <= 30 * oneDay) tierStats[tierId]["30d"].deact++;
-    if (ts > 0) {
-      const d = new Date(ts * 1000);
-      const dateStr = `${d.getMonth() + 1}/${d.getDate()}`;
-      if (!dailyData[dateStr]) dailyData[dateStr] = { activated: 0, deactivated: 0, timestamp: ts };
-      dailyData[dateStr].deactivated++;
-    }
-  };
-
-  for (const ev of events) {
-    if (!reconstructed.has(ev.tokenId)) continue;
-    const tierId = tokenRarity[ev.tokenId] || activeTokenTiers[ev.tokenId]?.t || "T0";
-    bumpDeact(tierId, ev.ts);
-    reconstructed.delete(ev.tokenId);
-  }
-
-  console.log(`  cardwall transfers: ${events.length} moves, ${deactTotal} vault deactivations`);
-
-  const sortedDates = Object.keys(dailyData).sort((a, b) => dailyData[a].timestamp - dailyData[b].timestamp);
-  const history = { labels: [], dailyActivations: [], dailyDeactivations: [], cumulative: [], cumulativeGross: [] };
-  let running = Object.keys(activeTokenTiers).length + deactTotal;
-  for (const dateStr of sortedDates) {
-    const d = dailyData[dateStr];
-    history.labels.push(dateStr);
-    history.dailyActivations.push(0);
-    history.dailyDeactivations.push(d.deactivated);
-    running -= d.deactivated;
-    history.cumulative.push(Math.max(0, running));
-    history.cumulativeGross.push(Object.keys(activeTokenTiers).length + deactTotal);
-  }
-
-  return { tierStats, history };
 }
 
 async function fetchOpenSeaFloorEth(slug) {
@@ -2138,7 +2073,7 @@ async function run() {
       }
 
       const activationStats = projectKey === "cardwall"
-        ? await fetchCardWallLiveActivations(conf)
+        ? await fetchCardWallLiveActivations(conf, prevProjData.activation || {})
         : await fetchActivations(projectKey, conf);
       const ownershipStats = await getOwnershipStats(conf, activationStats.dualBurn.equivalentBrokersBurnt, prevProjData);
 
