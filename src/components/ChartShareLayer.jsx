@@ -1,15 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
-import { shareChartToX } from '../lib/share';
-
-function headingFor(canvas) {
-  const host = canvas.parentElement;
-  const card = canvas.closest('.rounded-2xl, .rounded-xl, article, section') || host?.parentElement;
-  const heading = card?.querySelector('h2, h3, h4');
-  const text = heading?.textContent?.replace(/\s+/g, ' ').trim();
-  return text || "Savi's Dashboard";
-}
+import { copyChart } from '../lib/share';
 
 function collectHosts() {
   const canvases = [...document.querySelectorAll('canvas')];
@@ -23,65 +15,83 @@ function collectHosts() {
     if (w < 40 || h < 40) continue;
     seen.add(host);
     if (getComputedStyle(host).position === 'static') host.classList.add('relative');
-    hosts.push({ el: host, title: headingFor(canvas), tight: h < 160 });
+    hosts.push({ el: host, tight: h < 160 });
   }
   return hosts;
 }
 
 function sameHosts(a, b) {
   if (a.length !== b.length) return false;
-  return a.every((item, i) => item.el === b[i].el && item.title === b[i].title && item.tight === b[i].tight);
+  return a.every((item, i) => item.el === b[i].el && item.tight === b[i].tight);
 }
 
-function ShareButton({ host, title, tight }) {
-  const [busy, setBusy] = useState(false);
-  const [hint, setHint] = useState('');
+function CopyButton({ host, tight }) {
+  const [state, setState] = useState('idle');
 
-  async function onShare(event) {
+  async function onCopy(event) {
     event.preventDefault();
     event.stopPropagation();
-    setBusy(true);
-    setHint('');
+    if (state === 'busy') return;
+    setState('busy');
     try {
-      await shareChartToX(host, title);
-      setHint('PNG saved — attach it on X');
+      const copied = await copyChart(host);
+      setState(copied ? 'copied' : 'saved');
     } catch {
-      setHint('Could not share');
-    } finally {
-      setBusy(false);
-      window.setTimeout(() => setHint(''), 4000);
+      setState('fail');
     }
+    window.setTimeout(() => setState('idle'), 2500);
   }
+
+  const label =
+    state === 'busy' ? 'Copying' :
+    state === 'copied' ? 'Copied' :
+    state === 'saved' ? 'Saved' :
+    state === 'fail' ? 'Failed' :
+    'Copy';
 
   return (
     <div
-      className={`pointer-events-none absolute z-20 flex flex-col items-end gap-1 ${
+      className={`pointer-events-none absolute z-20 flex flex-col items-end ${
         tight ? 'right-1 top-1' : 'right-1 top-1 sm:right-2 sm:top-2'
       }`}
     >
       <button
         type="button"
-        onClick={onShare}
-        disabled={busy}
-        className="pointer-events-auto inline-flex min-h-8 items-center gap-1 rounded-md border border-line bg-panel/90 px-1.5 py-1 font-mono text-[10px] text-muted backdrop-blur-sm hover:text-ink disabled:opacity-60 sm:px-2"
-        title="Download a watermarked PNG and open a draft post on X"
-        aria-label="Share chart to X"
+        onClick={onCopy}
+        disabled={state === 'busy'}
+        className={`pointer-events-auto inline-flex min-h-8 items-center gap-1 rounded-md border px-1.5 py-1 font-mono text-[10px] backdrop-blur-sm sm:px-2 disabled:opacity-60 ${
+          state === 'copied' || state === 'saved'
+            ? 'border-emerald-700/60 bg-emerald-950/80 text-emerald-300'
+            : 'border-line bg-panel/90 text-muted hover:text-ink'
+        }`}
+        title="Copy chart image"
+        aria-label="Copy chart image"
       >
-        <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M18.244 2H21.5l-7.5 8.57L22.5 22h-6.57l-5.14-6.72L5.5 22H2.24l8.02-9.16L1.5 2h6.73l4.65 6.18L18.244 2zm-1.15 18.13h1.8L7.01 3.78H5.08l12.01 16.35z" />
-        </svg>
-        <span className={tight ? 'hidden' : 'hidden sm:inline'}>{busy ? 'Sharing' : 'Share'}</span>
+        {state === 'copied' || state === 'saved' ? (
+          <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+            <path d="M5 12l5 5L20 7" />
+          </svg>
+        ) : (
+          <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <rect x="8" y="8" width="12" height="12" rx="2" />
+            <path d="M4 16V6a2 2 0 0 1 2-2h10" />
+          </svg>
+        )}
+        <span className={tight ? 'hidden' : 'hidden sm:inline'}>{label}</span>
       </button>
-      {hint ? (
-        <span className="pointer-events-none max-w-[10rem] text-right font-mono text-[9px] leading-tight text-faint">
-          {hint}
-        </span>
-      ) : null}
+      {(state === 'copied' || state === 'saved') && (
+        <div
+          role="status"
+          className="pointer-events-none mt-1 rounded-md border border-emerald-700/60 bg-emerald-950/90 px-2 py-1 font-mono text-[10px] text-emerald-300"
+        >
+          {state === 'copied' ? 'Copied' : 'PNG saved'}
+        </div>
+      )}
     </div>
   );
 }
 
-/** Overlay a Share-to-X control on every Chart.js canvas in the current view. */
+/** Overlay a copy-chart control on every Chart.js canvas in the current view. */
 export default function ChartShareLayer() {
   const location = useLocation();
   const [hosts, setHosts] = useState([]);
@@ -108,9 +118,9 @@ export default function ChartShareLayer() {
 
   return (
     <>
-      {hosts.map(({ el, title, tight }, i) => (
-        <React.Fragment key={`chart-share-${i}`}>
-          {createPortal(<ShareButton host={el} title={title} tight={tight} />, el)}
+      {hosts.map(({ el, tight }, i) => (
+        <React.Fragment key={`chart-copy-${i}`}>
+          {createPortal(<CopyButton host={el} tight={tight} />, el)}
         </React.Fragment>
       ))}
     </>
