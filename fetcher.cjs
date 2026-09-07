@@ -975,39 +975,64 @@ const ACTIVATIONS_SEL = ethers.id("activations(uint256)").slice(0, 10);
 const ACTIVE_COUNT_SEL = ethers.id("activeCount()").slice(0, 10);
 
 /**
- * Card Wall SoftStakingVault does not emit the Anvil Activated topic this
- * fetcher walks for Mancer/Yard — recent windows returned 0 logs while
- * activeCount() was 837. rarityOf on the membership NFT is 0–4 (★–★★★★★).
- * activations(id) is the owner when that id is in the vault, else address(0).
+ * Card Wall SoftStakingVault emits Activated only rarely (two logs in the last
+ * 2M blocks while 841 NFTs sit in the vault). Most positions are an in-place
+ * stake after a buy: deactivateOnTransfer cleared the previous holder, then
+ * the buyer called activate with no second event.
  *
- * 24h/7d/30d ACT+DEACT come from hourly diffs of that vault set (see
- * lib/vaultFlow.cjs). Transfer-log reconstruction is not used: it cannot see
- * an activate-in-place, and it treated later sales of currently-active tokens
- * as the only clock.
+ * 24h/7d/30d ACT is the last NFT transfer of each currently-vaulted token —
+ * that transfer is when the current holder received it, so they activated
+ * after it. The old walk recorded the same clock as DEACT and hardcoded ACT
+ * to 0. Hourly vault-set diffs still catch in-place stakes and vault exits
+ * that a current-set transfer walk cannot see.
+ *
+ * rarityOf never changes; cache it so later runs only scan activations(id).
  */
 async function fetchCardWallLiveActivations(conf, prevActivation = {}) {
   const n = conf.maxSupply;
+  const rarityFile = path.join(__dirname, "cache", "cardwall_rarity.json");
+  let rarities = null;
+  try {
+    const rows = JSON.parse(fs.readFileSync(rarityFile, "utf8"));
+    if (Array.isArray(rows) && rows.length === n && rows.every((x) => x >= 0 && x <= 4)) {
+      rarities = rows;
+    }
+  } catch {}
+
   const calls = [];
-  for (let id = 1; id <= n; id++) {
-    const arg = encodeUint(id);
-    calls.push({ to: conf.nftCa, data: RARITY_OF_SEL + arg });
-    calls.push({ to: conf.activationCa, data: ACTIVATIONS_SEL + arg });
+  if (!rarities) {
+    for (let id = 1; id <= n; id++) {
+      calls.push({ to: conf.nftCa, data: RARITY_OF_SEL + encodeUint(id) });
+    }
   }
-  console.log(`  cardwall: scanning ${n} memberships for rarity + vault...`);
-  await sleep(2_000);
+  const rarityOffset = calls.length;
+  for (let id = 1; id <= n; id++) {
+    calls.push({ to: conf.activationCa, data: ACTIVATIONS_SEL + encodeUint(id) });
+  }
+  console.log(`  cardwall: scanning ${n} memberships for ${rarities ? "vault" : "rarity + vault"}...`);
   const raw = await rpc.calls(calls);
+
+  if (!rarities) {
+    rarities = [];
+    for (let i = 0; i < n; i++) {
+      rarities.push(Math.min(4, Math.max(0, Number(decodeUint(raw[i]) ?? 0n))));
+    }
+    fs.mkdirSync(path.dirname(rarityFile), { recursive: true });
+    fs.writeFileSync(rarityFile, JSON.stringify(rarities));
+  }
 
   const breakdown = { T0: 0, T1: 0, T2: 0, T3: 0, T4: 0 };
   const raritySupply = { T0: 0, T1: 0, T2: 0, T3: 0, T4: 0 };
+  const tokenRarity = {};
   const activeTokenTiers = {};
   let active = 0;
 
   for (let i = 0; i < n; i++) {
-    const rarity = Number(decodeUint(raw[i * 2]) ?? 0n);
-    const tierId = `T${Math.min(4, Math.max(0, rarity))}`;
+    const tierId = `T${rarities[i]}`;
     const tokenId = String(i + 1);
+    tokenRarity[tokenId] = tierId;
     raritySupply[tierId]++;
-    const owner = decodeAddr(raw[i * 2 + 1]);
+    const owner = decodeAddr(raw[rarityOffset + i]);
     if (owner && owner !== ZERO_ADDR) {
       active++;
       breakdown[tierId]++;
@@ -1024,10 +1049,12 @@ async function fetchCardWallLiveActivations(conf, prevActivation = {}) {
   const dualBurn = await getTrueDeflationStats(conf);
   const useCount = contractCount > 0 ? contractCount : active;
   const now = Math.floor(Date.now() / 1000);
+  const seedEvents = await cardWallSeedActs(conf, activeTokenTiers, tokenRarity);
   const { added, flow, tierStats, history } = vaultFlow.observe({
     projectKey: "cardwall",
     prevSet: prevActivation.activeTokenTiers,
     prevFlow: prevActivation.flow,
+    seedEvents,
     currSet: activeTokenTiers,
     liveBreakdown: breakdown,
     liveCount: useCount,
@@ -1035,7 +1062,8 @@ async function fetchCardWallLiveActivations(conf, prevActivation = {}) {
   });
   const actN = added.filter((e) => e.type === "act").length;
   const deactN = added.filter((e) => e.type === "deact").length;
-  console.log(`  cardwall vault: ${useCount} active (${breakdown.T0}/${breakdown.T1}/${breakdown.T2}/${breakdown.T3}/${breakdown.T4} by star); hour +${actN}/-${deactN}`);
+  const seedAct = seedEvents.filter((e) => e.type === "act").length;
+  console.log(`  cardwall vault: ${useCount} active (${breakdown.T0}/${breakdown.T1}/${breakdown.T2}/${breakdown.T3}/${breakdown.T4} by star); hour +${actN}/-${deactN}; seeded ${seedAct} last-transfer acts`);
 
   return {
     activeCount: useCount,
@@ -1049,6 +1077,38 @@ async function fetchCardWallLiveActivations(conf, prevActivation = {}) {
     activeTokenTiers,
     flow,
   };
+}
+
+/**
+ * Last ERC-721 transfer of each currently-vaulted membership. deactivateOnTransfer
+ * means that transfer closed the previous position; the current holder activated
+ * afterwards, so the clock belongs on ACT, not DEACT.
+ */
+async function cardWallSeedActs(conf, activeTokenTiers, tokenRarity) {
+  const transferLogs = await fetchAllLogs("cardwall_nft", conf.nftCa, conf.genesisBlock, TRANSFER_TOPIC);
+  const events = [];
+  for (const log of transferLogs) {
+    const topics = log.topics && Array.isArray(log.topics) ? log.topics.filter((t) => t !== null) : [];
+    if (topics.length !== 4) continue;
+    const from = topicToAddr(topics[1]);
+    const to = topicToAddr(topics[2]);
+    if (from === ZERO_ADDR) continue;
+    if (from === conf.activationCa || to === conf.activationCa) continue;
+    let ts = log.timeStamp || log.timestamp;
+    ts = ts ? (String(ts).startsWith("0x") ? parseInt(ts, 16) : parseInt(ts, 10)) : 0;
+    events.push({ tokenId: BigInt(topics[3]).toString(), ts });
+  }
+  events.sort((a, b) => b.ts - a.ts || 0);
+
+  const remaining = new Set(Object.keys(activeTokenTiers));
+  const seeded = [];
+  for (const ev of events) {
+    if (!remaining.has(ev.tokenId) || !(ev.ts > 0)) continue;
+    const t = tokenRarity[ev.tokenId] || activeTokenTiers[ev.tokenId]?.t || "T0";
+    seeded.push({ ts: ev.ts, id: ev.tokenId, type: "act", t });
+    remaining.delete(ev.tokenId);
+  }
+  return seeded;
 }
 
 async function fetchOpenSeaFloorEth(slug) {
