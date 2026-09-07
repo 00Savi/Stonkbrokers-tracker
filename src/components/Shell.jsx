@@ -8,22 +8,22 @@ export { LAUNCHER_REF, SAVI_X };
 
 export const NAV_GROUPS = [
   { id: 'tools', label: 'Tools' },
-  { id: 'ecosystem', label: 'Stonkbrokers Ecosystem' },
   { id: 'yield-tokens', label: 'Yield Tokens' },
   { id: 'yield-nfts', label: 'Yield NFTs' },
   { id: 'chain', label: 'Robinhood Chain' },
 ];
 
 export const NAV_ITEMS = [
+  { to: '/', label: 'Home', group: 'tools', dot: 'bg-brand' },
   { to: '/portfolio', label: 'Portfolio Tracker', group: 'tools', dot: 'bg-accent' },
   { to: '/ecosystem', label: 'Ecosystem Overview', group: 'tools', dot: 'bg-muted' },
-  { to: '/stonkbrokers/roi', label: 'StonkBrokers', group: 'ecosystem', dot: 'bg-[#60a5fa]' },
-  { to: '/mancer/roi', label: 'Mancer', group: 'ecosystem', dot: 'bg-[#a78bfa]' },
-  { to: '/tickeryard/roi', label: 'TickerYard', group: 'ecosystem', dot: 'bg-[#22d3ee]' },
-  { to: '/cardwall/roi', label: 'The Card Wall', group: 'ecosystem', dot: 'bg-[#fbbf24]' },
-  { to: '/oakmont/roi', label: 'Oakmont Vault', group: 'ecosystem', dot: 'bg-[#a3e635]' },
   { to: '/index/roi', label: 'Index', group: 'yield-tokens', dot: 'bg-[#34d399]' },
+  { to: '/oakmont/roi', label: 'Oakmont Vault', group: 'yield-tokens', dot: 'bg-[#a3e635]' },
   { to: '/bonus', label: '$Bonus', group: 'yield-tokens', dot: 'bg-[#e8c547]' },
+  { to: '/stonkbrokers/roi', label: 'StonkBrokers', group: 'yield-nfts', dot: 'bg-[#60a5fa]' },
+  { to: '/mancer/roi', label: 'Mancer', group: 'yield-nfts', dot: 'bg-[#a78bfa]' },
+  { to: '/tickeryard/roi', label: 'TickerYard', group: 'yield-nfts', dot: 'bg-[#22d3ee]' },
+  { to: '/cardwall/roi', label: 'The Card Wall', group: 'yield-nfts', dot: 'bg-[#fbbf24]' },
   { to: '/rhmachines/roi', label: 'RH Machines', group: 'yield-nfts', dot: 'bg-[#fb923c]' },
   { to: '/coattail/roi', label: 'Coattail Brokers', group: 'yield-nfts', dot: 'bg-[#f43f5e]' },
   { to: '/tokens', label: 'Tokens', group: 'chain', dot: 'bg-accent' },
@@ -32,6 +32,7 @@ export const NAV_ITEMS = [
 
 function titleForPath(pathname) {
   const first = pathname.split('/').filter(Boolean)[0];
+  if (!first) return "Savi's Dashboard";
   if (first === 'ecosystem') return 'Ecosystem';
   if (first === 'portfolio') return 'Portfolio';
   if (first === 'rankings') return 'Rankings';
@@ -51,9 +52,8 @@ function logoForPath(pathname, data) {
 }
 
 export function itemIsActive(pathname, to) {
-  const dest = to.split('/')[1];
-  const here = pathname.split('/').filter(Boolean)[0];
-  if (!here) return dest === 'portfolio';
+  const dest = to.split('/').filter(Boolean)[0] || '';
+  const here = pathname.split('/').filter(Boolean)[0] || '';
   return here === dest;
 }
 
@@ -76,6 +76,7 @@ export function TopNav({ live, data, pending }) {
   const logo = logoForPath(pathname, data);
   const title = titleForPath(pathname);
   const first = pathname.split('/').filter(Boolean)[0];
+  const isHome = !first;
   const project = PROJECTS.find((p) => p.slug === first);
   const marketKey = project?.key || 'stonk';
   const market = data?.projects?.[marketKey]?.market || {};
@@ -190,6 +191,7 @@ export function TopNav({ live, data, pending }) {
                 </Value>
               </div>
             </div>
+            {!isHome && (
             <div className="text-right">
               <div className="text-[9px] uppercase tracking-wider text-faint">${ticker}</div>
               <div className="text-[12px] text-ink">
@@ -198,7 +200,8 @@ export function TopNav({ live, data, pending }) {
                 </Value>
               </div>
             </div>
-            {project?.kind !== 'token' && project?.kind !== 'cashflow' && project?.kind !== 'vault' && (
+            )}
+            {!isHome && project?.kind !== 'token' && project?.kind !== 'cashflow' && project?.kind !== 'vault' && (
               <div className="text-right">
                 <div className="text-[9px] uppercase tracking-wider text-faint">Floor</div>
                 <div className="text-[12px] text-ink">

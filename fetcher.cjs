@@ -96,9 +96,16 @@ function sanitizeDailySnapshots(snaps, livePrice) {
   return out;
 }
 
-const API_KEY = process.env.BLOCKSCOUT_API_KEY;
-const PRO_API = "https://api.blockscout.com/v2/api";
 const CHAIN_ID = 4663;
+const EXPLORER_API = "https://api.blockscout.com/v2/api";
+const BLOCKSCOUT_KEY = process.env.BLOCKSCOUT_API_KEY || "";
+
+// Anvil RewardPaid / oracle windows. Stay at 7 until cache/yield_days.json
+// covers a full month; then this constant is the only change for 30 (and
+// later 90). Card Wall rain uses RAIN_LOOKBACK_DAYS because slabs arrive in
+// bursts a 7-day walk will miss.
+const YIELD_LOOKBACK_DAYS = 7;
+const RAIN_LOOKBACK_DAYS = 30;
 
 // gg-index: the self-hosted indexer that replaces the metered calls.
 //
@@ -110,6 +117,8 @@ const CHAIN_ID = 4663;
 //                     read from the chain at all -- it only has Transfer
 //                     events, so the count has to be produced by replaying and
 //                     folding them. Same for activation and reward aggregates.
+//                     Native ETH daily inflows belong here too once native:flows
+//                     is current; it cannot backfill pruned node state.
 //
 // Set GG_INDEX_URL to point at a different deployment.
 const { GgIndex } = require("./lib/ggindex.cjs");
@@ -117,6 +126,7 @@ const { Rpc, TOPIC, addrTopic, decodeUint, decodeAddr, encodeUint, topicAddr } =
 const { fetchLogsWithTimestamps } = require("./lib/chain.cjs");
 const { BlockTime } = require("./lib/blocktime.cjs");
 const { buildSpecialProject, isSpecial } = require("./lib/specials.cjs");
+const yieldDays = require("./lib/yieldDays.cjs");
 
 const gg = new GgIndex();
 const rpc = new Rpc();
@@ -497,49 +507,6 @@ function mergeChronological(a, b) {
 let ethPriceUsd = 1917;
 let tokenPrices = {};
 let allDexPairs = [];
-
-async function secureFetch(url) {
-  const headers = { "Accept": "application/json" };
-  for (let i = 0; i < 5; i++) {
-    try {
-      const res = await fetch(url, { headers, signal: AbortSignal.timeout(25_000) });
-      
-      // Do not kill the run. Holders/activations now come from gg-index, and
-      // yield walks already refuse a truncated window via `failed: true`.
-      // Exiting here froze lastUpdated until someone refilled the key.
-      if (res.status === 402) {
-          console.error("[warn] HTTP 402: Blockscout credits exhausted. Yield will be carried forward from the last good snapshot.");
-          return { result: [], failed: true };
-      }
-      
-      if (res.status === 429) { await sleep(3000); continue; }
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      
-      const text = await res.text();
-      const data = JSON.parse(text);
-      
-      if (data.status === "0") {
-          if (data.message === "No records found" || data.message === "No transactions found") return { result: [] };
-          const resultStr = typeof data.result === 'string' ? data.result.toLowerCase() : "";
-          if (resultStr.includes("limit") || resultStr.includes("rate")) { await sleep(3000); continue; }
-          
-          // EXTRA FAILSAFE: Catch JSON body errors regarding exhausted limits if HTTP status is technically 200
-          if (resultStr.includes("credit") || resultStr.includes("exhausted") || resultStr.includes("payment")) {
-              console.error("[warn] Blockscout API out of credits. Yield will be carried forward from the last good snapshot.");
-              return { result: [], failed: true };
-          }
-      }
-      return data;
-    } catch (e) {
-      await sleep(1500 * (i + 1));
-    }
-  }
-  // Every attempt failed. `failed` marks this apart from a genuine empty
-  // result: a paged walk breaks out on an empty page, so without the flag an
-  // exhausted request reads as "end of history" and silently truncates the
-  // window it was summing.
-  return { result: [], failed: true };
-}
 
 /**
  * Holder count, from the gg-index fold rather than Blockscout.
@@ -1342,29 +1309,93 @@ async function fetchVaultLedger(address, sevenDaysAgo) {
   return out;
 }
 
+function rainAnnualFromLedger(ledger, nowSec = Math.floor(Date.now() / 1000)) {
+  const start = ledger.firstDeliveredAt || ledger.firstRecordedAt || nowSec;
+  const ageDays = Math.max(1 / 24, (nowSec - start) / 86400);
+  const ts = ledger.historyTs || [];
+  const delivered = ledger.historyDelivered || [];
+  if (ageDays > RAIN_LOOKBACK_DAYS && ts.length) {
+    const cutoff = nowSec - RAIN_LOOKBACK_DAYS * 86400;
+    let sum = 0;
+    for (let i = 0; i < ts.length; i++) {
+      if (ts[i] >= cutoff) sum += delivered[i] || 0;
+    }
+    return {
+      annual: sum * (365 / RAIN_LOOKBACK_DAYS),
+      days: RAIN_LOOKBACK_DAYS,
+      window: `${RAIN_LOOKBACK_DAYS}d`,
+    };
+  }
+  return {
+    annual: (ledger.deliveredUsd || 0) * (365 / ageDays),
+    days: ageDays,
+    window: "lifetime",
+  };
+}
+
+function yieldDayIdx(ts, sevenDaysAgo, oneDay) {
+  return Math.max(0, Math.min(YIELD_LOOKBACK_DAYS - 1, Math.floor((ts - sevenDaysAgo) / oneDay)));
+}
+
+function asUsd(v) {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function persistYieldSample(projectKey, sevenDaysAgo, dailySampleUsd) {
+  const oneDay = 86400;
+  const dayUsd = {};
+  for (let i = 0; i < dailySampleUsd.length; i++) {
+    dayUsd[yieldDays.utcKey(sevenDaysAgo + i * oneDay + oneDay / 2)] = dailySampleUsd[i];
+  }
+  yieldDays.save(yieldDays.merge(yieldDays.load(), projectKey, dayUsd));
+}
+
+function cachedYieldSample(projectKey, sevenDaysAgo) {
+  const all = yieldDays.load();
+  const days = all[projectKey] || {};
+  const oneDay = 86400;
+  const out = [];
+  for (let i = 0; i < YIELD_LOOKBACK_DAYS; i++) {
+    const key = yieldDays.utcKey(sevenDaysAgo + i * oneDay + oneDay / 2);
+    const usd = days[key];
+    if (typeof usd !== "number" || !Number.isFinite(usd)) return null;
+    out.push(usd);
+  }
+  return out;
+}
+
+async function explorerFetch(url) {
+  for (let i = 0; i < 5; i++) {
+    try {
+      const res = await fetch(url, {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(25_000),
+      });
+      if (res.status === 402) {
+        console.warn("[warn] Blockscout 402: ETH walk skipped; cached days still apply");
+        return { result: [], failed: true };
+      }
+      if (res.status === 429) { await sleep(3000); continue; }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (data.status === "0") {
+        const msg = String(data.message || data.result || "").toLowerCase();
+        if (msg.includes("no record") || msg.includes("no transaction")) return { result: [] };
+        if (msg.includes("rate") || msg.includes("limit")) { await sleep(3000); continue; }
+      }
+      return data;
+    } catch {
+      await sleep(1500 * (i + 1));
+    }
+  }
+  return { result: [], failed: true };
+}
+
 /**
- * Legacy path: token transfers OUT of a project's vault/AMM, via Blockscout.
- *
- * Only reached by a project with no activation contract, where there are no
- * RewardPaid events to read. Card Wall no longer takes this path.
- */
-/**
- * Page a Blockscout listing newest-first until it crosses `until`.
- *
- * Every paged read in this file had the same bug, so the paging lives in one
- * place now. A short page is NOT the end of the history: Blockscout serves
- * short pages while its own indexing is behind and flags it in the same
- * response as `status: "2"`, and reading one as the end silently truncates the
- * window being summed. It printed stonk's weekly AMM revenue as $10,770 against
- * $209,037 an hour earlier. Only an empty page terminates a walk.
- *
- * Returns null when the window was covered, or a reason string when the result
- * cannot be trusted. Page exhaustion alone is deliberately not a reason -- an
- * address whose entire history fits inside the window legitimately runs out of
- * pages -- so the source's own `status` is what separates the two. Without that
- * distinction the guard false-positives and blocks every update.
- *
- * `onRow` receives each row inside the window, newest first.
+ * Page an explorer listing newest-first until it crosses `until`.
+ * A short page is not the end of history (status "2" means the indexer is
+ * behind). Only an empty page, or crossing `until`, terminates the walk.
  */
 async function walkPagesBackTo(urlFor, until, onRow) {
   let page = 1;
@@ -1373,7 +1404,7 @@ async function walkPagesBackTo(urlFor, until, onRow) {
   let incomplete = false;
 
   while (true) {
-    const data = await secureFetch(urlFor(page));
+    const data = await explorerFetch(urlFor(page));
     if (data?.failed) return "request failed";
     if (data?.status === "2") incomplete = true;
 
@@ -1399,54 +1430,146 @@ async function walkPagesBackTo(urlFor, until, onRow) {
     : null;
 }
 
-async function fetchVaultTokenOutflows(conf, marketData, sevenDaysAgo, oneDay, sink) {
+/**
+ * Native ETH into the oracle. Prefer gg-index daily inflows when that worker
+ * actually has recent complete days. It does not today: `native:flows` last
+ * ran 2026-08-27 and cannot backfill pruned state, so the one remaining
+ * Blockscout call is this ETH walk (tokens are eth_getLogs). Finished days
+ * stay in cache/yield_days.json so later hours only page today's internals.
+ */
+async function fetchOracleNativeEth(projectKey, oracle, sevenDaysAgo, ethPriceUsd) {
+  const oneDay = 86400;
+  const nDays = YIELD_LOOKBACK_DAYS;
+  const daily = Array(nDays).fill(0);
+  const oracleAddr = oracle.toLowerCase();
+
+  try {
+    const flows = await gg.nativeFlowsDaily(oracleAddr, { days: nDays + 1 });
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const usable = [];
+    for (const row of flows?.daily || []) {
+      const date = String(row.date || "").slice(0, 10);
+      if (!date) continue;
+      const ts = Math.floor(Date.parse(`${date}T12:00:00Z`) / 1000);
+      if (!(ts >= sevenDaysAgo)) continue;
+      if (row.complete === false && date !== todayKey) continue;
+      usable.push({ ts, usd: asUsd(row.inflow_usd) });
+    }
+    if (flows?.watched && usable.length >= nDays - 1) {
+      for (const { ts, usd } of usable) {
+        if (usd > 0) daily[yieldDayIdx(ts, sevenDaysAgo, oneDay)] += usd;
+      }
+      persistYieldSample(`${projectKey}:eth`, sevenDaysAgo, daily);
+      return { daily, source: "gg-index" };
+    }
+  } catch (e) {
+    console.warn(`[warn] ${projectKey}: native_flows/daily unavailable (${e.message || e}); explorer ETH walk`);
+  }
+
+  const cached = cachedYieldSample(`${projectKey}:eth`, sevenDaysAgo);
+  let until = sevenDaysAgo;
+  if (cached) {
+    for (let i = 0; i < nDays - 1; i++) daily[i] = cached[i];
+    until = sevenDaysAgo + (nDays - 1) * oneDay;
+  }
+
   const reason = await walkPagesBackTo(
-    (page) => `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokentx&address=${conf.oracleSource}&contractaddress=${conf.tokenCa}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`,
-    sevenDaysAgo,
+    (page) => `${EXPLORER_API}?chain_id=${CHAIN_ID}&module=account&action=txlistinternal&address=${oracleAddr}&page=${page}&offset=1000&sort=desc${BLOCKSCOUT_KEY ? `&apikey=${BLOCKSCOUT_KEY}` : ""}`,
+    until,
     (tx, ts) => {
-      if ((tx.from || "").toLowerCase() !== conf.oracleSource.toLowerCase()) return;
-
-      const amount = Number(tx.value || 0) / Math.pow(10, parseInt(tx.tokenDecimal || 18, 10));
-      if (amount <= 0) return;
-
-      const usdVal = amount * marketData.tokenPriceUsd;
-      const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
-
-      sink.dailyUsdPerWeight[dayIdx] += (usdVal / sink.totalNetworkWeight);
-      sink.addSample(usdVal);
-      sink.revenueBreakdown.ammFeesUsd += usdVal;
-      sink.revenueBreakdown.dailyAmm[dayIdx] += usdVal;
+      const fromAddr = (tx.from || "").toLowerCase();
+      const toAddr = (tx.to || "").toLowerCase();
+      if (!PROTOCOL_CONTRACTS.includes(fromAddr) || toAddr !== oracleAddr) return;
+      const eth = Number(tx.value || 0) / 1e18;
+      if (!(eth > 0)) return;
+      daily[yieldDayIdx(ts, sevenDaysAgo, oneDay)] += eth * (ethPriceUsd || 0);
     },
   );
-  if (reason) sink.truncated.push(`tokentx vault outflow: ${reason}`);
+
+  if (reason && !cached) return { daily, truncated: `txlistinternal oracle: ${reason}` };
+  if (!reason || cached) persistYieldSample(`${projectKey}:eth`, sevenDaysAgo, daily);
+  return { daily, truncated: reason || null, source: cached ? "explorer+cache" : "explorer" };
+}
+
+/**
+ * Token transfers OUT of a vault that has no activation contract (no RewardPaid).
+ * Card Wall no longer takes this path.
+ */
+async function fetchVaultTokenOutflows(conf, marketData, sevenDaysAgo, oneDay, sink) {
+  const fromBlock = blockTime.blockAt(sevenDaysAgo);
+  const toBlock = await rpc.blockNumber();
+  let logs;
+  try {
+    logs = await rpc.getLogs({
+      address: conf.tokenCa,
+      fromBlock,
+      toBlock,
+      topics: [TOPIC.transfer, addrTopic(conf.oracleSource), null],
+    });
+  } catch (e) {
+    sink.truncated.push(`vault outflow logs: ${e.message || e}`);
+    return;
+  }
+  for (const log of logs) {
+    const amount = decodeUint(log.data, 0);
+    if (amount == null || amount <= 0n) continue;
+    const ts = blockTime.at(parseInt(log.blockNumber, 16));
+    if (ts < sevenDaysAgo) continue;
+    const usdVal = (Number(amount) / 1e18) * marketData.tokenPriceUsd;
+    if (!(usdVal > 0)) continue;
+    const dayIdx = yieldDayIdx(ts, sevenDaysAgo, oneDay);
+    sink.dailyUsdPerWeight[dayIdx] += (usdVal / sink.totalNetworkWeight);
+    sink.addSample(usdVal);
+    if (sink.dailySampleUsd) sink.dailySampleUsd[dayIdx] += usdVal;
+    sink.revenueBreakdown.ammFeesUsd += usdVal;
+    sink.revenueBreakdown.dailyAmm[dayIdx] += usdVal;
+  }
 }
 
 async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, marketData) {
   const oneDay = 86400;
+  const nDays = YIELD_LOOKBACK_DAYS;
+  const zeros = () => Array(nDays).fill(0);
   const dailyDates = [];
-  for (let i = 0; i < 7; i++) dailyDates.push(`${new Date((sevenDaysAgo + (i * oneDay)) * 1000).getMonth() + 1}/${new Date((sevenDaysAgo + (i * oneDay)) * 1000).getDate()}`);
+  for (let i = 0; i < nDays; i++) {
+    const d = new Date((sevenDaysAgo + (i * oneDay)) * 1000);
+    dailyDates.push(`${d.getMonth() + 1}/${d.getDate()}`);
+  }
 
   let totalSampleUsd = 0;
-  const dailyUsdPerWeight = [0, 0, 0, 0, 0, 0, 0];
+  const dailyUsdPerWeight = zeros();
+  const dailySampleUsd = zeros();
   const revenueBreakdown = {
     ammFeesUsd: 0, securityBoxUsd: 0, launchpadUsd: 0, dexFeesUsd: 0,
     launchCreateUsd: 0, bondingFeesUsd: 0, bondingVolumeUsd: 0,
-    dailyAmm: [0,0,0,0,0,0,0], dailySecurityBox: [0,0,0,0,0,0,0], dailyLaunchpad: [0,0,0,0,0,0,0], dailyDex: [0,0,0,0,0,0,0],
-    dailyBondingTax: [0,0,0,0,0,0,0]
+    dailyAmm: zeros(), dailySecurityBox: zeros(), dailyLaunchpad: zeros(), dailyDex: zeros(),
+    dailyBondingTax: zeros()
   };
 
-  // Every paged walk in this function reports here. Function scope rather than
-  // block scope because the security-box and launchpad readers are defined
-  // outside the yield-mode branch that used to own this list -- which is how
-  // they ended up unguarded when the rest were fixed.
   const truncatedWalks = [];
 
   let totalNetworkWeight = 0;
   for (const t of conf.tiers) totalNetworkWeight += ((activationStats.breakdown[t.id] || 0) * t.weight);
   if (totalNetworkWeight === 0) totalNetworkWeight = 1;
 
+  function creditSample(usdVal, ts, { perWeight, amm, dex } = {}) {
+    if (!(usdVal > 0)) return;
+    const dayIdx = yieldDayIdx(ts, sevenDaysAgo, oneDay);
+    totalSampleUsd += usdVal;
+    dailySampleUsd[dayIdx] += usdVal;
+    dailyUsdPerWeight[dayIdx] += usdVal / (perWeight || totalNetworkWeight);
+    if (amm) {
+      revenueBreakdown.ammFeesUsd += usdVal;
+      revenueBreakdown.dailyAmm[dayIdx] += usdVal;
+    }
+    if (dex) {
+      revenueBreakdown.dexFeesUsd += usdVal;
+      revenueBreakdown.dailyDex[dayIdx] += usdVal;
+    }
+  }
+
   function launchpadDay(ts) {
-    return Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
+    return yieldDayIdx(ts, sevenDaysAgo, oneDay);
   }
 
   function creditLaunchpad(usdVal, ts, bucket) {
@@ -1551,7 +1674,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
       const ts = blockTime.at(parseInt(log.blockNumber, 16));
       if (ts < sevenDaysAgo) continue;
       const usdVal = (Number(amount) / 1e18) * price;
-      const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
+      const dayIdx = yieldDayIdx(ts, sevenDaysAgo, oneDay);
       revenueBreakdown.securityBoxUsd += usdVal;
       revenueBreakdown.dailySecurityBox[dayIdx] += usdVal;
     }
@@ -1560,67 +1683,61 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
 
   if (conf.yieldMode === "oracle_wallet") {
       let oracleAmmSampleUsd = 0;
-      let dailyOracleAmmSample = [0,0,0,0,0,0,0];
+      const dailyOracleAmmSample = zeros();
 
-
-      const ethReason = await walkPagesBackTo(
-        (page) => `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=txlistinternal&address=${conf.oracleSource}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`,
-        sevenDaysAgo,
-        (tx, ts) => {
-          const fromAddr = (tx.from || "").toLowerCase();
-          const toAddr = (tx.to || "").toLowerCase();
-          if (!PROTOCOL_CONTRACTS.includes(fromAddr) || toAddr !== conf.oracleSource.toLowerCase()) return;
-
-          const eth = Number(tx.value || 0) / 1e18;
-          if (eth <= 0) return;
-
-          const usdVal = eth * marketData.ethPriceUsd;
-          const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
-
-          totalSampleUsd += usdVal;
-          if (conf.oracleWeight) dailyUsdPerWeight[dayIdx] += (usdVal / conf.oracleWeight);
-
-          if (fromAddr === conf.streams?.amm) {
-            oracleAmmSampleUsd += usdVal;
-            dailyOracleAmmSample[dayIdx] += usdVal;
-          }
-        },
+      // Native ETH at the oracle: gg-index when current, otherwise one
+      // explorer walk (cached days are not re-fetched). Tokens never hit
+      // Blockscout — that was the 17-walk choke.
+      const ethIn = await fetchOracleNativeEth(
+        projectKey, conf.oracleSource, sevenDaysAgo, marketData.ethPriceUsd,
       );
-      if (ethReason) truncatedWalks.push(`txlistinternal oracle: ${ethReason}`);
-
-
-      for (const tokenAddr of Object.keys(TOKEN_TICKERS)) {
-        const price = tokenPrices[tokenAddr.toLowerCase()] || 0;
-        if (price <= 0) continue;
-        
-        const tokReason = await walkPagesBackTo(
-          (page) => `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokentx&address=${conf.oracleSource}&contractaddress=${tokenAddr}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`,
-          sevenDaysAgo,
-          (tx, ts) => {
-            const fromAddr = (tx.from || "").toLowerCase();
-            const toAddr = (tx.to || "").toLowerCase();
-            if (!PROTOCOL_CONTRACTS.includes(fromAddr) || toAddr !== conf.oracleSource.toLowerCase()) return;
-
-            const amount = Number(tx.value || 0) / Math.pow(10, parseInt(tx.tokenDecimal || 18, 10));
-            if (amount <= 0) return;
-
-            const usdVal = amount * price;
-            const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
-
-            totalSampleUsd += usdVal;
-            if (conf.oracleWeight) dailyUsdPerWeight[dayIdx] += (usdVal / conf.oracleWeight);
-
-            oracleAmmSampleUsd += usdVal;
-            dailyOracleAmmSample[dayIdx] += usdVal;
-          },
-        );
-        if (tokReason) truncatedWalks.push(`tokentx ${tokenAddr}: ${tokReason}`);
+      if (ethIn.truncated && !ethIn.daily.some((v) => v > 0)) {
+        truncatedWalks.push(ethIn.truncated);
+      } else {
+        if (ethIn.source) console.log(`  oracle ETH (${ethIn.source})`);
+        for (let i = 0; i < nDays; i++) {
+          const usd = ethIn.daily[i];
+          if (!(usd > 0)) continue;
+          const ts = sevenDaysAgo + i * oneDay + oneDay / 2;
+          creditSample(usd, ts, { perWeight: conf.oracleWeight });
+          oracleAmmSampleUsd += usd;
+          dailyOracleAmmSample[i] += usd;
+        }
       }
 
+      // ERC-20 into the oracle from any protocol contract, one eth_getLogs.
+      const priced = Object.keys(TOKEN_TICKERS).filter((a) => (tokenPrices[a.toLowerCase()] || 0) > 0);
+      if (priced.length) {
+        try {
+          const fromBlock = blockTime.blockAt(sevenDaysAgo);
+          const toBlock = await rpc.blockNumber();
+          const logs = await rpc.getLogs({
+            address: priced,
+            fromBlock,
+            toBlock,
+            topics: [TOPIC.transfer, PROTOCOL_CONTRACTS.map(addrTopic), addrTopic(conf.oracleSource)],
+          });
+          for (const log of logs) {
+            const price = tokenPrices[(log.address || "").toLowerCase()] || 0;
+            if (!(price > 0)) continue;
+            const amount = decodeUint(log.data, 0);
+            if (amount == null || amount <= 0n) continue;
+            const ts = blockTime.at(parseInt(log.blockNumber, 16));
+            if (ts < sevenDaysAgo) continue;
+            const usdVal = (Number(amount) / 1e18) * price;
+            if (!(usdVal > 0)) continue;
+            creditSample(usdVal, ts, { perWeight: conf.oracleWeight });
+            oracleAmmSampleUsd += usdVal;
+            dailyOracleAmmSample[yieldDayIdx(ts, sevenDaysAgo, oneDay)] += usdVal;
+          }
+        } catch (e) {
+          truncatedWalks.push(`oracle token logs: ${e.message || e}`);
+        }
+      }
 
       const scaleMultiplier = totalNetworkWeight / conf.oracleWeight;
       revenueBreakdown.ammFeesUsd = oracleAmmSampleUsd * scaleMultiplier;
-      for (let i = 0; i < 7; i++) {
+      for (let i = 0; i < nDays; i++) {
           revenueBreakdown.dailyAmm[i] = dailyOracleAmmSample[i] * scaleMultiplier;
       }
 
@@ -1654,7 +1771,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
       if (hasActivation) {
         try {
           const cumulative = [];
-          for (let i = 0; i <= 7; i++) {
+          for (let i = 0; i <= nDays; i++) {
             const fromBlock = blockTime.blockAt(sevenDaysAgo + i * oneDay);
             const t = await gg.activations(projectKey, { fromBlock });
             const paid = (t.totals || []).filter(
@@ -1668,15 +1785,11 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
 
           // cumulative[i] counts everything after dayBlocks[i], so day i is the
           // difference between consecutive reads.
-          for (let i = 0; i < 7; i++) {
+          for (let i = 0; i < nDays; i++) {
             const amount = Math.max(0, cumulative[i] - cumulative[i + 1]);
             if (amount <= 0) continue;
             const usdVal = amount * marketData.tokenPriceUsd;
-
-            dailyUsdPerWeight[i] += (usdVal / totalNetworkWeight);
-            totalSampleUsd += usdVal;
-            revenueBreakdown.ammFeesUsd += usdVal;
-            revenueBreakdown.dailyAmm[i] += usdVal;
+            creditSample(usdVal, sevenDaysAgo + i * oneDay + oneDay / 2, { amm: true });
           }
         } catch (e) {
           const msg = String(e.message || e);
@@ -1686,6 +1799,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
       } else {
         await fetchVaultTokenOutflows(conf, marketData, sevenDaysAgo, oneDay, {
           dailyUsdPerWeight,
+          dailySampleUsd,
           revenueBreakdown,
           addSample: (usd) => { totalSampleUsd += usd; },
           totalNetworkWeight,
@@ -1694,48 +1808,73 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
       }
 
       if (projectKey === "mancer" && conf.streams?.dexCollector) {
-          const dexReason = await walkPagesBackTo(
-            (page) => `${PRO_API}?chain_id=${CHAIN_ID}&module=account&action=tokentx&address=${conf.streams.dexCollector}&page=${page}&offset=1000&sort=desc&apikey=${API_KEY}`,
-            sevenDaysAgo,
-            (tx, ts) => {
-              if ((tx.to || "").toLowerCase() !== conf.streams.dexCollector) return;
-
-              const dec = parseInt(tx.tokenDecimal || 18, 10);
-              const amount = Number(tx.value || 0) / Math.pow(10, dec);
-              const sym = (tx.tokenSymbol || "").toUpperCase();
-
+          try {
+            const fromBlock = blockTime.blockAt(sevenDaysAgo);
+            const toBlock = await rpc.blockNumber();
+            const logs = await rpc.getLogs({
+              address: WETH,
+              fromBlock,
+              toBlock,
+              topics: [TOPIC.transfer, null, addrTopic(conf.streams.dexCollector)],
+            });
+            for (const log of logs) {
+              const amount = decodeUint(log.data, 0);
+              if (amount == null || amount <= 0n) continue;
+              const eth = Number(amount) / 1e18;
               // The < 5 bound rejects outliers that are not fee flow.
-              if (!(amount > 0 && amount < 5) || (sym !== "WETH" && sym !== "ETH")) return;
-
-              const usdVal = amount * marketData.ethPriceUsd;
-              if (usdVal <= 0) return;
-
-              const dayIdx = Math.max(0, Math.min(6, Math.floor((ts - sevenDaysAgo) / oneDay)));
-              revenueBreakdown.dexFeesUsd += usdVal;
-              revenueBreakdown.dailyDex[dayIdx] += usdVal;
-              totalSampleUsd += usdVal;
-              dailyUsdPerWeight[dayIdx] += (usdVal / totalNetworkWeight);
-            },
-          );
-          if (dexReason) truncatedWalks.push(`tokentx dex collector: ${dexReason}`);
+              if (!(eth > 0 && eth < 5)) continue;
+              const ts = blockTime.at(parseInt(log.blockNumber, 16));
+              if (ts < sevenDaysAgo) continue;
+              creditSample(eth * (marketData.ethPriceUsd || 0), ts, { dex: true });
+            }
+          } catch (e) {
+            truncatedWalks.push(`dex collector logs: ${e.message || e}`);
+          }
       }
   }
 
   // Refuse to publish a total derived from a window we could not see all of.
   // stonk's sample is scaled by totalNetworkWeight/oracleWeight (~600x), so a
-  // short walk is not slightly low -- it is confidently wrong. Carry the last
-  // good yield/revenue instead of aborting the whole payload.
+  // short walk is not slightly low -- it is confidently wrong. Prefer the
+  // on-disk daily cache (Actions restores cache/yield_days.json) over carrying
+  // a whole previous snapshot.
   if (truncatedWalks.length) {
-    console.warn(
-      `[warn] ${projectKey}: Blockscout truncated ${truncatedWalks.join("; ")} ` +
-      `(window starts ${new Date(sevenDaysAgo * 1000).toISOString()}). Carrying prior yield.`,
-    );
-    return { unavailable: true };
+    const cached = cachedYieldSample(projectKey, sevenDaysAgo);
+    if (cached) {
+      console.warn(
+        `[warn] ${projectKey}: ${truncatedWalks.join("; ")}; filling ${nDays}d from yield_days cache ` +
+        `(window starts ${new Date(sevenDaysAgo * 1000).toISOString()}).`,
+      );
+      totalSampleUsd = 0;
+      for (let i = 0; i < nDays; i++) {
+        const usd = cached[i];
+        dailyUsdPerWeight[i] = 0;
+        totalSampleUsd += usd;
+        dailySampleUsd[i] = usd;
+        if (conf.yieldMode === "oracle_wallet" && conf.oracleWeight) {
+          dailyUsdPerWeight[i] = usd / conf.oracleWeight;
+          const scale = totalNetworkWeight / conf.oracleWeight;
+          revenueBreakdown.dailyAmm[i] = usd * scale;
+        } else {
+          dailyUsdPerWeight[i] = usd / totalNetworkWeight;
+          revenueBreakdown.dailyAmm[i] = usd;
+        }
+      }
+      revenueBreakdown.ammFeesUsd = revenueBreakdown.dailyAmm.reduce((s, v) => s + v, 0);
+    } else {
+      console.warn(
+        `[warn] ${projectKey}: yield truncated ${truncatedWalks.join("; ")} ` +
+        `(window starts ${new Date(sevenDaysAgo * 1000).toISOString()}). Carrying prior yield.`,
+      );
+      return { unavailable: true };
+    }
+  } else {
+    persistYieldSample(projectKey, sevenDaysAgo, dailySampleUsd);
   }
 
   const yieldPerWeightUnitAnnual = conf.yieldMode === "oracle_wallet" 
-      ? (totalSampleUsd / conf.oracleWeight) * 52.14 * totalNetworkWeight
-      : totalSampleUsd * 52.14;
+      ? (totalSampleUsd / conf.oracleWeight) * (365 / YIELD_LOOKBACK_DAYS) * totalNetworkWeight
+      : totalSampleUsd * (365 / YIELD_LOOKBACK_DAYS);
 
   return { 
       globalAnnualYield: yieldPerWeightUnitAnnual, 
@@ -1952,7 +2091,7 @@ async function run() {
   } catch (e) {
     console.warn(`[warn] stocks: ${e.message}; carrying previous`);
   }
-  const sevenDaysAgo = Math.floor(Date.now() / 1000) - 7 * 24 * 3600;
+  const sevenDaysAgo = Math.floor(Date.now() / 1000) - YIELD_LOOKBACK_DAYS * 86400;
   
   const finalJson = { 
     lastUpdated: new Date().toISOString(), 
@@ -2019,23 +2158,22 @@ async function run() {
       let dailySnapshots = prevProjData.dailySnapshots || [];
 
       if (yieldCarried && Array.isArray(prevProjData.tiers) && prevProjData.tiers.length) {
-        console.warn(`[warn] ${projectKey}: using previous yield/revenue (Blockscout window incomplete).`);
+        console.warn(`[warn] ${projectKey}: using previous yield/revenue (window incomplete).`);
         mappedTiers = prevProjData.tiers;
         revenueBreakdown = prevProjData.revenue || {};
       } else {
         if (yieldCarried) {
-          throw new Error(`${projectKey}: Blockscout yield unavailable and no previous snapshot to carry forward.`);
+          throw new Error(`${projectKey}: yield unavailable and no previous snapshot to carry forward.`);
         }
         let yieldPerWeightUnitAnnual = totalNetworkWeight > 0 ? (yieldData.globalAnnualYield / totalNetworkWeight) : 0;
 
-        // When Anvil RewardPaid is not indexed yet, attribute rain by rarity
-        // rainWeight so ROI is not stuck at zero with a live vault.
+        // Card Wall ROI is VaultLedger rain, not the 7-day RewardPaid sample.
+        // Slabs arrive in bursts; a quiet week printed ~$6/yr against ~$22k
+        // already delivered. Trailing 30d once the vault is a month old.
         let rainYieldByTier = null;
-        if (ledger && ledger.deliveredUsd > 0 && !(yieldPerWeightUnitAnnual > 0)) {
-          const nowSec = Math.floor(Date.now() / 1000);
-          const start = ledger.firstDeliveredAt || ledger.firstRecordedAt || nowSec;
-          const days = Math.max(1, (nowSec - start) / 86400);
-          const annualDelivered = ledger.deliveredUsd * (365 / days);
+        if (ledger && ledger.deliveredUsd > 0) {
+          const rain = rainAnnualFromLedger(ledger);
+          const annualDelivered = rain.annual;
           let rainNetwork = 0;
           for (const t of conf.tiers) {
             rainNetwork += (activationStats.breakdown[t.id] || 0) * (t.rainWeight || 0);
@@ -2047,7 +2185,7 @@ async function run() {
           yieldData.revenueBreakdown.ammFeesUsd = ledger.deliveredUsd;
           yieldData.revenueBreakdown.dailyAmm = ledger.historyDelivered?.length ? ledger.historyDelivered : (ledger.dailyDelivered || yieldData.revenueBreakdown.dailyAmm);
           yieldData.revenueBreakdown.dailyDex = ledger.historyVaulted?.length ? ledger.historyVaulted : (ledger.dailyVaulted || yieldData.revenueBreakdown.dailyDex);
-          console.log(`  rain yield (rarity): $${annualDelivered.toFixed(0)}/yr over ${days.toFixed(1)}d, ${rainNetwork} rain-weight`);
+          console.log(`  rain yield (rarity): $${annualDelivered.toFixed(0)}/yr over ${rain.days.toFixed(1)}d (${rain.window}), ${rainNetwork} rain-weight`);
         }
 
         let rainNetworkForDaily = 0;

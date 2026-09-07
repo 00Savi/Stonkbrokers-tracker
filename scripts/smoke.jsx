@@ -18,6 +18,7 @@ import { renderToString } from 'react-dom/server';
 import { StaticRouter } from 'react-router-dom';
 import fs from 'node:fs';
 import App from '../src/app.jsx';
+import HomeView from '../src/components/views/HomeView';
 import OverviewView from '../src/components/views/OverviewView';
 import EcosystemView from '../src/components/views/EcosystemView';
 import PortfolioView from '../src/components/views/PortfolioView';
@@ -95,6 +96,7 @@ for (const route of ROUTES) {
  */
 console.log('\nviews (populated with public/data.json)');
 const VIEWS = [
+  ['HomeView', HomeView, { data: snapshot }],
   ['OverviewView', OverviewView, { data: snapshot, pending: false }],
   ['EcosystemView', EcosystemView, { data: snapshot }],
   ['PortfolioView', PortfolioView, { data: snapshot }],

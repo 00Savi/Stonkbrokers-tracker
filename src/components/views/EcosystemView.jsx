@@ -405,7 +405,11 @@ export default function EcosystemView({ data, pending = false }) {
                         <tr className="bg-[#08090b]/40 border-b border-[#1e2228]/50">
                           <td colSpan="5" className="p-4 md:p-6">
                             <div className="flex justify-between items-center mb-3">
-                              <h4 className="text-sm font-bold text-slate-300">Trailing 7-Day Realized Yield ({t0?.name})</h4>
+                              <h4 className="text-sm font-bold text-slate-300">
+                                {t0?.rainWeight
+                                  ? 'VaultLedger rain (annualized)'
+                                  : 'Trailing 7-day realized yield'} ({t0?.name})
+                              </h4>
                               <span className="text-xs text-slate-500">Based on On-Chain Distributions</span>
                             </div>
                             <div className="relative h-32 md:h-40 w-full">

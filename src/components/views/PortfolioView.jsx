@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ethers } from 'ethers';
 import { SAVI_X } from '../Shell';
 import { compactUsd } from '../kit';
@@ -87,7 +88,10 @@ function groupByProject(ownedAssets) {
 }
 
 export default function PortfolioView({ data }) {
-  const [inputVal, setInputVal] = useState('');
+  const [searchParams] = useSearchParams();
+  const urlWallets = searchParams.get('w') || '';
+  const autoScan = useRef(false);
+  const [inputVal, setInputVal] = useState(urlWallets);
   const [isScanning, setIsScanning] = useState(false);
   const [scanComplete, setScanComplete] = useState(false);
   const [results, setResults] = useState({
@@ -412,6 +416,12 @@ export default function PortfolioView({ data }) {
     setScanComplete(true);
   };
 
+  useEffect(() => {
+    if (autoScan.current || !data || !urlWallets.trim()) return;
+    autoScan.current = true;
+    handleScan();
+  }, [data, urlWallets]);
+
   const enrichProject = async (projectKey) => {
     if (enriched[projectKey]) return;
     setEnriched((e) => ({ ...e, [projectKey]: 'loading' }));
@@ -467,6 +477,7 @@ export default function PortfolioView({ data }) {
   const aggregate = aggregateTbaHoldings(allNfts, inventories, priceIndex);
   const inventoriesPending = allNfts.some((n) => n.tba && inventories[n.tba]?.status === 'loading');
   const grouped = useMemo(() => groupByProject(results.ownedAssets), [results.ownedAssets]);
+  const hasHoldings = results.ownedAssets.length > 0;
   const forecastUsd = results.yieldUsd * forecastYears;
   const cashLabel = mode === 'history' ? 'Earned in your ownership' : `Forecasted ${forecastYears}y cash-flow`;
   const cashValue = mode === 'history' ? results.earnedUsd : forecastUsd;
@@ -480,17 +491,15 @@ export default function PortfolioView({ data }) {
           <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
           </svg>
-          Multi-Wallet Ecosystem Portfolio Tracker
+          Portfolio tracker
         </h2>
         <p className="text-xs text-slate-400 mt-1">
-          Scan single or multiple comma-separated wallet addresses. Forecast uses current yield.
-          History counts drops after you received the NFT (and after activation). RH Machines only
-          pay awake/inked units, scaled by on-chain weight. TBA and images load when you expand a
-          collection.
+          Comma-separated wallets. Forecast uses current yield. History counts drops after you
+          received the NFT (and after activation).
         </p>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3 mb-8">
+      <div className="flex flex-col sm:flex-row gap-3 mb-6">
         <input
           type="text"
           value={inputVal}
@@ -507,23 +516,19 @@ export default function PortfolioView({ data }) {
         </button>
       </div>
 
-      <div className="mb-8 max-w-2xl border-t border-[#1e2228] pt-5">
-        <p className="text-sm text-slate-300 leading-relaxed">
-          Welcome to Savi's Dashboard. Currently supported: StonkBrokers, Mancer, TickerYard, The Card Wall, The Index, RH Machines, Oakmont Vault, plus the token and stock lists.
+      {!isScanning && !scanComplete && (
+        <p className="text-sm text-slate-400 mb-6 leading-relaxed">
+          Paste a wallet to load holdings. Or open{' '}
+          <Link to="/ecosystem" className="text-slate-200 underline underline-offset-2 hover:text-white">
+            Ecosystem
+          </Link>
+          {' / '}
+          <Link to="/" className="text-slate-200 underline underline-offset-2 hover:text-white">
+            a project
+          </Link>{' '}
+          to browse live stats first.
         </p>
-        <p className="mt-3 text-sm text-slate-300 leading-relaxed">
-          We will continue to add more support for the growing ecosystem. Make sure to{' '}
-          <a
-            href={SAVI_X}
-            target="_blank"
-            rel="noreferrer"
-            className="text-slate-200 underline underline-offset-2 hover:text-white"
-          >
-            follow @savicrypto on X
-          </a>{' '}
-          and let us know what you want added.
-        </p>
-      </div>
+      )}
 
       {isScanning && (
         <p className="text-xs text-slate-300 text-center mb-6">
@@ -535,6 +540,22 @@ export default function PortfolioView({ data }) {
 
       {scanComplete && (
         <div>
+          <p className="text-sm text-slate-400 mb-5 leading-relaxed">
+            This view stays public.{' '}
+            <a
+              href={SAVI_X}
+              target="_blank"
+              rel="noreferrer"
+              className="text-slate-200 underline underline-offset-2 hover:text-white"
+            >
+              Follow @SaviCrypto
+            </a>{' '}
+            for new projects and daily changes.
+          </p>
+          {!hasHoldings ? (
+            <p className="text-sm text-slate-400">No ecosystem NFTs found in the provided wallet(s).</p>
+          ) : (
+            <>
           <div className="flex flex-col lg:flex-row lg:items-center gap-3 mb-5">
             <div className="flex bg-[#08090b] rounded-lg p-1 border border-[#1e2228]">
               {[
@@ -831,6 +852,8 @@ export default function PortfolioView({ data }) {
                 </div>
               )}
             </div>
+          )}
+            </>
           )}
         </div>
       )}

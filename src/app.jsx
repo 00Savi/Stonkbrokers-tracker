@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useParams, useLocation } from 'react-router-do
 import { TopNav, TabBar, SiteFooter } from './components/Shell';
 import ChartShareLayer from './components/ChartShareLayer';
 import { ChartMobileSync } from './lib/charts';
+import HomeView from './components/views/HomeView';
 import EcosystemView from './components/views/EcosystemView';
 import PortfolioView from './components/views/PortfolioView';
 import StonkDetailView from './components/views/StonkDetailView';
@@ -105,9 +106,7 @@ export default function App() {
 
       <main className="mx-auto w-full max-w-[1500px] px-3 sm:px-4">
         <Routes>
-          {/* Home is the portfolio scanner: one wallet paste, no project
-              vocabulary to learn first. Project pages stay one click away. */}
-          <Route path="/" element={<Navigate to="/portfolio" replace />} />
+          <Route path="/" element={<HomeView data={data} />} />
           <Route path="/rankings" element={<Navigate to="/ecosystem?tab=rankings" replace />} />
           <Route
             path="/ecosystem"

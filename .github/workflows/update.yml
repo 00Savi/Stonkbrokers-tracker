@@ -2,10 +2,9 @@ name: Fetch Protocol Data
 
 on:
   schedule:
-    # Hourly. This was 0 */4 * * * while yield still walked Blockscout
-    # txlist/tokentx enough to burn Pro credits into HTTP 402; after moving
-    # holders, supplies, logs, and most balances onto gg-index/RPC, a run
-    # is a few hundred credits against a 100k/day free cap.
+    # Hourly. The 17 oracle tokentx walks and the Mancer dex collector are
+    # eth_getLogs now. One Blockscout txlistinternal remains for Stonk oracle
+    # ETH until gg-index native:flows is current; cached days are not re-paged.
     - cron: '0 * * * *'
   workflow_dispatch:
 
@@ -70,6 +69,7 @@ jobs:
           path: |
             cache_*.json
             cache/blocktime.json
+            cache/yield_days.json
           key: indexer-cache-${{ github.run_id }}
           restore-keys: |
             indexer-cache-
