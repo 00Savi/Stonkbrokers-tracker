@@ -111,7 +111,7 @@ export default function YardDetailView({ data, activeTab }) {
       </div>
 
       {/* ==================== TAB 1: ROI BENCHMARKS ==================== */}
-      {activeTab === 'roi' && (
+      <section id="roi" className="scroll-mt-32">
         <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6">
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
@@ -207,10 +207,10 @@ export default function YardDetailView({ data, activeTab }) {
             </table>
           </div>
         </div>
-      )}
+      </section>
 
       {/* ==================== TAB 2: HISTORICAL YIELD ==================== */}
-      {activeTab === 'historical' && (
+      <section id="yield" className="scroll-mt-32">
         <div className="bg-[#0e1013] border border-[#1e2228] p-4 md:p-6 rounded-2xl shadow-lg space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
@@ -239,10 +239,10 @@ export default function YardDetailView({ data, activeTab }) {
             </div>
           </div>
         </div>
-      )}
+      </section>
 
       {/* ==================== TAB 3: REVENUE & LPS ==================== */}
-      {activeTab === 'revenue' && (
+      <section id="revenue" className="scroll-mt-32">
         <div className="space-y-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div>
@@ -312,12 +312,12 @@ export default function YardDetailView({ data, activeTab }) {
             </div>
           )}
         </div>
-      )}
+      </section>
 
       {/* ========================================================================= */}
       {/* TAB 4: BURN TRACKER (Ratchet-secured cumulative burn chart) */}
       {/* ========================================================================= */}
-      {activeTab === 'burn' && (
+      <section id="burn" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-lg md:text-xl font-bold text-white mb-6">Token Burn & Supply Deflation Tracker</h2>
           
@@ -374,12 +374,12 @@ export default function YardDetailView({ data, activeTab }) {
             </div>
           </div>
         </div>
-      )}
+      </section>
 
       {/* ========================================================================= */}
       {/* TAB 5: ACTIVATION */}
       {/* ========================================================================= */}
-      {activeTab === 'activation' && (
+      <section id="activation" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-lg md:text-xl font-bold text-white mb-6">Ecosystem Activation Metrics</h2>
           
@@ -447,12 +447,12 @@ export default function YardDetailView({ data, activeTab }) {
              </div>
           </div>
         </div>
-      )}
+      </section>
 
       {/* ========================================================================= */}
       {/* TAB 6: OWNERSHIP */}
       {/* ========================================================================= */}
-      {activeTab === 'ownership' && (
+      <section id="ownership" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-lg md:text-xl font-bold text-white mb-6">Protocol Ownership & Distribution</h2>
           
@@ -479,7 +479,7 @@ export default function YardDetailView({ data, activeTab }) {
             </div>
           </div>
         </div>
-      )}
+      </section>
 
       {/* ========================================================================= */}
       {/* DYNAMIC DISCLAIMER FOOTER */}
@@ -490,10 +490,10 @@ export default function YardDetailView({ data, activeTab }) {
           <h3 className="text-base md:text-lg font-bold text-white">Methodology & Disclaimer</h3>
         </div>
         <div className="text-xs md:text-sm text-slate-300 mb-5 leading-relaxed space-y-4">
-          {activeTab === 'roi' && <p><strong className="text-white">Yield & ROI (Global Network Oracle) Methodology:</strong> Cash-on-Cash (CoC) returns are calculated dynamically based on the selected project's architecture and active network weight.</p>}
-          {activeTab === 'historical' && <p><strong className="text-white">Historical Yield & Payback Horizon Methodology:</strong> Capital recovery timelines are calculated by dividing the total entry cost by annualized trailing yield rates. ROI trajectories map historical performance over rolling epochs.</p>}
-          {activeTab === 'ownership' && <p><strong className="text-white">Protocol Ownership & Distribution Methodology:</strong> Wallet concentration metrics evaluate unique human holders against true circulating supply, subtracting protocol treasury allocations.</p>}
-          {['revenue', 'burn', 'activation'].includes(activeTab) && <p><strong className="text-white">Protocol Analytics:</strong> Metrics shown aggregate live on-chain events across registered smart contracts.</p>}
+          <p><strong className="text-white">Yield & ROI (Global Network Oracle) Methodology:</strong> Cash-on-Cash (CoC) returns are calculated dynamically based on the selected project's architecture and active network weight.</p>
+          <p><strong className="text-white">Historical Yield & Payback Horizon Methodology:</strong> Capital recovery timelines are calculated by dividing the total entry cost by annualized trailing yield rates. ROI trajectories map historical performance over rolling epochs.</p>
+          <p><strong className="text-white">Protocol Analytics:</strong> Metrics shown aggregate live on-chain events across registered smart contracts.</p>
+          <p><strong className="text-white">Protocol Ownership & Distribution Methodology:</strong> Wallet concentration metrics evaluate unique human holders against true circulating supply, subtracting protocol treasury allocations.</p>
         </div>
         <p className="text-xs md:text-sm text-slate-400 italic leading-relaxed border-t border-[#1e2228] pt-5">
           <strong className="text-slate-300 not-italic">Disclaimer:</strong> Tracked yield values are calculated using Mark-to-Market spot pricing at the exact time of the dashboard's last automated sync, rather than the historical price at the time of the drop. Yields fluctuate based on network activation weight, market token prices, and community protocol volume. This is a community-built tracking tool and does not guarantee future returns.

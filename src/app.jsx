@@ -14,7 +14,8 @@ import BonusDetailView from './components/views/BonusDetailView';
 import MemesTokensView from './components/views/MemesTokensView';
 import SpecialDetailView from './components/views/SpecialDetailView';
 import { useDashboard } from './lib/useDashboard';
-import { PROJECT_BY_SLUG, TAB_BY_SLUG, DEFAULT_TAB, BONUS_LIVE } from './lib/routes';
+import { PROJECT_BY_SLUG, TAB_BY_SLUG, DEFAULT_TAB, BONUS_LIVE, PROJECTS } from './lib/routes';
+import { useProjectScrollSpy } from './lib/projectScroll';
 import { SkeletonCard } from './components/kit';
 
 const DETAIL_VIEWS = {
@@ -44,6 +45,9 @@ function ProjectPage({ data }) {
   const { project, tab } = useParams();
   const key = PROJECT_BY_SLUG[project];
   const activeTab = TAB_BY_SLUG[tab];
+  const meta = PROJECTS.find((p) => p.slug === project);
+  const ready = !!(data && key && activeTab && key !== 'bonus');
+  useProjectScrollSpy(ready ? project : null, ready ? tab : null, meta, ready);
 
   if (!key) return <Navigate to="/" replace />;
   if (key === 'bonus') return <Navigate to={BONUS_LIVE ? '/bonus' : '/'} replace />;
@@ -54,8 +58,10 @@ function ProjectPage({ data }) {
 
   return (
     <>
-      <TabBar />
-      <div className="pt-5">
+      <div className="sticky top-[4.25rem] z-20 -mx-3 bg-[#08090b]/90 px-3 backdrop-blur sm:top-[4.75rem]">
+        <TabBar />
+      </div>
+      <div className="pt-5 pb-16">
         {data ? (
           <View data={data} activeTab={activeTab} />
         ) : (

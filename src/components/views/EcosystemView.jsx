@@ -1,5 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import React, { useCallback, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { projectPath } from '../../lib/routes';
+import { useSectionScrollSpy } from '../../lib/projectScroll';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, ArcElement, Filler
 } from 'chart.js';
@@ -20,10 +22,92 @@ const ECO_TABS = [
   { id: 'rankings', label: 'Rankings' },
 ];
 
+function lastFinite(arr) {
+  if (!Array.isArray(arr)) return null;
+  for (let i = arr.length - 1; i >= 0; i--) {
+    const n = Number(arr[i]);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+function seriesHasInk(data) {
+  return Array.isArray(data) && data.some((v) => v != null && Number(v) !== 0);
+}
+
+/** One protocol, one Y-axis. Overlaying 8 series on a shared scale hides everyone except the outlier. */
+function EcoMiniChart({ title, value, color, labels, data, kind = 'line', yTick, note, to }) {
+  const has = seriesHasInk(data);
+  const chartData = {
+    labels: labels || [],
+    datasets: [{
+      label: title,
+      data: data || [],
+      borderColor: color,
+      backgroundColor: kind === 'bar' ? color : `${color}22`,
+      borderWidth: kind === 'bar' ? 0 : 2,
+      fill: kind !== 'bar',
+      tension: 0.3,
+      pointRadius: 0,
+      borderRadius: 3,
+      spanGaps: true,
+    }],
+  };
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { display: false }, ticks: { color: '#64748b', maxTicksLimit: 5, maxRotation: 0 } },
+      y: { min: 0, grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: yTick, maxTicksLimit: 4 } },
+    },
+  };
+
+  const body = (
+    <>
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <div>
+          <p className="flex items-center gap-2 text-sm font-bold text-white">
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+            {title}
+          </p>
+          {note ? <p className="mt-0.5 text-[10px] text-slate-500">{note}</p> : null}
+        </div>
+        {value != null ? (
+          <p className="shrink-0 text-sm font-extrabold" style={{ color }}>{value}</p>
+        ) : null}
+      </div>
+      <div className="relative h-36 w-full sm:h-44">
+        {!has ? (
+          <div className="flex h-full items-center justify-center text-xs text-slate-500">No series yet</div>
+        ) : kind === 'bar' ? (
+          <Bar data={chartData} options={options} />
+        ) : (
+          <Line data={chartData} options={options} />
+        )}
+      </div>
+    </>
+  );
+
+  const frame = 'bg-[#0e1013] border border-[#1e2228] rounded-xl p-4';
+  if (!to) return <div className={frame}>{body}</div>;
+  return (
+    <Link
+      to={to}
+      onClick={(e) => {
+        if (e.target.closest('button')) e.preventDefault();
+      }}
+      className={`${frame} block cursor-pointer transition hover:border-slate-500 hover:bg-[#101318]`}
+    >
+      {body}
+    </Link>
+  );
+}
+
 export default function EcosystemView({ data, pending = false }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabFromUrl = searchParams.get('tab');
-  const [activeTab, setActiveTab] = useState(ECO_TABS.some((t) => t.id === tabFromUrl) ? tabFromUrl : 'roi');
+  const activeTab = ECO_TABS.some((t) => t.id === tabFromUrl) ? tabFromUrl : 'roi';
   const [expandedProject, setExpandedProject] = useState(null);
   const [yieldPeriod, setYieldPeriod] = useState('Y');
   
@@ -33,14 +117,18 @@ export default function EcosystemView({ data, pending = false }) {
   const [actTimeframe, setActTimeframe] = useState('all');
   const [ownTimeframe, setOwnTimeframe] = useState('all');
 
-  useEffect(() => {
-    if (tabFromUrl && ECO_TABS.some((t) => t.id === tabFromUrl) && tabFromUrl !== activeTab) {
-      setActiveTab(tabFromUrl);
-    }
-  }, [tabFromUrl, activeTab]);
+  const onActiveId = useCallback((id) => {
+    setSearchParams(id === 'roi' ? {} : { tab: id }, { replace: true });
+  }, [setSearchParams]);
+
+  useSectionScrollSpy({
+    sectionIds: ECO_TABS.map((t) => t.id),
+    activeId: activeTab,
+    onActiveId,
+    ready: !!(data && data.projects),
+  });
 
   const selectTab = (id) => {
-    setActiveTab(id);
     setSearchParams(id === 'roi' ? {} : { tab: id }, { replace: true });
   };
 
@@ -192,45 +280,56 @@ export default function EcosystemView({ data, pending = false }) {
   };
 
   // =========================================================
-  // REVENUE CALCULATIONS
+  // REVENUE — per-project series (do not force everyone onto Stonk's dates)
   // =========================================================
-  const getProjectRev = (projKey, timeframe) => {
-    const p = data.projects[projKey];
-    if (!p || !p.revenue) return 0;
-    const r = p.revenue;
-    const sliceCount = getSliceCount(timeframe, masterRevLabels.length);
-    
-    const sumArray = (arr) => {
-      if (!Array.isArray(arr) || arr.length === 0) return 0;
-      return arr.slice(-sliceCount).reduce((a, b) => a + Number(b || 0), 0);
-    };
-    return sumArray(r.dailyAmm) + sumArray(r.dailyDex) + sumArray(r.dailySecurityBox) + sumArray(r.dailyLaunchpad);
+  const projectRevenueSeries = (p) => {
+    const r = p?.revenue || {};
+    const cf = p?.cashflow || {};
+    const streams = [r.dailyAmm, r.dailyDex, r.dailySecurityBox, r.dailyLaunchpad];
+    const hasNftDaily = streams.some((a) => Array.isArray(a) && a.some((v) => Number(v) > 0));
+    if (hasNftDaily) {
+      const labels = p?.tiers?.[0]?.dailyDates?.length ? p.tiers[0].dailyDates : masterRevLabels;
+      const len = labels.length;
+      const data = labels.map((_, i) => {
+        const fromEnd = len - 1 - i;
+        return streams.reduce((s, a) => {
+          if (!Array.isArray(a) || !a.length) return s;
+          const idx = a.length - 1 - fromEnd;
+          return s + (idx >= 0 ? Number(a[idx]) || 0 : 0);
+        }, 0);
+      });
+      return { labels, data, source: 'streams' };
+    }
+    if (Array.isArray(cf.dailyDates) && cf.dailyDates.length) {
+      const src = (cf.dailyRevenue || []).some((v) => Number(v) > 0) ? cf.dailyRevenue : cf.dailyFees;
+      if (Array.isArray(src) && src.some((v) => Number(v) > 0)) {
+        return { labels: cf.dailyDates, data: src.map((v) => Number(v) || 0), source: 'cashflow' };
+      }
+    }
+    const snaps = Array.isArray(p?.dailySnapshots) ? p.dailySnapshots : [];
+    if (snaps.some((s) => Number(s.annualYield) > 0)) {
+      return {
+        labels: snaps.map((s) => s.date),
+        data: snaps.map((s) => Number(s.annualYield) / 365),
+        source: 'snapshot-est',
+      };
+    }
+    return { labels: [], data: [], source: null };
   };
 
-  const getRevChartData = (timeframe) => {
-    const sliceCount = getSliceCount(timeframe, masterRevLabels.length);
-    const slicedLabels = masterRevLabels.slice(-sliceCount);
-    
-    const datasets = order.map(k => {
-      const p = data.projects[k];
-      const r = p?.revenue || {};
-      
-      const d1 = rightAlignArray(r.dailyAmm, masterRevLabels.length);
-      const d2 = rightAlignArray(r.dailyDex, masterRevLabels.length);
-      const d3 = rightAlignArray(r.dailySecurityBox, masterRevLabels.length);
-      const d4 = rightAlignArray(r.dailyLaunchpad, masterRevLabels.length);
-      
-      const combinedDaily = d1.map((val, i) => val + (d2[i] || 0) + (d3[i] || 0) + (d4[i] || 0));
-      
-      return {
-        label: projectNames[k],
-        data: combinedDaily.slice(-sliceCount),
-        backgroundColor: projectColors[k],
-        borderRadius: 4
-      };
-    });
-
-    return { labels: slicedLabels, datasets };
+  const getProjectRev = (projKey, timeframe) => {
+    const p = data.projects[projKey];
+    if (!p) return 0;
+    const series = projectRevenueSeries(p);
+    if (series.data.length) {
+      const n = getSliceCount(timeframe, series.data.length);
+      return series.data.slice(-n).reduce((s, v) => s + (Number(v) || 0), 0);
+    }
+    const cf = p.cashflow || {};
+    if (timeframe === '1d') return Number(cf.revenue24h || cf.fees24h) || 0;
+    if (timeframe === '7d') return Number(cf.revenue7d || cf.holders7d || cf.fees7d) || 0;
+    if (timeframe === '30d') return Number(cf.revenue30d || cf.holders30d || cf.fees30d) || 0;
+    return Number(cf.revenueAllTime || cf.feesAllTime || cf.revenueAnnualized) || 0;
   };
 
   const getHistChartData = (timeframe) => {
@@ -291,10 +390,11 @@ export default function EcosystemView({ data, pending = false }) {
     <div className="space-y-6 pt-4 relative">
       
       {/* ECOSYSTEM TAB NAVIGATION */}
-      <div className="-mx-1 mb-6 flex w-full gap-2 overflow-x-auto px-1 pb-1">
+      <div className="sticky top-[4.25rem] z-20 -mx-1 mb-6 flex w-full gap-2 overflow-x-auto bg-[#08090b]/90 px-1 py-2 backdrop-blur sm:top-[4.75rem]">
         {ECO_TABS.map((tab) => (
           <button
             key={tab.id}
+            type="button"
             onClick={() => selectTab(tab.id)}
             className={`shrink-0 px-3 py-2 rounded-lg font-semibold transition text-xs md:text-sm ${
               activeTab === tab.id
@@ -310,7 +410,7 @@ export default function EcosystemView({ data, pending = false }) {
       {/* ========================================================= */}
       {/* TAB 1: ROI BENCHMARKS */}
       {/* ========================================================= */}
-      {activeTab === 'roi' && (
+      <section id="roi" className="scroll-mt-32">
         <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl">
           <div className="flex justify-between items-start mb-6 gap-4">
             <div>
@@ -371,8 +471,14 @@ export default function EcosystemView({ data, pending = false }) {
                       >
                         <td className="py-5 pl-2">
                           <div className="flex items-center gap-3">
-                            <img src={`/${projectLogos[k]}`} alt={projectNames[k]} className="w-8 h-8 rounded-md border border-[#1e2228] object-cover bg-[#08090b]" />
-                            <span className="font-bold text-white">{projectNames[k]}</span>
+                            <Link
+                              to={projectPath(k, 'roi')}
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center gap-3 rounded-md hover:opacity-90"
+                            >
+                              <img src={`/${projectLogos[k]}`} alt={projectNames[k]} className="w-8 h-8 rounded-md border border-[#1e2228] object-cover bg-[#08090b]" />
+                              <span className="font-bold text-white underline-offset-2 hover:underline">{projectNames[k]}</span>
+                            </Link>
                           </div>
                         </td>
                         <td className="py-5">
@@ -437,17 +543,19 @@ export default function EcosystemView({ data, pending = false }) {
             </table>
           </div>
         </div>
-      )}
+      </section>
 
       {/* ========================================================= */}
       {/* TAB 2: HISTORICAL YIELD (No more sea of zeros!) */}
       {/* ========================================================= */}
-      {activeTab === 'historical' && (
-        <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6">
+      <section id="historical" className="scroll-mt-32">
+        <div className="space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h3 className="text-lg font-bold text-white">Historical Protocol ROI Tracking (%)</h3>
-              <p className="text-xs text-slate-400 mt-1">Daily CoC from 8/20 onward — the first day every NFT-yield line has a recorded print.</p>
+              <h3 className="text-lg font-bold text-white">Historical protocol ROI</h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Each project gets its own scale. Overlaying Coattail at 1,000%+ with Stonk at ~8% made everyone else look flat.
+              </p>
             </div>
             <div className="flex bg-[#08090b] rounded-lg p-1 border border-[#1e2228]">
               {['7d', '30d', 'all'].map((tf) => (
@@ -457,23 +565,34 @@ export default function EcosystemView({ data, pending = false }) {
               ))}
             </div>
           </div>
-          
-          <div className="relative h-56 sm:h-80 md:h-96 w-full bg-[#08090b] p-4 rounded-xl border border-[#1e2228]">
-            <Line 
-              data={getHistChartData(histTimeframe)} 
-              options={{
-                ...percentChartOptions,
-                spanGaps: false,
-              }} 
-            />
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {(() => {
+              const hist = getHistChartData(histTimeframe);
+              return hist.datasets.map((ds, i) => {
+                const k = order[i];
+                const latest = lastFinite(ds.data);
+                return (
+                  <EcoMiniChart
+                    key={k}
+                    title={ds.label}
+                    color={projectColors[k]}
+                    labels={hist.labels}
+                    data={ds.data}
+                    yTick={(v) => `${compactTick(v)}%`}
+                    value={latest == null ? null : `${latest.toFixed(1)}%`}
+                    to={projectPath(k, 'historical')}
+                  />
+                );
+              });
+            })()}
           </div>
         </div>
-      )}
+      </section>
 
       {/* ========================================================= */}
       {/* TAB 3: REVENUE & LPS */}
       {/* ========================================================= */}
-      {activeTab === 'revenue' && (
+      <section id="revenue" className="scroll-mt-32">
         <div className="space-y-6">
           <div className="flex justify-between items-center mb-2">
             <h2 className="text-lg md:text-xl font-bold text-white">Ecosystem Revenue Streams</h2>
@@ -488,7 +607,11 @@ export default function EcosystemView({ data, pending = false }) {
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {order.map(k => (
-              <div key={k} className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm">
+              <Link
+                key={k}
+                to={projectPath(k, 'revenue')}
+                className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm transition hover:border-slate-500 hover:bg-[#101318]"
+              >
                 <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-1">
                   <span className="w-2 h-2 rounded-full" style={{backgroundColor: projectColors[k]}}></span>
                   {projectNames[k]} Revenue
@@ -496,34 +619,42 @@ export default function EcosystemView({ data, pending = false }) {
                 <p className="text-2xl font-extrabold" style={{color: projectColors[k]}}>
                   {formatCurrency(getProjectRev(k, revTimeframe))}
                 </p>
-              </div>
+              </Link>
             ))}
           </div>
 
-          <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-4 md:p-6">
-            <h3 className="text-sm font-bold text-white mb-4">Daily Revenue Inflows by Protocol (USD)</h3>
-            <div className="relative h-80 w-full bg-[#08090b] rounded-xl p-4 border border-[#1e2228]">
-              <Bar 
-                data={getRevChartData(revTimeframe)} 
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  plugins: { legend: { labels: { color: '#cbd5e1' } } },
-                  scales: {
-                    x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
-                    y: { min: 0, grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactUsdTick } }
-                  }
-                }} 
-              />
-            </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {order.map((k) => {
+              const series = projectRevenueSeries(data.projects[k]);
+              const n = getSliceCount(revTimeframe, series.data.length);
+              const note = k === 'printer'
+                ? (series.source === 'snapshot-est'
+                  ? 'Volume-tax estimate (annual / 365). Stock gacha is not indexed yet.'
+                  : 'Volume-tax estimate. Stock gacha is not indexed yet.')
+                : null;
+              return (
+                <EcoMiniChart
+                  key={k}
+                  title={projectNames[k]}
+                  color={projectColors[k]}
+                  labels={series.labels.slice(-n)}
+                  data={series.data.slice(-n)}
+                  kind="bar"
+                  yTick={compactUsdTick}
+                  value={formatCurrency(getProjectRev(k, revTimeframe))}
+                  note={note}
+                  to={projectPath(k, 'revenue')}
+                />
+              );
+            })}
           </div>
         </div>
-      )}
+      </section>
 
       {/* ========================================================= */}
       {/* TAB 4: BURN TRACKER (Calculated w/ dynamic max supply) */}
       {/* ========================================================= */}
-      {activeTab === 'burn' && (
+      <section id="burn" className="scroll-mt-32">
         <div className="space-y-6">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {order.map(k => {
@@ -531,7 +662,11 @@ export default function EcosystemView({ data, pending = false }) {
               const { tokenPct, nftPct } = burnCaps(p);
 
               return (
-                <div key={k} className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-4 shadow-sm">
+                <Link
+                  key={k}
+                  to={projectPath(k, 'burn')}
+                  className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-4 shadow-sm transition hover:border-slate-500 hover:bg-[#101318]"
+                >
                   <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1">
                     <span className="w-2 h-2 rounded-full" style={{backgroundColor: projectColors[k]}}></span>
                     {projectNames[k]} Deflation
@@ -544,7 +679,7 @@ export default function EcosystemView({ data, pending = false }) {
                     <span className="text-xs text-slate-400">NFT Burn</span>
                     <span className="text-blue-400 font-bold">{nftPct == null ? '—' : `${nftPct.toFixed(2)}%`}</span>
                   </div>
-                </div>
+                </Link>
               );
             })}
           </div>
@@ -644,12 +779,12 @@ export default function EcosystemView({ data, pending = false }) {
             </div>
           </div>
         </div>
-      )}
+      </section>
 
       {/* ========================================================= */}
       {/* TAB 5: ACTIVATION (Restored to elegant 0-curve starts) */}
       {/* ========================================================= */}
-      {activeTab === 'activation' && (
+      <section id="activation" className="scroll-mt-32">
         <div className="space-y-6">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {activationOrder.map(k => {
@@ -657,14 +792,18 @@ export default function EcosystemView({ data, pending = false }) {
               const actCount = p?.activation?.activeCount || 0;
               const pct = p?.activation?.percentActivated || 0;
               return (
-                <div key={k} className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm">
+                <Link
+                  key={k}
+                  to={projectPath(k, 'activation')}
+                  className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm transition hover:border-slate-500 hover:bg-[#101318]"
+                >
                   <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-1">
                     <span className="w-2 h-2 rounded-full" style={{backgroundColor: projectColors[k]}}></span>
                     {projectNames[k]} Active
                   </p>
                   <p className="text-2xl font-extrabold text-white">{formatNumber(actCount)}</p>
                   <p className="text-xs text-slate-500 mt-1">{pct.toFixed(1)}% of Supply</p>
-                </div>
+                </Link>
               );
             })}
           </div>
@@ -687,10 +826,14 @@ export default function EcosystemView({ data, pending = false }) {
               </div>
               <div className="w-full md:w-1/2 flex flex-col gap-3">
                 {activationOrder.map(k => (
-                  <div key={k} className="flex justify-between items-center bg-[#08090b] p-3 rounded-lg border border-[#1e2228]">
+                  <Link
+                    key={k}
+                    to={projectPath(k, 'activation')}
+                    className="flex justify-between items-center bg-[#08090b] p-3 rounded-lg border border-[#1e2228] transition hover:border-slate-500"
+                  >
                     <div className="flex items-center gap-3"><div className="w-3 h-3 rounded-md" style={{backgroundColor: projectColors[k]}}></div><span className="text-sm font-bold text-slate-300">{projectNames[k]}</span></div>
                     <span className="text-white font-bold tracking-wide">{formatNumber(data.projects[k]?.activation?.activeCount || 0)}</span>
-                  </div>
+                  </Link>
                 ))}
               </div>
             </div>
@@ -740,12 +883,12 @@ export default function EcosystemView({ data, pending = false }) {
              </div>
           </div>
         </div>
-      )}
+      </section>
 
       {/* ========================================================= */}
       {/* TAB 6: OWNERSHIP (Anomaly filtered to prevent RPC crashes) */}
       {/* ========================================================= */}
-      {activeTab === 'ownership' && (
+      <section id="ownership" className="scroll-mt-32">
         <div className="space-y-6">
           
           <div className="flex justify-between items-center mb-2">
@@ -770,7 +913,11 @@ export default function EcosystemView({ data, pending = false }) {
               if (tokens === 0 && k === 'mancer') tokens = 4101;
 
               return (
-                <div key={k} className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-4 shadow-sm">
+                <Link
+                  key={k}
+                  to={projectPath(k, 'ownership')}
+                  className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-4 shadow-sm transition hover:border-slate-500 hover:bg-[#101318]"
+                >
                   <div className="flex items-center gap-2 mb-3">
                      <span className="w-2 h-2 rounded-full" style={{backgroundColor: projectColors[k]}}></span>
                      <span className="font-bold text-white text-sm">{projectNames[k]}</span>
@@ -783,7 +930,7 @@ export default function EcosystemView({ data, pending = false }) {
                     <span className="text-[10px] text-slate-400 uppercase">Token Holders</span>
                     <span className="text-white font-bold">{formatNumber(tokens)}</span>
                   </div>
-                </div>
+                </Link>
               );
             })}
           </div>
@@ -867,11 +1014,11 @@ export default function EcosystemView({ data, pending = false }) {
             </div>
           </div>
         </div>
-      )}
+      </section>
 
-      {activeTab === 'rankings' && (
+      <section id="rankings" className="scroll-mt-32">
         <OverviewView data={data} pending={pending} compact />
-      )}
+      </section>
 
       {/* DYNAMIC DISCLAIMER */}
       <div className="bg-[#0e1013] rounded-xl p-5 md:p-6 border border-[#1e2228] shadow-lg mt-8">

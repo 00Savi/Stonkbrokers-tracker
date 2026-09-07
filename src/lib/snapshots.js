@@ -53,3 +53,29 @@ export function trailingSnapshots(snapshots, days) {
   const clean = usableSnapshots(snapshots);
   return days > 0 ? clean.slice(-days) : clean;
 }
+
+/**
+ * Token-holder counts over time.
+ *
+ * Prefer `ownership.historicalGrowth` (appended hourly). If that series has
+ * not started yet, use snapshot rows that already carry `tokenHolders`, then
+ * today's scalar so the chart still has a point instead of a blank canvas.
+ */
+export function holderSeries(ownership, snapshots) {
+  const hist = ownership?.historicalGrowth;
+  const labels = Array.isArray(hist?.labels) ? hist.labels : [];
+  const data = Array.isArray(hist?.data) ? hist.data.map(Number) : [];
+  if (labels.length > 0 && data.length === labels.length && data.some((n) => n > 0)) {
+    return { labels, data };
+  }
+
+  const rows = (Array.isArray(snapshots) ? snapshots : []).filter((s) => Number(s.tokenHolders) > 0);
+  if (rows.length) {
+    return { labels: rows.map((s) => s.date || ''), data: rows.map((s) => Number(s.tokenHolders)) };
+  }
+
+  const current = Number(ownership?.tokenHolders) || 0;
+  if (!(current > 0)) return { labels: [], data: [] };
+  const d = new Date();
+  return { labels: [`${d.getMonth() + 1}/${d.getDate()}`], data: [current] };
+}

@@ -104,7 +104,11 @@ const VIEWS = [
   ['MemesTokensView·stocks', MemesTokensView, { data: snapshot, type: 'stocks' }],
   ['BonusDetailView', BonusDetailView, { data: snapshot }],
   ['Index·roi', SpecialDetailView, { data: snapshot, projectKey: 'index', activeTab: 'roi' }],
+  ['Index·burn', SpecialDetailView, { data: snapshot, projectKey: 'index', activeTab: 'burn' }],
+  ['Index·ownership', SpecialDetailView, { data: snapshot, projectKey: 'index', activeTab: 'ownership' }],
   ['Printer·revenue', SpecialDetailView, { data: snapshot, projectKey: 'printer', activeTab: 'revenue' }],
+  ['Printer·burn', SpecialDetailView, { data: snapshot, projectKey: 'printer', activeTab: 'burn' }],
+  ['Printer·ownership', SpecialDetailView, { data: snapshot, projectKey: 'printer', activeTab: 'ownership' }],
   ['Oakmont·roi', SpecialDetailView, { data: snapshot, projectKey: 'oakmont', activeTab: 'roi' }],
   ['Oakmont·yield', SpecialDetailView, { data: snapshot, projectKey: 'oakmont', activeTab: 'historical' }],
   ['Oakmont·revenue', SpecialDetailView, { data: snapshot, projectKey: 'oakmont', activeTab: 'revenue' }],
@@ -113,7 +117,9 @@ const VIEWS = [
   ['Oakmont·holders', SpecialDetailView, { data: snapshot, projectKey: 'oakmont', activeTab: 'ownership' }],
   ['Coattail·roi', SpecialDetailView, { data: snapshot, projectKey: 'coattail', activeTab: 'roi' }],
   ['Coattail·yield', SpecialDetailView, { data: snapshot, projectKey: 'coattail', activeTab: 'historical' }],
+  ['Coattail·burn', SpecialDetailView, { data: snapshot, projectKey: 'coattail', activeTab: 'burn' }],
   ['Coattail·activation', SpecialDetailView, { data: snapshot, projectKey: 'coattail', activeTab: 'activation' }],
+  ['Coattail·ownership', SpecialDetailView, { data: snapshot, projectKey: 'coattail', activeTab: 'ownership' }],
 ];
 
 const TABS = ['roi', 'historical', 'revenue', 'burn', 'activation', 'ownership'];

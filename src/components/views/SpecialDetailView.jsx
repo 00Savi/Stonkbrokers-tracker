@@ -3,20 +3,22 @@ import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler
 } from 'chart.js';
 import { Line, Bar } from 'react-chartjs-2';
-import { trailingSnapshots } from '../../lib/snapshots';
+import { burnSeries, burnRateSeries } from '../../lib/burn';
+import { trailingSnapshots, holderSeries } from '../../lib/snapshots';
 import { PROJECTS } from '../../lib/routes';
 import { BetaTag, compactUsd, compactNum } from '../kit';
 import {
   OAKMONT_ACTIONS, OAKMONT_BASKET, OAKMONT_DOCS, OAKMONT_DAPP, OAKMONT_FEES,
   fetchGeckoTokenHolders,
 } from '../../lib/oakmont';
-import { baseChartOptions, compactUsdTick } from '../../lib/charts';
+import { baseChartOptions, compactTick, compactUsdTick } from '../../lib/charts';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler);
 
 const MARK = { green: '#00a804', violet: '#8b5cf6', sky: '#38bdf8', amber: '#f5b700', pink: '#f472b6', lime: '#a3e635' };
 
 export default function SpecialDetailView({ data, projectKey, activeTab }) {
+  const [burnTimeframe, setBurnTimeframe] = useState('all');
   const meta = PROJECTS.find((p) => p.key === projectKey);
   const project = data?.projects?.[projectKey];
   if (!project) {
@@ -50,6 +52,9 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
     : [];
 
   const chartOpts = baseChartOptions();
+  const burn = burnSeries(dailySnapshots, burnTimeframe);
+  const flywheel = burnRateSeries(dailySnapshots);
+  const holders = holderSeries(ownership, dailySnapshots);
 
   const burnTokens = activation.dualBurn?.totalBurnTokens || ownership.permanentlyBurntTokens || 0;
   const wrapPct = market.wrappedPct ?? (circulating > 0 ? (market.reserveSupply || 0) / circulating : 0);
@@ -85,7 +90,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
 
   return (
     <div className="space-y-6 relative">
-      {activeTab === 'roi' && (
+      <section id="roi" className="scroll-mt-32">
         <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl">
           <h3 className="mb-2 flex items-center gap-2 text-lg font-bold text-white">
             {meta?.name} cash-on-cash
@@ -155,9 +160,9 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
             </table>
           </div>
         </div>
-      )}
+      </section>
 
-      {activeTab === 'historical' && (
+      <section id="yield" className="scroll-mt-32">
         <div className="bg-[#0e1013] border border-[#1e2228] p-6 rounded-2xl space-y-6">
           <h2 className="text-xl font-bold text-white">Historical yield & payback</h2>
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
@@ -179,9 +184,9 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
             </div>
           </div>
         </div>
-      )}
+      </section>
 
-      {activeTab === 'revenue' && (
+      <section id="revenue" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-xl font-bold text-white">Protocol revenue</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -237,9 +242,9 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
             </div>
           )}
         </div>
-      )}
+      </section>
 
-      {activeTab === 'burn' && (
+      <section id="burn" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-xl font-bold text-white">Supply deflation</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -252,10 +257,87 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
               <p className="text-2xl font-extrabold text-blue-400">{num(circulating)} {ticker}</p>
             </div>
           </div>
-        </div>
-      )}
 
-      {activeTab === 'activation' && (
+          <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6">
+              <h3 className="text-sm font-bold text-white">Cumulative token burn</h3>
+              <div className="flex bg-[#0e1013] rounded-lg p-1 border border-[#1e2228]">
+                {['7d', '30d', 'all'].map((tf) => (
+                  <button
+                    key={tf}
+                    type="button"
+                    onClick={() => setBurnTimeframe(tf)}
+                    className={`px-4 py-1.5 text-xs font-bold rounded-md transition ${burnTimeframe === tf ? 'bg-[#1e2228] text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
+                  >
+                    {tf.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="relative h-52 sm:h-64 md:h-80 w-full">
+              {burn.data.length > 0 ? (
+                <Line
+                  data={{
+                    labels: burn.labels,
+                    datasets: [{
+                      label: 'Cumulative burnt',
+                      data: burn.data,
+                      borderColor: '#fb923c',
+                      backgroundColor: 'rgba(251, 146, 60, 0.1)',
+                      borderWidth: 3,
+                      fill: true,
+                      tension: 0.3,
+                    }],
+                  }}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                      x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
+                      y: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactTick } },
+                    },
+                  }}
+                />
+              ) : (
+                <div className="h-full flex items-center justify-center text-sm text-slate-500">No burn history recorded yet</div>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
+            <h3 className="text-sm font-bold text-white mb-1">Deflationary flywheel</h3>
+            <p className="text-xs text-slate-400 mb-4">Daily burn against ${ticker} spot.</p>
+            <div className="relative h-52 sm:h-64 md:h-80 w-full">
+              {flywheel.labels.length > 0 ? (
+                <Bar
+                  data={{
+                    labels: flywheel.labels,
+                    datasets: [
+                      { type: 'line', label: `$${ticker} price`, data: flywheel.prices, borderColor: '#00a804', backgroundColor: '#00a804', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y1' },
+                      { type: 'bar', label: 'Daily burn', data: flywheel.burn, backgroundColor: 'rgba(249, 115, 22, 0.8)', borderRadius: 4, yAxisID: 'y' },
+                    ],
+                  }}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#cbd5e1' } } },
+                    scales: {
+                      x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
+                      y: { type: 'linear', position: 'left', grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactTick } },
+                      y1: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#00a804', callback: compactUsdTick } },
+                    },
+                  }}
+                />
+              ) : (
+                <div className="h-full flex items-center justify-center text-sm text-slate-500">No burn history recorded yet</div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="activation" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-xl font-bold text-white">
             {kind === 'cashflow' ? 'Eligible wallets' : kind === 'brokers' ? 'Active Brokers' : 'Inked machines'}
@@ -284,9 +366,9 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
             </p>
           )}
         </div>
-      )}
+      </section>
 
-      {activeTab === 'ownership' && (
+      <section id="ownership" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-xl font-bold text-white">Ownership</h2>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -311,8 +393,41 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
               <p className="text-2xl font-extrabold text-white">{fmt(fdv)}</p>
             </div>
           </div>
+
+          <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
+            <h3 className="text-sm font-bold text-white mb-4">${ticker} holders over time</h3>
+            <div className="relative h-52 sm:h-64 md:h-80 w-full">
+              {holders.data.length > 0 ? (
+                <Line
+                  data={{
+                    labels: holders.labels,
+                    datasets: [{
+                      label: `$${ticker} holders`,
+                      data: holders.data,
+                      borderColor: '#8b5cf6',
+                      backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                      borderWidth: 3,
+                      fill: true,
+                      tension: 0.3,
+                    }],
+                  }}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                      x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
+                      y: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactTick } },
+                    },
+                  }}
+                />
+              ) : (
+                <div className="h-full flex items-center justify-center text-sm text-slate-500">Holder history starts after the next hourly run.</div>
+              )}
+            </div>
+          </div>
         </div>
-      )}
+      </section>
 
       <div className="bg-[#0e1013] rounded-xl p-5 border border-[#1e2228] mt-8">
         <h3 className="text-base font-bold text-white mb-3">Methodology</h3>
@@ -375,7 +490,7 @@ function VaultView({
 
   return (
     <div className="space-y-6 relative">
-      {activeTab === 'roi' && (
+      <section id="roi" className="scroll-mt-32">
         <div className="space-y-6">
           <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl">
             <h3 className="mb-2 flex items-center gap-2 text-lg font-bold text-white">
@@ -468,9 +583,9 @@ function VaultView({
             </div>
           </div>
         </div>
-      )}
+      </section>
 
-      {activeTab === 'historical' && (
+      <section id="yield" className="scroll-mt-32">
         <div className="bg-[#0e1013] border border-[#1e2228] p-6 rounded-2xl space-y-6">
           <h2 className="text-xl font-bold text-white">Markets</h2>
           <p className="text-xs text-slate-400">
@@ -544,9 +659,9 @@ function VaultView({
             </div>
           </div>
         </div>
-      )}
+      </section>
 
-      {activeTab === 'revenue' && (
+      <section id="revenue" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-xl font-bold text-white">Fees & liquidity</h2>
           <p className="text-xs text-slate-400">
@@ -605,9 +720,9 @@ function VaultView({
             </div>
           )}
         </div>
-      )}
+      </section>
 
-      {activeTab === 'burn' && (
+      <section id="burn" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-xl font-bold text-white">Supply</h2>
           <p className="text-xs text-slate-400">
@@ -621,9 +736,9 @@ function VaultView({
             <Panel label="$RESERVE FDV" value={fmt(market.reserveFdvUsd)} />
           </div>
         </div>
-      )}
+      </section>
 
-      {activeTab === 'activation' && (
+      <section id="activation" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-xl font-bold text-white">Wrap</h2>
           <p className="text-xs text-slate-400">
@@ -636,9 +751,9 @@ function VaultView({
             <Panel label="Wrap proxy" value={`${(wrapPct * 100).toFixed(1)}%`} color={MARK.violet} />
           </div>
         </div>
-      )}
+      </section>
 
-      {activeTab === 'ownership' && (
+      <section id="ownership" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-xl font-bold text-white">Holders</h2>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -674,7 +789,7 @@ function VaultView({
             </div>
           )}
         </div>
-      )}
+      </section>
 
       <div className="bg-[#0e1013] rounded-xl p-5 border border-[#1e2228] mt-8">
         <h3 className="text-base font-bold text-white mb-3">Methodology</h3>
