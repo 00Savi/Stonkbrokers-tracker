@@ -1704,7 +1704,10 @@ async function loadTokenListPrices(tokenList) {
   // token, walked one at a time with a 200ms pause between each. The meme and
   // stock lists together are 30 tokens, so ~60 credits and ~12 seconds of
   // sleeping per run become one call.
-  const supplyByToken = await gg.supplies(validTokens.map(m => m.ca));
+  const supplyByToken = await gg.supplies(validTokens.map(m => m.ca)).catch((e) => {
+    console.warn(`[warn] token supplies: ${e.message}; DexScreener prices still apply`);
+    return new Map();
+  });
 
   let pairsMap = {};
   try {
@@ -1834,8 +1837,18 @@ async function run() {
   console.log(`  gg-index: head ${idx.chain_head}, ${idx.cursors.length} cursors`);
 
   const markets = await loadMarketPrices();
-  const memeData = await loadTokenListPrices(MEMES);
-  const stockData = await loadTokenListPrices(STOCKS);
+  let memeData = previousData.memes || [];
+  let stockData = previousData.stocks || [];
+  try {
+    memeData = await loadTokenListPrices(MEMES);
+  } catch (e) {
+    console.warn(`[warn] memes: ${e.message}; carrying previous`);
+  }
+  try {
+    stockData = await loadTokenListPrices(STOCKS);
+  } catch (e) {
+    console.warn(`[warn] stocks: ${e.message}; carrying previous`);
+  }
   const sevenDaysAgo = Math.floor(Date.now() / 1000) - 7 * 24 * 3600;
   
   const finalJson = { 

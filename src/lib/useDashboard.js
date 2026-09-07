@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { loadProjects, loadOverlay, applyOverlay } from './ggindex';
 import { loadPrices, applyPrices } from './prices';
+import { PROJECTS } from './routes';
 
 /**
  * Loads the dashboard from three independent sources and reports each one's
@@ -32,9 +33,50 @@ import { loadPrices, applyPrices } from './prices';
  * If a live source fails or times out, its state becomes `stale` and the
  * snapshot value is shown rather than a skeleton spinning forever. A dashboard
  * that renders an hour-old number and says so beats one that renders nothing.
+ *
+ * ## Missing projects
+ *
+ * A project can be in the nav (and in gg-index's catalog) before the hourly
+ * fetcher has ever written it into `data.json`. Coattail sat in that gap and
+ * the detail view said "data loading..." forever, because `applyPrices` only
+ * patches keys that already exist. Seed a stub so live prices can land, then
+ * the fetcher fills the rest on the next successful run.
  */
 
 const TIMEOUT_MS = 8000;
+
+function ensureKnownProjects(snapshot, catalog = []) {
+  if (!snapshot) return snapshot;
+  const bySlug = Object.fromEntries((catalog || []).map((p) => [p.slug, p]));
+  const projects = { ...(snapshot.projects || {}) };
+
+  for (const meta of PROJECTS) {
+    if (meta.live === false || projects[meta.key]) continue;
+    const cat = bySlug[meta.key];
+    const token = cat?.contracts?.find((c) => c.kind === 'token');
+    const nft = cat?.contracts?.find((c) => c.kind === 'nft');
+    const cfg = cat?.config || {};
+    projects[meta.key] = {
+      market: {},
+      config: {
+        ticker: meta.ticker,
+        kind: meta.kind,
+        logo: meta.logo || null,
+        tokenCa: token?.address || null,
+        nftCa: nft?.address || null,
+        unitValue: cfg.unit_value ?? cfg.unitValue ?? meta.unitValue ?? (meta.key === 'coattail' ? 36750 : null),
+        site: cfg.site || null,
+      },
+      activation: {},
+      ownership: {},
+      tiers: [],
+      cashflow: {},
+      dailySnapshots: [],
+    };
+  }
+
+  return { ...snapshot, projects };
+}
 
 export function useDashboard() {
   const [data, setData] = useState(null);
@@ -67,6 +109,8 @@ export function useDashboard() {
       }
       if (ac.signal.aborted) return;
 
+      snapshot = ensureKnownProjects(snapshot);
+
       // Paint. From here the page is interactive and only the corrected
       // fields are still outstanding.
       setData(snapshot);
@@ -94,6 +138,9 @@ export function useDashboard() {
         return;
       }
       if (ac.signal.aborted) return;
+
+      snapshot = ensureKnownProjects(snapshot, catalog);
+      setData((current) => ensureKnownProjects(current, catalog));
 
       // Independent of each other, and each lands on its own. Awaiting both
       // together would hold the faster one hostage to the slower.
