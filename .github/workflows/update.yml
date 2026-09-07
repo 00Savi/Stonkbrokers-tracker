@@ -78,6 +78,7 @@ jobs:
         run: node fetcher.cjs
         env:
           BLOCKSCOUT_API_KEY: ${{ secrets.BLOCKSCOUT_API_KEY }}
+          OPENSEA_API_KEY: ${{ secrets.OPENSEA_API_KEY }}
 
       # Belt and suspenders alongside the concurrency group: that stops this
       # workflow racing itself, but an unrelated push to main during the ~6

@@ -265,11 +265,11 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
               <p className="text-xs uppercase text-slate-400 mb-1">
                 {kind === 'cashflow' ? `Wallets ≥ ${num(activation.eligibleMin || 10000)} INDEX` : kind === 'brokers' ? 'Active & earning' : 'Awake machines'}
               </p>
-              <p className="text-2xl font-extrabold text-emerald-400">{num(activation.activeCount || activation.eligibleWallets || 0)}</p>
+              <p className="text-2xl font-extrabold text-emerald-400">{num(activation.activeCount ?? activation.eligibleWallets)}</p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5">
               <p className="text-xs uppercase text-slate-400 mb-1">{kind === 'cashflow' ? 'Token holders' : kind === 'brokers' ? 'Collection' : 'Collection / holders'}</p>
-              <p className="text-2xl font-extrabold text-blue-400">{num(activation.totalSupply || ownership.tokenHolders || 0)}</p>
+              <p className="text-2xl font-extrabold text-blue-400">{num(activation.totalSupply ?? ownership.tokenHolders)}</p>
             </div>
           </div>
           {kind === 'machines' && (

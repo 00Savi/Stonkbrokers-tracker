@@ -40,6 +40,62 @@ function writeData(payload) {
   return written.map((f) => path.relative(__dirname, f));
 }
 
+function snapshotRoi(s) {
+  if (Number(s?.roi) > 0) return true;
+  return Array.isArray(s?.tiers) && s.tiers.some((t) => Number(t.roi) > 0);
+}
+
+function snapshotRoiValue(s) {
+  if (Number(s?.roi) > 0) return Number(s.roi);
+  const t = (s?.tiers || []).find((x) => Number(x.roi) > 0);
+  return t ? Number(t.roi) : 0;
+}
+
+/**
+ * Drop placeholder prices (the old 0.03 DexScreener miss) and the leading
+ * all-zero ROI row that a first successful run used to stamp when yield was
+ * still empty. Card Wall's genuinely-zero series is kept: we only strip
+ * leading zeros when a later row has real ROI.
+ *
+ * Also collapse same-date rows (local vs UTC jobs used to stamp 9/6 and 9/7
+ * for the same hour) and drop floor-derivation spikes: token price barely
+ * moved but ROI jumped 4× because a 0.003 ETH placeholder replaced the listing.
+ */
+function sanitizeDailySnapshots(snaps, livePrice) {
+  if (!Array.isArray(snaps) || !snaps.length) return Array.isArray(snaps) ? snaps : [];
+  const byDate = new Map();
+  for (const s of snaps) {
+    if (!s?.date) continue;
+    byDate.set(s.date, s);
+  }
+  let out = [...byDate.values()].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+  out = out.filter((s) => {
+    const px = Number(s.tokenPriceUsd);
+    if (px === 0.03 && livePrice > 0 && Math.abs(livePrice - 0.03) / livePrice > 0.5) return false;
+    return true;
+  });
+  if (out.length >= 2) {
+    const latest = out[out.length - 1];
+    const liveRoi = snapshotRoiValue(latest);
+    const livePx = Number(latest.tokenPriceUsd);
+    if (liveRoi > 0 && livePx > 0) {
+      out = out.filter((s, i) => {
+        if (i === out.length - 1) return true;
+        const r = snapshotRoiValue(s);
+        const px = Number(s.tokenPriceUsd);
+        if (!(r > 0) || !(px > 0)) return true;
+        const pxOk = px / livePx >= 0.5 && px / livePx <= 2;
+        const roiOff = r / liveRoi > 4 || liveRoi / r > 4;
+        return !(pxOk && roiOff);
+      });
+    }
+  }
+  if (out.some(snapshotRoi)) {
+    while (out.length && !snapshotRoi(out[0])) out.shift();
+  }
+  return out;
+}
+
 const API_KEY = process.env.BLOCKSCOUT_API_KEY;
 const PRO_API = "https://api.blockscout.com/v2/api";
 const CHAIN_ID = 4663;
@@ -154,14 +210,13 @@ const MEMES = [
   { name: "Index", ca: "0x56910D4409F3a0C78C64DD8D0545FF0705389870" },
   { name: "Pipedog", ca: "0x5Cb6F181081301b44905F3ae15419112ecaBd8A6" },
   { name: "Hmm", ca: "0x7FE995a80075dF3Dc8Ae11A9b82c7FE4202CD87f" },
-  { name: "Clockin", ca: null }, 
   { name: "Up", ca: "0x57C0E45cB534413D1C20A4240955d6bB250BB4F1" },
   { name: "Ai", ca: "0x2E8c31162b855A2ffa90F6F8634643Ad6F111e18" },
   { name: "Frong", ca: "0x6245e67affA44a23077f0Ea7f981a8DC743a0c47" },
   { name: "Yolo", ca: "0x62C71cd34a52c30d894419CBcc55Db2aFA8032eA" },
   { name: "Wojak", ca: "0xaCE55FE98Bab14366dD49aB5AA5dF76aA11A3c6f" },
   { name: "Juggernaut", ca: "0xD7321801CAae694090694Ff55A9323139F043B88" },
-  { name: "Sleuth", ca: "0x193674b72B6aA1905FC47BdbC19b30A53b666666" },
+  { name: "Sleuth", ca: "0x0500a1a597A631CEc9637767f7B75c5B5d0c1dB4" },
   { name: "Pons", ca: "0x39dBED3a2bd333467115dE45665cC57F813C4571" },
   { name: "Coat", ca: "0x93a887Beda77a9E2F6D6ed0C9742f04CcEBc8833" }
 ];
@@ -510,6 +565,7 @@ async function fetchTokenHoldersSafe(contractAddress) {
 }
 
 async function loadMarketPrices() {
+  const previous = readPreviousData();
   try {
     const r = await fetch("https://api.exchange.coinbase.com/products/ETH-USD/ticker");
     const j = await r.json();
@@ -518,7 +574,13 @@ async function loadMarketPrices() {
 
   const markets = {};
   for (const [key, conf] of Object.entries(PROJECTS)) {
-      markets[key] = { ethPriceUsd, tokenPriceUsd: 0.03, nftFloorEth: 0 };
+      const prevPx = previous.projects?.[key]?.market?.tokenPriceUsd;
+      const carryPx = prevPx > 0 && prevPx !== 0.03 ? prevPx : 0;
+      markets[key] = {
+        ethPriceUsd,
+        tokenPriceUsd: carryPx,
+        nftFloorEth: previous.projects?.[key]?.market?.nftFloorEth || 0,
+      };
       try {
         const r = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${conf.tokenCa}`);
         const j = await r.json();
@@ -551,7 +613,7 @@ async function loadMarketPrices() {
         }
       } catch {}
       
-      if (conf.nftCa && conf.unitValue > 1) {
+      if (conf.nftCa && conf.unitValue > 1 && conf.kind !== "brokers") {
         markets[key].nftFloorEth = +((conf.unitValue * markets[key].tokenPriceUsd * 1.10) / ethPriceUsd).toFixed(3);
       }
       tokenPrices[conf.tokenCa.toLowerCase()] = markets[key].tokenPriceUsd;
@@ -758,9 +820,11 @@ async function getOwnershipStats(conf, equivBurnt, previousData) {
   const rawStonkHolders = await fetchTokenHoldersSafe(conf.tokenCa);
   const trueUniqueStonkHolders = rawStonkHolders > (conf.teamWallets || 0) ? rawStonkHolders - (conf.teamWallets || 0) : 0;
 
-  const circulatingNftSupply = Math.max(0, conf.maxSupply - ammVaultNfts - Math.floor(equivBurnt)); 
-  const currentMaxSupply = Math.max(0, conf.maxSupply - Math.floor(equivBurnt));
-  const ownershipRatio = circulatingNftSupply > 0 ? (trueUniqueNftHolders / circulatingNftSupply) * 100 : 0;
+  const circulatingNftSupply = Math.max(0, conf.maxSupply - ammVaultNfts);
+  const currentMaxSupply = conf.maxSupply;
+  const ownershipRatio = circulatingNftSupply > 0
+    ? Math.min(100, (trueUniqueNftHolders / circulatingNftSupply) * 100)
+    : 0;
 
   let histLabels = previousData?.ownership?.historicalGrowth?.labels || [];
   let histData = previousData?.ownership?.historicalGrowth?.data || [];
@@ -1085,20 +1149,42 @@ async function cardWallTransferDeacts(conf, activeTokenTiers, tokenRarity, break
   return { tierStats, history };
 }
 
+async function fetchOpenSeaFloorEth(slug) {
+  if (!slug) return 0;
+  try {
+    const res = await fetch(`https://api.opensea.io/api/v2/collections/${slug}/stats`, {
+      headers: { accept: "application/json" },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) return 0;
+    const j = await res.json();
+    const sym = String(j.total?.floor_price_symbol || "ETH").toUpperCase();
+    const px = Number(j.total?.floor_price);
+    if (!(px > 0)) return 0;
+    // RH Machines quotes in USDG. Treating that as ETH would print a 138 ETH floor.
+    if (sym !== "ETH" && sym !== "WETH") return 0;
+    return px;
+  } catch {
+    return 0;
+  }
+}
+
 async function fetchCardWallStarFloors(conf) {
   const empty = { collectionEth: 0, byRarity: [null, null, null, null, null] };
   const slug = conf.openseaSlug;
   if (!slug) return empty;
 
+  const statsEth = await fetchOpenSeaFloorEth(slug);
+
   const headers = { accept: "application/json" };
   const key = process.env.OPENSEA_API_KEY;
   if (key) headers["x-api-key"] = key;
-  // Without OPENSEA_API_KEY OpenSea allows one unauthenticated "best listing"
-  // and 401s trait pagination, so only the collection floor lands.
+  // Listings need a key. Collection stats do not — that is how Coattail gets a
+  // real 0.067 ETH floor instead of 36,750 × token × 1.10 / ETH.
 
   const listed = [];
   let next = null;
-  const maxPages = key ? 15 : 1;
+  const maxPages = key ? 15 : 0;
   const limit = key ? 50 : 1;
 
   try {
@@ -1108,7 +1194,7 @@ async function fetchCardWallStarFloors(conf) {
       if (next) q.searchParams.set("next", next);
       const res = await fetch(q, { headers });
       if (!res.ok) {
-        if (page === 0) console.warn(`[warn] OpenSea listings ${res.status}; Card Wall floors stay derived`);
+        if (page === 0) console.warn(`[warn] OpenSea listings ${res.status}; using collection stats floor`);
         break;
       }
       const j = await res.json();
@@ -1125,25 +1211,30 @@ async function fetchCardWallStarFloors(conf) {
     }
   } catch (e) {
     console.warn(`[warn] OpenSea floors: ${e.message}`);
-    return empty;
   }
 
-  if (!listed.length) return empty;
-
-  const rarityCalls = listed.map((row) => ({
-    to: conf.nftCa,
-    data: RARITY_OF_SEL + encodeUint(row.id),
-  }));
-  const raw = await rpc.calls(rarityCalls);
   const byRarity = [null, null, null, null, null];
-  listed.forEach((row, i) => {
-    const r = Number(decodeUint(raw[i]) ?? 0n);
-    if (r < 0 || r > 4) return;
-    if (byRarity[r] == null || row.eth < byRarity[r]) byRarity[r] = row.eth;
-  });
+  if (listed.length && conf.nftCa) {
+    const rarityCalls = listed.map((row) => ({
+      to: conf.nftCa,
+      data: RARITY_OF_SEL + encodeUint(row.id),
+    }));
+    const raw = await rpc.calls(rarityCalls);
+    listed.forEach((row, i) => {
+      const r = Number(decodeUint(raw[i]) ?? 0n);
+      if (r < 0 || r > 4) return;
+      if (byRarity[r] == null || row.eth < byRarity[r]) byRarity[r] = row.eth;
+    });
+  }
 
-  const collectionEth = Math.min(...listed.map((r) => r.eth));
-  console.log(`  cardwall OpenSea floors ETH: ${byRarity.map((v) => (v == null ? "—" : v.toFixed(3))).join(" / ")}`);
+  const listingMin = listed.length ? Math.min(...listed.map((r) => r.eth)) : 0;
+  const collectionEth = statsEth || listingMin;
+  if (collectionEth > 0) {
+    console.log(
+      `  ${slug} floor ${collectionEth.toFixed(3)} ETH` +
+        (listed.length ? `; stars ${byRarity.map((v) => (v == null ? "—" : v.toFixed(3))).join(" / ")}` : " (OpenSea stats)"),
+    );
+  }
   return { collectionEth, byRarity };
 }
 
@@ -1696,7 +1787,6 @@ function scanLockedStonkLiquidity(stonkCa, tokenPriceUsd) {
 async function loadTokenListPrices(tokenList) {
   const tokenResults = [];
   const validTokens = tokenList.filter(m => m.ca !== null);
-  const addresses = validTokens.map(m => m.ca).join(",");
 
   // Supply and burn balance for the whole list up front, in ONE request.
   //
@@ -1709,9 +1799,16 @@ async function loadTokenListPrices(tokenList) {
     return new Map();
   });
 
+  // DexScreener's /tokens/{a,b,c} endpoint silently drops pairs once the
+  // address list gets long. One request for the whole meme table is why Yard,
+  // Wall, and Coat showed $0 mcap next to priced project pages.
+  const CHUNK = 5;
   let pairsMap = {};
-  try {
-      const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${addresses}`);
+  const validCas = validTokens.map((m) => m.ca);
+  for (let i = 0; i < validCas.length; i += CHUNK) {
+    const chunk = validCas.slice(i, i + CHUNK);
+    try {
+      const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${chunk.join(",")}`);
       const data = await res.json();
       if (data && data.pairs) {
           data.pairs.forEach(pair => {
@@ -1739,7 +1836,11 @@ async function loadTokenListPrices(tokenList) {
               });
           });
       }
-  } catch(e) {}
+    } catch (e) {
+      console.warn(`[warn] dexscreener chunk: ${e.message}`);
+    }
+    if (i + CHUNK < validCas.length) await sleep(200);
+  }
 
   for (const item of tokenList) {
       if (!item.ca) {
@@ -1777,11 +1878,13 @@ async function loadTokenListPrices(tokenList) {
       const burntBalance = s && s.dead !== null ? Number(s.dead) / scale : 0;
       const totalSupplyRaw = s && s.supply !== null ? Number(s.supply) / scale : 0;
 
-      // The 1e9 fallback is kept from the original: these are long-tail meme
-      // tokens and a reverted supply read leaves FDV needing *some* basis.
-      // Unlike the protocol tokens above this does not throw, because one dead
-      // meme contract should not take down the whole payload.
-      let finalTotalSupply = totalSupplyRaw > 0 ? totalSupplyRaw : 1000000000;
+      // Prefer a real supply read. If that failed, DexScreener's fdv/price is
+      // a better basis than inventing 1e9 — that fake supply is what put a
+      // billion-token cap on INDEX when the fold was still 409.
+      let finalTotalSupply = totalSupplyRaw > 0 ? totalSupplyRaw : 0;
+      if (!(finalTotalSupply > 0) && pair?.fdv > 0 && priceUsd > 0) {
+        finalTotalSupply = Number(pair.fdv) / priceUsd;
+      }
       
       fdv = priceUsd * finalTotalSupply;
       marketCap = priceUsd * Math.max(0, finalTotalSupply - burntBalance);
@@ -1864,11 +1967,18 @@ async function run() {
   for (const [projectKey, conf] of Object.entries(PROJECTS)) {
       console.log(`\n--- Processing ${projectKey.toUpperCase()} ---`);
       const prevProjData = previousData.projects ? previousData.projects[projectKey] : {};
-      const fetchOnly = (process.env.FETCH_ONLY || "").toLowerCase();
-      if (fetchOnly && projectKey !== fetchOnly) {
+      const fetchOnly = (process.env.FETCH_ONLY || "")
+        .toLowerCase()
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (fetchOnly.length && !fetchOnly.includes(projectKey)) {
         if (prevProjData && Object.keys(prevProjData).length) {
-          finalJson.projects[projectKey] = prevProjData;
-          console.log(`  skipped (FETCH_ONLY=${fetchOnly})`);
+          finalJson.projects[projectKey] = {
+            ...prevProjData,
+            market: { ...(prevProjData.market || {}), ...(markets[projectKey] || {}) },
+          };
+          console.log(`  skipped (FETCH_ONLY=${fetchOnly.join(",")}); prices refreshed`);
         }
         continue;
       }
@@ -1975,23 +2085,31 @@ async function run() {
         }
         revenueBreakdown = yieldData.revenueBreakdown;
 
-        const snapshotRow = (date, timestamp, annualByTier) => ({
+        const snapshotRow = (date, timestamp, annualByTier, priceUsd) => {
+            const px = priceUsd > 0 && priceUsd !== 0.03 ? priceUsd : markets[projectKey].tokenPriceUsd;
+            return {
             date,
             timestamp,
-            tokenPriceUsd: markets[projectKey].tokenPriceUsd,
+            tokenPriceUsd: px,
             totalBurn: (activationStats.dualBurn || {}).totalBurnTokens || 0,
             tiers: mappedTiers.map(t => {
                 const floorUsd = (t.floorEth || markets[projectKey].nftFloorEth) * markets[projectKey].ethPriceUsd;
-                const actCost = t.reqTokens * markets[projectKey].tokenPriceUsd;
+                const actCost = t.reqTokens * px;
                 const totalCost = floorUsd + actCost;
                 const annual = annualByTier ? annualByTier[t.tier] : t.trackedAnnualYieldUsd;
                 const roi = totalCost > 0 ? (annual / totalCost) * 100 : 0;
                 return { tier: t.tier, roi: roi, yieldUsd: annual };
             })
-        });
+        };
+        };
 
-        const todayStr = new Date().toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
+        const todayStr = new Date().toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', timeZone: 'UTC' });
         if (projectKey === "cardwall" && histDates.length && histDelivered.length) {
+          const prevPxByDate = {};
+          for (const s of prevProjData.dailySnapshots || []) {
+            if (s.date && s.tokenPriceUsd > 0 && s.tokenPriceUsd !== 0.03) prevPxByDate[s.date] = s.tokenPriceUsd;
+          }
+          let lastPx = markets[projectKey].tokenPriceUsd;
           let cum = 0;
           const start = ledger.firstDeliveredAt || ledger.firstRecordedAt || Math.floor(Date.now() / 1000);
           dailySnapshots = histDates.map((date, i) => {
@@ -2003,7 +2121,8 @@ async function run() {
             for (const t of mappedTiers) {
               annualByTier[t.tier] = annualNet * ((t.rainWeight || 0) / rainNetworkForDaily);
             }
-            return snapshotRow(date, dayTs * 1000, annualByTier);
+            if (prevPxByDate[date] > 0) lastPx = prevPxByDate[date];
+            return snapshotRow(date, dayTs * 1000, annualByTier, lastPx);
           });
         } else {
           const currentSnapshot = snapshotRow(todayStr, Date.now());
@@ -2049,6 +2168,12 @@ async function run() {
   }
   if (projectsFailed) {
     console.warn(`[warn] ${projectsFailed} project(s) carried forward; ${projectsOk} rebuilt`);
+  }
+
+  for (const [key, proj] of Object.entries(finalJson.projects)) {
+    if (!proj) continue;
+    const livePx = markets[key]?.tokenPriceUsd || proj.market?.tokenPriceUsd || 0;
+    proj.dailySnapshots = sanitizeDailySnapshots(proj.dailySnapshots, livePx);
   }
 
   const written = writeData(finalJson);

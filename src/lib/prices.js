@@ -9,9 +9,10 @@
 // Both sources are free and send `access-control-allow-origin: *`, so there is
 // no reason for the page to wait on the hourly job for them.
 //
-// The floor is derived, not fetched: `unitValue * tokenPriceUsd * 1.10 /
-// ethPriceUsd`. Both inputs were stale, which is why it was wrong too, and why
-// recomputing it here rather than carrying it over is the whole point.
+// The floor is derived for Anvil collections (unitValue × token × 1.10 / ETH)
+// and for RH Machines (ink). Listed collections (Coattail, Card Wall) keep
+// the OpenSea stats floor from the hourly job — recomputing those from token
+// price is what printed Coattail at 0.003 ETH and 2,500% ROI.
 
 const DEXSCREENER = 'https://api.dexscreener.com/latest/dex/tokens';
 
@@ -153,7 +154,7 @@ export function applyPrices(base, prices) {
       tokenPriceUsd: tokenPrice,
     };
 
-    if (unitValue > 0 && p.config?.nftCa && p.market?.floorSource !== 'opensea') {
+    if (unitValue > 0 && p.config?.nftCa && p.market?.floorSource !== 'opensea' && p.market?.floorSource !== 'listing' && p.config?.kind !== 'brokers') {
       // Straight from the pool where the pair quotes in ETH; otherwise fall
       // back to the dollar round trip, which is the same number by a longer
       // route and only differs in rounding.
