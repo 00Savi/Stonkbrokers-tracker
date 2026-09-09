@@ -122,6 +122,45 @@ function tvlByMode(vaults) {
   return o;
 }
 
+function applySmartLp(revenueBreakdown, smart) {
+  if (!smart) return;
+  revenueBreakdown.smartLpUsd = smart.protocolFees7dUsd || 0;
+  if (Array.isArray(smart.daily)) revenueBreakdown.dailySmartLp = smart.daily;
+  if (Array.isArray(smart.dailyGross)) revenueBreakdown.dailySmartLpGross = smart.dailyGross;
+  revenueBreakdown.smartLp = {
+    vaults: smart.vaults || [],
+    totalTvlUsd: smart.totalTvlUsd || 0,
+    fees7dUsd: smart.fees7dUsd || 0,
+    protocolFees7dUsd: smart.protocolFees7dUsd || 0,
+    feeSplit: smart.feeSplit,
+    site: smart.site,
+    feeRecipientA: smart.feeRecipientA,
+    feeRecipientB: smart.feeRecipientB,
+    perfFeeBps: smart.perfFeeBps,
+  };
+}
+
+function carrySmartLp(revenueBreakdown, prevRevenue, smart) {
+  const prev = prevRevenue?.smartLp;
+  const prevVaults = Array.isArray(prev?.vaults) ? prev.vaults : [];
+  const nextVaults = Array.isArray(smart?.vaults) ? smart.vaults : [];
+  if (nextVaults.length) {
+    applySmartLp(revenueBreakdown, smart);
+    return;
+  }
+  if (prevVaults.length) {
+    console.warn(`[warn] smart LP returned ${nextVaults.length} vaults; keeping previous ${prevVaults.length}`);
+    applySmartLp(revenueBreakdown, {
+      ...prev,
+      protocolFees7dUsd: prevRevenue.smartLpUsd || prev.protocolFees7dUsd,
+      daily: prevRevenue.dailySmartLp,
+      dailyGross: prevRevenue.dailySmartLpGross,
+    });
+    return;
+  }
+  if (smart) applySmartLp(revenueBreakdown, smart);
+}
+
 function stampLiveSnapshot(snaps, todayStr, extra) {
   if (!Array.isArray(snaps) || !snaps.length) return snaps;
   const last = snaps[snaps.length - 1];
@@ -2401,22 +2440,10 @@ async function run() {
               lookbackDays: YIELD_LOOKBACK_DAYS,
               knownCas: (prevProjData.revenue?.smartLp?.vaults || []).map((v) => v.ca),
             });
-            revenueBreakdown.smartLpUsd = smart.protocolFees7dUsd;
-            revenueBreakdown.dailySmartLp = smart.daily;
-            revenueBreakdown.dailySmartLpGross = smart.dailyGross;
-            revenueBreakdown.smartLp = {
-              vaults: smart.vaults,
-              totalTvlUsd: smart.totalTvlUsd,
-              fees7dUsd: smart.fees7dUsd,
-              protocolFees7dUsd: smart.protocolFees7dUsd,
-              feeSplit: smart.feeSplit,
-              site: smart.site,
-              feeRecipientA: smart.feeRecipientA,
-              feeRecipientB: smart.feeRecipientB,
-              perfFeeBps: smart.perfFeeBps,
-            };
+            carrySmartLp(revenueBreakdown, prevProjData.revenue, smart);
           } catch (e) {
             console.warn(`[warn] smart LP fetch failed: ${e.message}`);
+            carrySmartLp(revenueBreakdown, prevProjData.revenue, null);
           }
       }
 
