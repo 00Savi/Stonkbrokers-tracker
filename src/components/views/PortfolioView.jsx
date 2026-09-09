@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { ethers } from 'ethers';
 import { SAVI_X } from '../Shell';
 import { compactUsd } from '../kit';
-import { PROJECTS } from '../../lib/routes';
+import { PROJECTS, isProjectLive } from '../../lib/routes';
 import {
   aggregateTbaHoldings,
   buildPriceIndex,
@@ -169,6 +169,8 @@ export default function PortfolioView({ data }) {
 
       const nftJobs = [];
       for (const [pKey, pData] of Object.entries(data.projects || {})) {
+        const meta = PROJECTS.find((p) => p.key === pKey);
+        if (meta && !isProjectLive(meta)) continue;
         if (!pData.config?.nftCa) continue;
         for (const wallet of wallets) nftJobs.push({ pKey, pData, wallet });
       }

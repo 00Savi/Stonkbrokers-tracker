@@ -31,6 +31,7 @@ export const TAB_BY_SLUG = {
   roi: 'roi',
   yield: 'historical',
   revenue: 'revenue',
+  liquidity: 'liquidity',
   burn: 'burn',
   activation: 'activation',
   ownership: 'ownership',
@@ -47,6 +48,7 @@ export const TABS = [
   { slug: 'roi', label: 'ROI' },
   { slug: 'yield', label: 'Yield' },
   { slug: 'revenue', label: 'Revenue' },
+  { slug: 'liquidity', label: 'Liquidity' },
   { slug: 'burn', label: 'Burn' },
   { slug: 'activation', label: 'Activation' },
   { slug: 'ownership', label: 'Ownership' },
@@ -56,14 +58,19 @@ export const TABS = [
 export const VAULT_TABS = [
   { slug: 'roi', label: 'Protocol' },
   { slug: 'yield', label: 'Markets' },
-  { slug: 'revenue', label: 'Fees & LP' },
+  { slug: 'revenue', label: 'Fees' },
+  { slug: 'liquidity', label: 'LP' },
   { slug: 'burn', label: 'Supply' },
   { slug: 'activation', label: 'Wrap' },
   { slug: 'ownership', label: 'Holders' },
 ];
 
 export function tabsForProject(meta) {
-  return meta?.kind === 'vault' ? VAULT_TABS : TABS;
+  const tabs = meta?.kind === 'vault' ? VAULT_TABS : TABS;
+  if (meta?.key === 'stonk') {
+    return tabs.map((t) => (t.slug === 'liquidity' ? { ...t, label: 'Smart LPs' } : t));
+  }
+  return tabs;
 }
 
 export const PROJECTS = [
@@ -72,7 +79,7 @@ export const PROJECTS = [
   { slug: 'tickeryard', key: 'tickeryard', name: 'TickerYard', ticker: 'YARD' },
   { slug: 'cardwall', key: 'cardwall', name: 'The Card Wall', ticker: 'WALL', beta: true },
   { slug: 'index', key: 'index', name: 'The Index', ticker: 'INDEX', kind: 'cashflow', logo: 'Index.png', beta: true },
-  { slug: 'rhmachines', key: 'printer', name: 'RH Machines', ticker: 'PRINTER', kind: 'machines', logo: 'Printer.png', beta: true },
+  { slug: 'rhmachines', key: 'printer', name: 'RH Machines', ticker: 'PRINTER', kind: 'machines', logo: 'Printer.png', beta: true, live: false },
   { slug: 'coattail', key: 'coattail', name: 'Coattail Brokers', ticker: 'COAT', kind: 'brokers', logo: 'Coattail.svg', beta: true, unitValue: 36750 },
   { slug: 'oakmont', key: 'oakmont', name: 'Oakmont Vault', ticker: 'STRIKE', kind: 'vault', logo: 'Oakmont.png', beta: true },
   {
@@ -86,14 +93,18 @@ export const PROJECTS = [
   },
 ];
 
-/** Flip `live` on the bonus project when the token launches. */
-export const BONUS_LIVE = PROJECTS.some((p) => p.key === 'bonus' && p.live);
+/** Flip `live` on a project to show it in nav, home, rankings, and routes. */
+export const isProjectLive = (p) => p?.live !== false;
+
+export const BONUS_LIVE = PROJECTS.some((p) => p.key === 'bonus' && isProjectLive(p));
 
 /** NFT yield projects — rankings, ecosystem, and the ROI tab bar. */
-export const NFT_PROJECTS = PROJECTS.filter((p) => !p.kind || p.kind === 'machines' || p.kind === 'brokers');
+export const NFT_PROJECTS = PROJECTS.filter(
+  (p) => isProjectLive(p) && (!p.kind || p.kind === 'machines' || p.kind === 'brokers')
+);
 
 /** Everything shown in the ranked table: NFT units plus cash-flow tokens/vaults. */
-export const RANKING_PROJECTS = PROJECTS.filter((p) => p.kind !== 'token');
+export const RANKING_PROJECTS = PROJECTS.filter((p) => isProjectLive(p) && p.kind !== 'token');
 
 export const projectPath = (key, tab = 'roi') => {
   const meta = PROJECTS.find((p) => p.key === key);

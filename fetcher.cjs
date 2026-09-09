@@ -74,22 +74,9 @@ function sanitizeDailySnapshots(snaps, livePrice) {
     if (px === 0.03 && livePrice > 0 && Math.abs(livePrice - 0.03) / livePrice > 0.5) return false;
     return true;
   });
-  if (out.length >= 2) {
-    const latest = out[out.length - 1];
-    const liveRoi = snapshotRoiValue(latest);
-    const livePx = Number(latest.tokenPriceUsd);
-    if (liveRoi > 0 && livePx > 0) {
-      out = out.filter((s, i) => {
-        if (i === out.length - 1) return true;
-        const r = snapshotRoiValue(s);
-        const px = Number(s.tokenPriceUsd);
-        if (!(r > 0) || !(px > 0)) return true;
-        const pxOk = px / livePx >= 0.5 && px / livePx <= 2;
-        const roiOff = r / liveRoi > 4 || liveRoi / r > 4;
-        return !(pxOk && roiOff);
-      });
-    }
-  }
+  // Do not drop rows whose ROI is 4× the latest. Realized yield actually
+  // moved that much in the first weeks; the filter ate 8/20–8/25 of STONK
+  // and left the yield chart starting on 8/26.
   if (out.some(snapshotRoi)) {
     while (out.length && !snapshotRoi(out[0])) out.shift();
   }
@@ -128,6 +115,7 @@ const { BlockTime } = require("./lib/blocktime.cjs");
 const { buildSpecialProject, isSpecial } = require("./lib/specials.cjs");
 const yieldDays = require("./lib/yieldDays.cjs");
 const vaultFlow = require("./lib/vaultFlow.cjs");
+const { fetchSmartLps } = require("./lib/smartLp.cjs");
 
 const gg = new GgIndex();
 const rpc = new Rpc();
@@ -171,7 +159,6 @@ const TOKEN_TICKERS = {
   "0xc72f232a6869e6cf34dc06129affd07f8a2a246a": "MANCER", 
   "0xe3fa12da7fa026b21817f16622e8ae48fa785166": "YARD",
   "0xb03058b8a39f3967df08d833682c1c99b29821b1": "WALL",
-  "0x193674b72b6aa1905fc47bdbc19b30a53b666666": "SLEUTH",
   "0x39dbed3a2bd333467115de45665cc57f813c4571": "PONS",
   "0x85a574f2ff0795685f58d1d7b0d4b51f148ac489": "PRINTER",
   "0x5aed379a72bd2533371d153135c47d5eb61babc8": "STRIKE",
@@ -227,7 +214,6 @@ const MEMES = [
   { name: "Yolo", ca: "0x62C71cd34a52c30d894419CBcc55Db2aFA8032eA" },
   { name: "Wojak", ca: "0xaCE55FE98Bab14366dD49aB5AA5dF76aA11A3c6f" },
   { name: "Juggernaut", ca: "0xD7321801CAae694090694Ff55A9323139F043B88" },
-  { name: "Sleuth", ca: "0x0500a1a597A631CEc9637767f7B75c5B5d0c1dB4" },
   { name: "Pons", ca: "0x39dBED3a2bd333467115dE45665cC57F813C4571" },
   { name: "Coat", ca: "0x93a887Beda77a9E2F6D6ed0C9742f04CcEBc8833" }
 ];
@@ -1346,6 +1332,22 @@ function persistYieldSample(projectKey, sevenDaysAgo, dailySampleUsd) {
   yieldDays.save(yieldDays.merge(yieldDays.load(), projectKey, dayUsd));
 }
 
+function mdFromIso(iso) {
+  const p = String(iso).split("-");
+  if (p.length < 3) return iso;
+  return `${Number(p[1])}/${Number(p[2])}`;
+}
+
+/** Copy the on-disk daily yield cache onto revenue so the UI can plot >7 days. */
+function attachRevenueHistory(projectKey, revenue, scale) {
+  if (!revenue) return;
+  const rows = yieldDays.trailing(yieldDays.load(), projectKey, 120);
+  if (!rows.length) return;
+  const s = Number(scale) > 0 ? Number(scale) : 1;
+  revenue.historyDates = rows.map((r) => mdFromIso(r.date));
+  revenue.historyTotalUsd = rows.map((r) => +(Number(r.usd) * s).toFixed(2));
+}
+
 function cachedYieldSample(projectKey, sevenDaysAgo) {
   const all = yieldDays.load();
   const days = all[projectKey] || {};
@@ -1537,8 +1539,9 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
   const revenueBreakdown = {
     ammFeesUsd: 0, securityBoxUsd: 0, launchpadUsd: 0, dexFeesUsd: 0,
     launchCreateUsd: 0, bondingFeesUsd: 0, bondingVolumeUsd: 0,
+    smartLpUsd: 0,
     dailyAmm: zeros(), dailySecurityBox: zeros(), dailyLaunchpad: zeros(), dailyDex: zeros(),
-    dailyBondingTax: zeros()
+    dailyBondingTax: zeros(), dailySmartLp: zeros(),
   };
 
   const truncatedWalks = [];
@@ -2264,13 +2267,46 @@ async function run() {
           } else {
               dailySnapshots.push(currentSnapshot);
           }
-          if (dailySnapshots.length > 90) dailySnapshots.shift();
+          if (dailySnapshots.length > 365) dailySnapshots.shift();
         }
+      }
+
+      if (projectKey !== "cardwall" && revenueBreakdown) {
+        const scale = conf.yieldMode === "oracle_wallet" && conf.oracleWeight
+          ? totalNetworkWeight / conf.oracleWeight
+          : 1;
+        attachRevenueHistory(projectKey, revenueBreakdown, scale);
       }
 
       let lockedLpData = null;
       if (projectKey === "stonk") {
           lockedLpData = scanLockedStonkLiquidity(conf.tokenCa, markets[projectKey].tokenPriceUsd);
+          try {
+            const smart = await fetchSmartLps({
+              rpc,
+              blockTime,
+              sevenDaysAgo,
+              ethPriceUsd: markets[projectKey]?.ethPriceUsd,
+              tokenPrices,
+              lookbackDays: YIELD_LOOKBACK_DAYS,
+              knownCas: (prevProjData.revenue?.smartLp?.vaults || []).map((v) => v.ca),
+            });
+            revenueBreakdown.smartLpUsd = smart.protocolFees7dUsd;
+            revenueBreakdown.dailySmartLp = smart.daily;
+            revenueBreakdown.smartLp = {
+              vaults: smart.vaults,
+              totalTvlUsd: smart.totalTvlUsd,
+              fees7dUsd: smart.fees7dUsd,
+              protocolFees7dUsd: smart.protocolFees7dUsd,
+              feeSplit: smart.feeSplit,
+              site: smart.site,
+              feeRecipientA: smart.feeRecipientA,
+              feeRecipientB: smart.feeRecipientB,
+              perfFeeBps: smart.perfFeeBps,
+            };
+          } catch (e) {
+            console.warn(`[warn] smart LP fetch failed: ${e.message}`);
+          }
       }
 
       finalJson.projects[projectKey] = {

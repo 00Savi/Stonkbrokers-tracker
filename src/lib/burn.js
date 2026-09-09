@@ -17,12 +17,12 @@
 // measured ones, drifting further from the truth every day nobody notices.
 
 import { usableSnapshots } from './snapshots';
+import { windowLen } from './yieldHistory';
 
 /** Labels and values for the burn chart, windowed to a timeframe. */
 export function burnSeries(snapshots, timeframe = 'all') {
   const clean = usableSnapshots(snapshots);
-  const window = timeframe === '7d' ? 7 : timeframe === '30d' ? 30 : clean.length;
-  const rows = clean.slice(-window);
+  const rows = clean.slice(-windowLen(timeframe, clean.length));
 
   return {
     labels: rows.map((s) => s.date || ''),
@@ -38,14 +38,21 @@ export function burnSeries(snapshots, timeframe = 'all') {
  * `Math.max(0, curr - prev)`, which hid the 8/19 row rather than removing it:
  * the flywheel looked fine while the cumulative chart above it did not.
  */
-export function burnRateSeries(snapshots) {
+export function burnRateSeries(snapshots, timeframe = 'all') {
   const clean = usableSnapshots(snapshots);
+  const n = windowLen(timeframe, clean.length);
+  const start = Math.max(0, clean.length - n);
+  const prev = start > 0 ? clean[start - 1] : null;
+  const rows = clean.slice(start);
 
   return {
-    labels: clean.map((s) => s.date || ''),
-    prices: clean.map((s) => Number(s.tokenPriceUsd) || 0),
-    burn: clean.map((s, i) =>
-      i === 0 ? 0 : Number(s.totalBurn) - Number(clean[i - 1].totalBurn),
-    ),
+    labels: rows.map((s) => s.date || ''),
+    prices: rows.map((s) => Number(s.tokenPriceUsd) || 0),
+    burn: rows.map((s, i) => {
+      const prior = i === 0
+        ? (prev ? Number(prev.totalBurn) : Number(s.totalBurn))
+        : Number(rows[i - 1].totalBurn);
+      return Number(s.totalBurn) - prior;
+    }),
   };
 }

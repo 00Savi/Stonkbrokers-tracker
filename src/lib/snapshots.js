@@ -1,6 +1,6 @@
 // Which recorded daily snapshots can be trusted, and how far back to plot them.
 //
-// `fetcher.cjs` appends one row per day and keeps 90. Every chart that shows
+// `fetcher.cjs` appends one row per day and keeps 365. Every chart that shows
 // history reads from those rows, so they all inherit the same question: was
 // this row written by a run that worked?
 

@@ -14,7 +14,7 @@ import BonusDetailView from './components/views/BonusDetailView';
 import MemesTokensView from './components/views/MemesTokensView';
 import SpecialDetailView from './components/views/SpecialDetailView';
 import { useDashboard } from './lib/useDashboard';
-import { PROJECT_BY_SLUG, TAB_BY_SLUG, DEFAULT_TAB, BONUS_LIVE, PROJECTS } from './lib/routes';
+import { PROJECT_BY_SLUG, TAB_BY_SLUG, DEFAULT_TAB, BONUS_LIVE, PROJECTS, isProjectLive } from './lib/routes';
 import { useProjectScrollSpy } from './lib/projectScroll';
 import { SkeletonCard } from './components/kit';
 
@@ -46,11 +46,11 @@ function ProjectPage({ data }) {
   const key = PROJECT_BY_SLUG[project];
   const activeTab = TAB_BY_SLUG[tab];
   const meta = PROJECTS.find((p) => p.slug === project);
-  const ready = !!(data && key && activeTab && key !== 'bonus');
+  const ready = !!(data && key && activeTab && isProjectLive(meta));
   useProjectScrollSpy(ready ? project : null, ready ? tab : null, meta, ready);
 
   if (!key) return <Navigate to="/" replace />;
-  if (key === 'bonus') return <Navigate to={BONUS_LIVE ? '/bonus' : '/'} replace />;
+  if (!isProjectLive(meta)) return <Navigate to={key === 'bonus' && BONUS_LIVE ? '/bonus' : '/'} replace />;
   if (!activeTab) return <Navigate to={`/${project}/${DEFAULT_TAB}`} replace />;
 
   const View = DETAIL_VIEWS[key];
@@ -61,7 +61,7 @@ function ProjectPage({ data }) {
       <div className="sticky top-[4.25rem] z-20 -mx-3 bg-[#08090b]/90 px-3 backdrop-blur sm:top-[4.75rem]">
         <TabBar />
       </div>
-      <div className="pt-5 pb-16">
+      <div className="pt-5 pb-28">
         {data ? (
           <View data={data} activeTab={activeTab} />
         ) : (
@@ -104,7 +104,7 @@ export default function App() {
   }
 
   return (
-    <div className="flex min-h-full flex-col">
+    <div className="flex min-h-full flex-col pb-28">
       <ScrollToTop />
       <TopNav live={sources.prices === 'ready'} data={data} pending={booting} />
       <ChartMobileSync />
@@ -174,10 +174,11 @@ export default function App() {
 function RedirectToDefaultTab() {
   const { project } = useParams();
   if (!PROJECT_BY_SLUG[project]) return <Navigate to="/" replace />;
-  if (project === 'bonus') return <Navigate to={BONUS_LIVE ? '/bonus' : '/'} replace />;
+  const meta = PROJECTS.find((p) => p.slug === project);
+  if (!isProjectLive(meta)) return <Navigate to="/" replace />;
   return <Navigate to={`/${project}/${DEFAULT_TAB}`} replace />;
 }
 
 function Section({ children }) {
-  return <div className="pb-16 pt-6">{children}</div>;
+  return <div className="pb-28 pt-6">{children}</div>;
 }

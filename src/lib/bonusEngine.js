@@ -120,25 +120,51 @@ export function clearStoredCampaign() {
   localStorage.removeItem(CAMPAIGN_STORAGE_KEY);
 }
 
+const ROBINHOOD_CHAIN_HEX = `0x${ROBINHOOD_CHAIN_ID.toString(16)}`;
+
+async function ensureRobinhoodChain(injected) {
+  try {
+    await injected.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: ROBINHOOD_CHAIN_HEX }],
+    });
+  } catch (err) {
+    const code = err?.code ?? err?.error?.code;
+    if (code !== 4902) {
+      throw new Error('Switch your wallet to Robinhood Chain (chain id 4663).');
+    }
+    await injected.request({
+      method: 'wallet_addEthereumChain',
+      params: [
+        {
+          chainId: ROBINHOOD_CHAIN_HEX,
+          chainName: 'Robinhood Chain',
+          nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+          rpcUrls: [ROBINHOOD_RPC],
+          blockExplorerUrls: ['https://robinhoodchain.blockscout.com'],
+        },
+      ],
+    });
+  }
+}
+
 export async function getSigner() {
   const injected = globalThis.ethereum;
   if (!injected) {
     throw new Error('No wallet found. Connect a browser wallet on Robinhood Chain.');
   }
-  const provider = new ethers.BrowserProvider(injected);
-  await provider.send('eth_requestAccounts', []);
-  const network = await provider.getNetwork();
+  await new ethers.BrowserProvider(injected).send('eth_requestAccounts', []);
+  let provider = new ethers.BrowserProvider(injected);
+  let network = await provider.getNetwork();
   if (network.chainId !== BigInt(ROBINHOOD_CHAIN_ID)) {
-    try {
-      await injected.request({
-        method: 'wallet_switchEthereumChain',
-        params: [{ chainId: '0x1237' }],
-      });
-    } catch {
-      throw new Error('Switch your wallet to Robinhood Chain (chain id 4663).');
-    }
+    await ensureRobinhoodChain(injected);
+    provider = new ethers.BrowserProvider(injected);
+    network = await provider.getNetwork();
   }
-  return new ethers.BrowserProvider(injected).getSigner();
+  if (network.chainId !== BigInt(ROBINHOOD_CHAIN_ID)) {
+    throw new Error('Switch your wallet to Robinhood Chain (chain id 4663).');
+  }
+  return provider.getSigner();
 }
 
 async function approveExact(tokenAddress, humanAmount) {

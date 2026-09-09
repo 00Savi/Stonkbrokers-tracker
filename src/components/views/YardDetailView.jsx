@@ -4,15 +4,16 @@ import {
 } from 'chart.js';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import { burnSeries, burnRateSeries } from '../../lib/burn';
-import { trailingSnapshots } from '../../lib/snapshots';
+import { windowSnapshots, tierRoiDatasets, protocolRevenueChart, sliceCols, windowPeriodLabel, windowLen } from '../../lib/yieldHistory';
 import { compactUsd, compactNum } from '../kit';
 import { baseChartOptions, compactTick, compactUsdTick } from '../../lib/charts';
+import { useChartWindow } from '../../lib/chartWindow';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
 export default function YardDetailView({ data, activeTab }) {
+  const [timeframe] = useChartWindow();
   const [expandedTier, setExpandedTier] = useState(null);
-  const [burnTimeframe, setBurnTimeframe] = useState('all');
   const [tierTimeframe, setTierTimeframe] = useState('allTime');
   const [lpTableOpen, setLpTableOpen] = useState(true);
   const [volumeMultiplier, setVolumeMultiplier] = useState(1);
@@ -32,38 +33,39 @@ export default function YardDetailView({ data, activeTab }) {
   const hasSnaps = Array.isArray(dailySnapshots) && dailySnapshots.length > 0 && dailySnapshots[0].date;
   const masterDates = hasSnaps ? dailySnapshots.map(s => s.date) : ['Aug 17', 'Aug 18', 'Aug 19', 'Aug 20', 'Aug 21', 'Aug 22', 'Aug 23'];
 
-  // 1. Historical Yield Chart -- trailing 14 days of recorded ROI.
-  const roiSnaps = trailingSnapshots(dailySnapshots, 14);
+  const roiSnaps = windowSnapshots(dailySnapshots, timeframe);
   const histLabels = roiSnaps.map(s => s.date);
-  const histDatasets = tiers.map((t, i) => {
-    const tc = floorCostUsd + (t.reqTokens * market.tokenPriceUsd);
-    const currentRoi = tc > 0 ? ((t.trackedAnnualYieldUsd / tc) * 100).toFixed(2) : 0;
-
-    return {
-      label: `${t.tier} ROI (${currentRoi}%)`,
-      data: roiSnaps.map(s => s.tiers?.find(st => st.tier === t.tier)?.roi || 0),
-      borderColor: ['#00a804', '#8b5cf6', '#38bdf8', '#f5b700', '#f472b6'][i % 5],
-      tension: 0.3, borderWidth: 2, pointRadius: 2
-    };
+  const histDatasets = tierRoiDatasets(roiSnaps, tiers, {
+    floorCostUsd,
+    tokenPriceUsd: market.tokenPriceUsd,
   });
 
-  // 2. Revenue Chart
-  const hasRevData = Array.isArray(revenue.dailyAmm) && revenue.dailyAmm.length > 0;
-  const revDates = hasRevData && tiers[0]?.dailyDates?.length ? tiers[0].dailyDates : masterDates.slice(-7);
-  const revData1 = hasRevData ? revenue.dailyAmm : [15000, 16000, 15000, 18000, 16000, 17000, 15000];
-  const revData2 = hasRevData && revenue.dailyDex?.length ? revenue.dailyDex : [3000, 4000, 3500, 3000, 4500, 3000, 3000];
-  const revData3 = hasRevData && revenue.dailyLaunchpad?.length ? revenue.dailyLaunchpad : [6000, 6000, 7000, 6000, 6500, 6500, 7000];
+  const revPeriod = windowPeriodLabel(timeframe);
+  const rawRev = protocolRevenueChart(project);
+  const byKey = Object.fromEntries((rawRev.cols || []).map((c) => [c.key, c]));
+  const { labels: revDates, cols: revCols } = sliceCols(
+    rawRev.labels,
+    [
+      { ...(byKey.amm || { data: [] }), label: 'Vault Distributions', color: '#00a804' },
+      { ...(byKey.dex || { data: [] }), label: 'Yard AMM Fees', color: '#38bdf8' },
+      { ...(byKey.launch || { data: [] }), label: 'Ecosystem Fees', color: '#8b5cf6' },
+    ],
+    timeframe
+  );
+  const revData1 = revCols[0]?.data || [];
+  const revData2 = revCols[1]?.data || [];
+  const revData3 = revCols[2]?.data || [];
 
   // 3. Burn Tracker Data (Cumulative Ratchet: prevents values from dropping)
   const realBurntTokens = Math.max(Number(activation.dualBurn?.totalBurnTokens || 0), Number(ownership.permanentlyBurntTokens || 0));
   const realBurntUnits = Math.max(Number(activation.dualBurn?.equivalentBrokersBurnt || 0), Number(ownership.permanentlyBurntUnits || 0), Number(ownership.burntNfts || 0));
   
-  const burn = burnSeries(dailySnapshots, burnTimeframe);
+  const burn = burnSeries(dailySnapshots, timeframe);
   const slicedBurnLabels = burn.labels;
   const slicedBurnData = burn.data;
 
   // 4. Flywheel Chart
-  const flywheel = burnRateSeries(dailySnapshots);
+  const flywheel = burnRateSeries(dailySnapshots, timeframe);
   const fwPrices = flywheel.prices;
   const fwBurn = flywheel.burn;
 
@@ -98,6 +100,9 @@ export default function YardDetailView({ data, activeTab }) {
   const chartLastValue = ownData.length > 0 ? ownData[ownData.length - 1] : 0;
   let yardHolders = Number(ownership.yardHolders) || Number(ownership.tokenHolders) || Number(ownership.erc20Holders) || chartLastValue;
   if (yardHolders > 0 && yardHolders < chartLastValue * 0.7) yardHolders = chartLastValue;
+
+  const actN = windowLen(timeframe, actLabels.length);
+  const ownN = windowLen(timeframe, ownLabels.length);
 
   return (
     <div className="space-y-6 relative">
@@ -215,7 +220,7 @@ export default function YardDetailView({ data, activeTab }) {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
               <h2 className="text-xl font-bold text-white flex items-center gap-2">Historical Yield & Payback Horizon</h2>
-              <p className="text-xs md:text-sm text-slate-400 mt-1">Track capital recovery timelines and ROI trajectory mapped over time.</p>
+              <p className="text-xs md:text-sm text-slate-400 mt-1">Daily CoC ROI from the hourly ledger. Range is the sticky Weekly / Monthly / All control.</p>
             </div>
           </div>
           
@@ -253,16 +258,16 @@ export default function YardDetailView({ data, activeTab }) {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
-              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Protocol Vault Inflows (7D)</p>
-              <p className="text-2xl font-extrabold text-emerald-400">{formatCurrency(revenue.ammFeesUsd || 0)}</p>
+              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Protocol Vault Inflows ({revPeriod})</p>
+              <p className="text-2xl font-extrabold text-emerald-400">{formatCurrency(revCols[0]?.total || 0)}</p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
-              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Yard AMM Protocol Fees (7D)</p>
-              <p className="text-2xl font-extrabold text-cyan-400">{formatCurrency(revenue.dexFeesUsd || 0)}</p>
+              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Yard AMM Protocol Fees ({revPeriod})</p>
+              <p className="text-2xl font-extrabold text-cyan-400">{formatCurrency(revCols[1]?.total || 0)}</p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
-              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Ecosystem Inflows (7D)</p>
-              <p className="text-2xl font-extrabold text-purple-400">{formatCurrency(revenue.launchpadUsd || 0)}</p>
+              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Ecosystem Inflows ({revPeriod})</p>
+              <p className="text-2xl font-extrabold text-purple-400">{formatCurrency(revCols[2]?.total || 0)}</p>
             </div>
           </div>
 
@@ -282,8 +287,14 @@ export default function YardDetailView({ data, activeTab }) {
               />
             </div>
           </div>
+        </div>
+      </section>
 
-          {lockedLp && lockedLp.pools && lockedLp.pools.length > 0 && (
+      <section id="liquidity" className="scroll-mt-32">
+        <div className="space-y-6">
+          <h2 className="text-lg md:text-xl font-bold text-white">Liquidity</h2>
+          <p className="text-xs text-slate-400">Locked pool reserves scanned from partner, meme, and launchpad pairs.</p>
+          {lockedLp && lockedLp.pools && lockedLp.pools.length > 0 ? (
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-2">
                 <div>
@@ -310,6 +321,8 @@ export default function YardDetailView({ data, activeTab }) {
                 </div>
               )}
             </div>
+          ) : (
+            <p className="text-sm text-slate-500">No locked LP scanned for this project yet.</p>
           )}
         </div>
       </section>
@@ -333,19 +346,11 @@ export default function YardDetailView({ data, activeTab }) {
           </div>
 
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6">
-              <h3 className="text-sm font-bold text-white hidden sm:block">Cumulative Token Burn Over Time</h3>
-              <div className="flex bg-[#0e1013] rounded-lg p-1 border border-[#1e2228]">
-                {['7d', '30d', 'all'].map((tf) => (
-                  <button key={tf} onClick={() => setBurnTimeframe(tf)} className={`px-4 py-1.5 text-xs font-bold rounded-md transition ${burnTimeframe === tf ? 'bg-[#1e2228] text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>
-                    {tf.toUpperCase()}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <h3 className="text-sm font-bold text-white mb-4">Cumulative Token Burn Over Time</h3>
             <div className="relative h-52 sm:h-64 md:h-80 w-full">
               {slicedBurnData.length > 0 ? (
                 <Line
+                  key={`burn-${timeframe}`}
                   data={{ labels: slicedBurnLabels, datasets: [{ label: 'Cumulative Burnt', data: slicedBurnData, borderColor: '#fb923c', backgroundColor: 'rgba(251, 146, 60, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] }}
                   options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactTick } } } }}
                 />
@@ -363,10 +368,10 @@ export default function YardDetailView({ data, activeTab }) {
             <div className="relative h-52 sm:h-64 md:h-80 w-full">
               <Bar 
                 data={{
-                  labels: flywheel.labels.slice(-5),
+                  labels: flywheel.labels,
                   datasets: [
-                    { type: 'line', label: 'Token Price ($)', data: fwPrices.slice(-5), borderColor: '#38bdf8', backgroundColor: '#38bdf8', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y1' },
-                    { type: 'bar', label: 'Daily Burn Velocity', data: fwBurn.slice(-5), backgroundColor: 'rgba(249, 115, 22, 0.8)', borderRadius: 4, yAxisID: 'y' }
+                    { type: 'line', label: 'Token Price ($)', data: fwPrices, borderColor: '#38bdf8', backgroundColor: '#38bdf8', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y1' },
+                    { type: 'bar', label: 'Daily Burn Velocity', data: fwBurn, backgroundColor: 'rgba(249, 115, 22, 0.8)', borderRadius: 4, yAxisID: 'y' }
                   ]
                 }} 
                 options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#cbd5e1' } } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { type: 'linear', position: 'left', grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactTick } }, y1: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#38bdf8', callback: compactUsdTick } } } }} 
@@ -435,11 +440,11 @@ export default function YardDetailView({ data, activeTab }) {
              <div className="relative h-52 sm:h-64 md:h-80 w-full">
                 <Bar 
                   data={{
-                    labels: actLabels,
+                    labels: actLabels.slice(-actN),
                     datasets: [
-                      { type: 'line', label: 'Net Active Units', data: actCum, borderColor: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.05)', borderWidth: 3, fill: true, tension: 0.3, yAxisID: 'y' },
-                      { type: 'bar', label: 'Daily Activations', data: actDAct, backgroundColor: '#00a804', borderRadius: 4, yAxisID: 'y1' },
-                      { type: 'bar', label: 'Daily Deactivations', data: actDDeact, backgroundColor: '#f43f5e', borderRadius: 4, yAxisID: 'y1' }
+                      { type: 'line', label: 'Net Active Units', data: actCum.slice(-actN), borderColor: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.05)', borderWidth: 3, fill: true, tension: 0.3, yAxisID: 'y' },
+                      { type: 'bar', label: 'Daily Activations', data: actDAct.slice(-actN), backgroundColor: '#00a804', borderRadius: 4, yAxisID: 'y1' },
+                      { type: 'bar', label: 'Daily Deactivations', data: actDDeact.slice(-actN), backgroundColor: '#f43f5e', borderRadius: 4, yAxisID: 'y1' }
                     ]
                   }} 
                   options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#94a3b8' } } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { type: 'linear', position: 'left', grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y1: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, min: 0 } } }} 
@@ -473,7 +478,7 @@ export default function YardDetailView({ data, activeTab }) {
             <h3 className="text-sm font-bold text-white mb-4">True Active Token Holders Over Time</h3>
             <div className="relative h-52 sm:h-64 md:h-80 w-full">
               <Line 
-                data={{ labels: ownLabels, datasets: [{ label: 'Active Holders', data: ownData, borderColor: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] }} 
+                data={{ labels: ownLabels.slice(-ownN), datasets: [{ label: 'Active Holders', data: ownData.slice(-ownN), borderColor: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] }} 
                 options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } } } }} 
               />
             </div>

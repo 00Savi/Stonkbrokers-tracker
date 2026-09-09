@@ -4,15 +4,16 @@ import {
 } from 'chart.js';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import { burnSeries, burnRateSeries } from '../../lib/burn';
-import { trailingSnapshots } from '../../lib/snapshots';
+import { windowSnapshots, protocolRevenueChart, sliceCols, windowLen } from '../../lib/yieldHistory';
 import { BetaTag, compactUsd, compactNum } from '../kit';
 import { baseChartOptions, compactTick, compactUsdTick } from '../../lib/charts';
+import { useChartWindow } from '../../lib/chartWindow';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
 export default function CardWallDetailView({ data, activeTab }) {
+  const [timeframe] = useChartWindow();
   const [expandedTier, setExpandedTier] = useState(null);
-  const [burnTimeframe, setBurnTimeframe] = useState('all');
   const [tierTimeframe, setTierTimeframe] = useState('allTime');
   const [selectedSlab, setSelectedSlab] = useState(null);
   const [volumeMultiplier, setVolumeMultiplier] = useState(1);
@@ -35,15 +36,13 @@ export default function CardWallDetailView({ data, activeTab }) {
   const chartOptions = baseChartOptions();
 
   const hasSnaps = Array.isArray(dailySnapshots) && dailySnapshots.length > 0 && dailySnapshots[0].date;
-  // Trailing 14 days of recorded ROI.
-  const roiSnaps = trailingSnapshots(dailySnapshots, 14).filter((s) =>
+  const roiSnaps = windowSnapshots(dailySnapshots, timeframe).filter((s) =>
     Array.isArray(s.tiers) && s.tiers.some((t) => (t.yieldUsd || 0) > 0 || (t.roi || 0) > 0)
   );
   const histLabels = roiSnaps.map(s => s.date);
   const histDatasets = tiers.map((t, i) => {
     const tc = tierFloorUsd(t, i) + (t.reqTokens * market.tokenPriceUsd);
     const currentRoi = tc > 0 ? ((t.trackedAnnualYieldUsd / tc) * 100).toFixed(2) : 0;
-
     return {
       label: `${t.tier} ROI (${currentRoi}%)`,
       data: roiSnaps.map(s => s.tiers?.find(st => st.tier === t.tier)?.roi || 0),
@@ -53,19 +52,19 @@ export default function CardWallDetailView({ data, activeTab }) {
   });
 
   const zeros = [0, 0, 0, 0, 0, 0, 0];
-  const histDates = ledger?.historyDates?.length ? ledger.historyDates : (ledger?.dailyDates || []);
-  const revDates = histDates.length ? histDates : (tiers[0]?.dailyDates?.length ? tiers[0].dailyDates : zeros.map((_, i) => `${i}`));
-  const revData1 = ledger?.historyDelivered?.length ? ledger.historyDelivered : (ledger?.dailyDelivered?.length ? ledger.dailyDelivered : zeros);
-  const revData2 = ledger?.historyVaulted?.length ? ledger.historyVaulted : (ledger?.dailyVaulted?.length ? ledger.dailyVaulted : zeros);
+  const rawRev = protocolRevenueChart(project);
+  const { labels: revDates, cols: revCols } = sliceCols(rawRev.labels, rawRev.cols, timeframe);
+  const revData1 = revCols[0]?.data || zeros;
+  const revData2 = revCols[1]?.data || zeros;
 
   const realBurntTokens = Math.max(Number(activation.dualBurn?.totalBurnTokens || 0), Number(ownership.permanentlyBurntTokens || 0));
   const realBurntUnits = Math.max(Number(activation.dualBurn?.equivalentBrokersBurnt || 0), Number(ownership.permanentlyBurntUnits || 0), Number(ownership.burntNfts || 0));
   
-  const burn = burnSeries(dailySnapshots, burnTimeframe);
+  const burn = burnSeries(dailySnapshots, timeframe);
   const slicedBurnLabels = burn.labels;
   const slicedBurnData = burn.data;
 
-  const flywheel = burnRateSeries(dailySnapshots);
+  const flywheel = burnRateSeries(dailySnapshots, timeframe);
   const fwPrices = flywheel.prices;
   const fwBurn = flywheel.burn;
 
@@ -98,6 +97,9 @@ export default function CardWallDetailView({ data, activeTab }) {
   const chartLastValue = ownData.length > 0 ? ownData[ownData.length - 1] : 0;
   let wallHolders = Number(ownership.wallHolders) || Number(ownership.tokenHolders) || Number(ownership.erc20Holders) || Number(ownership.stonkHolders) || chartLastValue;
   if (wallHolders > 0 && wallHolders < chartLastValue * 0.7) wallHolders = chartLastValue;
+
+  const actN = windowLen(timeframe, actLabels.length);
+  const ownN = windowLen(timeframe, ownLabels.length);
 
   return (
     <div className="space-y-6 relative">
@@ -242,7 +244,7 @@ export default function CardWallDetailView({ data, activeTab }) {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
               <h2 className="text-xl font-bold text-white flex items-center gap-2">Historical Yield & Payback Horizon</h2>
-              <p className="text-xs md:text-sm text-slate-400 mt-1">Payback uses the live annualized rain rate. The ROI chart starts on the first VaultLedger rain day — earlier zeros are omitted, not invented.</p>
+              <p className="text-xs md:text-sm text-slate-400 mt-1">Payback uses the live annualized rain rate. The ROI chart follows the sticky Weekly / Monthly / All control.</p>
             </div>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -292,8 +294,10 @@ export default function CardWallDetailView({ data, activeTab }) {
           </div>
 
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
-            <h3 className="text-sm font-bold text-white mb-1">Slab landed cost by day</h3>
-            <p className="text-xs text-slate-500 mb-4">From the first vault record through today. Days with no new slabs are omitted.</p>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-1">
+              <h3 className="text-sm font-bold text-white">Slab landed cost by day</h3>
+            </div>
+            <p className="text-xs text-slate-500 mb-4">From the first vault record through today. Days with no new slabs are omitted. The sticky range control slices this series.</p>
             <div className="relative h-52 sm:h-64 md:h-80 w-full">
               <Bar 
                 data={{
@@ -305,6 +309,23 @@ export default function CardWallDetailView({ data, activeTab }) {
                 }} 
                 options={{ responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true, grid: { color: '#1e2228', borderDash: [4, 4] } }, y: { stacked: true, grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactUsdTick } } }, plugins: { legend: { labels: { color: '#cbd5e1' } } } }} 
               />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="liquidity" className="scroll-mt-32">
+        <div className="space-y-6">
+          <h2 className="text-lg md:text-xl font-bold text-white">Liquidity</h2>
+          <p className="text-xs text-slate-400">The wall itself is the inventory: slabs still in custody versus already rained to members.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
+              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">On the wall</p>
+              <p className="text-2xl font-extrabold text-amber-400">{formatCurrency(ledger?.vaultedUsd || 0)}</p>
+            </div>
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
+              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">With members</p>
+              <p className="text-2xl font-extrabold text-purple-400">{formatCurrency(ledger?.deliveredUsd || 0)}</p>
             </div>
           </div>
         </div>
@@ -326,19 +347,11 @@ export default function CardWallDetailView({ data, activeTab }) {
           </div>
 
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6">
-              <h3 className="text-sm font-bold text-white hidden sm:block">Cumulative Token Burn Over Time</h3>
-              <div className="flex bg-[#0e1013] rounded-lg p-1 border border-[#1e2228]">
-                {['7d', '30d', 'all'].map((tf) => (
-                  <button key={tf} onClick={() => setBurnTimeframe(tf)} className={`px-4 py-1.5 text-xs font-bold rounded-md transition ${burnTimeframe === tf ? 'bg-[#1e2228] text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>
-                    {tf.toUpperCase()}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <h3 className="text-sm font-bold text-white mb-4">Cumulative Token Burn Over Time</h3>
             <div className="relative h-52 sm:h-64 md:h-80 w-full">
               {slicedBurnData.length > 0 ? (
                 <Line
+                  key={`burn-${timeframe}`}
                   data={{ labels: slicedBurnLabels, datasets: [{ label: 'Cumulative Burnt', data: slicedBurnData, borderColor: '#fb923c', backgroundColor: 'rgba(251, 146, 60, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] }}
                   options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactTick } } } }}
                 />
@@ -356,10 +369,10 @@ export default function CardWallDetailView({ data, activeTab }) {
             <div className="relative h-52 sm:h-64 md:h-80 w-full">
               <Bar 
                 data={{
-                  labels: flywheel.labels.slice(-5),
+                  labels: flywheel.labels,
                   datasets: [
-                    { type: 'line', label: 'Token Price ($)', data: fwPrices.slice(-5), borderColor: '#f5b700', backgroundColor: '#f5b700', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y1' },
-                    { type: 'bar', label: 'Daily Burn Velocity', data: fwBurn.slice(-5), backgroundColor: 'rgba(249, 115, 22, 0.8)', borderRadius: 4, yAxisID: 'y' }
+                    { type: 'line', label: 'Token Price ($)', data: fwPrices, borderColor: '#f5b700', backgroundColor: '#f5b700', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y1' },
+                    { type: 'bar', label: 'Daily Burn Velocity', data: fwBurn, backgroundColor: 'rgba(249, 115, 22, 0.8)', borderRadius: 4, yAxisID: 'y' }
                   ]
                 }} 
                 options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#cbd5e1' } } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { type: 'linear', position: 'left', grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactTick } }, y1: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#f5b700', callback: compactUsdTick } } } }} 
@@ -425,11 +438,11 @@ export default function CardWallDetailView({ data, activeTab }) {
              <div className="relative h-52 sm:h-64 md:h-80 w-full">
                 <Bar 
                   data={{
-                    labels: actLabels,
+                    labels: actLabels.slice(-actN),
                     datasets: [
-                      { type: 'line', label: 'Net Active Units', data: actCum, borderColor: '#f5b700', backgroundColor: 'rgba(245, 183, 0, 0.05)', borderWidth: 3, fill: true, tension: 0.3, yAxisID: 'y' },
-                      { type: 'bar', label: 'Daily Activations', data: actDAct, backgroundColor: '#00a804', borderRadius: 4, yAxisID: 'y1' },
-                      { type: 'bar', label: 'Daily Deactivations', data: actDDeact, backgroundColor: '#f43f5e', borderRadius: 4, yAxisID: 'y1' }
+                      { type: 'line', label: 'Net Active Units', data: actCum.slice(-actN), borderColor: '#f5b700', backgroundColor: 'rgba(245, 183, 0, 0.05)', borderWidth: 3, fill: true, tension: 0.3, yAxisID: 'y' },
+                      { type: 'bar', label: 'Daily Activations', data: actDAct.slice(-actN), backgroundColor: '#00a804', borderRadius: 4, yAxisID: 'y1' },
+                      { type: 'bar', label: 'Daily Deactivations', data: actDDeact.slice(-actN), backgroundColor: '#f43f5e', borderRadius: 4, yAxisID: 'y1' }
                     ]
                   }} 
                   options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#94a3b8' } } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { type: 'linear', position: 'left', grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y1: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, min: 0 } } }} 
@@ -460,7 +473,7 @@ export default function CardWallDetailView({ data, activeTab }) {
             <h3 className="text-sm font-bold text-white mb-4">True Active Token Holders Over Time</h3>
             <div className="relative h-52 sm:h-64 md:h-80 w-full">
               <Line 
-                data={{ labels: ownLabels, datasets: [{ label: 'Active Holders', data: ownData, borderColor: '#f5b700', backgroundColor: 'rgba(245, 183, 0, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] }} 
+                data={{ labels: ownLabels.slice(-ownN), datasets: [{ label: 'Active Holders', data: ownData.slice(-ownN), borderColor: '#f5b700', backgroundColor: 'rgba(245, 183, 0, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] }} 
                 options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } } } }} 
               />
             </div>

@@ -250,3 +250,35 @@ export const num = (v) =>
 
 export const pct = (v, digits = 1) =>
   v == null || !Number.isFinite(Number(v)) ? '—' : `${Number(v).toFixed(digits)}%`;
+
+export const YIELD_WINDOWS = [
+  { id: '7d', label: 'Weekly' },
+  { id: '30d', label: 'Monthly' },
+  { id: 'all', label: 'All' },
+];
+
+/** Weekly / Monthly / All control. Sticky chrome uses `compact`. */
+export function WindowBar({ value, onChange, windows = YIELD_WINDOWS, compact = false }) {
+  return (
+    <div
+      className={`flex shrink-0 rounded-lg border border-[#1e2228] bg-[#0e1013] p-1 ${compact ? '' : ''}`}
+      role="group"
+      aria-label="Chart range"
+    >
+      {windows.map((w) => (
+        <button
+          key={w.id}
+          type="button"
+          onClick={() => onChange(w.id)}
+          className={`rounded-md font-bold transition ${
+            compact ? 'px-2.5 py-1 text-[11px] sm:px-3.5 sm:py-1.5 sm:text-xs' : 'px-4 py-1.5 text-xs'
+          } ${
+            value === w.id ? 'bg-[#1e2228] text-white shadow-sm' : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          {w.label}
+        </button>
+      ))}
+    </div>
+  );
+}

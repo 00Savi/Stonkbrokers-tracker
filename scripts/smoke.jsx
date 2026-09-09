@@ -49,6 +49,7 @@ const ROUTES = [
   '/stonkbrokers/roi',
   '/stonkbrokers/yield',
   '/stonkbrokers/revenue',
+  '/stonkbrokers/liquidity',
   '/stonkbrokers/burn',
   '/stonkbrokers/activation',
   '/stonkbrokers/ownership',
@@ -104,6 +105,7 @@ const VIEWS = [
   ['MemesTokensView·stocks', MemesTokensView, { data: snapshot, type: 'stocks' }],
   ['BonusDetailView', BonusDetailView, { data: snapshot }],
   ['Index·roi', SpecialDetailView, { data: snapshot, projectKey: 'index', activeTab: 'roi' }],
+  ['Index·revenue', SpecialDetailView, { data: snapshot, projectKey: 'index', activeTab: 'revenue' }],
   ['Index·burn', SpecialDetailView, { data: snapshot, projectKey: 'index', activeTab: 'burn' }],
   ['Index·ownership', SpecialDetailView, { data: snapshot, projectKey: 'index', activeTab: 'ownership' }],
   ['Printer·revenue', SpecialDetailView, { data: snapshot, projectKey: 'printer', activeTab: 'revenue' }],
@@ -116,13 +118,14 @@ const VIEWS = [
   ['Oakmont·wrap', SpecialDetailView, { data: snapshot, projectKey: 'oakmont', activeTab: 'activation' }],
   ['Oakmont·holders', SpecialDetailView, { data: snapshot, projectKey: 'oakmont', activeTab: 'ownership' }],
   ['Coattail·roi', SpecialDetailView, { data: snapshot, projectKey: 'coattail', activeTab: 'roi' }],
+  ['Coattail·revenue', SpecialDetailView, { data: snapshot, projectKey: 'coattail', activeTab: 'revenue' }],
   ['Coattail·yield', SpecialDetailView, { data: snapshot, projectKey: 'coattail', activeTab: 'historical' }],
   ['Coattail·burn', SpecialDetailView, { data: snapshot, projectKey: 'coattail', activeTab: 'burn' }],
   ['Coattail·activation', SpecialDetailView, { data: snapshot, projectKey: 'coattail', activeTab: 'activation' }],
   ['Coattail·ownership', SpecialDetailView, { data: snapshot, projectKey: 'coattail', activeTab: 'ownership' }],
 ];
 
-const TABS = ['roi', 'historical', 'revenue', 'burn', 'activation', 'ownership'];
+const TABS = ['roi', 'historical', 'revenue', 'liquidity', 'burn', 'activation', 'ownership'];
 for (const [label, View] of [
   ['Stonk', StonkDetailView],
   ['Mancer', MancerDetailView],

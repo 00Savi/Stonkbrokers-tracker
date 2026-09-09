@@ -11,12 +11,13 @@
 // gg-index folds Transfer events into a balance table instead, so its count
 // reconciles against `totalSupply()` with difference 0.
 //
-// Activation counts have the same shape of problem from a different cause. The
-// dashboard derives them from logs alone, and selling an activated NFT stops it
-// earning without emitting any event — so a log-only walk keeps counting it.
-// Against the contracts' own `activeCount()`, gg-index matched all three
-// exactly while the derived numbers were off by -86 on mancer and +29 on
-// tickeryard.
+// Activation is a different story. The index reproduces the contract's
+// `activeCount()`, which is an upper bound: a sale can stop a position
+// earning without an event, so the counter still includes it. The hourly
+// fetcher already models that with deactivateOnTransfer. Overlaying `active`
+// here used to undo that pass (and disagreed with lib/ggindex.cjs, which
+// refuses to replace the local count). Holders still come from the index.
+// Activation stays on the snapshot.
 
 const BASE = (import.meta.env?.VITE_GG_INDEX_URL || 'https://index.ggservices.dev').replace(/\/+$/, '');
 
@@ -67,10 +68,6 @@ async function holderCount(address, signal) {
   return typeof holders === 'number' ? holders : null;
 }
 
-// gg-index keys tiers by index (`{"0": n}`); the dashboard keys them "T0".
-const toBreakdown = (byTier) =>
-  Object.fromEntries(Object.entries(byTier || {}).map(([i, n]) => [`T${i}`, n]));
-
 async function projectPatch(project, signal) {
   const { slug, contracts = [] } = project;
   const patch = {};
@@ -94,28 +91,6 @@ async function projectPatch(project, signal) {
   }
   if (nftHolders !== null) ownership.nftHolders = nftHolders;
   if (Object.keys(ownership).length) patch.ownership = ownership;
-
-  // Cardwall has no activation contract *in the index catalog* yet, so this
-  // 404s for it. Holder counts must still land. Once gg-index lists
-  // SoftStakingVault 0xb3f6… the overlay will start correcting activeCount.
-  try {
-    const a = await get(`/projects/${slug}/activations`, signal);
-    const activation = {};
-    if (typeof a.active === 'number') activation.activeCount = a.active;
-    if (a.by_tier) activation.breakdown = toBreakdown(a.by_tier);
-    if (typeof a.supply === 'number') {
-      activation.totalSupply = a.supply;
-      if (typeof a.active === 'number' && a.supply > 0) {
-        // Recomputed rather than carried over: leaving the old percentage
-        // beside a corrected count would put two numbers on the page that
-        // disagree with each other.
-        activation.percentActivated = +((a.active / a.supply) * 100).toFixed(2);
-      }
-    }
-    if (Object.keys(activation).length) patch.activation = activation;
-  } catch (e) {
-    if (!String(e.message).includes('404')) throw e;
-  }
 
   return patch;
 }
@@ -160,9 +135,8 @@ export async function loadOverlay(signal, known) {
 /**
  * Merge an overlay onto a `data.json` payload without disturbing the rest.
  *
- * Only `ownership` and `activation` are touched, and only the keys the index
- * actually returned — every other field on those objects (history, tierStats,
- * the per-token tier map) still comes from `data.json`.
+ * Only `ownership` is touched, and only the keys the index actually returned.
+ * Activation stays on the snapshot (see file header).
  */
 export function applyOverlay(base, overlay) {
   if (!base?.projects || !overlay) return base;
@@ -174,7 +148,6 @@ export function applyOverlay(base, overlay) {
     projects[slug] = {
       ...p,
       ...(patch.ownership ? { ownership: { ...p.ownership, ...patch.ownership } } : {}),
-      ...(patch.activation ? { activation: { ...p.activation, ...patch.activation } } : {}),
     };
   }
   return { ...base, projects };

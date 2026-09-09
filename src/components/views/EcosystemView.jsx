@@ -1,13 +1,15 @@
 import React, { useCallback, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { projectPath } from '../../lib/routes';
+import { projectPath, PROJECTS, isProjectLive } from '../../lib/routes';
 import { useSectionScrollSpy } from '../../lib/projectScroll';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, ArcElement, Filler
 } from 'chart.js';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import OverviewView from './OverviewView';
-import { compactUsd, compactNum } from '../kit';
+import { compactUsd, compactNum, WindowBar } from '../kit';
+import { protocolRevenueChart } from '../../lib/yieldHistory';
+import { useChartWindow } from '../../lib/chartWindow';
 import { baseChartOptions, compactTick, compactUsdTick } from '../../lib/charts';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
@@ -110,15 +112,15 @@ export default function EcosystemView({ data, pending = false }) {
   const activeTab = ECO_TABS.some((t) => t.id === tabFromUrl) ? tabFromUrl : 'roi';
   const [expandedProject, setExpandedProject] = useState(null);
   const [yieldPeriod, setYieldPeriod] = useState('Y');
-  
-  const [revTimeframe, setRevTimeframe] = useState('7d');
-  const [histTimeframe, setHistTimeframe] = useState('all');
-  const [burnTimeframe, setBurnTimeframe] = useState('all');
-  const [actTimeframe, setActTimeframe] = useState('all');
-  const [ownTimeframe, setOwnTimeframe] = useState('all');
+  const [timeframe, setTimeframe] = useChartWindow();
 
   const onActiveId = useCallback((id) => {
-    setSearchParams(id === 'roi' ? {} : { tab: id }, { replace: true });
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (id === 'roi') next.delete('tab');
+      else next.set('tab', id);
+      return next;
+    }, { replace: true });
   }, [setSearchParams]);
 
   useSectionScrollSpy({
@@ -129,7 +131,12 @@ export default function EcosystemView({ data, pending = false }) {
   });
 
   const selectTab = (id) => {
-    setSearchParams(id === 'roi' ? {} : { tab: id }, { replace: true });
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (id === 'roi') next.delete('tab');
+      else next.set('tab', id);
+      return next;
+    }, { replace: true });
   };
 
   if (!data || !data.projects) return <div className="text-center text-slate-400 p-12">Loading Ecosystem...</div>;
@@ -137,7 +144,10 @@ export default function EcosystemView({ data, pending = false }) {
   const formatCurrency = compactUsd;
   const formatNumber = compactNum;
 
-  const order = ['stonk', 'mancer', 'tickeryard', 'cardwall', 'index', 'printer', 'oakmont', 'coattail'];
+  const hidden = new Set(PROJECTS.filter((p) => !isProjectLive(p)).map((p) => p.key));
+  const order = ['stonk', 'mancer', 'tickeryard', 'cardwall', 'index', 'printer', 'oakmont', 'coattail'].filter(
+    (k) => !hidden.has(k)
+  );
   const activationOrder = order.filter((k) => {
     const kind = data.projects[k]?.config?.kind;
     return kind !== 'cashflow' && kind !== 'vault';
@@ -283,28 +293,12 @@ export default function EcosystemView({ data, pending = false }) {
   // REVENUE — per-project series (do not force everyone onto Stonk's dates)
   // =========================================================
   const projectRevenueSeries = (p) => {
-    const r = p?.revenue || {};
-    const cf = p?.cashflow || {};
-    const streams = [r.dailyAmm, r.dailyDex, r.dailySecurityBox, r.dailyLaunchpad];
-    const hasNftDaily = streams.some((a) => Array.isArray(a) && a.some((v) => Number(v) > 0));
-    if (hasNftDaily) {
-      const labels = p?.tiers?.[0]?.dailyDates?.length ? p.tiers[0].dailyDates : masterRevLabels;
-      const len = labels.length;
-      const data = labels.map((_, i) => {
-        const fromEnd = len - 1 - i;
-        return streams.reduce((s, a) => {
-          if (!Array.isArray(a) || !a.length) return s;
-          const idx = a.length - 1 - fromEnd;
-          return s + (idx >= 0 ? Number(a[idx]) || 0 : 0);
-        }, 0);
-      });
-      return { labels, data, source: 'streams' };
-    }
-    if (Array.isArray(cf.dailyDates) && cf.dailyDates.length) {
-      const src = (cf.dailyRevenue || []).some((v) => Number(v) > 0) ? cf.dailyRevenue : cf.dailyFees;
-      if (Array.isArray(src) && src.some((v) => Number(v) > 0)) {
-        return { labels: cf.dailyDates, data: src.map((v) => Number(v) || 0), source: 'cashflow' };
-      }
+    const chart = protocolRevenueChart(p);
+    if (chart.labels?.length) {
+      const data = chart.labels.map((_, i) =>
+        (chart.cols || []).reduce((s, c) => s + (Number(c.data?.[i]) || 0), 0)
+      );
+      if (data.some((v) => v > 0)) return { labels: chart.labels, data, source: 'protocol' };
     }
     const snaps = Array.isArray(p?.dailySnapshots) ? p.dailySnapshots : [];
     if (snaps.some((s) => Number(s.annualYield) > 0)) {
@@ -348,8 +342,7 @@ export default function EcosystemView({ data, pending = false }) {
       Object.keys(map).forEach((d) => labelSet.add(d));
     }
     const labels = [...labelSet]
-      .sort((a, b) => labelSortKey(a) - labelSortKey(b))
-      .filter((d) => labelSortKey(d) >= labelSortKey('8/20'));
+      .sort((a, b) => labelSortKey(a) - labelSortKey(b));
     const sliceCount = getSliceCount(timeframe, labels.length);
     const slicedLabels = labels.slice(-sliceCount);
 
@@ -390,7 +383,8 @@ export default function EcosystemView({ data, pending = false }) {
     <div className="space-y-6 pt-4 relative">
       
       {/* ECOSYSTEM TAB NAVIGATION */}
-      <div className="sticky top-[4.25rem] z-20 -mx-1 mb-6 flex w-full gap-2 overflow-x-auto bg-[#08090b]/90 px-1 py-2 backdrop-blur sm:top-[4.75rem]">
+      <div className="sticky top-[4.25rem] z-20 -mx-1 mb-6 flex w-full items-center gap-2 overflow-x-auto bg-[#08090b]/90 px-1 py-2 backdrop-blur sm:top-[4.75rem]">
+        <div className="flex min-w-0 flex-1 gap-2">
         {ECO_TABS.map((tab) => (
           <button
             key={tab.id}
@@ -405,6 +399,8 @@ export default function EcosystemView({ data, pending = false }) {
             {tab.label}
           </button>
         ))}
+        </div>
+        <WindowBar compact value={timeframe} onChange={setTimeframe} />
       </div>
 
       {/* ========================================================= */}
@@ -557,17 +553,10 @@ export default function EcosystemView({ data, pending = false }) {
                 Each project gets its own scale. Overlaying Coattail at 1,000%+ with Stonk at ~8% made everyone else look flat.
               </p>
             </div>
-            <div className="flex bg-[#08090b] rounded-lg p-1 border border-[#1e2228]">
-              {['7d', '30d', 'all'].map((tf) => (
-                <button key={tf} onClick={() => setHistTimeframe(tf)} className={`px-4 py-1.5 text-xs font-bold rounded-md transition ${histTimeframe === tf ? 'bg-[#1e2228] text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>
-                  {tf.toUpperCase()}
-                </button>
-              ))}
-            </div>
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {(() => {
-              const hist = getHistChartData(histTimeframe);
+              const hist = getHistChartData(timeframe);
               return hist.datasets.map((ds, i) => {
                 const k = order[i];
                 const latest = lastFinite(ds.data);
@@ -596,13 +585,6 @@ export default function EcosystemView({ data, pending = false }) {
         <div className="space-y-6">
           <div className="flex justify-between items-center mb-2">
             <h2 className="text-lg md:text-xl font-bold text-white">Ecosystem Revenue Streams</h2>
-            <div className="flex bg-[#0e1013] rounded-lg p-1 border border-[#1e2228]">
-              {['1d', '7d', '30d', 'all'].map((tf) => (
-                <button key={tf} onClick={() => setRevTimeframe(tf)} className={`px-4 py-1.5 text-xs font-bold rounded-md transition ${revTimeframe === tf ? 'bg-[#1e2228] text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>
-                  {tf.toUpperCase()}
-                </button>
-              ))}
-            </div>
           </div>
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -617,7 +599,7 @@ export default function EcosystemView({ data, pending = false }) {
                   {projectNames[k]} Revenue
                 </p>
                 <p className="text-2xl font-extrabold" style={{color: projectColors[k]}}>
-                  {formatCurrency(getProjectRev(k, revTimeframe))}
+                  {formatCurrency(getProjectRev(k, timeframe))}
                 </p>
               </Link>
             ))}
@@ -626,7 +608,7 @@ export default function EcosystemView({ data, pending = false }) {
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {order.map((k) => {
               const series = projectRevenueSeries(data.projects[k]);
-              const n = getSliceCount(revTimeframe, series.data.length);
+              const n = getSliceCount(timeframe, series.data.length);
               const note = k === 'printer'
                 ? (series.source === 'snapshot-est'
                   ? 'Volume-tax estimate (annual / 365). Stock gacha is not indexed yet.'
@@ -641,7 +623,7 @@ export default function EcosystemView({ data, pending = false }) {
                   data={series.data.slice(-n)}
                   kind="bar"
                   yTick={compactUsdTick}
-                  value={formatCurrency(getProjectRev(k, revTimeframe))}
+                  value={formatCurrency(getProjectRev(k, timeframe))}
                   note={note}
                   to={projectPath(k, 'revenue')}
                 />
@@ -690,19 +672,12 @@ export default function EcosystemView({ data, pending = false }) {
                 <h3 className="text-sm font-bold text-white">Cumulative Token Supply Burnt Over Time (%)</h3>
                 <p className="text-xs text-slate-400 mt-0.5">Deflation measured as a percentage of total token supply.</p>
               </div>
-              <div className="flex bg-[#08090b] rounded-lg p-1 border border-[#1e2228]">
-                {['7d', '30d', 'all'].map((tf) => (
-                  <button key={tf} onClick={() => setBurnTimeframe(tf)} className={`px-4 py-1.5 text-xs font-bold rounded-md transition ${burnTimeframe === tf ? 'bg-[#1e2228] text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>
-                    {tf.toUpperCase()}
-                  </button>
-                ))}
-              </div>
             </div>
             
             <div className="relative h-80 w-full bg-[#08090b] p-4 rounded-xl border border-[#1e2228]">
               <Line 
                 data={{
-                  labels: masterGenesisLabels.slice(-getSliceCount(burnTimeframe, masterGenesisLabels.length)),
+                  labels: masterGenesisLabels.slice(-getSliceCount(timeframe, masterGenesisLabels.length)),
                   datasets: order.map((k) => {
                     const p = data.projects[k];
                     const { maxToken, burntTok } = burnCaps(p);
@@ -720,7 +695,7 @@ export default function EcosystemView({ data, pending = false }) {
                       tokenBurnPctArray = interpolateData(Math.min(100, targetPct), masterGenesisLabels.length, launchOffsets[k] || 0);
                     }
 
-                    const slicedData = tokenBurnPctArray.slice(-getSliceCount(burnTimeframe, masterGenesisLabels.length));
+                    const slicedData = tokenBurnPctArray.slice(-getSliceCount(timeframe, masterGenesisLabels.length));
 
                     return {
                       label: `${projectNames[k]} Tokens Burnt (%)`,
@@ -743,7 +718,7 @@ export default function EcosystemView({ data, pending = false }) {
             <div className="relative h-80 w-full bg-[#08090b] p-4 rounded-xl border border-[#1e2228]">
               <Line 
                 data={{
-                  labels: masterGenesisLabels.slice(-getSliceCount(burnTimeframe, masterGenesisLabels.length)),
+                  labels: masterGenesisLabels.slice(-getSliceCount(timeframe, masterGenesisLabels.length)),
                   datasets: order.filter((k) => burnCaps(data.projects[k]).nftPct != null).map((k) => {
                     const p = data.projects[k];
                     const maxNftSupply = p?.ownership?.currentMaxSupply || p?.config?.maxSupply || 3592;
@@ -763,7 +738,7 @@ export default function EcosystemView({ data, pending = false }) {
                       nftBurnPctArray = interpolateData(nftPct || 0, masterGenesisLabels.length, 0);
                     }
 
-                    const slicedData = nftBurnPctArray.slice(-getSliceCount(burnTimeframe, masterGenesisLabels.length));
+                    const slicedData = nftBurnPctArray.slice(-getSliceCount(timeframe, masterGenesisLabels.length));
 
                     return {
                       label: `${projectNames[k]} NFTs Removed (%)`,
@@ -842,18 +817,11 @@ export default function EcosystemView({ data, pending = false }) {
           <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-4 md:p-6">
              <div className="flex justify-between items-center mb-4">
                <h3 className="text-sm font-bold text-white">Network Growth Over Time (Net Active Units)</h3>
-               <div className="flex bg-[#08090b] rounded-lg p-1 border border-[#1e2228]">
-                 {['7d', '30d', 'all'].map((tf) => (
-                  <button key={tf} onClick={() => setActTimeframe(tf)} className={`px-4 py-1.5 text-xs font-bold rounded-md transition ${actTimeframe === tf ? 'bg-[#1e2228] text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>
-                    {tf.toUpperCase()}
-                  </button>
-                ))}
-               </div>
              </div>
              <div className="relative h-56 sm:h-80 md:h-96 w-full bg-[#08090b] rounded-xl p-4 border border-[#1e2228]">
                 <Line 
                   data={{ 
-                    labels: masterGenesisLabels.slice(-getSliceCount(actTimeframe, masterGenesisLabels.length)), 
+                    labels: masterGenesisLabels.slice(-getSliceCount(timeframe, masterGenesisLabels.length)), 
                     datasets: activationOrder.map(k => {
                       const p = data.projects[k];
                       const rawData = Array.isArray(p?.activation?.history?.cumulative) ? p.activation.history.cumulative : [];
@@ -867,7 +835,7 @@ export default function EcosystemView({ data, pending = false }) {
                         activeUnitsArray = interpolateData(targetCount, masterGenesisLabels.length, launchOffsets[k] || 0);
                       }
 
-                      const slicedData = activeUnitsArray.slice(-getSliceCount(actTimeframe, masterGenesisLabels.length));
+                      const slicedData = activeUnitsArray.slice(-getSliceCount(timeframe, masterGenesisLabels.length));
 
                       return {
                         label: projectNames[k],
@@ -893,13 +861,6 @@ export default function EcosystemView({ data, pending = false }) {
           
           <div className="flex justify-between items-center mb-2">
             <h2 className="text-lg md:text-xl font-bold text-white">Ecosystem Holder Distribution</h2>
-            <div className="flex bg-[#0e1013] rounded-lg p-1 border border-[#1e2228]">
-              {['7d', '30d', 'all'].map((tf) => (
-                <button key={tf} onClick={() => setOwnTimeframe(tf)} className={`px-4 py-1.5 text-xs font-bold rounded-md transition ${ownTimeframe === tf ? 'bg-[#1e2228] text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>
-                  {tf.toUpperCase()}
-                </button>
-              ))}
-            </div>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -940,7 +901,7 @@ export default function EcosystemView({ data, pending = false }) {
             <div className="relative h-80 w-full bg-[#08090b] rounded-xl p-4 border border-[#1e2228]">
               <Line 
                 data={{
-                  labels: masterGenesisLabels.slice(-getSliceCount(ownTimeframe, masterGenesisLabels.length)),
+                  labels: masterGenesisLabels.slice(-getSliceCount(timeframe, masterGenesisLabels.length)),
                   datasets: order.map(k => {
                     const p = data.projects[k];
                     const rawData = Array.isArray(p?.ownership?.historicalGrowth?.data) ? p.ownership.historicalGrowth.data : [];
@@ -957,7 +918,7 @@ export default function EcosystemView({ data, pending = false }) {
                       nftHoldersArray = interpolateData(targetHolders, masterGenesisLabels.length, launchOffsets[k] || 0);
                     }
 
-                    const slicedData = nftHoldersArray.slice(-getSliceCount(ownTimeframe, masterGenesisLabels.length));
+                    const slicedData = nftHoldersArray.slice(-getSliceCount(timeframe, masterGenesisLabels.length));
 
                     return {
                       label: `${projectNames[k]} NFT Holders`,
@@ -978,7 +939,7 @@ export default function EcosystemView({ data, pending = false }) {
             <div className="relative h-80 w-full bg-[#08090b] rounded-xl p-4 border border-[#1e2228]">
               <Line 
                 data={{
-                  labels: masterGenesisLabels.slice(-getSliceCount(ownTimeframe, masterGenesisLabels.length)),
+                  labels: masterGenesisLabels.slice(-getSliceCount(timeframe, masterGenesisLabels.length)),
                   datasets: order.map(k => {
                     const p = data.projects[k];
                     const currentTokenHolders = Number(p?.ownership?.tokenHolders) || Number(p?.ownership?.stonkHolders) || Number(p?.ownership?.erc20Holders) || (k === 'stonk' ? 1845 : 1);
@@ -998,7 +959,7 @@ export default function EcosystemView({ data, pending = false }) {
                       tokenHoldersArray = interpolateData(currentTokenHolders, masterGenesisLabels.length, launchOffsets[k] || 0);
                     }
 
-                    const slicedData = tokenHoldersArray.slice(-getSliceCount(ownTimeframe, masterGenesisLabels.length));
+                    const slicedData = tokenHoldersArray.slice(-getSliceCount(timeframe, masterGenesisLabels.length));
 
                     return {
                       label: `${projectNames[k]} Token Holders`,

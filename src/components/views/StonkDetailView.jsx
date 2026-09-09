@@ -1,20 +1,67 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, ArcElement, Filler
 } from 'chart.js';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import { burnSeries, burnRateSeries } from '../../lib/burn';
-import { trailingSnapshots } from '../../lib/snapshots';
+import { windowSnapshots, tierRoiDatasets, protocolRevenueChart, sliceCols, windowPeriodLabel, windowLen } from '../../lib/yieldHistory';
 import { compactUsd, compactNum } from '../kit';
 import { baseChartOptions, compactTick, compactUsdTick } from '../../lib/charts';
+import { useChartWindow } from '../../lib/chartWindow';
+import { explorerAddressUrl } from '../../lib/tba';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
+const MODE_ORDER = { 0: 0, 1: 1, 2: 2 };
+const MODE_SHORT = { 0: 'FR', 1: 'BB', 2: 'ASK' };
+
+function groupSmartLpMarkets(vaults) {
+  const map = new Map();
+  for (const v of vaults || []) {
+    const key = v.market || v.symbol || v.ca;
+    if (!map.has(key)) {
+      map.set(key, { market: key, vaults: [], tvlUsd: 0, fees7dUsd: 0, protocolFees7dUsd: 0, modes: new Set() });
+    }
+    const g = map.get(key);
+    g.vaults.push(v);
+    g.tvlUsd += Number(v.tvlUsd) || 0;
+    g.fees7dUsd += Number(v.fees7dUsd) || 0;
+    g.protocolFees7dUsd += Number(v.protocolFees7dUsd) || 0;
+    if (v.mode === 0 || v.mode === 1 || v.mode === 2) g.modes.add(v.mode);
+  }
+  for (const g of map.values()) {
+    g.vaults.sort((a, b) => (MODE_ORDER[a.mode] ?? 9) - (MODE_ORDER[b.mode] ?? 9) || (b.tvlUsd || 0) - (a.tvlUsd || 0));
+  }
+  return [...map.values()].sort((a, b) => b.tvlUsd - a.tvlUsd || b.fees7dUsd - a.fees7dUsd);
+}
+
+function shortCa(ca) {
+  const s = String(ca || '');
+  return s.length > 10 ? `${s.slice(0, 6)}…${s.slice(-4)}` : s;
+}
+
+function splitMarket(market) {
+  const [base, quote] = String(market || '').split('/');
+  return { base: base || market, quote: quote || '' };
+}
+
+function FeeStat({ label, value, tone = 'amber' }) {
+  const color = tone === 'sky' ? 'text-sky-400' : 'text-amber-400';
+  return (
+    <div className="min-w-0 rounded-lg border border-[#1e2228] bg-[#08090b] px-2.5 py-2 sm:px-3 sm:py-2.5">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500 leading-snug sm:text-[11px]">{label}</p>
+      <p className={`mt-1 text-lg font-extrabold tabular-nums leading-none sm:text-xl ${color}`}>{value}</p>
+    </div>
+  );
+}
+
 export default function StonkDetailView({ data, activeTab }) {
+  const [timeframe] = useChartWindow();
   const [expandedTier, setExpandedTier] = useState(null);
-  const [burnTimeframe, setBurnTimeframe] = useState('all');
   const [tierTimeframe, setTierTimeframe] = useState('allTime');
   const [lpTableOpen, setLpTableOpen] = useState(true);
+  const [smartLpOpen, setSmartLpOpen] = useState(true);
+  const [smartLpMarket, setSmartLpMarket] = useState(null);
   const [volumeMultiplier, setVolumeMultiplier] = useState(1);
 
   const project = data?.projects?.stonk;
@@ -33,41 +80,34 @@ export default function StonkDetailView({ data, activeTab }) {
   // BULLETPROOF CHART DATA FALLBACKS & FIXES
   // ==========================================
 
-  // 1. Historical Yield Chart -- trailing 14 days of recorded ROI.
+  // 1. Historical Yield Chart — weekly / monthly / all usable snapshots.
   const hasSnaps = Array.isArray(dailySnapshots) && dailySnapshots.length > 0 && dailySnapshots[0].date;
-  const roiSnaps = trailingSnapshots(dailySnapshots, 14);
+  const roiSnaps = windowSnapshots(dailySnapshots, timeframe);
   const histLabels = roiSnaps.map(s => s.date);
-  const histDatasets = tiers.map((t, i) => {
-    const tc = floorCostUsd + (t.reqTokens * market.tokenPriceUsd);
-    const currentRoi = tc > 0 ? ((t.trackedAnnualYieldUsd / tc) * 100).toFixed(2) : 0;
-
-    return {
-      label: `${t.tier} ROI (${currentRoi}%)`,
-      data: roiSnaps.map(s => s.tiers?.find(st => st.tier === t.tier)?.roi || 0),
-      borderColor: ['#00a804', '#8b5cf6', '#38bdf8', '#f5b700', '#f472b6'][i % 5],
-      tension: 0.3, borderWidth: 2, pointRadius: 2
-    };
+  const histDatasets = tierRoiDatasets(roiSnaps, tiers, {
+    floorCostUsd,
+    tokenPriceUsd: market.tokenPriceUsd,
   });
 
   // 2. Revenue Chart — one grouped series per stream, colors locked to the boxes.
-  const padSeries = (arr, len) => Array.from({ length: len }, (_, i) => Number(arr?.[i]) || 0);
-  const revLen = Math.max(
-    7,
-    revenue.dailyAmm?.length || 0,
-    revenue.dailySecurityBox?.length || 0,
-    revenue.dailyLaunchpad?.length || 0,
-    revenue.dailyBondingTax?.length || 0,
-    tiers[0]?.dailyDates?.length || 0,
+  const revPeriod = windowPeriodLabel(timeframe);
+  const rawRev = protocolRevenueChart(project);
+  const byKey = Object.fromEntries((rawRev.cols || []).map((c) => [c.key, c]));
+  const { labels: revDates, cols: REV_STREAMS } = sliceCols(
+    rawRev.labels,
+    [
+      { ...(byKey.amm || { data: [] }), label: 'AMM & Swaps', color: '#00a804' },
+      { ...(byKey.box || { data: [] }), label: 'Clock-In Box', color: '#38bdf8' },
+      { ...(byKey.launch || { data: [] }), label: 'Launch + Bonding volume', color: '#8b5cf6' },
+      { ...(byKey.tax || { data: [] }), label: 'Curve tax', color: '#f472b6' },
+      { ...(byKey.smartLp || { data: [] }), label: 'StonkBroker Fees', color: '#fbbf24' },
+    ],
+    timeframe
   );
-  const revDates = tiers[0]?.dailyDates?.length === revLen
-    ? tiers[0].dailyDates
-    : Array.from({ length: revLen }, (_, i) => `${i + 1}`);
-  const REV_STREAMS = [
-    { label: 'AMM & Swaps', color: '#00a804', data: padSeries(revenue.dailyAmm, revLen), total: revenue.ammFeesUsd || 0 },
-    { label: 'Clock-In Box', color: '#38bdf8', data: padSeries(revenue.dailySecurityBox, revLen), total: revenue.securityBoxUsd || 0 },
-    { label: 'Launch + Bonding volume', color: '#8b5cf6', data: padSeries(revenue.dailyLaunchpad, revLen), total: revenue.launchpadUsd || 0 },
-    { label: 'Curve tax', color: '#f472b6', data: padSeries(revenue.dailyBondingTax, revLen), total: revenue.bondingFeesUsd || 0 },
-  ];
+  const smartLp = revenue.smartLp || {};
+  const smartLpVaults = Array.isArray(smartLp.vaults) ? smartLp.vaults : [];
+  const smartLpMarkets = useMemo(() => groupSmartLpMarkets(smartLpVaults), [smartLpVaults]);
+  const smartLpCol = REV_STREAMS[4] || { total: 0, color: '#fbbf24', data: [] };
   const revChartOpts = {
     responsive: true,
     maintainAspectRatio: false,
@@ -90,12 +130,12 @@ export default function StonkDetailView({ data, activeTab }) {
     Number(ownership.burntNfts || 0)
   );
   
-  const burn = burnSeries(dailySnapshots, burnTimeframe);
+  const burn = burnSeries(dailySnapshots, timeframe);
   const slicedBurnLabels = burn.labels;
   const slicedBurnData = burn.data;
 
   // 4. Flywheel Chart
-  const flywheel = burnRateSeries(dailySnapshots);
+  const flywheel = burnRateSeries(dailySnapshots, timeframe);
   const fwLabels = flywheel.labels;
   const fwPrices = flywheel.prices;
   const fwBurn = flywheel.burn;
@@ -134,12 +174,13 @@ export default function StonkDetailView({ data, activeTab }) {
 
   const chartLastValue = ownData.length > 0 ? ownData[ownData.length - 1] : 0;
   let stonkHolders = Number(ownership.stonkHolders) || Number(ownership.tokenHolders) || Number(ownership.erc20Holders) || chartLastValue;
-  
-  // Protect the top box from displaying the crashed RPC value
+
   if (stonkHolders > 0 && stonkHolders < chartLastValue * 0.7) {
     stonkHolders = chartLastValue;
   }
 
+  const actN = windowLen(timeframe, actLabels.length);
+  const ownN = windowLen(timeframe, ownLabels.length);
   const burntNfts = ownership.burntNfts || ownership.permanentlyBurntUnits || 0;
 
   return (
@@ -251,7 +292,7 @@ export default function StonkDetailView({ data, activeTab }) {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
               <h2 className="text-xl font-bold text-white flex items-center gap-2">Historical Yield & Payback Horizon</h2>
-              <p className="text-xs md:text-sm text-slate-400 mt-1">Track capital recovery timelines and ROI trajectory mapped over time.</p>
+              <p className="text-xs md:text-sm text-slate-400 mt-1">Daily CoC ROI from the hourly ledger. Range is the sticky Weekly / Monthly / All control.</p>
             </div>
           </div>
           
@@ -271,7 +312,7 @@ export default function StonkDetailView({ data, activeTab }) {
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mt-6">
             <h3 className="text-sm font-bold text-white mb-4">Tier ROI % Trajectory</h3>
             <div className="relative h-52 sm:h-64 md:h-80 w-full">
-              <Line data={{ labels: histLabels, datasets: histDatasets }} options={chartOptions} />
+              <Line key={`yield-${timeframe}`} data={{ labels: histLabels, datasets: histDatasets }} options={chartOptions} />
             </div>
           </div>
         </div>
@@ -283,29 +324,29 @@ export default function StonkDetailView({ data, activeTab }) {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div>
               <h2 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">Protocol Revenue & Ecosystem Liquidity</h2>
-              <p className="text-xs text-slate-400 mt-1">AMM and Clock-In are protocol fees. Launch + Bonding is create fees plus quote volume traded while tokens are still on the curve.</p>
+              <p className="text-xs text-slate-400 mt-1">AMM and Clock-In are protocol fees. StonkBroker Fees on this chart are the Smart LP skim. Depositor Fees Generated are on the Smart LPs tab.</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
               <p className="text-xs uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-2">
                 <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: REV_STREAMS[0].color }} />
-                AMM & Swap Protocol Fees (7D)
+                AMM & Swap Protocol Fees ({revPeriod})
               </p>
               <p className="text-2xl font-extrabold" style={{ color: REV_STREAMS[0].color }}>{formatCurrency(REV_STREAMS[0].total)}</p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
               <p className="text-xs uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-2">
                 <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: REV_STREAMS[1].color }} />
-                Clock-In Security Box (7D)
+                Clock-In Security Box ({revPeriod})
               </p>
               <p className="text-2xl font-extrabold" style={{ color: REV_STREAMS[1].color }}>{formatCurrency(REV_STREAMS[1].total)}</p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
               <p className="text-xs uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-2">
                 <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: REV_STREAMS[2].color }} />
-                Launch Fees + Bonding Volume (7D)
+                Launch Fees + Bonding Volume ({revPeriod})
               </p>
               <p className="text-2xl font-extrabold" style={{ color: REV_STREAMS[2].color }}>{formatCurrency(REV_STREAMS[2].total)}</p>
               <p className="text-[10px] text-slate-500 mt-1.5">
@@ -317,11 +358,25 @@ export default function StonkDetailView({ data, activeTab }) {
                 Curve tax {formatCurrency(REV_STREAMS[3].total)}
               </p>
             </div>
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
+              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-2">
+                <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: smartLpCol.color }} />
+                StonkBroker Fees ({revPeriod})
+              </p>
+              <p className="text-2xl font-extrabold" style={{ color: smartLpCol.color }}>{formatCurrency(smartLpCol.total)}</p>
+              <p className="text-[10px] text-slate-500 mt-1.5">
+                Depositor Fees Generated {formatCurrency(smartLp.fees7dUsd || 0)}
+                <span className="mx-1.5 text-slate-700">·</span>
+                {smartLp.perfFeeBps ? `${(smartLp.perfFeeBps / 100).toFixed(0)}% skim` : '10% skim'}
+                <span className="mx-1.5 text-slate-700">·</span>
+                50/50 buyback · booster
+              </p>
+            </div>
           </div>
 
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
             <h3 className="text-sm font-bold text-white mb-4">Daily revenue streams (USD)</h3>
-            <p className="text-[10px] text-slate-500 -mt-3 mb-4">Grouped bars: AMM fees, Clock-In, launch/bonding quote volume, and curve tax. Same colors as the boxes.</p>
+            <p className="text-[10px] text-slate-500 -mt-3 mb-4">Grouped bars: AMM fees, Clock-In, launch/bonding quote volume, curve tax, and StonkBroker Fees. Same colors as the boxes.</p>
             <div className="relative h-52 sm:h-64 md:h-80 w-full">
               <Bar
                 data={{
@@ -338,6 +393,137 @@ export default function StonkDetailView({ data, activeTab }) {
               />
             </div>
           </div>
+        </div>
+      </section>
+
+      <section id="liquidity" className="scroll-mt-32">
+        <div className="space-y-6">
+          <div>
+            <h2 className="text-lg md:text-xl font-bold text-white">Liquidity & Smart LPs</h2>
+            <p className="text-xs text-slate-400 mt-1">
+              Depositor Fees Generated are Uniswap trading fees the vaults collected. StonkBroker Fees are the {smartLp.perfFeeBps ? `${(smartLp.perfFeeBps / 100).toFixed(0)}%` : '10%'} skim, split 50/50 buyback and StonkBooster.
+            </p>
+          </div>
+
+          {smartLpVaults.length > 0 && (
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-2xl p-3 sm:p-5 md:p-6">
+              <div className="flex flex-col gap-4 mb-4">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+                      Smart LP Volatility Farming
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {smartLpMarkets.length} pairs · {smartLpVaults.length} vaults. Tap a pair for Full Range, Balanced Band, and Ask.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSmartLpOpen(!smartLpOpen)}
+                    className="text-xs bg-[#0e1013] border border-[#1e2228] text-slate-300 px-3 py-2.5 rounded-lg hover:text-white transition shadow-sm w-full sm:w-auto min-h-11"
+                  >
+                    {smartLpOpen ? 'Hide Markets ▲' : 'Show Markets ▼'}
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+                  <div className="rounded-xl border border-[#1e2228] bg-[#0e1013] px-3 py-3 sm:px-4 sm:py-4">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">Vault TVL</p>
+                    <p className="mt-1.5 text-2xl sm:text-3xl font-extrabold tabular-nums text-white leading-none">{formatCurrency(smartLp.totalTvlUsd || 0)}</p>
+                  </div>
+                  <div className="rounded-xl border border-amber-400/25 bg-[#0e1013] px-3 py-3 sm:px-4 sm:py-4">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">Depositor Fees Generated</p>
+                    <p className="mt-1.5 text-2xl sm:text-3xl font-extrabold tabular-nums text-amber-400 leading-none">{formatCurrency(smartLp.fees7dUsd || 0)}</p>
+                  </div>
+                  <div className="rounded-xl border border-sky-400/25 bg-[#0e1013] px-3 py-3 sm:px-4 sm:py-4">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">StonkBroker Fees</p>
+                    <p className="mt-1.5 text-2xl sm:text-3xl font-extrabold tabular-nums text-sky-400 leading-none">{formatCurrency(smartLp.protocolFees7dUsd || smartLpCol.total || 0)}</p>
+                  </div>
+                </div>
+              </div>
+              {smartLpOpen && (
+                <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3">
+                  {smartLpMarkets.map((g) => {
+                    const open = smartLpMarket === g.market;
+                    const { base, quote } = splitMarket(g.market);
+                    return (
+                      <div
+                        key={g.market}
+                        className={`rounded-2xl border bg-[#0e1013] text-left transition ${
+                          open ? 'border-amber-400/50 shadow-[0_0_0_1px_rgba(251,191,36,0.12)]' : 'border-[#1e2228]'
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setSmartLpMarket(open ? null : g.market)}
+                          className="w-full p-3.5 sm:p-4 text-left min-h-11"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-base font-bold text-white tracking-tight truncate">
+                              {base}
+                              {quote ? <span className="text-slate-500 font-semibold"> / {quote}</span> : null}
+                            </p>
+                            <span className="shrink-0 text-slate-500 text-xs">{open ? '▲' : '▼'}</span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 mt-1">TVL {formatCurrency(g.tvlUsd)}</p>
+                          <div className="grid grid-cols-2 gap-2 mt-3">
+                            <FeeStat label="Depositor Fees" value={formatCurrency(g.fees7dUsd)} />
+                            <FeeStat label="StonkBroker Fees" value={formatCurrency(g.protocolFees7dUsd)} tone="sky" />
+                          </div>
+                          <div className="flex flex-wrap gap-1.5 mt-3">
+                            {[0, 1, 2].map((mode) => {
+                              const live = g.modes.has(mode);
+                              return (
+                                <span
+                                  key={mode}
+                                  className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded-md border ${
+                                    live
+                                      ? 'border-amber-400/35 bg-amber-400/10 text-amber-200'
+                                      : 'border-[#1e2228] text-slate-600'
+                                  }`}
+                                >
+                                  {MODE_SHORT[mode]}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </button>
+                        {open && (
+                          <div className="border-t border-[#1e2228] px-3 pb-3 pt-2 space-y-2">
+                            {g.vaults.map((v) => (
+                              <div
+                                key={v.ca}
+                                className="rounded-xl border border-[#1e2228] bg-[#08090b] p-3"
+                              >
+                                <div className="flex items-center justify-between gap-2 mb-2">
+                                  <p className="text-sm font-bold text-white">{v.modeLabel || MODE_SHORT[v.mode] || 'Vault'}</p>
+                                  <p className="text-[11px] text-slate-500 font-mono">{v.symbol}</p>
+                                </div>
+                                <p className="text-[11px] text-slate-500 mb-2">TVL {formatCurrency(v.tvlUsd || 0)}</p>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <FeeStat label="Depositor Fees" value={formatCurrency(v.fees7dUsd || 0)} />
+                                  <FeeStat label="StonkBroker Fees" value={formatCurrency(v.protocolFees7dUsd || 0)} tone="sky" />
+                                </div>
+                                <a
+                                  href={explorerAddressUrl(v.ca)}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="mt-2 inline-block text-[11px] text-slate-400 hover:text-white font-mono py-1"
+                                >
+                                  {shortCa(v.ca)}
+                                </a>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           {lockedLp && lockedLp.pools && lockedLp.pools.length > 0 && (
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
@@ -349,7 +535,7 @@ export default function StonkDetailView({ data, activeTab }) {
                 <div className="text-right flex flex-col items-end w-full md:w-auto">
                   <p className="text-base font-extrabold text-orange-400">{formatNumber(lockedLp.totalStonkLocked || 0)} {config.ticker}</p>
                   <p className="text-[10px] text-slate-400">{formatCurrency(lockedLp.totalLpUsd || 0)} Total Pool Reserves</p>
-                  <button onClick={() => setLpTableOpen(!lpTableOpen)} className="mt-2 text-[10px] bg-[#0e1013] border border-[#1e2228] text-slate-300 px-3 py-1 rounded hover:text-white transition shadow-sm w-full md:w-auto">
+                  <button onClick={() => setLpTableOpen(!lpTableOpen)} className="mt-2 text-xs bg-[#0e1013] border border-[#1e2228] text-slate-300 px-3 py-2.5 rounded-lg hover:text-white transition shadow-sm w-full md:w-auto min-h-11">
                     {lpTableOpen ? 'Hide Pools ▲' : 'Show Pools ▼'}
                   </button>
                 </div>
@@ -390,19 +576,11 @@ export default function StonkDetailView({ data, activeTab }) {
           </div>
 
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6">
-              <h3 className="text-sm font-bold text-white hidden sm:block">Cumulative Token Burn Over Time</h3>
-              <div className="flex bg-[#0e1013] rounded-lg p-1 border border-[#1e2228]">
-                {['7d', '30d', 'all'].map((tf) => (
-                  <button key={tf} onClick={() => setBurnTimeframe(tf)} className={`px-4 py-1.5 text-xs font-bold rounded-md transition ${burnTimeframe === tf ? 'bg-[#1e2228] text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>
-                    {tf.toUpperCase()}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <h3 className="text-sm font-bold text-white mb-4">Cumulative Token Burn Over Time</h3>
             <div className="relative h-52 sm:h-64 md:h-80 w-full">
               {slicedBurnData.length > 0 ? (
                 <Line
+                  key={`burn-${timeframe}`}
                   data={{ labels: slicedBurnLabels, datasets: [{ label: 'Cumulative Burnt', data: slicedBurnData, borderColor: '#fb923c', backgroundColor: 'rgba(251, 146, 60, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] }}
                   options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactTick } } } }}
                 />
@@ -492,11 +670,11 @@ export default function StonkDetailView({ data, activeTab }) {
              <div className="relative h-52 sm:h-64 md:h-80 w-full">
                 <Bar 
                   data={{
-                    labels: actLabels,
+                    labels: actLabels.slice(-actN),
                     datasets: [
-                      { type: 'line', label: 'Net Active Units', data: actCum, borderColor: '#00a804', backgroundColor: 'rgba(0, 168, 4, 0.05)', borderWidth: 3, fill: true, tension: 0.3, yAxisID: 'y' },
-                      { type: 'bar', label: 'Daily Activations', data: actDAct, backgroundColor: '#00a804', borderRadius: 4, yAxisID: 'y1' },
-                      { type: 'bar', label: 'Daily Deactivations', data: actDDeact, backgroundColor: '#f43f5e', borderRadius: 4, yAxisID: 'y1' }
+                      { type: 'line', label: 'Net Active Units', data: actCum.slice(-actN), borderColor: '#00a804', backgroundColor: 'rgba(0, 168, 4, 0.05)', borderWidth: 3, fill: true, tension: 0.3, yAxisID: 'y' },
+                      { type: 'bar', label: 'Daily Activations', data: actDAct.slice(-actN), backgroundColor: '#00a804', borderRadius: 4, yAxisID: 'y1' },
+                      { type: 'bar', label: 'Daily Deactivations', data: actDDeact.slice(-actN), backgroundColor: '#f43f5e', borderRadius: 4, yAxisID: 'y1' }
                     ]
                   }} 
                   options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#94a3b8' } } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { type: 'linear', position: 'left', grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y1: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, min: 0 } } }} 
@@ -530,7 +708,7 @@ export default function StonkDetailView({ data, activeTab }) {
             <h3 className="text-sm font-bold text-white mb-4">True Active Token Holders Over Time</h3>
             <div className="relative h-52 sm:h-64 md:h-80 w-full">
               <Line 
-                data={{ labels: ownLabels, datasets: [{ label: 'Active Holders', data: ownData, borderColor: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] }} 
+                data={{ labels: ownLabels.slice(-ownN), datasets: [{ label: 'Active Holders', data: ownData.slice(-ownN), borderColor: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] }} 
                 options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } } } }} 
               />
             </div>

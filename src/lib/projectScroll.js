@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { tabsForProject } from './routes';
 
 /**
@@ -49,11 +49,16 @@ export function useSectionScrollSpy({ sectionIds, activeId, onActiveId, ready })
 /** Scroll the URL tab into view, and keep the URL in sync as the page is scrolled. */
 export function useProjectScrollSpy(project, tab, meta, ready) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const tabs = tabsForProject(meta).map((t) => t.slug);
   const onActiveId = useCallback((slug) => {
     if (!project) return;
-    navigate(`/${project}/${slug}`, { replace: true });
-  }, [navigate, project]);
+    const search = searchParams.toString();
+    navigate(
+      { pathname: `/${project}/${slug}`, search: search ? `?${search}` : '' },
+      { replace: true },
+    );
+  }, [navigate, project, searchParams]);
   useSectionScrollSpy({
     sectionIds: tabs,
     activeId: tab,

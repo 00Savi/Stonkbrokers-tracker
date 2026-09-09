@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { NavLink, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { PROJECTS, BONUS_LIVE, tabsForProject } from '../lib/routes';
+import { NavLink, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { PROJECTS, isProjectLive, tabsForProject } from '../lib/routes';
 import { LAUNCHER_REF, SAVI_X } from '../lib/share';
-import { Value, price, usd, eth, BetaTag } from './kit';
+import { Value, price, usd, eth, BetaTag, WindowBar } from './kit';
+import { useChartWindow } from '../lib/chartWindow';
 
 export { LAUNCHER_REF, SAVI_X };
 
@@ -28,7 +29,11 @@ export const NAV_ITEMS = [
   { to: '/coattail/roi', label: 'Coattail Brokers', group: 'yield-nfts', dot: 'bg-[#f43f5e]' },
   { to: '/tokens', label: 'Tokens', group: 'chain', dot: 'bg-accent' },
   { to: '/stocks', label: 'Stocks', group: 'chain', dot: 'bg-[#60a5fa]' },
-].filter((item) => item.to !== '/bonus' || BONUS_LIVE);
+].filter((item) => {
+  const slug = item.to.split('/').filter(Boolean)[0];
+  const project = PROJECTS.find((p) => p.slug === slug);
+  return !project || isProjectLive(project);
+});
 
 function titleForPath(pathname) {
   const first = pathname.split('/').filter(Boolean)[0];
@@ -247,28 +252,36 @@ export function TopNav({ live, data, pending }) {
 /** Project tab bar. Every tab is a real link, so each is refresh-safe. */
 export function TabBar() {
   const { project } = useParams();
+  const [searchParams] = useSearchParams();
+  const [timeframe, setTimeframe] = useChartWindow();
   const meta = PROJECTS.find((p) => p.slug === project);
   const tabs = tabsForProject(meta);
+  const keep = searchParams.toString();
   return (
-    <div className="-mx-1 flex items-center gap-1 overflow-x-auto border-b border-line px-1 pb-3 pt-4 sm:mx-0 sm:px-0">
-      {tabs.map((t) => (
-        <NavLink
-          key={t.slug}
-          to={`/${project}/${t.slug}`}
-          className={({ isActive }) =>
-            `shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-[13px] transition-colors ${
-              isActive ? 'bg-panel-2 text-ink' : 'text-muted hover:text-ink'
-            }`
-          }
-        >
-          {t.label}
-        </NavLink>
-      ))}
-      {meta?.beta && (
-        <span className="ml-auto shrink-0 pl-2">
-          <BetaTag />
-        </span>
-      )}
+    <div className="-mx-1 flex flex-col gap-2 overflow-x-auto border-b border-line px-1 pb-3 pt-4 sm:mx-0 sm:flex-row sm:items-center sm:gap-2 sm:px-0">
+      <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {tabs.map((t) => (
+          <NavLink
+            key={t.slug}
+            to={{ pathname: `/${project}/${t.slug}`, search: keep ? `?${keep}` : '' }}
+            className={({ isActive }) =>
+              `shrink-0 whitespace-nowrap rounded-lg px-2.5 py-2 text-[12px] sm:px-3 sm:py-1.5 sm:text-[13px] transition-colors ${
+                isActive ? 'bg-panel-2 text-ink' : 'text-muted hover:text-ink'
+              }`
+            }
+          >
+            {t.label}
+          </NavLink>
+        ))}
+      </div>
+      <div className="flex shrink-0 justify-end">
+        <WindowBar compact value={timeframe} onChange={setTimeframe} />
+        {meta?.beta && (
+          <span className="ml-2 hidden sm:block">
+            <BetaTag />
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -284,10 +297,10 @@ export function SiteFooter() {
   const { pathname } = useLocation();
 
   return (
-    <footer className="mt-auto border-t border-brand/50 bg-panel/95">
+    <footer className="fixed inset-x-0 bottom-0 z-30 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-4 sm:pb-3">
       <nav
         aria-label="Quick navigation"
-        className="mx-auto flex max-w-[1500px] flex-wrap items-center justify-center gap-1.5 px-4 py-3 sm:px-6"
+        className="mx-auto flex max-w-[1500px] items-center gap-1.5 overflow-x-auto rounded-2xl border border-line bg-panel/95 px-2 py-2 shadow-[0_-8px_30px_rgba(0,0,0,0.35)] backdrop-blur-xl [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:rounded-full sm:px-3"
       >
         {NAV_ITEMS.map((item) => {
           const active = itemIsActive(pathname, item.to);
@@ -295,7 +308,7 @@ export function SiteFooter() {
             <NavLink
               key={item.to}
               to={item.to}
-              className={`rounded-full border px-3 py-1 text-[11px] font-medium transition-colors ${
+              className={`shrink-0 whitespace-nowrap rounded-full border px-3 py-1.5 text-[11px] font-medium transition-colors min-h-9 ${
                 active
                   ? 'border-line bg-panel-2 text-ink'
                   : 'border-line text-muted hover:bg-panel-2 hover:text-ink'

@@ -4,7 +4,8 @@ import {
 } from 'chart.js';
 import { Line, Bar } from 'react-chartjs-2';
 import { burnSeries, burnRateSeries } from '../../lib/burn';
-import { trailingSnapshots, holderSeries } from '../../lib/snapshots';
+import { holderSeries } from '../../lib/snapshots';
+import { windowSnapshots, protocolRevenueChart, sliceCols, windowPeriodLabel, windowLen } from '../../lib/yieldHistory';
 import { PROJECTS } from '../../lib/routes';
 import { BetaTag, compactUsd, compactNum } from '../kit';
 import {
@@ -12,13 +13,14 @@ import {
   fetchGeckoTokenHolders,
 } from '../../lib/oakmont';
 import { baseChartOptions, compactTick, compactUsdTick } from '../../lib/charts';
+import { useChartWindow } from '../../lib/chartWindow';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler);
 
 const MARK = { green: '#00a804', violet: '#8b5cf6', sky: '#38bdf8', amber: '#f5b700', pink: '#f472b6', lime: '#a3e635' };
 
 export default function SpecialDetailView({ data, projectKey, activeTab }) {
-  const [burnTimeframe, setBurnTimeframe] = useState('all');
+  const [timeframe] = useChartWindow();
   const meta = PROJECTS.find((p) => p.key === projectKey);
   const project = data?.projects?.[projectKey];
   if (!project) {
@@ -45,20 +47,26 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
     ? (brokerYield > 0 ? brokerCost / brokerYield : null)
     : (perToken > 0 ? tokenUsd / perToken : null);
 
-  const snaps = trailingSnapshots(dailySnapshots, 14);
+  const snaps = windowSnapshots(dailySnapshots, timeframe);
   const histLabels = snaps.length ? snaps.map((s) => s.date) : (cashflow.dailyDates || []);
   const histRoi = snaps.length
     ? snaps.map((s) => s.roi || s.tiers?.[0]?.roi || 0)
     : [];
 
   const chartOpts = baseChartOptions();
-  const burn = burnSeries(dailySnapshots, burnTimeframe);
-  const flywheel = burnRateSeries(dailySnapshots);
-  const holders = holderSeries(ownership, dailySnapshots);
+  const burn = burnSeries(dailySnapshots, timeframe);
+  const flywheel = burnRateSeries(dailySnapshots, timeframe);
+  const holdersFull = holderSeries(ownership, dailySnapshots);
+  const hN = windowLen(timeframe, holdersFull.labels.length);
+  const holders = { labels: holdersFull.labels.slice(-hN), data: holdersFull.data.slice(-hN) };
 
   const burnTokens = activation.dualBurn?.totalBurnTokens || ownership.permanentlyBurntTokens || 0;
   const wrapPct = market.wrappedPct ?? (circulating > 0 ? (market.reserveSupply || 0) / circulating : 0);
   const poolVol = market.poolVolume24h || (lockedLp?.pools || []).reduce((s, p) => s + (p.volume24h || 0), 0);
+
+  const revPeriod = windowPeriodLabel(timeframe);
+  const rawRev = protocolRevenueChart(project);
+  const { labels: revDates, cols: revCols } = sliceCols(rawRev.labels, rawRev.cols, timeframe);
 
   if (kind === 'vault') {
     return (
@@ -69,7 +77,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
         activation={activation}
         lockedLp={lockedLp}
         snaps={snaps}
-        histLabels={histLabels}
+        histLabels={snaps.map((s) => s.date)}
         chartOpts={chartOpts}
         activeTab={activeTab}
         fmt={fmt}
@@ -164,7 +172,9 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
 
       <section id="yield" className="scroll-mt-32">
         <div className="bg-[#0e1013] border border-[#1e2228] p-6 rounded-2xl space-y-6">
-          <h2 className="text-xl font-bold text-white">Historical yield & payback</h2>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <h2 className="text-xl font-bold text-white">Historical yield & payback</h2>
+          </div>
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
             <h3 className="text-sm font-bold text-white mb-4">ROI trajectory</h3>
             <div className="relative h-52 sm:h-64 md:h-72 w-full">
@@ -188,15 +198,17 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
 
       <section id="revenue" className="scroll-mt-32">
         <div className="space-y-6">
-          <h2 className="text-xl font-bold text-white">Protocol revenue</h2>
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <h2 className="text-xl font-bold text-white">Protocol revenue</h2>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5">
-              <p className="text-xs uppercase text-slate-400 mb-1">Fees (24h)</p>
-              <p className="text-2xl font-extrabold" style={{ color: MARK.green }}>{fmt(cashflow.fees24h)}</p>
+              <p className="text-xs uppercase text-slate-400 mb-1">Fees ({revPeriod})</p>
+              <p className="text-2xl font-extrabold" style={{ color: MARK.green }}>{fmt(revCols[0]?.total || 0)}</p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5">
-              <p className="text-xs uppercase text-slate-400 mb-1">Holders / revenue (7D)</p>
-              <p className="text-2xl font-extrabold" style={{ color: MARK.sky }}>{fmt(cashflow.holders7d || cashflow.revenue7d)}</p>
+              <p className="text-xs uppercase text-slate-400 mb-1">Holders / revenue ({revPeriod})</p>
+              <p className="text-2xl font-extrabold" style={{ color: MARK.sky }}>{fmt(revCols[1]?.total || 0)}</p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5">
               <p className="text-xs uppercase text-slate-400 mb-1">Annualized</p>
@@ -204,16 +216,17 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
             </div>
           </div>
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
-            <h3 className="text-sm font-bold text-white mb-4">Daily fees vs holders revenue</h3>
+            <h3 className="text-sm font-bold text-white mb-4">Fees vs holders revenue</h3>
             <div className="relative h-52 sm:h-64 md:h-72 w-full">
-              {(cashflow.dailyDates || []).length ? (
+              {revDates.length ? (
                 <Bar
                   data={{
-                    labels: cashflow.dailyDates,
-                    datasets: [
-                      { label: 'Fees', data: cashflow.dailyFees, backgroundColor: MARK.green },
-                      { label: 'Holders revenue', data: cashflow.dailyRevenue, backgroundColor: MARK.violet },
-                    ],
+                    labels: revDates,
+                    datasets: (revCols || []).map((c) => ({
+                      label: c.label,
+                      data: c.data,
+                      backgroundColor: c.color,
+                    })),
                   }}
                   options={{ ...chartOpts, scales: { ...chartOpts.scales, x: { ...chartOpts.scales.x, stacked: false }, y: { ...chartOpts.scales.y, stacked: false, ticks: { ...chartOpts.scales.y.ticks, callback: compactUsdTick } } } }}
                 />
@@ -224,7 +237,13 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
               )}
             </div>
           </div>
-          {lockedLp?.pools?.length > 0 && (
+        </div>
+      </section>
+
+      <section id="liquidity" className="scroll-mt-32">
+        <div className="space-y-6">
+          <h2 className="text-xl font-bold text-white">Liquidity</h2>
+          {lockedLp?.pools?.length > 0 ? (
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4">
               <h3 className="text-sm font-bold text-white mb-2">Liquidity pools · {fmt(lockedLp.totalLpUsd)}</h3>
               <table className="w-full text-xs">
@@ -240,6 +259,8 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
                 </tbody>
               </table>
             </div>
+          ) : (
+            <p className="text-sm text-slate-500">No tracked pools for this project yet.</p>
           )}
         </div>
       </section>
@@ -259,21 +280,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
           </div>
 
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6">
-              <h3 className="text-sm font-bold text-white">Cumulative token burn</h3>
-              <div className="flex bg-[#0e1013] rounded-lg p-1 border border-[#1e2228]">
-                {['7d', '30d', 'all'].map((tf) => (
-                  <button
-                    key={tf}
-                    type="button"
-                    onClick={() => setBurnTimeframe(tf)}
-                    className={`px-4 py-1.5 text-xs font-bold rounded-md transition ${burnTimeframe === tf ? 'bg-[#1e2228] text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
-                  >
-                    {tf.toUpperCase()}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <h3 className="text-sm font-bold text-white mb-4">Cumulative token burn</h3>
             <div className="relative h-52 sm:h-64 md:h-80 w-full">
               {burn.data.length > 0 ? (
                 <Line
@@ -461,6 +468,10 @@ function VaultView({
   activeTab, fmt, num, tokenUsd, fdv, circulating, burnTokens, wrapPct, poolVol,
   cashflow, tiers, vault, config,
 }) {
+  const [timeframe] = useChartWindow();
+  const revPeriod = windowPeriodLabel(timeframe);
+  const rawRev = protocolRevenueChart({ cashflow });
+  const { labels: revDates, cols: revCols } = sliceCols(rawRev.labels, rawRev.cols, timeframe);
   const wrapHist = snaps.map((s) => s.wrapRatio || 0);
   const covHist = snaps.map((s) => (s.navCoverage || 0) * 100);
   const strikeHist = snaps.map((s) => s.tokenPriceUsd || 0);
@@ -663,16 +674,36 @@ function VaultView({
 
       <section id="revenue" className="scroll-mt-32">
         <div className="space-y-6">
-          <h2 className="text-xl font-bold text-white">Fees & liquidity</h2>
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <h2 className="text-xl font-bold text-white">Fees & liquidity</h2>
+          </div>
           <p className="text-xs text-slate-400">
             Vault growth is wrap, unwrap, origination, interest, liquidations, redemptions, and arb.
             ETH fee revenue is what the indexer reports as going into the vault. Pool volume is the arb surface, not wrap notional.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Panel label="ETH fees → vault /yr" value={fmt(feeAnnual)} color={MARK.green} />
+            <Panel label={`ETH fees (${revPeriod})`} value={fmt(revCols[0]?.total || 0)} color={MARK.green} />
             <Panel label="Tracked LP" value={fmt(lockedLp?.totalLpUsd)} color={MARK.sky} />
             <Panel label="24h wraps / unwraps" value={`${num(market.wraps24h)} / ${num(market.unwraps24h)}`} color={MARK.amber} />
           </div>
+          {revDates.length > 0 && (
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
+              <h3 className="text-sm font-bold text-white mb-4">Fees into the vault</h3>
+              <div className="relative h-52 sm:h-64 md:h-72 w-full">
+                <Bar
+                  data={{
+                    labels: revDates,
+                    datasets: (revCols || []).slice(0, 1).map((c) => ({
+                      label: c.label,
+                      data: c.data,
+                      backgroundColor: c.color,
+                    })),
+                  }}
+                  options={{ ...chartOpts, scales: { ...chartOpts.scales, y: { ...chartOpts.scales.y, ticks: { ...chartOpts.scales.y.ticks, callback: compactUsdTick } } } }}
+                />
+              </div>
+            </div>
+          )}
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 overflow-x-auto">
             <h3 className="text-sm font-bold text-white mb-3">Fee schedule</h3>
             <table className="w-full text-xs">
@@ -694,7 +725,13 @@ function VaultView({
               </tbody>
             </table>
           </div>
-          {lockedLp?.pools?.length > 0 && (
+        </div>
+      </section>
+
+      <section id="liquidity" className="scroll-mt-32">
+        <div className="space-y-6">
+          <h2 className="text-xl font-bold text-white">LP</h2>
+          {lockedLp?.pools?.length > 0 ? (
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4">
               <h3 className="text-sm font-bold text-white mb-2">Pools · {fmt(lockedLp.totalLpUsd)}</h3>
               <table className="w-full text-xs">
@@ -718,6 +755,8 @@ function VaultView({
                 </tbody>
               </table>
             </div>
+          ) : (
+            <p className="text-sm text-slate-500">No tracked pools for this vault yet.</p>
           )}
         </div>
       </section>

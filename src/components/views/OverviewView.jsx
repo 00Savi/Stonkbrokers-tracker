@@ -150,7 +150,7 @@ export default function OverviewView({ data, pending, compact = false }) {
     (acc, p) => {
       const r = p.revenue || {};
       acc.amm += r.ammFeesUsd || 0;
-      acc.other += (r.securityBoxUsd || 0) + (r.launchpadUsd || 0) + (r.dexFeesUsd || 0);
+      acc.other += (r.securityBoxUsd || 0) + (r.launchpadUsd || 0) + (r.dexFeesUsd || 0) + (r.smartLpUsd || 0);
       return acc;
     },
     { amm: 0, other: 0 }
