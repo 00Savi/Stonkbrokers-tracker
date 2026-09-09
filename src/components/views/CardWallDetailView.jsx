@@ -4,10 +4,18 @@ import {
 } from 'chart.js';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import { burnSeries, burnRateSeries } from '../../lib/burn';
-import { windowSnapshots, protocolRevenueChart, sliceCols, windowLen } from '../../lib/yieldHistory';
+import { windowSnapshots, protocolRevenueChart, sliceCols, windowLen, seriesHasInk } from '../../lib/yieldHistory';
 import { BetaTag, compactUsd, compactNum } from '../kit';
 import { baseChartOptions, compactTick, compactUsdTick } from '../../lib/charts';
 import { useChartWindow } from '../../lib/chartWindow';
+import { holderSeries } from '../../lib/snapshots';
+import {
+  EmptyChart,
+  YieldUsdPricePanel,
+  PaybackPanel,
+  ActivationStackPanel,
+  OwnershipHistoryPanels,
+} from '../HistoryCharts';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
@@ -70,10 +78,10 @@ export default function CardWallDetailView({ data, activeTab }) {
 
   const actHistory = activation.history || {};
   const hasActHist = Array.isArray(actHistory.labels) && actHistory.labels.length > 0;
-  const actLabels = hasActHist ? actHistory.labels : zeros.map((_, i) => `${i}`);
-  const actCum = (hasActHist && actHistory.cumulative?.length) ? actHistory.cumulative : zeros;
-  const actDAct = (hasActHist && actHistory.dailyActivations?.length) ? actHistory.dailyActivations : zeros;
-  const actDDeact = (hasActHist && actHistory.dailyDeactivations?.length) ? actHistory.dailyDeactivations : zeros;
+  const actLabels = hasActHist ? actHistory.labels : [];
+  const actCum = hasActHist && actHistory.cumulative?.length ? actHistory.cumulative : [];
+  const actDAct = hasActHist && actHistory.dailyActivations?.length ? actHistory.dailyActivations : [];
+  const actDDeact = hasActHist && actHistory.dailyDeactivations?.length ? actHistory.dailyDeactivations : [];
 
   let breakdownArr = tiers.map((t) => {
     if (activation.breakdown && activation.breakdown[t.tier] != null) return activation.breakdown[t.tier];
@@ -81,25 +89,13 @@ export default function CardWallDetailView({ data, activeTab }) {
     return Math.max(0, (s.act || 0) - (s.deact || 0));
   });
 
-  const ownHistGrowth = ownership.historicalGrowth || {};
-  const hasOwnHist = Array.isArray(ownHistGrowth.labels) && ownHistGrowth.labels.length > 0;
-  const ownLabels = hasOwnHist ? ownHistGrowth.labels : zeros.map((_, i) => `${i}`);
-  const rawOwnData = hasOwnHist ? ownHistGrowth.data : zeros;
-  
-  let lastValidOwn = 0;
-  const ownData = rawOwnData.map((v, i) => {
-    const num = Number(v);
-    if (i === 0) { lastValidOwn = num; return num; }
-    if (num > 0 && num >= lastValidOwn * 0.7) { lastValidOwn = num; return num; }
-    return lastValidOwn;
-  });
-
-  const chartLastValue = ownData.length > 0 ? ownData[ownData.length - 1] : 0;
-  let wallHolders = Number(ownership.wallHolders) || Number(ownership.tokenHolders) || Number(ownership.erc20Holders) || Number(ownership.stonkHolders) || chartLastValue;
-  if (wallHolders > 0 && wallHolders < chartLastValue * 0.7) wallHolders = chartLastValue;
+  const holdersFull = holderSeries(ownership, dailySnapshots);
+  const ownN = windowLen(timeframe, holdersFull.labels.length);
+  const ownLabels = holdersFull.labels.slice(-ownN);
+  const ownData = holdersFull.data.slice(-ownN);
+  const wallHolders = Number(ownership.wallHolders) || Number(ownership.tokenHolders) || Number(ownership.erc20Holders) || Number(ownership.stonkHolders) || 0;
 
   const actN = windowLen(timeframe, actLabels.length);
-  const ownN = windowLen(timeframe, ownLabels.length);
 
   return (
     <div className="space-y-6 relative">
@@ -218,13 +214,17 @@ export default function CardWallDetailView({ data, activeTab }) {
                             ) : null}
                             <h4 className="text-sm font-bold text-slate-300 mb-3">Trailing 7-Day Realized Yield ({t.name})</h4>
                             <div className="relative h-32 md:h-40 w-full">
-                              <Line 
-                                data={{ 
-                                  labels: t.dailyDates?.length ? t.dailyDates : revDates, 
-                                  datasets: [{ label: 'Daily Yield (USD)', data: t.dailyYields?.length ? t.dailyYields : zeros, borderColor: '#f5b700', backgroundColor: 'rgba(245, 183, 0, 0.1)', borderWidth: 2, fill: true, tension: 0.4, pointRadius: 0 }] 
-                                }} 
-                                options={chartOptions} 
-                              />
+                              {seriesHasInk(t.dailyYields) ? (
+                                <Line 
+                                  data={{ 
+                                    labels: t.dailyDates?.length ? t.dailyDates : revDates, 
+                                    datasets: [{ label: 'Daily Yield (USD)', data: t.dailyYields, borderColor: '#f5b700', backgroundColor: 'rgba(245, 183, 0, 0.1)', borderWidth: 2, fill: true, tension: 0.4, pointRadius: 0 }] 
+                                  }} 
+                                  options={chartOptions} 
+                                />
+                              ) : (
+                                <EmptyChart>No daily yield recorded for this tier</EmptyChart>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -269,6 +269,8 @@ export default function CardWallDetailView({ data, activeTab }) {
               )}
             </div>
           </div>
+          <YieldUsdPricePanel snaps={roiSnaps} tiers={tiers} />
+          <PaybackPanel snaps={roiSnaps} tiers={tiers} floorCostUsd={floorCostUsd} tokenPriceUsd={market.tokenPriceUsd} />
         </div>
       </section>
 
@@ -433,9 +435,11 @@ export default function CardWallDetailView({ data, activeTab }) {
             </div>
           </div>
 
+          <ActivationStackPanel snaps={roiSnaps} tiers={tiers} breakdown={activation.breakdown} />
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
              <h3 className="text-sm font-bold text-white mb-4">Historical Activity (Net vs. Daily)</h3>
              <div className="relative h-52 sm:h-64 md:h-80 w-full">
+                {hasActHist ? (
                 <Bar 
                   data={{
                     labels: actLabels.slice(-actN),
@@ -447,6 +451,9 @@ export default function CardWallDetailView({ data, activeTab }) {
                   }} 
                   options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#94a3b8' } } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { type: 'linear', position: 'left', grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y1: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, min: 0 } } }} 
                 />
+                ) : (
+                  <EmptyChart>No activation history recorded</EmptyChart>
+                )}
              </div>
           </div>
         </div>
@@ -463,8 +470,9 @@ export default function CardWallDetailView({ data, activeTab }) {
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner border-b-4 border-b-amber-500"><p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">True Circulating NFTs</p><p className="text-xl md:text-3xl font-extrabold text-amber-400">{formatNumber(ownership.circulatingNftSupply || 0)}</p></div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Unique NFT Holders</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-purple-400">{formatNumber(ownership.nftHolders || 0)} Wallets</p></div>
+            <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm ring-1 ring-amber-500/20"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Wallets with an activated Card Wall</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-amber-300">{activation.activeHolders == null ? '—' : `${formatNumber(activation.activeHolders)} Wallets`}</p></div>
             <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm ring-1 ring-emerald-500/20"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Ownership Concentration</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-emerald-400">{(ownership.ownershipRatio || 0).toFixed(2)}%</p></div>
             <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Unique ${config.ticker} Holders</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-purple-400">{formatNumber(wallHolders)} Wallets</p></div>
           </div>
@@ -472,12 +480,20 @@ export default function CardWallDetailView({ data, activeTab }) {
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
             <h3 className="text-sm font-bold text-white mb-4">True Active Token Holders Over Time</h3>
             <div className="relative h-52 sm:h-64 md:h-80 w-full">
+              {seriesHasInk(ownData) ? (
               <Line 
-                data={{ labels: ownLabels.slice(-ownN), datasets: [{ label: 'Active Holders', data: ownData.slice(-ownN), borderColor: '#f5b700', backgroundColor: 'rgba(245, 183, 0, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] }} 
+                data={{ labels: ownLabels, datasets: [{ label: 'Active Holders', data: ownData, borderColor: '#f5b700', backgroundColor: 'rgba(245, 183, 0, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] }} 
                 options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } } } }} 
               />
+              ) : (
+                <EmptyChart>No holder history recorded</EmptyChart>
+              )}
             </div>
           </div>
+          <OwnershipHistoryPanels
+            snaps={roiSnaps}
+            live={{ tokenHolders: wallHolders, nftHolders: ownership.nftHolders, ownershipRatio: ownership.ownershipRatio }}
+          />
         </div>
       </section>
 
@@ -514,7 +530,7 @@ export default function CardWallDetailView({ data, activeTab }) {
           <p><strong className="text-white">Yield & ROI Methodology:</strong> Each rank is an OpenSea rarity (1-Star through 5-Star). Cost is that rarity's listing floor. Expected yield is annualized VaultLedger delivered landed-cost, split by rarity rain weight among currently vault-activated memberships. Wall-stage and the early-build bonus are not in this table.</p>
           <p><strong className="text-white">Historical Yield & Payback Horizon Methodology:</strong> Capital recovery timelines are calculated by dividing the total entry cost by annualized trailing yield rates. ROI trajectories map historical performance over rolling epochs.</p>
           <p><strong className="text-white">Protocol Analytics:</strong> Revenue is VaultLedger landed cost (delivered vs still on the wall), not AMM swap fees. Activations are a live SoftStakingVault scan by rarityOf, not a log replay of Anvil Activated events.</p>
-          <p><strong className="text-white">Protocol Ownership & Distribution Methodology:</strong> Wallet concentration metrics evaluate unique human holders against true circulating supply, subtracting protocol treasury allocations.</p>
+          <p><strong className="text-white">Protocol Ownership & Distribution Methodology:</strong> Wallet concentration metrics evaluate unique human holders against true circulating supply, subtracting protocol treasury allocations. Activated-wallet count is unique vault stakers, not the NFT contract (the wall holds the memberships).</p>
         </div>
         <p className="text-xs md:text-sm text-slate-400 italic leading-relaxed border-t border-[#1e2228] pt-5">
           <strong className="text-slate-300 not-italic">Disclaimer:</strong> Tracked yield values are calculated using Mark-to-Market spot pricing at the exact time of the dashboard's last automated sync, rather than the historical price at the time of the drop. Yields fluctuate based on network activation weight, market token prices, and community protocol volume. This is a community-built tracking tool and does not guarantee future returns.

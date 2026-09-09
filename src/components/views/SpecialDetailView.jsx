@@ -14,10 +14,11 @@ import {
 } from '../../lib/oakmont';
 import { baseChartOptions, compactTick, compactUsdTick } from '../../lib/charts';
 import { useChartWindow } from '../../lib/chartWindow';
+import { YieldUsdPricePanel, PaybackPanel } from '../HistoryCharts';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler);
 
-const MARK = { green: '#00a804', violet: '#8b5cf6', sky: '#38bdf8', amber: '#f5b700', pink: '#f472b6', lime: '#a3e635' };
+const MARK = { green: '#00a804', violet: '#8b5cf6', sky: '#38bdf8', amber: '#f5b700', pink: '#f472b6', lime: '#e879f9' };
 
 export default function SpecialDetailView({ data, projectKey, activeTab }) {
   const [timeframe] = useChartWindow();
@@ -193,6 +194,12 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
               )}
             </div>
           </div>
+          {snaps.length > 0 && (
+            <>
+              <YieldUsdPricePanel snaps={snaps} tiers={tiers} />
+              <PaybackPanel snaps={snaps} tiers={tiers} floorCostUsd={kind === 'brokers' ? brokerCost : tokenUsd} tokenPriceUsd={tokenUsd} />
+            </>
+          )}
         </div>
       </section>
 
@@ -571,7 +578,7 @@ function VaultView({
                   {OAKMONT_ACTIONS.map((row) => (
                     <tr key={row.name}>
                       <td className="py-3 font-bold text-white">{row.name}</td>
-                      <td className="py-3 text-[#a3e635] font-bold whitespace-nowrap">{row.cost}</td>
+                      <td className="py-3 text-[#e879f9] font-bold whitespace-nowrap">{row.cost}</td>
                       <td className="py-3 text-slate-400 text-xs leading-relaxed">{row.note}</td>
                     </tr>
                   ))}
@@ -718,7 +725,7 @@ function VaultView({
                 {OAKMONT_FEES.map((row) => (
                   <tr key={row.fee} className="border-b border-[#1e2228]/40">
                     <td className="py-2 text-white font-bold">{row.fee}</td>
-                    <td className="py-2 text-[#a3e635] font-bold whitespace-nowrap">{row.rate}</td>
+                    <td className="py-2 text-[#e879f9] font-bold whitespace-nowrap">{row.rate}</td>
                     <td className="py-2 text-slate-400">{row.dest}</td>
                   </tr>
                 ))}

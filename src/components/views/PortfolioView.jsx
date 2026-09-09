@@ -3,7 +3,13 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { ethers } from 'ethers';
 import { SAVI_X } from '../Shell';
 import { compactUsd } from '../kit';
+import { copyElement } from '../../lib/share';
+import { PAIR_COLORS } from '../../lib/charts';
 import { PROJECTS, isProjectLive } from '../../lib/routes';
+import {
+  Chart as ChartJS, ArcElement, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler
+} from 'chart.js';
+import { Doughnut, Line } from 'react-chartjs-2';
 import {
   aggregateTbaHoldings,
   buildPriceIndex,
@@ -30,6 +36,20 @@ import {
 } from '../../lib/portfolioHistory';
 
 const FORECAST_YEARS = [1, 3, 5, 10];
+const PIE_COLORS = PAIR_COLORS;
+
+function forecastCurve(years) {
+  if (years <= 1) return [0, 0.25, 0.5, 0.75, 1];
+  return Array.from({ length: years + 1 }, (_, i) => i);
+}
+
+function forecastAxisLabel(y) {
+  if (y === 0) return 'Now';
+  if (y < 1) return `${Math.round(y * 12)}mo`;
+  return `${y}y`;
+}
+
+ChartJS.register(ArcElement, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler);
 
 const projectName = (key, ticker) =>
   PROJECTS.find((p) => p.key === key)?.name || ticker;
@@ -109,6 +129,8 @@ export default function PortfolioView({ data }) {
   const [aggregateOpen, setAggregateOpen] = useState(false);
   const [mode, setMode] = useState('forecast');
   const [forecastYears, setForecastYears] = useState(1);
+  const [copyState, setCopyState] = useState('idle');
+  const snapshotRef = useRef(null);
   const [scanProgress, setScanProgress] = useState('');
 
   const formatCurrency = compactUsd;
@@ -485,23 +507,64 @@ export default function PortfolioView({ data }) {
   const cashValue = mode === 'history' ? results.earnedUsd : forecastUsd;
   const roiPct =
     results.floorUsd > 0 ? ((mode === 'history' ? results.earnedUsd : forecastUsd) / results.floorUsd) * 100 : 0;
+  const curve = forecastCurve(forecastYears);
+
+  const copyLabel =
+    copyState === 'busy' ? 'Copying' :
+    copyState === 'copied' ? 'Copied' :
+    copyState === 'saved' ? 'Saved' :
+    copyState === 'fail' ? 'Failed' :
+    'Copy';
+
+  const handleCopySnapshot = async () => {
+    if (copyState === 'busy' || !snapshotRef.current) return;
+    setCopyState('busy');
+    try {
+      const copied = await copyElement(snapshotRef.current);
+      setCopyState(copied ? 'copied' : 'saved');
+    } catch {
+      setCopyState('fail');
+    }
+    window.setTimeout(() => setCopyState('idle'), 2500);
+  };
 
   return (
-    <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl mt-6">
-      <div className="mb-6">
-        <h2 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
-          <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-          </svg>
-          Portfolio tracker
-        </h2>
-        <p className="text-xs text-slate-400 mt-1">
-          Comma-separated wallets. Forecast uses current yield. History counts drops after you
-          received the NFT (and after activation).
-        </p>
+    <div
+      ref={snapshotRef}
+      className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl mt-6"
+    >
+      <div className="mb-6 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
+            <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+            </svg>
+            Portfolio tracker
+          </h2>
+          <p className="text-xs text-slate-400 mt-1">
+            Comma-separated wallets. Forecast uses current yield. History counts drops after you
+            received the NFT (and after activation).
+          </p>
+        </div>
+        {scanComplete && hasHoldings && (
+          <button
+            type="button"
+            data-share-omit
+            onClick={handleCopySnapshot}
+            disabled={copyState === 'busy'}
+            title="Copy portfolio snapshot (no addresses)"
+            className={`shrink-0 rounded-md border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide disabled:opacity-50 ${
+              copyState === 'copied' || copyState === 'saved'
+                ? 'border-emerald-700/60 bg-emerald-950/80 text-emerald-300'
+                : 'border-[#1e2228] bg-[#08090b] text-slate-300 hover:border-slate-500 hover:text-white'
+            }`}
+          >
+            {copyLabel}
+          </button>
+        )}
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+      <div data-share-omit className="flex flex-col sm:flex-row gap-3 mb-6">
         <input
           type="text"
           value={inputVal}
@@ -619,6 +682,73 @@ export default function PortfolioView({ data }) {
             </div>
           </div>
 
+          {grouped.some((g) => g.floorValue > 0) && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+              <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
+                <h3 className="text-sm font-bold text-white mb-4">Floor allocation</h3>
+                <div className="relative h-52 w-full">
+                  <Doughnut
+                    data={{
+                      labels: grouped.filter((g) => g.floorValue > 0).map((g) => projectName(g.projectKey, g.ticker)),
+                      datasets: [{
+                        data: grouped.filter((g) => g.floorValue > 0).map((g) => g.floorValue),
+                        backgroundColor: PIE_COLORS,
+                        borderWidth: 0,
+                      }],
+                    }}
+                    options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#94a3b8' } } } }}
+                  />
+                </div>
+              </div>
+              {mode === 'forecast' && results.yieldUsd > 0 && (
+                <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
+                  <div className="flex items-center justify-between gap-2 mb-4">
+                    <h3 className="text-sm font-bold text-white">Forecasted cash-flow</h3>
+                    <div className="flex bg-[#0e1013] rounded-lg p-0.5 border border-[#1e2228]">
+                      {FORECAST_YEARS.map((y) => (
+                        <button
+                          key={y}
+                          type="button"
+                          onClick={() => setForecastYears(y)}
+                          className={`px-2 py-1 text-[10px] font-bold rounded-md transition ${
+                            forecastYears === y ? 'bg-[#1e2228] text-white' : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          {y}y
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-500 mb-3">Current annual yield × years. Not compounded.</p>
+                  <div className="relative h-44 w-full">
+                    <Line
+                      data={{
+                        labels: curve.map(forecastAxisLabel),
+                        datasets: [{
+                          label: 'Forecasted cash (USD)',
+                          data: curve.map((y) => results.yieldUsd * y),
+                          borderColor: '#00a804',
+                          backgroundColor: 'rgba(0,168,4,0.1)',
+                          fill: true,
+                          tension: 0.3,
+                        }],
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                          x: { ticks: { color: '#94a3b8' }, grid: { color: '#1e2228' } },
+                          y: { ticks: { color: '#94a3b8' }, grid: { color: '#1e2228' } },
+                        },
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <h3 className="text-sm font-bold text-white mb-4 border-b border-[#1e2228] pb-2">Owned Asset Breakdown</h3>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {grouped.length === 0 ? (
@@ -649,7 +779,7 @@ export default function PortfolioView({ data }) {
                         <h4 className="text-sm font-bold text-white">
                           {asset.project} ({asset.tokenPosition ? formatAmount(asset.balance) : `${asset.balance} owned`})
                         </h4>
-                        <p className="text-[10px] text-slate-400 font-mono">
+                        <p data-share-omit className="text-[10px] text-slate-400 font-mono">
                           {(asset.wallets || [asset.wallet]).map((w) => `${w.slice(0, 6)}...${w.slice(-4)}`).join(' · ')}
                         </p>
                       </div>
@@ -776,7 +906,7 @@ export default function PortfolioView({ data }) {
                                       {enriched[asset.projectKey] === 'loading' && !nft.tba ? (
                                         <p className="text-xs text-slate-500 animate-pulse">Resolving tokenbound wallet...</p>
                                       ) : nft.tba ? (
-                                        <p className="text-[10px] text-slate-500 font-mono mb-2">
+                                        <p data-share-omit className="text-[10px] text-slate-500 font-mono mb-2">
                                           TBA{' '}
                                           <a
                                             href={explorerAddressUrl(nft.tba)}

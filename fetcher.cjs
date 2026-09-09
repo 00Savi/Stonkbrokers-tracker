@@ -83,6 +83,53 @@ function sanitizeDailySnapshots(snaps, livePrice) {
   return out;
 }
 
+function mdSnapKey(label) {
+  const m = String(label || "").match(/(\d{1,2})\D+(\d{1,2})/);
+  return m ? `${Number(m[1])}/${Number(m[2])}` : String(label || "");
+}
+
+function overlayDailyStreams(snaps, revenue, extraDates) {
+  if (!Array.isArray(snaps) || !revenue) return snaps;
+  const dates = (revenue.dailyDates && revenue.dailyDates.length)
+    ? revenue.dailyDates
+    : (extraDates || []);
+  if (dates.length && !(revenue.dailyDates && revenue.dailyDates.length)) {
+    revenue.dailyDates = dates;
+  }
+  const idx = new Map(dates.map((d, i) => [mdSnapKey(d), i]));
+  for (const s of snaps) {
+    const j = idx.get(mdSnapKey(s.date));
+    if (j == null) continue;
+    s.revAmm = Number(revenue.dailyAmm?.[j]) || 0;
+    s.revDex = Number(revenue.dailyDex?.[j]) || 0;
+    s.revBox = Number(revenue.dailySecurityBox?.[j]) || 0;
+    s.revVolume = Number(revenue.dailyLaunchpad?.[j]) || 0;
+    s.revTax = Number(revenue.dailyBondingTax?.[j]) || 0;
+    s.revSmartLp = Number(revenue.dailySmartLp?.[j]) || 0;
+    s.revSmartLpGross = Number(revenue.dailySmartLpGross?.[j]) || 0;
+  }
+  return snaps;
+}
+
+function tvlByMode(vaults) {
+  const o = { tvlFr: 0, tvlBb: 0, tvlAsk: 0 };
+  for (const v of vaults || []) {
+    const usd = Number(v.tvlUsd) || 0;
+    if (v.mode === 0) o.tvlFr += usd;
+    else if (v.mode === 1) o.tvlBb += usd;
+    else if (v.mode === 2) o.tvlAsk += usd;
+  }
+  return o;
+}
+
+function stampLiveSnapshot(snaps, todayStr, extra) {
+  if (!Array.isArray(snaps) || !snaps.length) return snaps;
+  const last = snaps[snaps.length - 1];
+  if (!last || last.date !== todayStr) return snaps;
+  Object.assign(last, extra);
+  return snaps;
+}
+
 const CHAIN_ID = 4663;
 const EXPLORER_API = "https://api.blockscout.com/v2/api";
 const BLOCKSCOUT_KEY = process.env.BLOCKSCOUT_API_KEY || "";
@@ -215,10 +262,18 @@ const MEMES = [
   { name: "Wojak", ca: "0xaCE55FE98Bab14366dD49aB5AA5dF76aA11A3c6f" },
   { name: "Juggernaut", ca: "0xD7321801CAae694090694Ff55A9323139F043B88" },
   { name: "Pons", ca: "0x39dBED3a2bd333467115dE45665cC57F813C4571" },
-  { name: "Coat", ca: "0x93a887Beda77a9E2F6D6ed0C9742f04CcEBc8833" }
+  { name: "Coat", ca: "0x93a887Beda77a9E2F6D6ed0C9742f04CcEBc8833" },
+  { name: "MEME", ca: "0x385f4f8ae47651ce5f58f5265395a669f8281e18" },
+  { name: "ZZZ", ca: "0x7dbf38976f6d3b9c529e7d9484a71898b409ee6a" },
+  { name: "Chump", ca: "0x0e0d2c89a5a019fe1cf762e5e33187631dacc21b" },
+  { name: "Delta", ca: "0xe8ffd7e24187f72afb08d75b1bb13088a989a791" },
+  { name: "HOOKR", ca: "0x18e674231a58c239dc7daedcffe15ec3a24cff5c" },
+  { name: "PAIR", ca: "0x6b1d42927b1a84ec28fa88d4fc6fa7af404966be" },
+  { name: "RSTR", ca: "0x78b96280c3347e0f58a7147b73eb0ec5ffff025d" },
+  { name: "Robin", ca: "0x11b70d0243baf75e85ce03201a92b5b7c33beb59" },
 ];
 
-const STOCKS = [
+const STOCKS_FALLBACK = [
   { name: "AAPL", ca: "0xaf3d76f1834a1d425780943c99ea8a608f8a93f9" },
   { name: "AMZN", ca: "0x12f190a9f9d7d37a250758b26824b97ce941bf54" },
   { name: "NVDA", ca: "0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec" },
@@ -232,6 +287,33 @@ const STOCKS = [
   { name: "GME", ca: "0x1b0e319c6a659f002271b69db8a7df2f911c153e" },
   { name: "USO", ca: "0xa30fa36db767ad9ed3f7a60fc79526fb4d56d344" }
 ];
+
+async function loadStockUniverse() {
+  try {
+    const res = await fetch("https://api.robinhood.com/rhj/assets");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const body = await res.json();
+    const rows = [];
+    const seen = new Set();
+    for (const a of body.assets || []) {
+      if (a.status && !String(a.status).includes("ACTIVE")) continue;
+      const d = (a.deployments || []).find((x) => Number(x.chainId) === CHAIN_ID);
+      if (!d?.contractAddress) continue;
+      const ca = String(d.contractAddress).toLowerCase();
+      if (seen.has(ca)) continue;
+      seen.add(ca);
+      rows.push({ name: a.tokenSymbol || a.tokenName || ca.slice(0, 8), ca });
+    }
+    rows.sort((x, y) => x.name.localeCompare(y.name));
+    if (rows.length) {
+      console.log(`  stock universe: ${rows.length} from rhj/assets`);
+      return rows;
+    }
+  } catch (e) {
+    console.warn(`[warn] rhj/assets: ${e.message}; using fallback stock list`);
+  }
+  return STOCKS_FALLBACK;
+}
 
 const PROJECTS = {
   stonk: {
@@ -783,15 +865,7 @@ async function getOwnershipStats(conf, equivBurnt, previousData) {
   let histLabels = previousData?.ownership?.historicalGrowth?.labels || [];
   let histData = previousData?.ownership?.historicalGrowth?.data || [];
 
-  for (let i = 0; i < histData.length; i++) {
-      if ((histData[i] === 0 || histData[i] > 30000) && trueUniqueStonkHolders > 0) histData[i] = trueUniqueStonkHolders;
-  }
-
-  if (histLabels.length === 0 || histData.every(v => v === 0)) {
-      histLabels = ["7/15", "7/20", "7/25", "7/30", "8/5"];
-      let target = trueUniqueStonkHolders > 0 ? trueUniqueStonkHolders : (conf.ticker==="STONK" ? 21000 : 500);
-      histData = [ Math.round(target*0.25), Math.round(target*0.55), Math.round(target*0.75), Math.round(target*0.9), Math.round(target*0.98) ];
-  }
+  // Past points stay as recorded. Do not backfill today's count onto older days.
 
   const dateStr = `${new Date().getMonth() + 1}/${new Date().getDate()}`;
   if (histLabels[histLabels.length - 1] === dateStr) {
@@ -884,7 +958,8 @@ async function fetchActivations(projectKey, conf) {
             const tierVal = parsed.args.toTier !== undefined ? parsed.args.toTier : (parsed.args.newTier !== undefined ? parsed.args.newTier : parsed.args.tier);
             if (tierVal !== undefined && tierVal !== null) {
                 tierId = `T${tierVal.toString()}`;
-                activeBrokers.set(tokenId, { t: tierId, ts: ts, tx: log.transactionHash });
+                const owner = parsed.args.owner ? String(parsed.args.owner).toLowerCase() : null;
+                activeBrokers.set(tokenId, { t: tierId, ts: ts, tx: log.transactionHash, owner });
             }
           }
           else if (isDeact) {
@@ -938,12 +1013,21 @@ async function fetchActivations(projectKey, conf) {
   }
 
   const breakdown = { T0: 0, T1: 0, T2: 0, T3: 0, T4: 0 };
-  for (const val of activeBrokers.values()) { if (breakdown[val.t] !== undefined) breakdown[val.t]++; }
+  const activeOwners = new Set();
+  for (const val of activeBrokers.values()) {
+    if (breakdown[val.t] !== undefined) breakdown[val.t]++;
+    if (val.owner && val.owner !== ZERO_ADDR) activeOwners.add(val.owner);
+  }
+  let activeHolders = activeOwners.size;
+  if (activeBrokers.size && activeHolders === 0) {
+    activeHolders = await countUniqueNftOwners(conf.nftCa, [...activeBrokers.keys()]);
+  }
 
   const dualBurn = await getTrueDeflationStats(conf);
 
   return { 
-    activeCount: activeBrokers.size, 
+    activeCount: activeBrokers.size,
+    activeHolders,
     breakdown, 
     percentActivated: +((activeBrokers.size / conf.maxSupply) * 100).toFixed(2), 
     totalSupply: conf.maxSupply, 
@@ -959,6 +1043,19 @@ async function fetchActivations(projectKey, conf) {
 const RARITY_OF_SEL = ethers.id("rarityOf(uint256)").slice(0, 10);
 const ACTIVATIONS_SEL = ethers.id("activations(uint256)").slice(0, 10);
 const ACTIVE_COUNT_SEL = ethers.id("activeCount()").slice(0, 10);
+const OWNER_OF_SEL = ethers.id("ownerOf(uint256)").slice(0, 10);
+
+async function countUniqueNftOwners(nftCa, tokenIds) {
+  const ids = (tokenIds || []).filter(Boolean);
+  if (!nftCa || !ids.length) return 0;
+  const raw = await rpc.calls(ids.map((id) => ({ to: nftCa, data: OWNER_OF_SEL + encodeUint(id) })));
+  const owners = new Set();
+  for (const word of raw) {
+    const a = decodeAddr(word);
+    if (a && a !== ZERO_ADDR) owners.add(a);
+  }
+  return owners.size;
+}
 
 /**
  * Card Wall SoftStakingVault emits Activated only rarely (two logs in the last
@@ -1011,6 +1108,7 @@ async function fetchCardWallLiveActivations(conf, prevActivation = {}) {
   const raritySupply = { T0: 0, T1: 0, T2: 0, T3: 0, T4: 0 };
   const tokenRarity = {};
   const activeTokenTiers = {};
+  const activeOwners = new Set();
   let active = 0;
 
   for (let i = 0; i < n; i++) {
@@ -1022,6 +1120,7 @@ async function fetchCardWallLiveActivations(conf, prevActivation = {}) {
     if (owner && owner !== ZERO_ADDR) {
       active++;
       breakdown[tierId]++;
+      activeOwners.add(owner);
       activeTokenTiers[tokenId] = { t: tierId, ts: 0 };
     }
   }
@@ -1053,6 +1152,7 @@ async function fetchCardWallLiveActivations(conf, prevActivation = {}) {
 
   return {
     activeCount: useCount,
+    activeHolders: activeOwners.size,
     breakdown,
     raritySupply,
     percentActivated: +((useCount / conf.maxSupply) * 100).toFixed(2),
@@ -2085,7 +2185,7 @@ async function run() {
     console.warn(`[warn] memes: ${e.message}; carrying previous`);
   }
   try {
-    stockData = await loadTokenListPrices(STOCKS);
+    stockData = await loadTokenListPrices(await loadStockUniverse());
   } catch (e) {
     console.warn(`[warn] stocks: ${e.message}; carrying previous`);
   }
@@ -2223,11 +2323,21 @@ async function run() {
 
         const snapshotRow = (date, timestamp, annualByTier, priceUsd) => {
             const px = priceUsd > 0 && priceUsd !== 0.03 ? priceUsd : markets[projectKey].tokenPriceUsd;
+            const floorEth = markets[projectKey].nftFloorEth || 0;
+            const ethUsd = markets[projectKey].ethPriceUsd || 0;
             return {
             date,
             timestamp,
             tokenPriceUsd: px,
+            nftFloorEth: floorEth,
+            nftFloorUsd: floorEth * ethUsd,
             totalBurn: (activationStats.dualBurn || {}).totalBurnTokens || 0,
+            tokenHolders: ownershipStats.stonkHolders || ownershipStats.tokenHolders || 0,
+            nftHolders: ownershipStats.nftHolders || 0,
+            ownershipRatio: ownershipStats.ownershipRatio || 0,
+            activeCount: activationStats.activeCount || 0,
+            percentActivated: activationStats.percentActivated || 0,
+            tierActive: { ...(activationStats.breakdown || {}) },
             tiers: mappedTiers.map(t => {
                 const floorUsd = (t.floorEth || markets[projectKey].nftFloorEth) * markets[projectKey].ethPriceUsd;
                 const actCost = t.reqTokens * px;
@@ -2293,6 +2403,7 @@ async function run() {
             });
             revenueBreakdown.smartLpUsd = smart.protocolFees7dUsd;
             revenueBreakdown.dailySmartLp = smart.daily;
+            revenueBreakdown.dailySmartLpGross = smart.dailyGross;
             revenueBreakdown.smartLp = {
               vaults: smart.vaults,
               totalTvlUsd: smart.totalTvlUsd,
@@ -2308,6 +2419,24 @@ async function run() {
             console.warn(`[warn] smart LP fetch failed: ${e.message}`);
           }
       }
+
+      const todayStamp = new Date().toLocaleDateString("en-US", { month: "numeric", day: "numeric", timeZone: "UTC" });
+      overlayDailyStreams(dailySnapshots, revenueBreakdown, mappedTiers?.[0]?.dailyDates);
+      const modeTvl = tvlByMode(revenueBreakdown?.smartLp?.vaults);
+      stampLiveSnapshot(dailySnapshots, todayStamp, {
+        nftFloorEth: markets[projectKey].nftFloorEth || 0,
+        nftFloorUsd: (markets[projectKey].nftFloorEth || 0) * (markets[projectKey].ethPriceUsd || 0),
+        tokenHolders: ownershipStats.stonkHolders || ownershipStats.tokenHolders || 0,
+        nftHolders: ownershipStats.nftHolders || 0,
+        ownershipRatio: ownershipStats.ownershipRatio || 0,
+        activeCount: activationStats.activeCount || 0,
+        percentActivated: activationStats.percentActivated || 0,
+        tierActive: { ...(activationStats.breakdown || {}) },
+        smartLpTvl: revenueBreakdown?.smartLp?.totalTvlUsd || 0,
+        ...modeTvl,
+        lockedStonk: lockedLpData?.totalStonkLocked || 0,
+        lockedLpUsd: lockedLpData?.totalLpUsd || 0,
+      });
 
       finalJson.projects[projectKey] = {
         market: markets[projectKey],

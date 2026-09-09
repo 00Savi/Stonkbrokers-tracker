@@ -51,6 +51,7 @@ function CopyButton({ host, tight }) {
 
   return (
     <div
+      data-share-omit
       className={`pointer-events-none absolute z-20 flex flex-col items-end ${
         tight ? 'right-1 top-1' : 'right-1 top-1 sm:right-2 sm:top-2'
       }`}
@@ -59,6 +60,7 @@ function CopyButton({ host, tight }) {
         type="button"
         onClick={onCopy}
         disabled={state === 'busy'}
+        data-share-omit
         className={`pointer-events-auto inline-flex min-h-8 items-center gap-1 rounded-md border px-1.5 py-1 font-mono text-[10px] backdrop-blur-sm sm:px-2 disabled:opacity-60 ${
           state === 'copied' || state === 'saved'
             ? 'border-emerald-700/60 bg-emerald-950/80 text-emerald-300'
@@ -115,6 +117,8 @@ export default function ChartShareLayer() {
       observer.disconnect();
     };
   }, [location.pathname, location.search]);
+
+  if (location.pathname === '/portfolio') return null;
 
   return (
     <>

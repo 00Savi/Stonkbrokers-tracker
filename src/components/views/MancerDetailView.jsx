@@ -4,10 +4,19 @@ import {
 } from 'chart.js';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import { burnSeries, burnRateSeries } from '../../lib/burn';
-import { windowSnapshots, tierRoiDatasets, protocolRevenueChart, sliceCols, windowPeriodLabel, windowLen } from '../../lib/yieldHistory';
+import { windowSnapshots, tierRoiDatasets, protocolRevenueChart, sliceCols, windowPeriodLabel, windowLen, seriesHasInk } from '../../lib/yieldHistory';
 import { compactUsd, compactNum } from '../kit';
-import { baseChartOptions, compactTick, compactUsdTick } from '../../lib/charts';
+import { baseChartOptions, compactTick, compactUsdTick, STREAM_COLORS } from '../../lib/charts';
 import { useChartWindow } from '../../lib/chartWindow';
+import { holderSeries } from '../../lib/snapshots';
+import {
+  EmptyChart,
+  YieldUsdPricePanel,
+  PaybackPanel,
+  ProtocolFeeVolumePanels,
+  ActivationStackPanel,
+  OwnershipHistoryPanels,
+} from '../HistoryCharts';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
@@ -35,9 +44,7 @@ export default function MancerDetailView({ data, activeTab }) {
   // ==========================================
 
   const hasSnaps = Array.isArray(dailySnapshots) && dailySnapshots.length > 0 && dailySnapshots[0].date;
-  const masterDates = hasSnaps ? dailySnapshots.map(s => s.date) : ['Aug 17', 'Aug 18', 'Aug 19', 'Aug 20', 'Aug 21', 'Aug 22', 'Aug 23'];
 
-  // 1. Historical Yield Chart — weekly / monthly / all usable snapshots.
   const roiSnaps = windowSnapshots(dailySnapshots, timeframe);
   const histLabels = roiSnaps.map(s => s.date);
   const histDatasets = tierRoiDatasets(roiSnaps, tiers, {
@@ -48,13 +55,14 @@ export default function MancerDetailView({ data, activeTab }) {
   // 2. Revenue Chart
   const revPeriod = windowPeriodLabel(timeframe);
   const rawRev = protocolRevenueChart(project);
+  const slicedRev = sliceCols(rawRev.labels, rawRev.cols, timeframe);
   const byKey = Object.fromEntries((rawRev.cols || []).map((c) => [c.key, c]));
   const { labels: revDates, cols: revCols } = sliceCols(
     rawRev.labels,
     [
-      { ...(byKey.dex || { data: [] }), label: 'DEX Swap Fees', color: '#00a804' },
-      { ...(byKey.amm || { data: [] }), label: 'Vault Inflows', color: '#8b5cf6' },
-      { ...(byKey.box || { data: [] }), label: 'Order Layer', color: '#38bdf8' },
+      { ...(byKey.dex || { data: [] }), label: 'DEX Swap Fees', color: STREAM_COLORS.dex },
+      { ...(byKey.amm || { data: [] }), label: 'Vault Inflows', color: STREAM_COLORS.amm },
+      { ...(byKey.box || { data: [] }), label: 'Order Layer', color: STREAM_COLORS.box },
     ],
     timeframe
   );
@@ -78,10 +86,10 @@ export default function MancerDetailView({ data, activeTab }) {
   // 5. Activation Chart
   const actHistory = activation.history || {};
   const hasActHist = Array.isArray(actHistory.labels) && actHistory.labels.length > 0;
-  const actLabels = hasActHist ? actHistory.labels : masterDates.slice(-7);
-  const actCum = (hasActHist && actHistory.cumulative?.length) ? actHistory.cumulative : [1500, 1550, 1600, 1630, 1650, 1671, 1690];
-  const actDAct = (hasActHist && actHistory.dailyActivations?.length) ? actHistory.dailyActivations : [20, 30, 40, 10, 25, 15, 22];
-  const actDDeact = (hasActHist && actHistory.dailyDeactivations?.length) ? actHistory.dailyDeactivations : [0, 0, 10, 0, 5, 8, 15];
+  const actLabels = hasActHist ? actHistory.labels : [];
+  const actCum = hasActHist && actHistory.cumulative?.length ? actHistory.cumulative : [];
+  const actDAct = hasActHist && actHistory.dailyActivations?.length ? actHistory.dailyActivations : [];
+  const actDDeact = hasActHist && actHistory.dailyDeactivations?.length ? actHistory.dailyDeactivations : [];
 
   let breakdownArr = tiers.map((t) => {
     if (activation.breakdown && activation.breakdown[t.tier] != null) return activation.breakdown[t.tier];
@@ -89,27 +97,13 @@ export default function MancerDetailView({ data, activeTab }) {
     return Math.max(0, (s.act || 0) - (s.deact || 0));
   }); 
 
-  // 6. Ownership Fields & Charts (Anomaly filtered & Smoothed)
-  const ownHistGrowth = ownership.historicalGrowth || {};
-  const hasOwnHist = Array.isArray(ownHistGrowth.labels) && ownHistGrowth.labels.length > 0;
-  const ownLabels = hasOwnHist ? ownHistGrowth.labels : masterDates.slice(-7);
-  const rawOwnData = hasOwnHist ? ownHistGrowth.data : [1000, 1030, 1050, 1080, 1081, 1090, 1100];
-  
-  let lastValidOwn = 0;
-  const ownData = rawOwnData.map((v, i) => {
-    const num = Number(v);
-    if (i === 0) { lastValidOwn = num; return num; }
-    // Anomaly filter: ignore drops of > 30%
-    if (num > 0 && num >= lastValidOwn * 0.7) { lastValidOwn = num; return num; }
-    return lastValidOwn;
-  });
-
-  const chartLastValue = ownData.length > 0 ? ownData[ownData.length - 1] : 0;
-  let mancerHolders = Number(ownership.mancerHolders) || Number(ownership.tokenHolders) || Number(ownership.erc20Holders) || chartLastValue;
-  if (mancerHolders > 0 && mancerHolders < chartLastValue * 0.7) mancerHolders = chartLastValue; // Top box fallback
+  const holdersFull = holderSeries(ownership, dailySnapshots);
+  const ownN = windowLen(timeframe, holdersFull.labels.length);
+  const ownLabels = holdersFull.labels.slice(-ownN);
+  const ownData = holdersFull.data.slice(-ownN);
+  const mancerHolders = Number(ownership.mancerHolders) || Number(ownership.tokenHolders) || Number(ownership.erc20Holders) || 0;
 
   const actN = windowLen(timeframe, actLabels.length);
-  const ownN = windowLen(timeframe, ownLabels.length);
 
   return (
     <div className="space-y-6 relative">
@@ -193,13 +187,17 @@ export default function MancerDetailView({ data, activeTab }) {
                               <span className="text-xs text-slate-500">Based on On-Chain Distributions</span>
                             </div>
                             <div className="relative h-32 md:h-40 w-full">
+                              {seriesHasInk(t.dailyYields) ? (
                               <Line 
                                 data={{ 
-                                  labels: t.dailyDates?.length ? t.dailyDates : revDates, 
-                                  datasets: [{ label: 'Daily Yield (USD)', data: t.dailyYields?.length ? t.dailyYields : [10, 8, 15, 12, 18, 10, 15], borderColor: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.1)', borderWidth: 2, fill: true, tension: 0.4, pointRadius: 0 }] 
+                                  labels: t.dailyDates, 
+                                  datasets: [{ label: 'Daily Yield (USD)', data: t.dailyYields, borderColor: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.1)', borderWidth: 2, fill: true, tension: 0.4, pointRadius: 0 }] 
                                 }} 
                                 options={chartOptions} 
                               />
+                              ) : (
+                                <EmptyChart>No daily yield recorded for this tier</EmptyChart>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -242,6 +240,8 @@ export default function MancerDetailView({ data, activeTab }) {
               <Line data={{ labels: histLabels, datasets: histDatasets }} options={chartOptions} />
             </div>
           </div>
+          <YieldUsdPricePanel snaps={roiSnaps} tiers={tiers} />
+          <PaybackPanel snaps={roiSnaps} tiers={tiers} floorCostUsd={floorCostUsd} tokenPriceUsd={market.tokenPriceUsd} />
         </div>
       </section>
 
@@ -258,34 +258,19 @@ export default function MancerDetailView({ data, activeTab }) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
               <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">DEX Swap Routing Fees ({revPeriod})</p>
-              <p className="text-2xl font-extrabold text-emerald-400">{formatCurrency(revCols[0]?.total || 0)}</p>
+              <p className="text-2xl font-extrabold" style={{ color: STREAM_COLORS.dex }}>{formatCurrency(revCols[0]?.total || 0)}</p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
               <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Soft-Staking Vault Inflows ({revPeriod})</p>
-              <p className="text-2xl font-extrabold text-purple-400">{formatCurrency(revCols[1]?.total || 0)}</p>
+              <p className="text-2xl font-extrabold" style={{ color: STREAM_COLORS.amm }}>{formatCurrency(revCols[1]?.total || 0)}</p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
               <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Order Execution Layer ({revPeriod})</p>
-              <p className="text-2xl font-extrabold text-blue-400">{formatCurrency(revCols[2]?.total || 0)}</p>
+              <p className="text-2xl font-extrabold" style={{ color: STREAM_COLORS.box }}>{formatCurrency(revCols[2]?.total || 0)}</p>
             </div>
           </div>
 
-          <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
-            <h3 className="text-sm font-bold text-white mb-4">Daily Revenue Inflows by Stream (USD)</h3>
-            <div className="relative h-52 sm:h-64 md:h-80 w-full">
-              <Bar 
-                data={{
-                  labels: revDates,
-                  datasets: [
-                    { label: "DEX Swap Fees", data: revDataDex, backgroundColor: "#00a804", borderRadius: 4 },
-                    { label: "Vault Inflows", data: revDataAmm, backgroundColor: "#8b5cf6", borderRadius: 4 },
-                    { label: "Order Layer", data: revDataSec, backgroundColor: "#38bdf8", borderRadius: 4 }
-                  ]
-                }} 
-                options={{ responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true, grid: { color: '#1e2228', borderDash: [4, 4] } }, y: { stacked: true, grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactUsdTick } } }, plugins: { legend: { labels: { color: '#cbd5e1' } } } }} 
-              />
-            </div>
-          </div>
+          <ProtocolFeeVolumePanels labels={slicedRev.labels} cols={slicedRev.cols} kind={rawRev.kind} />
         </div>
       </section>
 
@@ -436,9 +421,11 @@ export default function MancerDetailView({ data, activeTab }) {
             </div>
           </div>
 
+          <ActivationStackPanel snaps={roiSnaps} tiers={tiers} breakdown={activation.breakdown} />
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
              <h3 className="text-sm font-bold text-white mb-4">Historical Activity (Net vs. Daily)</h3>
              <div className="relative h-52 sm:h-64 md:h-80 w-full">
+                {hasActHist ? (
                 <Bar 
                   data={{
                     labels: actLabels.slice(-actN),
@@ -450,6 +437,9 @@ export default function MancerDetailView({ data, activeTab }) {
                   }} 
                   options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#94a3b8' } } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { type: 'linear', position: 'left', grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y1: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, min: 0 } } }} 
                 />
+                ) : (
+                  <EmptyChart>No activation history recorded</EmptyChart>
+                )}
              </div>
           </div>
         </div>
@@ -469,8 +459,9 @@ export default function MancerDetailView({ data, activeTab }) {
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner border-b-4 border-b-purple-500"><p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">True Circulating NFTs</p><p className="text-xl md:text-3xl font-extrabold text-purple-400">{formatNumber(ownership.circulatingNftSupply || 0)}</p></div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Unique NFT Holders</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-purple-400">{formatNumber(ownership.nftHolders || 0)} Wallets</p></div>
+            <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm ring-1 ring-purple-500/20"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Wallets with an activated Mancer</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-purple-300">{activation.activeHolders == null ? '—' : `${formatNumber(activation.activeHolders)} Wallets`}</p></div>
             <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm ring-1 ring-emerald-500/20"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Ownership Concentration</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-emerald-400">{(ownership.ownershipRatio || 0).toFixed(2)}%</p></div>
             <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Unique ${config.ticker} Holders</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-purple-400">{formatNumber(mancerHolders)} Wallets</p></div>
           </div>
@@ -478,12 +469,20 @@ export default function MancerDetailView({ data, activeTab }) {
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
             <h3 className="text-sm font-bold text-white mb-4">True Active Token Holders Over Time</h3>
             <div className="relative h-52 sm:h-64 md:h-80 w-full">
+              {seriesHasInk(ownData) ? (
               <Line 
-                data={{ labels: ownLabels.slice(-ownN), datasets: [{ label: 'Active Holders', data: ownData.slice(-ownN), borderColor: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] }} 
+                data={{ labels: ownLabels, datasets: [{ label: 'Active Holders', data: ownData, borderColor: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] }} 
                 options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } } } }} 
               />
+              ) : (
+                <EmptyChart>No holder history recorded</EmptyChart>
+              )}
             </div>
           </div>
+          <OwnershipHistoryPanels
+            snaps={roiSnaps}
+            live={{ tokenHolders: mancerHolders, nftHolders: ownership.nftHolders, ownershipRatio: ownership.ownershipRatio }}
+          />
         </div>
       </section>
 
@@ -499,7 +498,7 @@ export default function MancerDetailView({ data, activeTab }) {
           <p><strong className="text-white">Yield & ROI (Global Network Oracle) Methodology:</strong> Cash-on-Cash (CoC) returns are calculated dynamically based on the selected project's architecture and active network weight.</p>
           <p><strong className="text-white">Historical Yield & Payback Horizon Methodology:</strong> Capital recovery timelines are calculated by dividing the total entry cost by annualized trailing yield rates. ROI trajectories map historical performance over rolling epochs.</p>
           <p><strong className="text-white">Protocol Analytics:</strong> Metrics shown aggregate live on-chain events across registered smart contracts.</p>
-          <p><strong className="text-white">Protocol Ownership & Distribution Methodology:</strong> Wallet concentration metrics evaluate unique human holders against true circulating supply, subtracting protocol treasury allocations.</p>
+          <p><strong className="text-white">Protocol Ownership & Distribution Methodology:</strong> Wallet concentration metrics evaluate unique human holders against true circulating supply, subtracting protocol treasury allocations. Activated-wallet count is unique current owners of NFTs that still have an open activation — a sale clears it.</p>
         </div>
         <p className="text-xs md:text-sm text-slate-400 italic leading-relaxed border-t border-[#1e2228] pt-5">
           <strong className="text-slate-300 not-italic">Disclaimer:</strong> Tracked yield values are calculated using Mark-to-Market spot pricing at the exact time of the dashboard's last automated sync, rather than the historical price at the time of the drop. Yields fluctuate based on network activation weight, market token prices, and community protocol volume. This is a community-built tracking tool and does not guarantee future returns.

@@ -36,7 +36,7 @@ export default function MemesTokensView({ data, type = 'memes' }) {
             {isStocks ? 'Robinhood Stock Tokens Tracker' : 'Robinhood Tokens Tracker'}
           </h2>
           <p className="text-xs md:text-sm text-slate-400 mt-1">
-            {isStocks ? 'Real-time liquidity, volume, and metrics for Robinhood Chain stock tokens' : 'Real-time liquidity, volume, and metrics for Robinhood Chain tokens'}
+            {isStocks ? 'Every active Robinhood Chain stock token from the official registry, with DexScreener liquidity and volume.' : 'Real-time liquidity, volume, and metrics for Robinhood Chain tokens'}
           </p>
         </div>
       </div>

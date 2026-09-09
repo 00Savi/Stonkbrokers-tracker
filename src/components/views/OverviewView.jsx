@@ -1,7 +1,16 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import {
+  Chart as ChartJS, LinearScale, PointElement, Tooltip, Legend, Filler
+} from 'chart.js';
+import { Scatter } from 'react-chartjs-2';
 import { NFT_PROJECTS, RANKING_PROJECTS } from '../../lib/routes';
 import { Card, Figure, Stat, SplitBar, Tag, BetaTag, Value, Skeleton, usd, num, pct } from '../kit';
+import { compactUsdTick, PROJECT_COLORS } from '../../lib/charts';
+
+ChartJS.register(LinearScale, PointElement, Tooltip, Legend, Filler);
+
+const SCATTER_COLORS = PROJECT_COLORS;
 
 /**
  * Rankings: of everything on the board, what is worth buying right now.
@@ -296,6 +305,51 @@ export default function OverviewView({ data, pending, compact = false }) {
           </div>
         </Card>
       </div>
+
+      {!pending && rows.some((r) => r.cost > 0 && r.annual > 0) && (
+        <Card eyebrow="Cost vs annual yield" sub="Each point is a tier. Further up-and-left is cheaper yield.">
+          <div className="relative h-64 w-full px-4 pb-4 pt-2">
+            <Scatter
+              data={{
+                datasets: RANKING_PROJECTS.map((m) => ({
+                  label: m.name,
+                  data: rows
+                    .filter((r) => r.project.key === m.key && r.cost > 0 && r.annual > 0)
+                    .map((r) => ({ x: r.cost, y: r.annual, label: `${r.project.name} ${r.tier}` })),
+                  backgroundColor: SCATTER_COLORS[m.key] || '#94a3b8',
+                })).filter((d) => d.data.length),
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: { labels: { color: '#94a3b8' } },
+                  tooltip: {
+                    callbacks: {
+                      label: (ctx) => {
+                        const raw = ctx.raw || {};
+                        return `${raw.label || ctx.dataset.label}: cost ${usd(raw.x)} · yield ${usd(raw.y)}/yr`;
+                      },
+                    },
+                  },
+                },
+                scales: {
+                  x: {
+                    title: { display: true, text: 'Cost to enter (USD)', color: '#94a3b8' },
+                    ticks: { color: '#94a3b8', callback: compactUsdTick },
+                    grid: { color: '#1e2228' },
+                  },
+                  y: {
+                    title: { display: true, text: 'Annual yield (USD)', color: '#94a3b8' },
+                    ticks: { color: '#94a3b8', callback: compactUsdTick },
+                    grid: { color: '#1e2228' },
+                  },
+                },
+              }}
+            />
+          </div>
+        </Card>
+      )}
 
       <Card
         eyebrow="Every tier · ranked by annual return"

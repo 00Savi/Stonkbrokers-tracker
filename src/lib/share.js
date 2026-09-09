@@ -55,10 +55,10 @@ function pngBlobFromCanvas(canvas) {
   return new Blob([bytes], { type: 'image/png' });
 }
 
-function downloadPng(blob) {
+function downloadPng(blob, filename = 'savi-dashboard.png') {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'savi-dashboard.png';
+  a.download = filename;
   a.click();
   URL.revokeObjectURL(a.href);
 }
@@ -83,5 +83,41 @@ export async function copyChart(root) {
   const blob = pngBlobFromCanvas(drawWatermarked(chartCanvas));
   const copied = await writeClipboardPng(blob);
   if (!copied) downloadPng(blob);
+  return copied;
+}
+
+const ADDR_RE = /0x[a-fA-F0-9]{6,}\.\.\.[a-fA-F0-9]{4}|0x[a-fA-F0-9]{40}/g;
+
+function scrubAddresses(node) {
+  if (!node) return;
+  if (node.nodeType === 3) {
+    node.textContent = node.textContent.replace(ADDR_RE, '').replace(/[ \t]{2,}/g, ' ');
+    return;
+  }
+  if (node.nodeType !== 1) return;
+  if (node.getAttribute?.('data-share-omit') != null) {
+    node.remove();
+    return;
+  }
+  [...node.childNodes].forEach(scrubAddresses);
+}
+
+/** Full-page PNG of an element. Strips wallet addresses from the clone. */
+export async function copyElement(root) {
+  if (typeof window === 'undefined' || !root) return false;
+  const { default: html2canvas } = await import('html2canvas');
+  const shot = await html2canvas(root, {
+    backgroundColor: '#08090b',
+    scale: Math.min(2, window.devicePixelRatio || 1.5),
+    useCORS: true,
+    logging: false,
+    ignoreElements: (el) =>
+      el?.nodeType === 1 &&
+      (el.hasAttribute?.('data-share-omit') || !!el.closest?.('[data-share-omit]')),
+    onclone: (clonedDoc, clonedEl) => scrubAddresses(clonedEl || clonedDoc.body),
+  });
+  const blob = pngBlobFromCanvas(drawWatermarked(shot));
+  const copied = await writeClipboardPng(blob);
+  if (!copied) downloadPng(blob, 'savi-portfolio.png');
   return copied;
 }

@@ -4,11 +4,22 @@ import {
 } from 'chart.js';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import { burnSeries, burnRateSeries } from '../../lib/burn';
-import { windowSnapshots, tierRoiDatasets, protocolRevenueChart, sliceCols, windowPeriodLabel, windowLen } from '../../lib/yieldHistory';
+import { windowSnapshots, tierRoiDatasets, protocolRevenueChart, sliceCols, windowPeriodLabel, windowLen, seriesHasInk } from '../../lib/yieldHistory';
 import { compactUsd, compactNum } from '../kit';
-import { baseChartOptions, compactTick, compactUsdTick } from '../../lib/charts';
+import { baseChartOptions, compactTick, compactUsdTick, STREAM_COLORS } from '../../lib/charts';
 import { useChartWindow } from '../../lib/chartWindow';
 import { explorerAddressUrl } from '../../lib/tba';
+import { holderSeries } from '../../lib/snapshots';
+import {
+  EmptyChart,
+  YieldUsdPricePanel,
+  PaybackPanel,
+  ProtocolFeeVolumePanels,
+  SmartLpChartPanels,
+  BlackHoleChartPanels,
+  ActivationStackPanel,
+  OwnershipHistoryPanels,
+} from '../HistoryCharts';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
@@ -92,32 +103,22 @@ export default function StonkDetailView({ data, activeTab }) {
   // 2. Revenue Chart — one grouped series per stream, colors locked to the boxes.
   const revPeriod = windowPeriodLabel(timeframe);
   const rawRev = protocolRevenueChart(project);
-  const byKey = Object.fromEntries((rawRev.cols || []).map((c) => [c.key, c]));
-  const { labels: revDates, cols: REV_STREAMS } = sliceCols(
-    rawRev.labels,
-    [
-      { ...(byKey.amm || { data: [] }), label: 'AMM & Swaps', color: '#00a804' },
-      { ...(byKey.box || { data: [] }), label: 'Clock-In Box', color: '#38bdf8' },
-      { ...(byKey.launch || { data: [] }), label: 'Launch + Bonding volume', color: '#8b5cf6' },
-      { ...(byKey.tax || { data: [] }), label: 'Curve tax', color: '#f472b6' },
-      { ...(byKey.smartLp || { data: [] }), label: 'StonkBroker Fees', color: '#fbbf24' },
+  const slicedRev = sliceCols(rawRev.labels, rawRev.cols, timeframe);
+  const byKey = Object.fromEntries((slicedRev.cols || []).map((c) => [c.key, c]));
+  const { labels: revDates, cols: REV_STREAMS } = {
+    labels: slicedRev.labels,
+    cols: [
+      { ...(byKey.amm || { data: [], total: 0 }), label: 'AMM & Swaps', color: STREAM_COLORS.amm },
+      { ...(byKey.box || { data: [], total: 0 }), label: 'Clock-In Box', color: STREAM_COLORS.box },
+      { ...(byKey.volume || { data: [], total: 0 }), label: 'Launch + Bonding volume', color: STREAM_COLORS.volume },
+      { ...(byKey.tax || { data: [], total: 0 }), label: 'Curve tax', color: STREAM_COLORS.tax },
+      { ...(byKey.smartLp || { data: [], total: 0 }), label: 'StonkBroker Fees', color: STREAM_COLORS.smartLp },
     ],
-    timeframe
-  );
+  };
   const smartLp = revenue.smartLp || {};
   const smartLpVaults = Array.isArray(smartLp.vaults) ? smartLp.vaults : [];
   const smartLpMarkets = useMemo(() => groupSmartLpMarkets(smartLpVaults), [smartLpVaults]);
-  const smartLpCol = REV_STREAMS[4] || { total: 0, color: '#fbbf24', data: [] };
-  const revChartOpts = {
-    responsive: true,
-    maintainAspectRatio: false,
-    interaction: { mode: 'index', intersect: false },
-    scales: {
-      x: { stacked: false, grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
-      y: { stacked: false, beginAtZero: true, grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactUsdTick } },
-    },
-    plugins: { legend: { labels: { color: '#cbd5e1', usePointStyle: true, pointStyle: 'rect' } } },
-  };
+  const smartLpCol = REV_STREAMS[4] || { total: 0, color: STREAM_COLORS.smartLp, data: [] };
 
   // 3. Burn Tracker Data
   const realBurntTokens = Math.max(
@@ -140,13 +141,13 @@ export default function StonkDetailView({ data, activeTab }) {
   const fwPrices = flywheel.prices;
   const fwBurn = flywheel.burn;
 
-  // 5. Activation Chart
+  // 5. Activation Chart — no invented Aug 14–20 series
   const actHistory = activation.history || {};
   const hasActHist = Array.isArray(actHistory.labels) && actHistory.labels.length > 0;
-  const actLabels = hasActHist ? actHistory.labels : ['Aug 14', 'Aug 15', 'Aug 16', 'Aug 17', 'Aug 18', 'Aug 19', 'Aug 20'];
-  const actCum = (hasActHist && actHistory.cumulative?.length) ? actHistory.cumulative : [1700, 1720, 1750, 1780, 1790, 1805, 1812];
-  const actDAct = (hasActHist && actHistory.dailyActivations?.length) ? actHistory.dailyActivations : [20, 30, 40, 10, 25, 15, 22];
-  const actDDeact = (hasActHist && actHistory.dailyDeactivations?.length) ? actHistory.dailyDeactivations : [0, 0, 10, 0, 5, 8, 15];
+  const actLabels = hasActHist ? actHistory.labels : [];
+  const actCum = hasActHist && actHistory.cumulative?.length ? actHistory.cumulative : [];
+  const actDAct = hasActHist && actHistory.dailyActivations?.length ? actHistory.dailyActivations : [];
+  const actDDeact = hasActHist && actHistory.dailyDeactivations?.length ? actHistory.dailyDeactivations : [];
 
   let breakdownArr = tiers.map((t) => {
     if (activation.breakdown && activation.breakdown[t.tier] != null) return activation.breakdown[t.tier];
@@ -154,33 +155,13 @@ export default function StonkDetailView({ data, activeTab }) {
     return Math.max(0, (s.act || 0) - (s.deact || 0));
   }); 
 
-  // 6. Ownership Fields & Charts (Anomaly filtered to prevent RPC crashes)
-  const ownHistGrowth = ownership.historicalGrowth || {};
-  const hasOwnHist = Array.isArray(ownHistGrowth.labels) && ownHistGrowth.labels.length > 0;
-  const ownLabels = hasOwnHist ? ownHistGrowth.labels : ['8/14', '8/15', '8/16', '8/17', '8/18', '8/19', '8/20'];
-  const rawOwnData = hasOwnHist ? ownHistGrowth.data : [1600, 1650, 1700, 1750, 1790, 1820, 1845];
-  
-  let lastValidOwn = 0;
-  const ownData = rawOwnData.map((v, i) => {
-    const num = Number(v);
-    if (i === 0) { lastValidOwn = num; return num; }
-    // Anomaly filter: Ignore bad reads where indexer drops more than 30% in one day
-    if (num > 0 && num >= lastValidOwn * 0.7) { 
-      lastValidOwn = num; 
-      return num; 
-    }
-    return lastValidOwn;
-  });
-
-  const chartLastValue = ownData.length > 0 ? ownData[ownData.length - 1] : 0;
-  let stonkHolders = Number(ownership.stonkHolders) || Number(ownership.tokenHolders) || Number(ownership.erc20Holders) || chartLastValue;
-
-  if (stonkHolders > 0 && stonkHolders < chartLastValue * 0.7) {
-    stonkHolders = chartLastValue;
-  }
+  const holdersFull = holderSeries(ownership, dailySnapshots);
+  const ownN = windowLen(timeframe, holdersFull.labels.length);
+  const ownLabels = holdersFull.labels.slice(-ownN);
+  const ownData = holdersFull.data.slice(-ownN);
+  const stonkHolders = Number(ownership.stonkHolders) || Number(ownership.tokenHolders) || Number(ownership.erc20Holders) || 0;
 
   const actN = windowLen(timeframe, actLabels.length);
-  const ownN = windowLen(timeframe, ownLabels.length);
   const burntNfts = ownership.burntNfts || ownership.permanentlyBurntUnits || 0;
 
   return (
@@ -266,13 +247,17 @@ export default function StonkDetailView({ data, activeTab }) {
                               <span className="text-xs text-slate-500">Based on On-Chain Distributions</span>
                             </div>
                             <div className="relative h-32 md:h-40 w-full">
-                              <Line 
-                                data={{ 
-                                  labels: t.dailyDates?.length ? t.dailyDates : revDates, 
-                                  datasets: [{ label: 'Daily Yield (USD)', data: t.dailyYields?.length ? t.dailyYields : [20, 15, 30, 25, 35, 20, 30], borderColor: '#00a804', backgroundColor: 'rgba(0, 168, 4, 0.1)', borderWidth: 2, fill: true, tension: 0.4, pointRadius: 0 }] 
-                                }} 
-                                options={chartOptions} 
-                              />
+                              {seriesHasInk(t.dailyYields) ? (
+                                <Line 
+                                  data={{ 
+                                    labels: t.dailyDates, 
+                                    datasets: [{ label: 'Daily Yield (USD)', data: t.dailyYields, borderColor: '#00a804', backgroundColor: 'rgba(0, 168, 4, 0.1)', borderWidth: 2, fill: true, tension: 0.4, pointRadius: 0 }] 
+                                  }} 
+                                  options={chartOptions} 
+                                />
+                              ) : (
+                                <EmptyChart>No daily yield recorded for this tier</EmptyChart>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -315,6 +300,8 @@ export default function StonkDetailView({ data, activeTab }) {
               <Line key={`yield-${timeframe}`} data={{ labels: histLabels, datasets: histDatasets }} options={chartOptions} />
             </div>
           </div>
+          <YieldUsdPricePanel snaps={roiSnaps} tiers={tiers} />
+          <PaybackPanel snaps={roiSnaps} tiers={tiers} floorCostUsd={floorCostUsd} tokenPriceUsd={market.tokenPriceUsd} />
         </div>
       </section>
 
@@ -324,7 +311,7 @@ export default function StonkDetailView({ data, activeTab }) {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div>
               <h2 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">Protocol Revenue & Ecosystem Liquidity</h2>
-              <p className="text-xs text-slate-400 mt-1">AMM and Clock-In are protocol fees. StonkBroker Fees on this chart are the Smart LP skim. Depositor Fees Generated are on the Smart LPs tab.</p>
+              <p className="text-xs text-slate-400 mt-1">AMM and Clock-In are protocol fees. StonkBroker Fees are the Smart LP skim. Launch volume is not a fee — it is on its own chart.</p>
             </div>
           </div>
 
@@ -374,25 +361,7 @@ export default function StonkDetailView({ data, activeTab }) {
             </div>
           </div>
 
-          <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
-            <h3 className="text-sm font-bold text-white mb-4">Daily revenue streams (USD)</h3>
-            <p className="text-[10px] text-slate-500 -mt-3 mb-4">Grouped bars: AMM fees, Clock-In, launch/bonding quote volume, curve tax, and StonkBroker Fees. Same colors as the boxes.</p>
-            <div className="relative h-52 sm:h-64 md:h-80 w-full">
-              <Bar
-                data={{
-                  labels: revDates,
-                  datasets: REV_STREAMS.map((s) => ({
-                    label: s.label,
-                    data: s.data,
-                    backgroundColor: s.color,
-                    borderRadius: 3,
-                    maxBarThickness: 28,
-                  })),
-                }}
-                options={revChartOpts}
-              />
-            </div>
-          </div>
+          <ProtocolFeeVolumePanels labels={slicedRev.labels} cols={slicedRev.cols} kind={rawRev.kind} />
         </div>
       </section>
 
@@ -406,6 +375,8 @@ export default function StonkDetailView({ data, activeTab }) {
           </div>
 
           {smartLpVaults.length > 0 && (
+            <>
+            <SmartLpChartPanels snaps={roiSnaps} smartLp={smartLp} vaults={smartLpVaults} />
             <div className="bg-[#08090b] border border-[#1e2228] rounded-2xl p-3 sm:p-5 md:p-6">
               <div className="flex flex-col gap-4 mb-4">
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
@@ -523,9 +494,12 @@ export default function StonkDetailView({ data, activeTab }) {
                 </div>
               )}
             </div>
+            </>
           )}
 
           {lockedLp && lockedLp.pools && lockedLp.pools.length > 0 && (
+            <>
+            <BlackHoleChartPanels snaps={roiSnaps} lockedLp={lockedLp} ticker={config.ticker} />
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-2">
                 <div>
@@ -553,6 +527,7 @@ export default function StonkDetailView({ data, activeTab }) {
                 </div>
               )}
             </div>
+            </>
           )}
         </div>
       </section>
@@ -665,20 +640,25 @@ export default function StonkDetailView({ data, activeTab }) {
             </div>
           </div>
 
+          <ActivationStackPanel snaps={roiSnaps} tiers={tiers} breakdown={activation.breakdown} />
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
              <h3 className="text-sm font-bold text-white mb-4">Historical Activity (Net vs. Daily)</h3>
              <div className="relative h-52 sm:h-64 md:h-80 w-full">
+                {hasActHist ? (
                 <Bar 
                   data={{
                     labels: actLabels.slice(-actN),
                     datasets: [
-                      { type: 'line', label: 'Net Active Units', data: actCum.slice(-actN), borderColor: '#00a804', backgroundColor: 'rgba(0, 168, 4, 0.05)', borderWidth: 3, fill: true, tension: 0.3, yAxisID: 'y' },
+                      { type: 'line', label: 'Net Active Units', data: actCum.slice(-actN), borderColor: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.05)', borderWidth: 3, fill: true, tension: 0.3, yAxisID: 'y' },
                       { type: 'bar', label: 'Daily Activations', data: actDAct.slice(-actN), backgroundColor: '#00a804', borderRadius: 4, yAxisID: 'y1' },
                       { type: 'bar', label: 'Daily Deactivations', data: actDDeact.slice(-actN), backgroundColor: '#f43f5e', borderRadius: 4, yAxisID: 'y1' }
                     ]
                   }} 
                   options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#94a3b8' } } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { type: 'linear', position: 'left', grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y1: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, min: 0 } } }} 
                 />
+                ) : (
+                  <EmptyChart>No activation history recorded</EmptyChart>
+                )}
              </div>
           </div>
         </div>
@@ -698,8 +678,9 @@ export default function StonkDetailView({ data, activeTab }) {
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner border-b-4 border-b-blue-500"><p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">True Circulating NFTs</p><p className="text-xl md:text-3xl font-extrabold text-blue-400">{formatNumber(ownership.circulatingNftSupply || 1400)}</p></div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Unique NFT Holders</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-purple-400">{formatNumber(ownership.nftHolders || 0)} Wallets</p></div>
+            <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm ring-1 ring-emerald-500/20"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Wallets with an activated StonkBroker</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-emerald-300">{activation.activeHolders == null ? '—' : `${formatNumber(activation.activeHolders)} Wallets`}</p></div>
             <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm ring-1 ring-emerald-500/20"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Ownership Concentration</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-emerald-400">{(ownership.ownershipRatio || 0).toFixed(2)}%</p></div>
             <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Unique $STONK Holders</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-purple-400">{formatNumber(stonkHolders)} Wallets</p></div>
           </div>
@@ -707,12 +688,24 @@ export default function StonkDetailView({ data, activeTab }) {
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
             <h3 className="text-sm font-bold text-white mb-4">True Active Token Holders Over Time</h3>
             <div className="relative h-52 sm:h-64 md:h-80 w-full">
+              {seriesHasInk(ownData) ? (
               <Line 
-                data={{ labels: ownLabels.slice(-ownN), datasets: [{ label: 'Active Holders', data: ownData.slice(-ownN), borderColor: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] }} 
+                data={{ labels: ownLabels, datasets: [{ label: 'Active Holders', data: ownData, borderColor: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] }} 
                 options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } } } }} 
               />
+              ) : (
+                <EmptyChart>No holder history recorded</EmptyChart>
+              )}
             </div>
           </div>
+          <OwnershipHistoryPanels
+            snaps={roiSnaps}
+            live={{
+              tokenHolders: stonkHolders,
+              nftHolders: ownership.nftHolders,
+              ownershipRatio: ownership.ownershipRatio,
+            }}
+          />
         </div>
       </section>
 
@@ -728,7 +721,7 @@ export default function StonkDetailView({ data, activeTab }) {
           <p><strong className="text-white">Yield & ROI (Global Network Oracle) Methodology:</strong> Cash-on-Cash (CoC) returns are calculated dynamically based on the selected project's architecture and active network weight.</p>
           <p><strong className="text-white">Historical Yield & Payback Horizon Methodology:</strong> Capital recovery timelines are calculated by dividing the total entry cost by annualized trailing yield rates. ROI trajectories map historical performance over rolling epochs.</p>
           <p><strong className="text-white">Protocol Analytics:</strong> Metrics shown aggregate live on-chain events across registered smart contracts.</p>
-          <p><strong className="text-white">Protocol Ownership & Distribution Methodology:</strong> Wallet concentration metrics evaluate unique human holders against true circulating supply, subtracting protocol treasury allocations.</p>
+          <p><strong className="text-white">Protocol Ownership & Distribution Methodology:</strong> Wallet concentration metrics evaluate unique human holders against true circulating supply, subtracting protocol treasury allocations. Activated-wallet count is unique current owners of NFTs that still have an open activation — a sale clears it.</p>
         </div>
         <p className="text-xs md:text-sm text-slate-400 italic leading-relaxed border-t border-[#1e2228] pt-5">
           <strong className="text-slate-300 not-italic">Disclaimer:</strong> Tracked yield values are calculated using Mark-to-Market spot pricing at the exact time of the dashboard's last automated sync, rather than the historical price at the time of the drop. Yields fluctuate based on network activation weight, market token prices, and community protocol volume. This is a community-built tracking tool and does not guarantee future returns.

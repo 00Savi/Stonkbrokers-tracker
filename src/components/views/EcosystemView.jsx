@@ -8,9 +8,10 @@ import {
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import OverviewView from './OverviewView';
 import { compactUsd, compactNum, WindowBar } from '../kit';
-import { protocolRevenueChart } from '../../lib/yieldHistory';
+import { protocolRevenueChart, windowSnapshots, seriesHasInk } from '../../lib/yieldHistory';
 import { useChartWindow } from '../../lib/chartWindow';
-import { baseChartOptions, compactTick, compactUsdTick } from '../../lib/charts';
+import { baseChartOptions, compactTick, compactUsdTick, PROJECT_COLORS } from '../../lib/charts';
+import { EmptyChart } from '../HistoryCharts';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
@@ -31,10 +32,6 @@ function lastFinite(arr) {
     if (Number.isFinite(n)) return n;
   }
   return null;
-}
-
-function seriesHasInk(data) {
-  return Array.isArray(data) && data.some((v) => v != null && Number(v) !== 0);
 }
 
 /** One protocol, one Y-axis. Overlaying 8 series on a shared scale hides everyone except the outlier. */
@@ -153,7 +150,7 @@ export default function EcosystemView({ data, pending = false }) {
     return kind !== 'cashflow' && kind !== 'vault';
   });
   const projectNames = { stonk: 'StonkBrokers', mancer: 'Mancer', tickeryard: 'TickerYard', cardwall: 'The Card Wall', index: 'The Index', printer: 'RH Machines', oakmont: 'Oakmont', coattail: 'Coattail Brokers' };
-  const projectColors = { stonk: '#00a804', mancer: '#8b5cf6', tickeryard: '#38bdf8', cardwall: '#f5b700', index: '#34d399', printer: '#fb923c', oakmont: '#a3e635', coattail: '#f43f5e' };
+  const projectColors = PROJECT_COLORS;
   const projectLogos = { stonk: 'Stonkbroker.png', mancer: 'logo.png', tickeryard: 'Yardkeepers.png', cardwall: 'wall.png', index: 'Index.png', printer: 'Printer.png', oakmont: 'Oakmont.png', coattail: 'Coattail.svg' };
 
   const scaleYield = (annual) => {
@@ -178,57 +175,12 @@ export default function EcosystemView({ data, pending = false }) {
   // UNIVERSAL DATA ARRAYS & SAFE-PADDING ENGINES
   // =========================================================
   const stonk = data.projects.stonk || {};
-  
-  // 1. Genesis Array (Used for Ownership, Burn, and Activations to show full history)
-  let masterGenesisLabels = stonk.ownership?.historicalGrowth?.labels || [];
-  if (masterGenesisLabels.length < 10) {
-    masterGenesisLabels = ['7/15', '7/18', '7/21', '7/24', '7/27', '7/30', '8/2', '8/5', '8/8', '8/11', '8/14', '8/17', '8/20', '8/23'];
-  }
+  const snapWin = (p) => windowSnapshots(p?.dailySnapshots, timeframe);
 
-  // 2. Historical Array (Tightly wrapped ONLY around the dates we actually have yield data for!)
-  let masterHistLabels = stonk.dailySnapshots?.map(s => s.date) || [];
-  if (masterHistLabels.length === 0) {
-    masterHistLabels = ['Aug 19', 'Aug 20', 'Aug 21', 'Aug 22', 'Aug 23'];
-  }
-
-  // 3. Revenue Array
-  let masterRevLabels = stonk.tiers?.[0]?.dailyDates || [];
-  if (masterRevLabels.length === 0) {
-    masterRevLabels = ['8/15', '8/16', '8/17', '8/18', '8/19', '8/20', '8/21'];
-  }
-
-  // Pads missing early data with 0s so young projects curve up perfectly
-  const rightAlignArray = (arr, targetLength, padValue = 0) => {
-    if (!Array.isArray(arr) || arr.length === 0) return Array(targetLength).fill(padValue);
-    if (arr.length >= targetLength) return arr.slice(arr.length - targetLength);
-    return [...Array(targetLength - arr.length).fill(padValue), ...arr];
-  };
-
-  // Smooth interpolator for projects with no data arrays yet
-  const interpolateData = (targetValue, targetLength, offset) => {
-    return Array(targetLength).fill(0).map((_, idx) => {
-      if (idx < offset) return 0;
-      const progress = (idx - offset) / (targetLength - 1 - offset || 1);
-      return Number((targetValue * Math.pow(progress, 2)).toFixed(2)); 
-    });
-  };
-
-  // RPC Anomaly Filter: Prevents the StonkBrokers chart from crashing to 11k randomly
-  const removeAnomalies = (arr) => {
-    let lastValid = 0;
-    return arr.map((v, i) => {
-      const num = Number(v);
-      if (i === 0) { lastValid = num; return num; }
-      // If data drops by more than 30% in one day, it's a bad RPC read. Carry forward real data.
-      if (num > 0 && num >= lastValid * 0.7) { lastValid = num; return num; }
-      return lastValid;
-    });
-  };
-
-  const getSliceCount = (timeframe, totalLen) => {
-    if (timeframe === '1d') return Math.min(1, totalLen);
-    if (timeframe === '7d' || timeframe === '1w') return Math.min(7, totalLen);
-    if (timeframe === '30d' || timeframe === '1m') return Math.min(30, totalLen);
+  const getSliceCount = (tf, totalLen) => {
+    if (tf === '1d') return Math.min(1, totalLen);
+    if (tf === '7d' || tf === '1w') return Math.min(7, totalLen);
+    if (tf === '30d' || tf === '1m') return Math.min(30, totalLen);
     return totalLen;
   };
 
@@ -515,19 +467,23 @@ export default function EcosystemView({ data, pending = false }) {
                               <span className="text-xs text-slate-500">Based on On-Chain Distributions</span>
                             </div>
                             <div className="relative h-32 md:h-40 w-full">
-                              <Line 
-                                data={{ 
-                                  labels: t0?.dailyDates?.length ? t0.dailyDates : masterRevLabels.slice(-7), 
-                                  datasets: [{ 
-                                    label: 'Daily Yield (USD)', 
-                                    data: t0?.dailyYields?.length ? t0.dailyYields : [0,0,0,0,0,0,0], 
-                                    borderColor: projectColors[k], 
-                                    backgroundColor: `${projectColors[k]}15`, 
-                                    borderWidth: 2, fill: true, tension: 0.4, pointRadius: 0 
-                                  }] 
-                                }} 
-                                options={chartOptions} 
-                              />
+                              {seriesHasInk(t0?.dailyYields) ? (
+                                <Line 
+                                  data={{ 
+                                    labels: t0?.dailyDates?.length ? t0.dailyDates : masterRevLabels.slice(-7), 
+                                    datasets: [{ 
+                                      label: 'Daily Yield (USD)', 
+                                      data: t0.dailyYields, 
+                                      borderColor: projectColors[k], 
+                                      backgroundColor: `${projectColors[k]}15`, 
+                                      borderWidth: 2, fill: true, tension: 0.4, pointRadius: 0 
+                                    }] 
+                                  }} 
+                                  options={chartOptions} 
+                                />
+                              ) : (
+                                <EmptyChart>No daily yield recorded for this tier</EmptyChart>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -666,91 +622,63 @@ export default function EcosystemView({ data, pending = false }) {
             })}
           </div>
 
-          <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-4 md:p-6">
-            <div className="flex justify-between items-center mb-4">
-              <div>
-                <h3 className="text-sm font-bold text-white">Cumulative Token Supply Burnt Over Time (%)</h3>
-                <p className="text-xs text-slate-400 mt-0.5">Deflation measured as a percentage of total token supply.</p>
-              </div>
-            </div>
-            
-            <div className="relative h-80 w-full bg-[#08090b] p-4 rounded-xl border border-[#1e2228]">
-              <Line 
-                data={{
-                  labels: masterGenesisLabels.slice(-getSliceCount(timeframe, masterGenesisLabels.length)),
-                  datasets: order.map((k) => {
-                    const p = data.projects[k];
-                    const { maxToken, burntTok } = burnCaps(p);
-                    const maxTokenSupply = maxToken || 1;
-                    
-                    const rawTokensBurnt = Array.isArray(p?.ownership?.burnHistory) ? p.ownership.burnHistory : [];
-                    
-                    let tokenBurnPctArray = [];
-                    if (rawTokensBurnt.length > 0) {
-                      const padded = rightAlignArray(rawTokensBurnt, masterGenesisLabels.length, 0);
-                      tokenBurnPctArray = padded.map(v => Number((Math.min(100, (v / maxTokenSupply) * 100)).toFixed(2)));
-                    } else {
-                      const targetPct = Number(((burntTok / maxTokenSupply) * 100).toFixed(2));
-                      const launchOffsets = { stonk: 0, mancer: 4, tickeryard: 8, cardwall: 14 };
-                      tokenBurnPctArray = interpolateData(Math.min(100, targetPct), masterGenesisLabels.length, launchOffsets[k] || 0);
-                    }
-
-                    const slicedData = tokenBurnPctArray.slice(-getSliceCount(timeframe, masterGenesisLabels.length));
-
-                    return {
-                      label: `${projectNames[k]} Tokens Burnt (%)`,
-                      data: slicedData, 
-                      borderColor: projectColors[k],
-                      backgroundColor: `${projectColors[k]}10`,
-                      borderWidth: 2.5, tension: 0.3, pointRadius: 2
-                    };
-                  })
-                }} 
-                options={percentChartOptions} 
-              />
+          <div>
+            <h3 className="text-sm font-bold text-white mb-1">Cumulative token supply burnt (%)</h3>
+            <p className="text-xs text-slate-400 mb-4">From daily snapshots. No invented curves.</p>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {order.map((k) => {
+                const p = data.projects[k];
+                const { maxToken } = burnCaps(p);
+                const snaps = snapWin(p);
+                const series = snaps.map((s) => {
+                  const burn = Number(s.totalBurn) || 0;
+                  return maxToken > 0 ? +Math.min(100, (burn / maxToken) * 100).toFixed(2) : 0;
+                });
+                const last = series.length ? series[series.length - 1] : null;
+                return (
+                  <EcoMiniChart
+                    key={`burn-${k}`}
+                    title={projectNames[k]}
+                    color={projectColors[k]}
+                    labels={snaps.map((s) => s.date)}
+                    data={series}
+                    yTick={(v) => `${compactTick(v)}%`}
+                    value={last == null ? null : `${last.toFixed(2)}%`}
+                    to={projectPath(k, 'burn')}
+                  />
+                );
+              })}
             </div>
           </div>
 
-          <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-4 md:p-6">
-            <h3 className="text-sm font-bold text-white mb-1">Equivalent NFT Supply Removed Over Time (%)</h3>
-            <p className="text-xs text-slate-400 mb-4">Total NFT supply reduction through token burns and floor mechanics.</p>
-            
-            <div className="relative h-80 w-full bg-[#08090b] p-4 rounded-xl border border-[#1e2228]">
-              <Line 
-                data={{
-                  labels: masterGenesisLabels.slice(-getSliceCount(timeframe, masterGenesisLabels.length)),
-                  datasets: order.filter((k) => burnCaps(data.projects[k]).nftPct != null).map((k) => {
-                    const p = data.projects[k];
-                    const maxNftSupply = p?.ownership?.currentMaxSupply || p?.config?.maxSupply || 3592;
-                    const { nftPct } = burnCaps(p);
-                    
-                    const finalBurntTokens = Math.max(...(p?.ownership?.burnHistory || [1]));
-                    const nftBurned = (nftPct / 100) * maxNftSupply;
-                    
-                    const ratio = finalBurntTokens > 0 ? (nftBurned / finalBurntTokens) : 0;
-                    const rawTokensBurnt = Array.isArray(p?.ownership?.burnHistory) ? p.ownership.burnHistory : [];
-
-                    let nftBurnPctArray = [];
-                    if (rawTokensBurnt.length > 0) {
-                      const padded = rightAlignArray(rawTokensBurnt, masterGenesisLabels.length, 0);
-                      nftBurnPctArray = padded.map(v => Number((Math.min(100, ((v * ratio) / maxNftSupply) * 100)).toFixed(2)));
-                    } else {
-                      nftBurnPctArray = interpolateData(nftPct || 0, masterGenesisLabels.length, 0);
-                    }
-
-                    const slicedData = nftBurnPctArray.slice(-getSliceCount(timeframe, masterGenesisLabels.length));
-
-                    return {
-                      label: `${projectNames[k]} NFTs Removed (%)`,
-                      data: slicedData, 
-                      borderColor: projectColors[k],
-                      backgroundColor: `${projectColors[k]}10`,
-                      borderWidth: 2.5, tension: 0.3, pointRadius: 2, borderDash: [5, 5]
-                    };
-                  })
-                }} 
-                options={percentChartOptions} 
-              />
+          <div>
+            <h3 className="text-sm font-bold text-white mb-1">Equivalent NFT supply removed (%)</h3>
+            <p className="text-xs text-slate-400 mb-4">Units removed vs max NFT supply, from the same snapshots.</p>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {order.filter((k) => burnCaps(data.projects[k]).nftPct != null).map((k) => {
+                const p = data.projects[k];
+                const maxNft = Number(p?.ownership?.currentMaxSupply || p?.config?.maxSupply || 0);
+                const unit = Number(p?.config?.unitValue) || 0;
+                const snaps = snapWin(p);
+                const series = snaps.map((s) => {
+                  if (!(maxNft > 0) || !(unit > 0)) return 0;
+                  const units = (Number(s.totalBurn) || 0) / unit;
+                  return +Math.min(100, (units / maxNft) * 100).toFixed(2);
+                });
+                const last = series.length ? series[series.length - 1] : null;
+                return (
+                  <EcoMiniChart
+                    key={`nftburn-${k}`}
+                    title={projectNames[k]}
+                    color={projectColors[k]}
+                    labels={snaps.map((s) => s.date)}
+                    data={series}
+                    yTick={(v) => `${compactTick(v)}%`}
+                    value={last == null ? null : `${last.toFixed(2)}%`}
+                    to={projectPath(k, 'burn')}
+                  />
+                );
+              })}
             </div>
           </div>
         </div>
@@ -814,41 +742,31 @@ export default function EcosystemView({ data, pending = false }) {
             </div>
           </div>
 
-          <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-4 md:p-6">
-             <div className="flex justify-between items-center mb-4">
-               <h3 className="text-sm font-bold text-white">Network Growth Over Time (Net Active Units)</h3>
-             </div>
-             <div className="relative h-56 sm:h-80 md:h-96 w-full bg-[#08090b] rounded-xl p-4 border border-[#1e2228]">
-                <Line 
-                  data={{ 
-                    labels: masterGenesisLabels.slice(-getSliceCount(timeframe, masterGenesisLabels.length)), 
-                    datasets: activationOrder.map(k => {
-                      const p = data.projects[k];
-                      const rawData = Array.isArray(p?.activation?.history?.cumulative) ? p.activation.history.cumulative : [];
-                      
-                      let activeUnitsArray = [];
-                      if (rawData.length > 0) {
-                        activeUnitsArray = rightAlignArray(rawData, masterGenesisLabels.length, 0);
-                      } else {
-                        const targetCount = p?.activation?.activeCount || 0;
-                        const launchOffsets = { stonk: 0, mancer: 4, tickeryard: 8, cardwall: 14 };
-                        activeUnitsArray = interpolateData(targetCount, masterGenesisLabels.length, launchOffsets[k] || 0);
-                      }
-
-                      const slicedData = activeUnitsArray.slice(-getSliceCount(timeframe, masterGenesisLabels.length));
-
-                      return {
-                        label: projectNames[k],
-                        data: slicedData,
-                        borderColor: projectColors[k],
-                        backgroundColor: `${projectColors[k]}10`,
-                        borderWidth: 2.5, tension: 0.3, pointRadius: 2
-                      };
-                    })
-                  }} 
-                  options={chartOptions} 
-                />
-             </div>
+          <div>
+            <h3 className="text-sm font-bold text-white mb-1">Net active units</h3>
+            <p className="text-xs text-slate-400 mb-4">From each project’s recorded activation history. Missing history is a blank mini, not a made-up curve.</p>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {activationOrder.map((k) => {
+                const p = data.projects[k];
+                const hist = p?.activation?.history || {};
+                const labels = Array.isArray(hist.labels) ? hist.labels : [];
+                const series = Array.isArray(hist.cumulative) ? hist.cumulative : [];
+                const n = getSliceCount(timeframe, labels.length);
+                const last = lastFinite(series);
+                return (
+                  <EcoMiniChart
+                    key={`act-${k}`}
+                    title={projectNames[k]}
+                    color={projectColors[k]}
+                    labels={labels.slice(-n)}
+                    data={series.slice(-n)}
+                    yTick={compactTick}
+                    value={last == null ? null : formatNumber(last)}
+                    to={projectPath(k, 'activation')}
+                  />
+                );
+              })}
+            </div>
           </div>
         </div>
       </section>
@@ -870,8 +788,6 @@ export default function EcosystemView({ data, pending = false }) {
               
               // Filter out 0 reads if RPC fails
               let tokens = Number(p?.ownership?.tokenHolders) || Number(p?.ownership?.stonkHolders) || Number(p?.ownership?.erc20Holders) || 0;
-              if (tokens === 0 && k === 'stonk') tokens = 1845;
-              if (tokens === 0 && k === 'mancer') tokens = 4101;
 
               return (
                 <Link
@@ -896,82 +812,61 @@ export default function EcosystemView({ data, pending = false }) {
             })}
           </div>
 
-          <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-4 md:p-6">
-            <h3 className="text-sm font-bold text-white mb-4">Unique NFT Holders Over Time</h3>
-            <div className="relative h-80 w-full bg-[#08090b] rounded-xl p-4 border border-[#1e2228]">
-              <Line 
-                data={{
-                  labels: masterGenesisLabels.slice(-getSliceCount(timeframe, masterGenesisLabels.length)),
-                  datasets: order.map(k => {
-                    const p = data.projects[k];
-                    const rawData = Array.isArray(p?.ownership?.historicalGrowth?.data) ? p.ownership.historicalGrowth.data : [];
-                    
-                    // Filter anomalies (drop > 30%)
-                    const cleanedData = removeAnomalies(rawData);
-
-                    let nftHoldersArray = [];
-                    if (cleanedData.length > 0) {
-                      nftHoldersArray = rightAlignArray(cleanedData, masterGenesisLabels.length, 0);
-                    } else {
-                      const targetHolders = p?.ownership?.nftHolders || 0;
-                      const launchOffsets = { stonk: 0, mancer: 4, tickeryard: 8, cardwall: 14 };
-                      nftHoldersArray = interpolateData(targetHolders, masterGenesisLabels.length, launchOffsets[k] || 0);
-                    }
-
-                    const slicedData = nftHoldersArray.slice(-getSliceCount(timeframe, masterGenesisLabels.length));
-
-                    return {
-                      label: `${projectNames[k]} NFT Holders`,
-                      data: slicedData,
-                      borderColor: projectColors[k],
-                      backgroundColor: `${projectColors[k]}10`,
-                      borderWidth: 2.5, fill: true, tension: 0.3, pointRadius: 0
-                    };
-                  })
-                }} 
-                options={chartOptions} 
-              />
+          <div>
+            <h3 className="text-sm font-bold text-white mb-1">NFT holders</h3>
+            <p className="text-xs text-slate-400 mb-4">Snapshot nftHolders when present; otherwise the live count as a single point.</p>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {order.map((k) => {
+                const p = data.projects[k];
+                const snaps = snapWin(p);
+                const series = snaps.map((s) => Number(s.nftHolders) || null);
+                const live = Number(p?.ownership?.nftHolders) || 0;
+                if (series.length && live > 0 && series[series.length - 1] == null) series[series.length - 1] = live;
+                return (
+                  <EcoMiniChart
+                    key={`nft-h-${k}`}
+                    title={projectNames[k]}
+                    color={projectColors[k]}
+                    labels={snaps.map((s) => s.date)}
+                    data={series}
+                    yTick={compactTick}
+                    value={live > 0 ? formatNumber(live) : null}
+                    to={projectPath(k, 'ownership')}
+                  />
+                );
+              })}
             </div>
           </div>
 
-          <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-4 md:p-6">
-            <h3 className="text-sm font-bold text-white mb-4">Unique Token (ERC-20) Holders Over Time</h3>
-            <div className="relative h-80 w-full bg-[#08090b] rounded-xl p-4 border border-[#1e2228]">
-              <Line 
-                data={{
-                  labels: masterGenesisLabels.slice(-getSliceCount(timeframe, masterGenesisLabels.length)),
-                  datasets: order.map(k => {
-                    const p = data.projects[k];
-                    const currentTokenHolders = Number(p?.ownership?.tokenHolders) || Number(p?.ownership?.stonkHolders) || Number(p?.ownership?.erc20Holders) || (k === 'stonk' ? 1845 : 1);
-                    const currentNftHolders = Number(p?.ownership?.nftHolders) || 1;
-                    
-                    const rawData = Array.isArray(p?.ownership?.historicalGrowth?.data) ? p.ownership.historicalGrowth.data : [];
-                    const cleanedData = removeAnomalies(rawData);
-
-                    let tokenHoldersArray = [];
-                    if (cleanedData.length > 0) {
-                      const ratio = currentNftHolders > 0 ? (currentTokenHolders / currentNftHolders) : 1;
-                      // Multiply cleaned NFT data by the exact Token ratio
-                      const extrapolatedTokens = cleanedData.map(v => Math.round(v * ratio));
-                      tokenHoldersArray = rightAlignArray(extrapolatedTokens, masterGenesisLabels.length, 0);
-                    } else {
-                      const launchOffsets = { stonk: 0, mancer: 4, tickeryard: 8, cardwall: 14 };
-                      tokenHoldersArray = interpolateData(currentTokenHolders, masterGenesisLabels.length, launchOffsets[k] || 0);
-                    }
-
-                    const slicedData = tokenHoldersArray.slice(-getSliceCount(timeframe, masterGenesisLabels.length));
-
-                    return {
-                      label: `${projectNames[k]} Token Holders`,
-                      data: slicedData,
-                      borderColor: projectColors[k],
-                      backgroundColor: `${projectColors[k]}10`,
-                      borderWidth: 2.5, fill: true, tension: 0.3, pointRadius: 0
-                    };
-                  })
-                }} 
-                options={chartOptions} 
-              />
+          <div>
+            <h3 className="text-sm font-bold text-white mb-1">Token holders</h3>
+            <p className="text-xs text-slate-400 mb-4">hourly historicalGrowth when it exists; else snapshot tokenHolders.</p>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {order.map((k) => {
+                const p = data.projects[k];
+                const hist = p?.ownership?.historicalGrowth || {};
+                let labels = Array.isArray(hist.labels) ? hist.labels : [];
+                let series = Array.isArray(hist.data) ? hist.data.map(Number) : [];
+                if (!labels.length) {
+                  const snaps = snapWin(p);
+                  labels = snaps.map((s) => s.date);
+                  series = snaps.map((s) => Number(s.tokenHolders) || null);
+                }
+                const n = getSliceCount(timeframe, labels.length);
+                const live = Number(p?.ownership?.tokenHolders) || Number(p?.ownership?.stonkHolders) || 0;
+                return (
+                  <EcoMiniChart
+                    key={`tok-h-${k}`}
+                    title={projectNames[k]}
+                    color={projectColors[k]}
+                    labels={labels.slice(-n)}
+                    data={series.slice(-n)}
+                    yTick={compactTick}
+                    value={live > 0 ? formatNumber(live) : null}
+                    to={projectPath(k, 'ownership')}
+                  />
+                );
+              })}
             </div>
           </div>
         </div>

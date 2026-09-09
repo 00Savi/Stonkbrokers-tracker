@@ -1,6 +1,38 @@
 import React, { useEffect } from 'react';
 import { Chart as ChartJS } from 'chart.js';
 
+/** One hue per series when they share a chart. No two greens, no two golds. */
+export const STREAM_COLORS = {
+  amm: '#00a804',
+  dex: '#f97316',
+  box: '#38bdf8',
+  tax: '#f472b6',
+  smartLp: '#fbbf24',
+  volume: '#8b5cf6',
+  delivered: '#00a804',
+  vaulted: '#f5b700',
+  fees: '#00a804',
+  holdersRev: '#8b5cf6',
+};
+
+export const TIER_COLORS = ['#00a804', '#8b5cf6', '#38bdf8', '#f5b700', '#f472b6'];
+
+export const PROJECT_COLORS = {
+  stonk: '#00a804',
+  mancer: '#8b5cf6',
+  tickeryard: '#38bdf8',
+  cardwall: '#f5b700',
+  index: '#14b8a6',
+  printer: '#fb923c',
+  oakmont: '#e879f9',
+  coattail: '#f43f5e',
+};
+
+export const PAIR_COLORS = [
+  '#00a804', '#8b5cf6', '#38bdf8', '#f5b700', '#f472b6',
+  '#fb923c', '#14b8a6', '#e879f9', '#94a3b8',
+];
+
 export function isNarrow() {
   return typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
 }
@@ -64,6 +96,56 @@ export function baseChartOptions() {
       x: {
         ticks: { color: '#94a3b8' },
         grid: { color: '#1e2228', borderDash: [4, 4] },
+      },
+    },
+  };
+}
+
+export function usdStackOptions() {
+  const base = baseChartOptions();
+  return {
+    ...base,
+    scales: {
+      ...base.scales,
+      x: { ...base.scales.x, stacked: true },
+      y: {
+        ...base.scales.y,
+        stacked: true,
+        beginAtZero: true,
+        ticks: { ...base.scales.y.ticks, callback: compactUsdTick },
+      },
+    },
+  };
+}
+
+export function percentStackOptions() {
+  const base = usdStackOptions();
+  return {
+    ...base,
+    scales: {
+      ...base.scales,
+      y: {
+        ...base.scales.y,
+        min: 0,
+        max: 100,
+        ticks: { ...base.scales.y.ticks, callback: (v) => `${compactTick(v)}%` },
+      },
+    },
+  };
+}
+
+export function dualAxisOptions({ leftTick = compactTick, rightTick = compactUsdTick, rightColor = '#00a804' } = {}) {
+  const base = baseChartOptions();
+  return {
+    ...base,
+    scales: {
+      ...base.scales,
+      y: { ...base.scales.y, position: 'left', ticks: { ...base.scales.y.ticks, callback: leftTick } },
+      y1: {
+        type: 'linear',
+        position: 'right',
+        grid: { drawOnChartArea: false },
+        ticks: { color: rightColor, callback: rightTick },
       },
     },
   };
