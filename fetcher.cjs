@@ -201,7 +201,7 @@ const { BlockTime } = require("./lib/blocktime.cjs");
 const { buildSpecialProject, isSpecial } = require("./lib/specials.cjs");
 const yieldDays = require("./lib/yieldDays.cjs");
 const vaultFlow = require("./lib/vaultFlow.cjs");
-const { fetchSmartLps } = require("./lib/smartLp.cjs");
+const { fetchSmartLps, fromGgIndex } = require("./lib/smartLp.cjs");
 
 const gg = new GgIndex();
 const rpc = new Rpc();
@@ -2431,15 +2431,29 @@ async function run() {
       if (projectKey === "stonk") {
           lockedLpData = scanLockedStonkLiquidity(conf.tokenCa, markets[projectKey].tokenPriceUsd);
           try {
-            const smart = await fetchSmartLps({
-              rpc,
-              blockTime,
-              sevenDaysAgo,
-              ethPriceUsd: markets[projectKey]?.ethPriceUsd,
-              tokenPrices,
-              lookbackDays: YIELD_LOOKBACK_DAYS,
-              knownCas: (prevProjData.revenue?.smartLp?.vaults || []).map((v) => v.ca),
-            });
+            let smart = null;
+            try {
+              const idx = await gg.smartLps("stonk", { days: YIELD_LOOKBACK_DAYS });
+              smart = await fromGgIndex(idx, {
+                rpc,
+                ethPriceUsd: markets[projectKey]?.ethPriceUsd,
+                tokenPrices,
+                lookbackDays: YIELD_LOOKBACK_DAYS,
+              });
+            } catch (e) {
+              console.warn(`[warn] smart LP via gg-index: ${e.message}`);
+            }
+            if (!smart?.vaults?.length) {
+              smart = await fetchSmartLps({
+                rpc,
+                blockTime,
+                sevenDaysAgo,
+                ethPriceUsd: markets[projectKey]?.ethPriceUsd,
+                tokenPrices,
+                lookbackDays: YIELD_LOOKBACK_DAYS,
+                knownCas: (prevProjData.revenue?.smartLp?.vaults || []).map((v) => v.ca),
+              });
+            }
             carrySmartLp(revenueBreakdown, prevProjData.revenue, smart);
           } catch (e) {
             console.warn(`[warn] smart LP fetch failed: ${e.message}`);
