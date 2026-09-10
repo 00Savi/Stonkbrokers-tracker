@@ -46,9 +46,14 @@ export function compactTick(value) {
   if (abs >= 1e3) return `${sign}${(abs / 1e3).toFixed(1).replace(/\.0$/, '')}k`;
   if (abs >= 100) return `${sign}${Math.round(abs)}`;
   if (Number.isInteger(n)) return String(n);
-  return `${sign}${abs.toFixed(1).replace(/\.0$/, '')}`;
+  if (abs >= 1) return `${sign}${abs.toFixed(1).replace(/\.0$/, '')}`;
+  return `${sign}${trimZeros(abs.toFixed(abs >= 0.01 ? 4 : 6))}`;
 }
 
+/**
+ * Axis labels for USD. Token prices here are often $0.00x; rounding those to
+ * the nearest dollar made every tick on the price axis read $0.
+ */
 export function compactUsdTick(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return '';
@@ -57,7 +62,15 @@ export function compactUsdTick(value) {
   const sign = n < 0 ? '-' : '';
   if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(1).replace(/\.0$/, '')}M`;
   if (abs >= 1e3) return `${sign}$${(abs / 1e3).toFixed(1).replace(/\.0$/, '')}k`;
-  return `${sign}$${Math.round(abs)}`;
+  if (abs >= 100) return `${sign}$${Math.round(abs)}`;
+  if (abs >= 1) return `${sign}$${abs.toFixed(2)}`;
+  if (abs >= 0.01) return `${sign}$${trimZeros(abs.toFixed(4))}`;
+  if (abs >= 0.0001) return `${sign}$${trimZeros(abs.toFixed(6))}`;
+  return `${sign}$${Number(abs.toPrecision(2))}`;
+}
+
+function trimZeros(s) {
+  return s.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
 }
 
 export function applyChartJsLayout() {
@@ -138,6 +151,18 @@ export function dualAxisOptions({ leftTick = compactTick, rightTick = compactUsd
   const base = baseChartOptions();
   return {
     ...base,
+    plugins: {
+      ...base.plugins,
+      tooltip: {
+        callbacks: {
+          label(ctx) {
+            const v = ctx.parsed?.y;
+            const tick = ctx.dataset.yAxisID === 'y1' ? rightTick : leftTick;
+            return `${ctx.dataset.label || ''}: ${tick(v)}`;
+          },
+        },
+      },
+    },
     scales: {
       ...base.scales,
       y: { ...base.scales.y, position: 'left', ticks: { ...base.scales.y.ticks, callback: leftTick } },

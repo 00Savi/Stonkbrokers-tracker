@@ -6,7 +6,7 @@ import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import { burnSeries, burnRateSeries } from '../../lib/burn';
 import { windowSnapshots, tierRoiDatasets, protocolRevenueChart, sliceCols, windowPeriodLabel, windowLen, seriesHasInk } from '../../lib/yieldHistory';
 import { compactUsd, compactNum } from '../kit';
-import { baseChartOptions, compactTick, compactUsdTick, STREAM_COLORS } from '../../lib/charts';
+import { baseChartOptions, compactTick, compactUsdTick, dualAxisOptions, STREAM_COLORS } from '../../lib/charts';
 import { useChartWindow } from '../../lib/chartWindow';
 import { explorerAddressUrl } from '../../lib/tba';
 import { holderSeries } from '../../lib/snapshots';
@@ -579,7 +579,7 @@ export default function StonkDetailView({ data, activeTab }) {
                     { type: 'bar', label: 'Daily Burn Velocity', data: fwBurn, backgroundColor: 'rgba(249, 115, 22, 0.8)', borderRadius: 4, yAxisID: 'y' }
                   ]
                 }} 
-                options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#cbd5e1' } } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { type: 'linear', position: 'left', grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactTick } }, y1: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#00a804', callback: compactUsdTick } } } }} 
+                options={dualAxisOptions({ leftTick: compactTick, rightTick: compactUsdTick, rightColor: '#00a804' })} 
               />
             </div>
           </div>
