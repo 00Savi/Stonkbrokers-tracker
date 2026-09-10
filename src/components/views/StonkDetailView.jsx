@@ -311,7 +311,7 @@ export default function StonkDetailView({ data, activeTab }) {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div>
               <h2 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">Protocol Revenue & Ecosystem Liquidity</h2>
-              <p className="text-xs text-slate-400 mt-1">AMM and Clock-In are protocol fees. StonkBroker Fees are the Smart LP skim. Launch volume is not a fee — it is on its own chart.</p>
+              <p className="text-xs text-slate-400 mt-1">AMM and Clock-In are protocol fees. StonkBroker Fees are the Smart LP skim. Launch + bonding volume sits beside the fee stack on the same chart — it is not a fee.</p>
             </div>
           </div>
 

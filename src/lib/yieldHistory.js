@@ -80,11 +80,11 @@ function pickNum(row, keys, fallback = null) {
 }
 
 const FEE_COL_META = [
-  { key: 'amm', label: 'AMM & protocol', color: STREAM_COLORS.amm, snap: ['revAmm'], daily: 'dailyAmm' },
-  { key: 'dex', label: 'DEX fees', color: STREAM_COLORS.dex, snap: ['revDex'], daily: 'dailyDex' },
-  { key: 'box', label: 'Clock-In / order', color: STREAM_COLORS.box, snap: ['revBox'], daily: 'dailySecurityBox' },
-  { key: 'tax', label: 'Curve tax', color: STREAM_COLORS.tax, snap: ['revTax'], daily: 'dailyBondingTax' },
-  { key: 'smartLp', label: 'StonkBroker Fees', color: STREAM_COLORS.smartLp, snap: ['revSmartLp'], daily: 'dailySmartLp' },
+  { key: 'amm', label: 'AMM & protocol', color: STREAM_COLORS.amm, snap: ['revAmm'], daily: 'dailyAmm', hist: 'historyAmm' },
+  { key: 'dex', label: 'DEX fees', color: STREAM_COLORS.dex, snap: ['revDex'], daily: 'dailyDex', hist: 'historyDex' },
+  { key: 'box', label: 'Clock-In / order', color: STREAM_COLORS.box, snap: ['revBox'], daily: 'dailySecurityBox', hist: 'historyBox' },
+  { key: 'tax', label: 'Curve tax', color: STREAM_COLORS.tax, snap: ['revTax'], daily: 'dailyBondingTax', hist: 'historyTax' },
+  { key: 'smartLp', label: 'StonkBroker Fees', color: STREAM_COLORS.smartLp, snap: ['revSmartLp'], daily: 'dailySmartLp', hist: 'historySmartLp' },
 ];
 
 const VOLUME_META = {
@@ -93,12 +93,16 @@ const VOLUME_META = {
   color: STREAM_COLORS.volume,
   snap: ['revVolume'],
   daily: 'dailyLaunchpad',
+  hist: 'historyVolume',
 };
 
-function streamOnLabels(labels, snaps, r, meta, { ammHist = false } = {}) {
+function streamOnLabels(labels, snaps, r, meta) {
   const shortDates = r.dailyDates || [];
   const shortLookup = windowLookup(shortDates, r[meta.daily]);
-  const histLookup = ammHist ? windowLookup(r.historyDates || [], r.historyTotalUsd || []) : null;
+  const histArr = meta.hist === 'historyAmm'
+    ? (r.historyAmm || r.historyTotalUsd || [])
+    : (r[meta.hist] || []);
+  const histLookup = windowLookup(r.historyDates || [], histArr);
   const byDate = new Map((snaps || []).map((s) => [mdKey(s.date), s]));
   return labels.map((d) => {
     const s = byDate.get(mdKey(d));
@@ -106,10 +110,8 @@ function streamOnLabels(labels, snaps, r, meta, { ammHist = false } = {}) {
     if (fromSnap != null) return fromSnap;
     const fromWin = shortLookup(d);
     if (fromWin != null) return fromWin;
-    if (histLookup) {
-      const h = histLookup(d);
-      if (h != null) return h;
-    }
+    const h = histLookup(d);
+    if (h != null) return h;
     return null;
   });
 }
@@ -150,9 +152,14 @@ export function protocolRevenueChart(project) {
   const short = r.dailyDates?.length ? r.dailyDates : (project?.tiers?.[0]?.dailyDates || []);
   const snaps = usableSnapshots(project?.dailySnapshots);
   const snapLabels = snaps.map((s) => s.date).filter(Boolean);
-  const labels = snapLabels.length > short.length
-    ? snapLabels
-    : (r.historyDates?.length ? r.historyDates : short);
+  const labels = (() => {
+    const hist = r.historyDates || [];
+    if (snapLabels.length >= hist.length && snapLabels.length > short.length) return snapLabels;
+    if (hist.length > snapLabels.length && hist.length > short.length) return hist;
+    if (snapLabels.length > short.length) return snapLabels;
+    if (hist.length) return hist;
+    return short;
+  })();
   const hasSmart = !!(r.smartLp || r.dailySmartLp?.length || snaps.some((s) => s.revSmartLp != null));
   const rWin = { ...r, dailyDates: short };
 
@@ -162,7 +169,7 @@ export function protocolRevenueChart(project) {
       key: m.key,
       label: m.label,
       color: m.color,
-      data: streamOnLabels(labels, snaps, rWin, m, { ammHist: m.key === 'amm' }),
+      data: streamOnLabels(labels, snaps, rWin, m),
     }));
 
   cols.push({

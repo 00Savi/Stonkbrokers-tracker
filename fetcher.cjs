@@ -108,6 +108,33 @@ function overlayDailyStreams(snaps, revenue, extraDates) {
     s.revSmartLp = Number(revenue.dailySmartLp?.[j]) || 0;
     s.revSmartLpGross = Number(revenue.dailySmartLpGross?.[j]) || 0;
   }
+  overlayHistoryStreams(snaps, revenue);
+  return snaps;
+}
+
+function overlayHistoryStreams(snaps, revenue) {
+  const dates = revenue.historyDates || [];
+  if (!dates.length) return snaps;
+  const idx = new Map(dates.map((d, i) => [mdSnapKey(d), i]));
+  const pick = (arr, j) => {
+    const n = Number(arr?.[j]);
+    return Number.isFinite(n) ? n : null;
+  };
+  for (const s of snaps) {
+    const j = idx.get(mdSnapKey(s.date));
+    if (j == null) continue;
+    const fill = (field, arr) => {
+      if (s[field] != null) return;
+      const v = pick(arr, j);
+      if (v != null) s[field] = v;
+    };
+    fill("revAmm", revenue.historyAmm || revenue.historyTotalUsd);
+    fill("revDex", revenue.historyDex);
+    fill("revBox", revenue.historyBox);
+    fill("revVolume", revenue.historyVolume);
+    fill("revTax", revenue.historyTax);
+    fill("revSmartLp", revenue.historySmartLp);
+  }
   return snaps;
 }
 
@@ -1471,20 +1498,143 @@ function persistYieldSample(projectKey, sevenDaysAgo, dailySampleUsd) {
   yieldDays.save(yieldDays.merge(yieldDays.load(), projectKey, dayUsd));
 }
 
+function persistStreamDays(projectKey, revenue) {
+  const n = Math.max(
+    (revenue.dailyDates || []).length,
+    (revenue.dailyAmm || []).length,
+    (revenue.dailySecurityBox || []).length,
+    (revenue.dailyLaunchpad || []).length,
+  );
+  if (!n) return;
+  const todayUtc = Date.UTC(
+    new Date().getUTCFullYear(),
+    new Date().getUTCMonth(),
+    new Date().getUTCDate(),
+  );
+  const dayMap = {};
+  for (let i = 0; i < n; i++) {
+    const ts = todayUtc / 1000 - (n - 1 - i) * 86400 + 43200;
+    dayMap[yieldDays.utcKey(ts)] = {
+      amm: Number(revenue.dailyAmm?.[i]) || 0,
+      box: Number(revenue.dailySecurityBox?.[i]) || 0,
+      volume: Number(revenue.dailyLaunchpad?.[i]) || 0,
+      tax: Number(revenue.dailyBondingTax?.[i]) || 0,
+      dex: Number(revenue.dailyDex?.[i]) || 0,
+      smartLp: Number(revenue.dailySmartLp?.[i]) || 0,
+    };
+  }
+  yieldDays.save(yieldDays.mergeStreams(yieldDays.load(), projectKey, dayMap));
+}
+
 function mdFromIso(iso) {
   const p = String(iso).split("-");
   if (p.length < 3) return iso;
   return `${Number(p[1])}/${Number(p[2])}`;
 }
 
-/** Copy the on-disk daily yield cache onto revenue so the UI can plot >7 days. */
-function attachRevenueHistory(projectKey, revenue, scale) {
+function isoFromMdLabel(md, now = new Date()) {
+  const [m, d] = String(md).split("/").map(Number);
+  if (!m || !d) return null;
+  let y = now.getUTCFullYear();
+  if (now.getUTCMonth() === 0 && m === 12) y -= 1;
+  if (now.getUTCMonth() === 11 && m === 1) y += 1;
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+function ingestHistoryArrays(byIso, prev) {
+  const dates = prev?.historyDates || [];
+  if (!dates.length) return;
+  const cols = [
+    ["amm", prev.historyAmm || prev.historyTotalUsd],
+    ["box", prev.historyBox],
+    ["volume", prev.historyVolume],
+    ["tax", prev.historyTax],
+    ["dex", prev.historyDex],
+    ["smartLp", prev.historySmartLp],
+  ];
+  for (let i = 0; i < dates.length; i++) {
+    const iso = isoFromMdLabel(dates[i]);
+    if (!iso) continue;
+    const cur = byIso.get(iso) || { date: iso };
+    for (const [k, arr] of cols) {
+      const n = Number(arr?.[i]);
+      if (Number.isFinite(n) && cur[k] == null) cur[k] = n;
+    }
+    byIso.set(iso, cur);
+  }
+}
+
+function scaleOracleAmm(usd, cell, yieldMode, scale) {
+  const n = Number(usd);
+  if (!Number.isFinite(n)) return null;
+  const src = cell?.source;
+  if (yieldMode === "oracle_wallet" && (src === "native" || src === "chain")) {
+    const s = Number(scale) > 0 ? Number(scale) : 1;
+    return n * s;
+  }
+  return n;
+}
+
+/**
+ * Long revenue series: gg-index first, then the on-disk yield cache / git stitch.
+ * Oracle-wallet AMM from chain/native is the unscaled sample; git rows are already scaled.
+ */
+async function attachRevenueHistory(projectKey, revenue, scale, yieldMode, prevRevenue) {
   if (!revenue) return;
-  const rows = yieldDays.trailing(yieldDays.load(), projectKey, 120);
-  if (!rows.length) return;
-  const s = Number(scale) > 0 ? Number(scale) : 1;
-  revenue.historyDates = rows.map((r) => mdFromIso(r.date));
-  revenue.historyTotalUsd = rows.map((r) => +(Number(r.usd) * s).toFixed(2));
+  persistStreamDays(projectKey, revenue);
+
+  const byIso = new Map();
+  ingestHistoryArrays(byIso, prevRevenue);
+  const local = yieldDays.trailingStreams(yieldDays.load(), projectKey, 365);
+  for (const r of local) {
+    const cur = byIso.get(r.date) || { date: r.date };
+    byIso.set(r.date, { ...cur, ...r });
+  }
+
+  let remote = null;
+  try {
+    remote = await gg.revenueDaily(projectKey, { days: 365 });
+  } catch (e) {
+    console.warn(`[warn] ${projectKey}: revenue/daily skipped: ${e.message}`);
+  }
+
+  const remoteMode = remote?.yield_mode || yieldMode;
+  const streamMap = [
+    ["amm", "amm"],
+    ["box", "box"],
+    ["volume", "volume"],
+    ["tax", "tax"],
+    ["dex", "dex"],
+    ["smart_lp", "smartLp"],
+  ];
+  for (const d of remote?.daily || []) {
+    if (!d?.date) continue;
+    const cur = byIso.get(d.date) || { date: d.date };
+    const streams = d.streams || {};
+    for (const [apiKey, localKey] of streamMap) {
+      const cell = streams[apiKey];
+      if (!cell || cell.usd == null) continue;
+      const usd = scaleOracleAmm(cell.usd, cell, remoteMode, scale);
+      if (usd == null) continue;
+      cur[localKey] = usd;
+    }
+    byIso.set(d.date, cur);
+  }
+
+  const dates = [...byIso.keys()].sort();
+  if (!dates.length) return;
+  const col = (key) => dates.map((d) => {
+    const n = Number(byIso.get(d)?.[key]);
+    return Number.isFinite(n) ? +n.toFixed(2) : 0;
+  });
+  revenue.historyDates = dates.map(mdFromIso);
+  revenue.historyAmm = col("amm");
+  revenue.historyBox = col("box");
+  revenue.historyVolume = col("volume");
+  revenue.historyTax = col("tax");
+  revenue.historyDex = col("dex");
+  revenue.historySmartLp = col("smartLp");
+  revenue.historyTotalUsd = revenue.historyAmm;
 }
 
 function cachedYieldSample(projectKey, sevenDaysAgo) {
@@ -1495,8 +1645,9 @@ function cachedYieldSample(projectKey, sevenDaysAgo) {
   for (let i = 0; i < YIELD_LOOKBACK_DAYS; i++) {
     const key = yieldDays.utcKey(sevenDaysAgo + i * oneDay + oneDay / 2);
     const usd = days[key];
-    if (typeof usd !== "number" || !Number.isFinite(usd)) return null;
-    out.push(usd);
+    const n = typeof usd === "number" ? usd : Number(usd?.amm);
+    if (typeof n !== "number" || !Number.isFinite(n)) return null;
+    out.push(n);
   }
   return out;
 }
@@ -2424,7 +2575,7 @@ async function run() {
         const scale = conf.yieldMode === "oracle_wallet" && conf.oracleWeight
           ? totalNetworkWeight / conf.oracleWeight
           : 1;
-        attachRevenueHistory(projectKey, revenueBreakdown, scale);
+        await attachRevenueHistory(projectKey, revenueBreakdown, scale, conf.yieldMode, prevProjData.revenue);
       }
 
       let lockedLpData = null;

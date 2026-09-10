@@ -89,25 +89,24 @@ export function ProtocolFeeVolumePanels({ labels, cols, kind }) {
   const fees = protocolFeeCols(cols).filter((c) => seriesHasInk(c.data));
   const vol = volumeCols(cols).filter((c) => seriesHasInk(c.data));
   const mix = mixPercentCols(fees).filter((c) => seriesHasInk(c.data));
+  const combined = [
+    ...barDatasets(fees, { stacked: true }),
+    ...barDatasets(vol).map((d) => ({ ...d, stack: 'volume' })),
+  ];
   return (
     <>
       <ChartPanel
-        title="Protocol fees (USD)"
-        note="Stacked AMM, Clock-In, curve tax, and Smart LP skim. Volume is the next chart — it is not a fee."
+        title="Protocol fees & launch volume (USD)"
+        note="Stacked AMM, Clock-In, curve tax, and Smart LP skim. Purple is launch + bonding quote volume — not a fee, grouped beside the stack."
       >
-        {fees.length ? (
-          <Bar data={{ labels, datasets: barDatasets(fees, { stacked: true }) }} options={usdStackOptions()} />
+        {fees.length || vol.length ? (
+          <Bar data={{ labels, datasets: combined }} options={usdStackOptions()} />
         ) : (
           <EmptyChart>No fee days in this window</EmptyChart>
         )}
       </ChartPanel>
-      {vol.length ? (
-        <ChartPanel title="Launch + bonding volume (USD)" note="Quote volume, not protocol take. Same window as the fee stack.">
-          <Bar data={{ labels, datasets: barDatasets(vol) }} options={usdStackOptions()} />
-        </ChartPanel>
-      ) : null}
       {mix.length ? (
-        <ChartPanel title="Fee mix (100%)" note="Share of protocol fees that day. Days with no fees are blank.">
+        <ChartPanel title="Fee mix (100%)" note="Share of protocol fees that day. Days with no fees are blank. Volume is excluded.">
           <Bar data={{ labels, datasets: barDatasets(mix, { stacked: true }) }} options={percentStackOptions()} />
         </ChartPanel>
       ) : null}

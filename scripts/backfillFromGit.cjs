@@ -55,19 +55,30 @@ function inferredDates(iso, n) {
   return Array.from({ length: n }, (_, i) => mdFromTs(sevenAgoMs + i * 86400000));
 }
 
+function isoFromMd(md, commitIso) {
+  const c = new Date(commitIso);
+  if (Number.isNaN(c.getTime())) return null;
+  let y = c.getUTCFullYear();
+  const [m, d] = String(md).split("/").map(Number);
+  if (!m || !d) return null;
+  if (c.getUTCMonth() === 0 && m === 12) y -= 1;
+  if (c.getUTCMonth() === 11 && m === 1) y += 1;
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
 function num(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 }
 
 const STREAMS = [
-  ["revAmm", "dailyAmm"],
-  ["revDex", "dailyDex"],
-  ["revBox", "dailySecurityBox"],
-  ["revVolume", "dailyLaunchpad"],
-  ["revTax", "dailyBondingTax"],
-  ["revSmartLp", "dailySmartLp"],
-  ["revSmartLpGross", "dailySmartLpGross"],
+  ["revAmm", "dailyAmm", "amm"],
+  ["revDex", "dailyDex", "dex"],
+  ["revBox", "dailySecurityBox", "box"],
+  ["revVolume", "dailyLaunchpad", "volume"],
+  ["revTax", "dailyBondingTax", "tax"],
+  ["revSmartLp", "dailySmartLp", "smartLp"],
+  ["revSmartLpGross", "dailySmartLpGross", null],
 ];
 
 const days = lastCommitPerUtcDay();
@@ -122,6 +133,10 @@ for (const [day, { hash, iso }] of days) {
       const d = dates[i];
       if (!d) continue;
       const row = (feesByProject[key][d] ||= {});
+      if (!row.iso) {
+        const isoDay = isoFromMd(d, iso);
+        if (isoDay) row.iso = isoDay;
+      }
       for (const [snapKey, dailyKey] of STREAMS) {
         const v = num(r[dailyKey]?.[i]);
         if (v != null) row[snapKey] = v;
@@ -181,11 +196,54 @@ for (const [key, p] of Object.entries(data.projects || {})) {
   });
   if (feeDays.length && p.revenue) {
     p.revenue.historyDates = feeDays;
-    p.revenue.historyTotalUsd = feeDays.map((d) => Number(feesByProject[key][d].revAmm) || 0);
+    p.revenue.historyAmm = feeDays.map((d) => Number(feesByProject[key][d].revAmm) || 0);
+    p.revenue.historyBox = feeDays.map((d) => Number(feesByProject[key][d].revBox) || 0);
+    p.revenue.historyVolume = feeDays.map((d) => Number(feesByProject[key][d].revVolume) || 0);
+    p.revenue.historyTax = feeDays.map((d) => Number(feesByProject[key][d].revTax) || 0);
+    p.revenue.historyDex = feeDays.map((d) => Number(feesByProject[key][d].revDex) || 0);
+    p.revenue.historySmartLp = feeDays.map((d) => Number(feesByProject[key][d].revSmartLp) || 0);
+    p.revenue.historyTotalUsd = p.revenue.historyAmm;
   }
   counts[key] = { snaps: snaps.length, filledLive, filledFee, feeDays: feeDays.length };
 }
 
+const yieldDays = require("../lib/yieldDays.cjs");
+let allDays = yieldDays.load();
+const gitRows = [];
+for (const [key, byDay] of Object.entries(feesByProject)) {
+  const dayMap = {};
+  for (const row of Object.values(byDay)) {
+    if (!row.iso) continue;
+    dayMap[row.iso] = {
+      amm: row.revAmm,
+      box: row.revBox,
+      volume: row.revVolume,
+      tax: row.revTax,
+      dex: row.revDex,
+      smartLp: row.revSmartLp,
+    };
+    for (const [, , stream] of STREAMS) {
+      if (!stream) continue;
+      const usd = row[{ amm: "revAmm", box: "revBox", volume: "revVolume", tax: "revTax", dex: "revDex", smartLp: "revSmartLp" }[stream]];
+      if (usd == null) continue;
+      gitRows.push({ project: key, day: row.iso, stream: stream === "smartLp" ? "smart_lp" : stream, usd });
+    }
+  }
+  allDays = yieldDays.mergeStreams(allDays, key, dayMap);
+}
+yieldDays.save(allDays);
+
+const gitFile = path.join(__dirname, "..", "cache", "stream_days_git.json");
+fs.mkdirSync(path.dirname(gitFile), { recursive: true });
+fs.writeFileSync(gitFile, JSON.stringify(gitRows));
+const ggFile = path.join(__dirname, "..", "..", "gg-index", "priv", "repo", "stream_days_git.json");
+try {
+  fs.mkdirSync(path.dirname(ggFile), { recursive: true });
+  fs.writeFileSync(ggFile, JSON.stringify(gitRows));
+} catch (e) {
+  console.warn(`skip gg-index copy: ${e.message}`);
+}
+
 fs.writeFileSync(file, JSON.stringify(data));
 fs.writeFileSync(path.join(__dirname, "..", "docs", "data.json"), JSON.stringify(data));
-console.log(JSON.stringify(counts, null, 2));
+console.log(JSON.stringify({ ...counts, gitRows: gitRows.length }, null, 2));
