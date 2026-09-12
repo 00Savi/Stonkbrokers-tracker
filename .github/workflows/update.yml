@@ -82,6 +82,12 @@ jobs:
           BLOCKSCOUT_API_KEY: ${{ secrets.BLOCKSCOUT_API_KEY }}
           OPENSEA_API_KEY: ${{ secrets.OPENSEA_API_KEY }}
 
+      # Pages serves docs/. Data sync used to commit JSON only, so UI fixes
+      # stayed dark until someone ran `npm run build` by hand. Build after the
+      # fetcher so the live bundle and the new snapshot ship together.
+      - name: Build frontend
+        run: npm run build
+
       # Belt and suspenders alongside the concurrency group: that stops this
       # workflow racing itself, but an unrelated push to main during the ~6
       # minute run window would still reject us. Retry against the moved remote
@@ -90,10 +96,9 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          # public/data.json is what the next build reads; docs/data.json is what
-          # Pages actually serves. The fetcher writes both -- commit both, or the
-          # live site stays pinned to whenever someone last ran a build by hand.
-          git add public/data.json docs/data.json
+          # public/data.json is what the next build reads; docs/ is what Pages
+          # serves (index.html, hashed assets, and the data.json mirror).
+          git add public/data.json docs/
           git commit -m "Automated data sync" || exit 0
           for attempt in 1 2 3; do
             git push && exit 0

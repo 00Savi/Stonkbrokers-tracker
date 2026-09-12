@@ -1,3 +1,5 @@
+import { utcIso } from './dates';
+
 // Which recorded daily snapshots can be trusted, and how far back to plot them.
 //
 // `fetcher.cjs` appends one row per day and keeps 365. Every chart that shows
@@ -76,6 +78,5 @@ export function holderSeries(ownership, snapshots) {
 
   const current = Number(ownership?.tokenHolders) || 0;
   if (!(current > 0)) return { labels: [], data: [] };
-  const d = new Date();
-  return { labels: [`${d.getMonth() + 1}/${d.getDate()}`], data: [current] };
+  return { labels: [utcIso()], data: [current] };
 }

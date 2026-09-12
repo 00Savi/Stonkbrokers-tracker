@@ -1,4 +1,5 @@
 import { STREAM_COLORS, TIER_COLORS } from './charts';
+import { dateKey, formatLabels } from './dates';
 import { trailingSnapshots, usableSnapshots } from './snapshots';
 
 /** Yield / ROI chart windows. `all` is every usable snapshot we still have. */
@@ -52,8 +53,7 @@ function padLeft(arr, n) {
 }
 
 export function mdKey(label) {
-  const m = String(label || '').match(/(\d{1,2})\D+(\d{1,2})/);
-  return m ? `${Number(m[1])}/${Number(m[2])}` : String(label || '');
+  return dateKey(label);
 }
 
 export function seriesHasInk(data) {
@@ -126,7 +126,7 @@ export function protocolRevenueChart(project) {
   if (ledger?.historyDates?.length) {
     const n = ledger.historyDates.length;
     return {
-      labels: ledger.historyDates,
+      labels: formatLabels(ledger.historyDates),
       kind: 'ledger',
       cols: [
         { key: 'delivered', label: 'Delivered to members', color: STREAM_COLORS.delivered, data: padLeft(ledger.historyDelivered, n) },
@@ -139,7 +139,7 @@ export function protocolRevenueChart(project) {
   if (cf?.dailyDates?.length) {
     const n = cf.dailyDates.length;
     return {
-      labels: cf.dailyDates,
+      labels: formatLabels(cf.dailyDates),
       kind: 'cashflow',
       cols: [
         { key: 'fees', label: 'Fees', color: STREAM_COLORS.fees, data: padLeft(cf.dailyFees, n) },
@@ -179,7 +179,7 @@ export function protocolRevenueChart(project) {
     data: streamOnLabels(labels, snaps, rWin, VOLUME_META),
   });
 
-  return { labels, kind: 'protocol', cols };
+  return { labels: formatLabels(labels), rawLabels: labels, kind: 'protocol', cols };
 }
 
 export const FEE_KEYS = ['amm', 'dex', 'box', 'tax', 'smartLp', 'fees'];
@@ -315,7 +315,7 @@ export function smartLpHistory(snaps, live = {}) {
     return null;
   });
   return {
-    labels: snaps.map((s) => s.date),
+    labels: formatLabels(snaps.map((s) => s.date)),
     tvl,
     skim: snaps.map((s) => pickNum(s, ['revSmartLp', 'smartLpSkim'])),
     gross: snaps.map((s) => pickNum(s, ['revSmartLpGross', 'smartLpGross'])),
@@ -328,7 +328,7 @@ export function smartLpHistory(snaps, live = {}) {
 export function lockedLpHistory(snaps, live = {}) {
   const last = snaps.length - 1;
   return {
-    labels: snaps.map((s) => s.date),
+    labels: formatLabels(snaps.map((s) => s.date)),
     stonk: snaps.map((s, i) => {
       const v = pickNum(s, ['lockedStonk']);
       if (v != null) return v;
@@ -388,7 +388,7 @@ export function tierActiveDatasets(snaps, tiers, liveBreakdown, colors = TIER_RO
 export function ownershipHistory(snaps, live = {}) {
   const last = snaps.length - 1;
   return {
-    labels: snaps.map((s) => s.date),
+    labels: formatLabels(snaps.map((s) => s.date)),
     token: snaps.map((s, i) => {
       const v = pickNum(s, ['tokenHolders']);
       if (v != null) return v;

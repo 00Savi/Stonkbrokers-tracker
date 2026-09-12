@@ -1,5 +1,6 @@
 import React from 'react';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
+import { formatLabels } from '../lib/dates';
 import {
   barDatasets,
   mixPercentCols,
@@ -57,7 +58,7 @@ export function YieldUsdPricePanel({ snaps, tiers, chartOptions }) {
     >
       {has ? (
         <Line
-          data={{ labels: snaps.map((s) => s.date), datasets: [...yieldSets, price] }}
+          data={{ labels: formatLabels(snaps.map((s) => s.date)), datasets: [...yieldSets, price] }}
           options={dualAxisOptions({ leftTick: compactUsdTick, rightTick: compactUsdTick, rightColor: '#94a3b8' })}
         />
       ) : (
@@ -76,7 +77,7 @@ export function PaybackPanel({ snaps, tiers, floorCostUsd, tokenPriceUsd }) {
       note="Entry cost ÷ annualized yield on each snapshot. Lower is faster."
     >
       {has ? (
-        <Line data={{ labels: snaps.map((s) => s.date), datasets: sets }} options={baseChartOptions()} />
+        <Line data={{ labels: formatLabels(snaps.map((s) => s.date)), datasets: sets }} options={baseChartOptions()} />
       ) : (
         <EmptyChart />
       )}
@@ -266,7 +267,7 @@ export function ActivationStackPanel({ snaps, tiers, breakdown }) {
     <ChartPanel title="Active units by tier" note="Stacked from daily snapshots. Older days stay empty until a run records the breakdown.">
       {has ? (
         <Bar
-          data={{ labels: snaps.map((s) => s.date), datasets: sets }}
+          data={{ labels: formatLabels(snaps.map((s) => s.date)), datasets: sets }}
           options={{
             ...baseChartOptions(),
             scales: {

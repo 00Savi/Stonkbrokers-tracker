@@ -5,6 +5,7 @@ import {
 import { Line, Bar } from 'react-chartjs-2';
 import { burnSeries, burnRateSeries } from '../../lib/burn';
 import { holderSeries } from '../../lib/snapshots';
+import { formatLabels } from '../../lib/dates';
 import { windowSnapshots, protocolRevenueChart, sliceCols, windowPeriodLabel, windowLen } from '../../lib/yieldHistory';
 import { PROJECTS } from '../../lib/routes';
 import { BetaTag, compactUsd, compactNum } from '../kit';
@@ -49,7 +50,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
     : (perToken > 0 ? tokenUsd / perToken : null);
 
   const snaps = windowSnapshots(dailySnapshots, timeframe);
-  const histLabels = snaps.length ? snaps.map((s) => s.date) : (cashflow.dailyDates || []);
+  const histLabels = formatLabels(snaps.length ? snaps.map((s) => s.date) : (cashflow.dailyDates || []));
   const histRoi = snaps.length
     ? snaps.map((s) => s.roi || s.tiers?.[0]?.roi || 0)
     : [];
@@ -78,7 +79,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
         activation={activation}
         lockedLp={lockedLp}
         snaps={snaps}
-        histLabels={snaps.map((s) => s.date)}
+        histLabels={formatLabels(snaps.map((s) => s.date))}
         chartOpts={chartOpts}
         activeTab={activeTab}
         fmt={fmt}

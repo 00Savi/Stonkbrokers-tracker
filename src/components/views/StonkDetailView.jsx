@@ -4,6 +4,7 @@ import {
 } from 'chart.js';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import { burnSeries, burnRateSeries } from '../../lib/burn';
+import { formatLabels } from '../../lib/dates';
 import { windowSnapshots, tierRoiDatasets, protocolRevenueChart, sliceCols, windowPeriodLabel, windowLen, seriesHasInk } from '../../lib/yieldHistory';
 import { compactUsd, compactNum } from '../kit';
 import { baseChartOptions, compactTick, compactUsdTick, dualAxisOptions, STREAM_COLORS } from '../../lib/charts';
@@ -94,7 +95,7 @@ export default function StonkDetailView({ data, activeTab }) {
   // 1. Historical Yield Chart — weekly / monthly / all usable snapshots.
   const hasSnaps = Array.isArray(dailySnapshots) && dailySnapshots.length > 0 && dailySnapshots[0].date;
   const roiSnaps = windowSnapshots(dailySnapshots, timeframe);
-  const histLabels = roiSnaps.map(s => s.date);
+  const histLabels = formatLabels(roiSnaps.map(s => s.date));
   const histDatasets = tierRoiDatasets(roiSnaps, tiers, {
     floorCostUsd,
     tokenPriceUsd: market.tokenPriceUsd,

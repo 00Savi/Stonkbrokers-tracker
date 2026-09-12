@@ -4,6 +4,7 @@ import {
 } from 'chart.js';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import { burnSeries, burnRateSeries } from '../../lib/burn';
+import { formatLabels } from '../../lib/dates';
 import { windowSnapshots, protocolRevenueChart, sliceCols, windowLen, seriesHasInk } from '../../lib/yieldHistory';
 import { BetaTag, compactUsd, compactNum } from '../kit';
 import { baseChartOptions, compactTick, compactUsdTick, dualAxisOptions } from '../../lib/charts';
@@ -47,7 +48,7 @@ export default function CardWallDetailView({ data, activeTab }) {
   const roiSnaps = windowSnapshots(dailySnapshots, timeframe).filter((s) =>
     Array.isArray(s.tiers) && s.tiers.some((t) => (t.yieldUsd || 0) > 0 || (t.roi || 0) > 0)
   );
-  const histLabels = roiSnaps.map(s => s.date);
+  const histLabels = formatLabels(roiSnaps.map(s => s.date));
   const histDatasets = tiers.map((t, i) => {
     const tc = tierFloorUsd(t, i) + (t.reqTokens * market.tokenPriceUsd);
     const currentRoi = tc > 0 ? ((t.trackedAnnualYieldUsd / tc) * 100).toFixed(2) : 0;

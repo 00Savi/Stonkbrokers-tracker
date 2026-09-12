@@ -73,7 +73,17 @@ export function itemIsActive(pathname, to) {
  * sign matters.
  */
 
-export function TopNav({ live, data, pending }) {
+function liveStatus(live, sources) {
+  const overlayStale = sources?.overlay === 'stale';
+  const pricesStale = sources?.prices === 'stale';
+  if (live && !overlayStale) return { label: 'LIVE', title: 'Prices and holder counts are live', on: true };
+  if (pricesStale && overlayStale) return { label: 'CACHED', title: 'Live prices and holder overlay failed; hourly snapshot is showing', on: false };
+  if (pricesStale) return { label: 'PRICE CACHED', title: 'Live prices failed; header prices are from the hourly snapshot', on: false };
+  if (overlayStale) return { label: 'HOLDERS CACHED', title: 'Holder overlay failed; counts are from the hourly snapshot', on: false };
+  return { label: 'SYNCING', title: 'Refreshing live prices and holder counts', on: false };
+}
+
+export function TopNav({ live, sources, data, pending }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -87,6 +97,7 @@ export function TopNav({ live, data, pending }) {
   const market = data?.projects?.[marketKey]?.market || {};
   const ticker = project?.ticker || 'STONK';
   const ethUsd = data?.projects?.stonk?.market?.ethPriceUsd;
+  const status = liveStatus(live, sources);
 
   useEffect(() => {
     function onPointerDown(event) {
@@ -217,13 +228,16 @@ export function TopNav({ live, data, pending }) {
               </div>
             )}
           </div>
-          <span className="hidden items-center gap-1.5 rounded-full border border-line px-2.5 py-1 font-mono text-[10px] text-faint md:flex">
+          <span
+            className="hidden items-center gap-1.5 rounded-full border border-line px-2.5 py-1 font-mono text-[10px] text-faint md:flex"
+            title={status.title}
+          >
             <span
               className={`inline-block h-1.5 w-1.5 rounded-full ${
-                live ? 'live-dot bg-accent' : 'bg-faint'
+                status.on ? 'live-dot bg-accent' : 'bg-faint'
               }`}
             />
-            {live ? 'LIVE' : 'SYNCING'}
+            {status.label}
           </span>
           <a
             href={LAUNCHER_REF}

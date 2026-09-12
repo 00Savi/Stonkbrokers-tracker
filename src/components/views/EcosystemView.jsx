@@ -8,6 +8,7 @@ import {
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import OverviewView from './OverviewView';
 import { compactUsd, compactNum, WindowBar } from '../kit';
+import { formatLabels } from '../../lib/dates';
 import { protocolRevenueChart, windowSnapshots, seriesHasInk } from '../../lib/yieldHistory';
 import { useChartWindow } from '../../lib/chartWindow';
 import { baseChartOptions, compactTick, compactUsdTick, PROJECT_COLORS } from '../../lib/charts';
@@ -255,7 +256,7 @@ export default function EcosystemView({ data, pending = false }) {
     const snaps = Array.isArray(p?.dailySnapshots) ? p.dailySnapshots : [];
     if (snaps.some((s) => Number(s.annualYield) > 0)) {
       return {
-        labels: snaps.map((s) => s.date),
+        labels: formatLabels(snaps.map((s) => s.date)),
         data: snaps.map((s) => Number(s.annualYield) / 365),
         source: 'snapshot-est',
       };
@@ -640,7 +641,7 @@ export default function EcosystemView({ data, pending = false }) {
                     key={`burn-${k}`}
                     title={projectNames[k]}
                     color={projectColors[k]}
-                    labels={snaps.map((s) => s.date)}
+                    labels={formatLabels(snaps.map((s) => s.date))}
                     data={series}
                     yTick={(v) => `${compactTick(v)}%`}
                     value={last == null ? null : `${last.toFixed(2)}%`}
@@ -671,7 +672,7 @@ export default function EcosystemView({ data, pending = false }) {
                     key={`nftburn-${k}`}
                     title={projectNames[k]}
                     color={projectColors[k]}
-                    labels={snaps.map((s) => s.date)}
+                    labels={formatLabels(snaps.map((s) => s.date))}
                     data={series}
                     yTick={(v) => `${compactTick(v)}%`}
                     value={last == null ? null : `${last.toFixed(2)}%`}
@@ -827,7 +828,7 @@ export default function EcosystemView({ data, pending = false }) {
                     key={`nft-h-${k}`}
                     title={projectNames[k]}
                     color={projectColors[k]}
-                    labels={snaps.map((s) => s.date)}
+                    labels={formatLabels(snaps.map((s) => s.date))}
                     data={series}
                     yTick={compactTick}
                     value={live > 0 ? formatNumber(live) : null}
@@ -852,6 +853,7 @@ export default function EcosystemView({ data, pending = false }) {
                   labels = snaps.map((s) => s.date);
                   series = snaps.map((s) => Number(s.tokenHolders) || null);
                 }
+                labels = formatLabels(labels);
                 const n = getSliceCount(timeframe, labels.length);
                 const live = Number(p?.ownership?.tokenHolders) || Number(p?.ownership?.stonkHolders) || 0;
                 return (

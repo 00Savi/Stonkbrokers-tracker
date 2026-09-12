@@ -167,7 +167,17 @@ export function applyPrices(base, prices) {
       }
     }
 
-    projects[slug] = { ...p, market };
+    const floorUsd = (market.nftFloorEth || 0) * (market.ethPriceUsd || 0);
+    const tiers = (p.tiers || []).map((t) => {
+      const cost = floorUsd + (Number(t.reqTokens) || 0) * tokenPrice;
+      const annual = Number(t.trackedAnnualYieldUsd) || 0;
+      return {
+        ...t,
+        currentRoi: cost > 0 && annual > 0 ? +((annual / cost) * 100).toFixed(2) : 0,
+      };
+    });
+
+    projects[slug] = { ...p, market, tiers };
   }
 
   return { ...base, projects };

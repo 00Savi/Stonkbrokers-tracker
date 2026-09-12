@@ -1,4 +1,5 @@
 import { ethers } from 'ethers';
+import { utcIsoFromTs } from './dates';
 
 const EXPLORER = 'https://robinhoodchain.blockscout.com';
 const ZERO = '0x0000000000000000000000000000000000000000';
@@ -6,7 +7,7 @@ const ZERO = '0x0000000000000000000000000000000000000000';
 export function dayKeyFromSeconds(ts) {
   const d = new Date(Number(ts) * 1000);
   if (Number.isNaN(d.getTime())) return null;
-  return `${d.getMonth() + 1}/${d.getDate()}`;
+  return utcIsoFromTs(ts);
 }
 
 export function formatDate(ts) {

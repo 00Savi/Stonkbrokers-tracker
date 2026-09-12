@@ -65,8 +65,10 @@ function sanitizeDailySnapshots(snaps, livePrice) {
   if (!Array.isArray(snaps) || !snaps.length) return Array.isArray(snaps) ? snaps : [];
   const byDate = new Map();
   for (const s of snaps) {
-    if (!s?.date) continue;
-    byDate.set(s.date, s);
+    if (!s?.date && !s?.timestamp) continue;
+    const iso = s.timestamp ? dates.utcIsoFromTs(s.timestamp) : dates.dateKey(s.date);
+    if (!iso) continue;
+    byDate.set(iso, { ...s, date: iso });
   }
   let out = [...byDate.values()].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
   out = out.filter((s) => {
@@ -84,8 +86,7 @@ function sanitizeDailySnapshots(snaps, livePrice) {
 }
 
 function mdSnapKey(label) {
-  const m = String(label || "").match(/(\d{1,2})\D+(\d{1,2})/);
-  return m ? `${Number(m[1])}/${Number(m[2])}` : String(label || "");
+  return dates.dateKey(label);
 }
 
 function overlayDailyStreams(snaps, revenue, extraDates) {
@@ -191,7 +192,8 @@ function carrySmartLp(revenueBreakdown, prevRevenue, smart) {
 function stampLiveSnapshot(snaps, todayStr, extra) {
   if (!Array.isArray(snaps) || !snaps.length) return snaps;
   const last = snaps[snaps.length - 1];
-  if (!last || last.date !== todayStr) return snaps;
+  if (!last || dates.dateKey(last.date) !== dates.dateKey(todayStr)) return snaps;
+  last.date = dates.dateKey(todayStr);
   Object.assign(last, extra);
   return snaps;
 }
@@ -229,6 +231,7 @@ const { buildSpecialProject, isSpecial } = require("./lib/specials.cjs");
 const yieldDays = require("./lib/yieldDays.cjs");
 const vaultFlow = require("./lib/vaultFlow.cjs");
 const { fetchSmartLps, fromGgIndex } = require("./lib/smartLp.cjs");
+const dates = require("./lib/dates.cjs");
 
 const gg = new GgIndex();
 const rpc = new Rpc();
@@ -832,7 +835,7 @@ async function fetchAllLogs(projectKey, address, genesisBlock, topic0 = null) {
     if (txIdxA !== txIdxB) return txIdxA - txIdxB;
 
     const logIdxA = parseNum(a.logIndex !== undefined ? a.logIndex : (a.log_index !== undefined ? a.log_index : a.index));
-    const logIdxB = parseNum(b.logIndex !== undefined ? b.logIndex : (b.log_index !== undefined ? b.log_index : a.index));
+    const logIdxB = parseNum(b.logIndex !== undefined ? b.logIndex : (b.log_index !== undefined ? b.log_index : b.index));
     return logIdxA - logIdxB;
   });
 
@@ -933,8 +936,9 @@ async function getOwnershipStats(conf, equivBurnt, previousData) {
 
   // Past points stay as recorded. Do not backfill today's count onto older days.
 
-  const dateStr = `${new Date().getMonth() + 1}/${new Date().getDate()}`;
-  if (histLabels[histLabels.length - 1] === dateStr) {
+  const dateStr = dates.utcIso();
+  if (histLabels.length && dates.dateKey(histLabels[histLabels.length - 1]) === dateStr) {
+    histLabels[histLabels.length - 1] = dateStr;
       histData[histData.length - 1] = trueUniqueStonkHolders;
   } else {
       histLabels.push(dateStr);
@@ -984,7 +988,7 @@ async function fetchActivations(projectKey, conf) {
     try {
       const topics = log.topics && Array.isArray(log.topics) ? log.topics.filter(t => t !== null) : [];
 
-      let tokenId, isAct = false, isDeact = false, tierId = null;
+      let tokenId, isAct = false, isDeact = false, tierId = null, parsed = null;
 
       if (log.__nftTransfer) {
           // A 721 indexes from/to/tokenId, so anything without 4 topics is an
@@ -1013,7 +1017,7 @@ async function fetchActivations(projectKey, conf) {
           activeBrokers.delete(tokenId);
           isDeact = true;
       } else {
-          const parsed = iface.parseLog({ topics, data: log.data });
+          parsed = iface.parseLog({ topics, data: log.data });
           if (!parsed) continue;
 
           tokenId = parsed.args.tokenId.toString();
@@ -1034,8 +1038,15 @@ async function fetchActivations(projectKey, conf) {
           }
       }
 
+      // Upgrades change the live tier but are not a new activation. Counting
+      // them as `act` made history.cumulative climb past activeCount (Mancer
+      // was 1873 vs 1711 on the same snapshot).
+      const isUpgrade = !log.__nftTransfer && isAct && parsed
+        && parsed.name !== "Activated"
+        && (parsed.name === "ActivationUpgraded" || String(parsed.name).includes("Upgraded"));
+
       if (isAct || isDeact) {
-          if (tierId && tierStats[tierId]) {
+          if (tierId && tierStats[tierId] && !isUpgrade) {
               if (isAct) tierStats[tierId].allTime.act++;
               if (isDeact) tierStats[tierId].allTime.deact++;
               if (age <= oneDay) { if (isAct) tierStats[tierId]['24h'].act++; if (isDeact) tierStats[tierId]['24h'].deact++; }
@@ -1043,40 +1054,59 @@ async function fetchActivations(projectKey, conf) {
               if (age <= 30 * oneDay) { if (isAct) tierStats[tierId]['30d'].act++; if (isDeact) tierStats[tierId]['30d'].deact++; }
           }
 
-          const date = new Date(ts * 1000);
-          const dateStr = `${date.getMonth() + 1}/${date.getDate()}`;
-          if (!dailyData[dateStr]) dailyData[dateStr] = { activated: 0, deactivated: 0, timestamp: new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime() / 1000 };
-          if (isAct) dailyData[dateStr].activated++;
+          const dateStr = dates.utcIsoFromTs(ts) || dates.utcIso();
+          const dayTs = dates.utcMidnightSec(new Date((ts > 0 ? ts : now) * 1000));
+          if (!dailyData[dateStr]) dailyData[dateStr] = { activated: 0, deactivated: 0, timestamp: dayTs };
+          if (isAct && !isUpgrade) dailyData[dateStr].activated++;
           if (isDeact) dailyData[dateStr].deactivated++;
       }
     } catch (e) { }
   }
 
-  if (minTs < now - (60 * 86400)) minTs = now - (60 * 86400);
-
-  let currentTs = new Date(minTs * 1000).setHours(0,0,0,0) / 1000;
-  while (currentTs <= now) {
-      const d = new Date(currentTs * 1000);
-      const dateStr = `${d.getMonth() + 1}/${d.getDate()}`;
+  const firstTs = Object.values(dailyData).reduce((m, d) => Math.min(m, d.timestamp || now), now);
+  let currentTs = dates.utcMidnightSec(new Date(firstTs * 1000));
+  const endTs = dates.utcMidnightSec();
+  while (currentTs <= endTs) {
+      const dateStr = dates.utcIsoFromTs(currentTs);
       if (!dailyData[dateStr]) dailyData[dateStr] = { activated: 0, deactivated: 0, timestamp: currentTs };
-      currentTs += 86400; 
+      currentTs += 86400;
   }
 
   const sortedDates = Object.keys(dailyData).sort((a, b) => dailyData[a].timestamp - dailyData[b].timestamp);
-  
-  const history = { labels: [], dailyActivations: [], dailyDeactivations: [], cumulative: [], cumulativeGross: [] };
+
+  const allLabels = [];
+  const allAct = [];
+  const allDeact = [];
+  const allCum = [];
+  const allGross = [];
   let runningActive = 0, runningGross = 0;
 
   for (const dateStr of sortedDates) {
       const d = dailyData[dateStr];
-      history.labels.push(dateStr);
-      history.dailyActivations.push(d.activated);
-      history.dailyDeactivations.push(d.deactivated);
+      allLabels.push(dateStr);
+      allAct.push(d.activated);
+      allDeact.push(d.deactivated);
       runningActive += (d.activated - d.deactivated);
-      runningGross += d.activated; 
-      history.cumulative.push(runningActive);
-      history.cumulativeGross.push(runningGross);
+      runningGross += d.activated;
+      allCum.push(runningActive);
+      allGross.push(runningGross);
   }
+
+  // Rebase so the last point equals the live set. Dropped ts=0 logs or a
+  // same-tx guard can leave a few units of drift; the chart should still
+  // agree with Total Active Units.
+  const drift = activeBrokers.size - runningActive;
+  const aligned = drift === 0 ? allCum : allCum.map((v) => v + drift);
+
+  const keep = 60;
+  const start = Math.max(0, allLabels.length - keep);
+  const history = {
+    labels: allLabels.slice(start),
+    dailyActivations: allAct.slice(start),
+    dailyDeactivations: allDeact.slice(start),
+    cumulative: aligned.slice(start),
+    cumulativeGross: allGross.slice(start),
+  };
 
   const breakdown = { T0: 0, T1: 0, T2: 0, T3: 0, T4: 0 };
   const activeOwners = new Set();
@@ -1393,8 +1423,8 @@ async function fetchVaultLedger(address, sevenDaysAgo) {
 
   const bumpHist = (ts, custody, usd) => {
     if (!(ts > 0)) return;
-    const d = new Date(ts * 1000);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const key = dates.utcIsoFromTs(ts);
+    if (!key) return;
     if (!hist.has(key)) hist.set(key, { delivered: 0, vaulted: 0, ts });
     const row = hist.get(key);
     if (custody === 1) row.delivered += usd;
@@ -1439,15 +1469,9 @@ async function fetchVaultLedger(address, sevenDaysAgo) {
   out.deliveredUsd = +out.deliveredUsd.toFixed(2);
   out.dailyDelivered = out.dailyDelivered.map((v) => +v.toFixed(2));
   out.dailyVaulted = out.dailyVaulted.map((v) => +v.toFixed(2));
-  out.dailyDates = emptyDaily.map((_, i) => {
-    const d = new Date((windowStart + i * oneDay) * 1000);
-    return `${d.getMonth() + 1}/${d.getDate()}`;
-  });
+  out.dailyDates = emptyDaily.map((_, i) => dates.utcIsoFromTs(windowStart + i * oneDay));
   const histKeys = [...hist.keys()].sort();
-  out.historyDates = histKeys.map((k) => {
-    const [y, m, d] = k.split("-");
-    return `${Number(m)}/${Number(d)}`;
-  });
+  out.historyDates = histKeys;
   out.historyDelivered = histKeys.map((k) => +hist.get(k).delivered.toFixed(2));
   out.historyVaulted = histKeys.map((k) => +hist.get(k).vaulted.toFixed(2));
   out.historyTs = histKeys.map((k) => hist.get(k).ts);
@@ -1527,18 +1551,12 @@ function persistStreamDays(projectKey, revenue) {
 }
 
 function mdFromIso(iso) {
-  const p = String(iso).split("-");
-  if (p.length < 3) return iso;
-  return `${Number(p[1])}/${Number(p[2])}`;
+  return dates.chartLabel(iso, false);
 }
 
-function isoFromMdLabel(md, now = new Date()) {
-  const [m, d] = String(md).split("/").map(Number);
-  if (!m || !d) return null;
-  let y = now.getUTCFullYear();
-  if (now.getUTCMonth() === 0 && m === 12) y -= 1;
-  if (now.getUTCMonth() === 11 && m === 1) y += 1;
-  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+function isoFromMdLabel(md) {
+  const key = dates.dateKey(md);
+  return key || null;
 }
 
 function ingestHistoryArrays(byIso, prev) {
@@ -1627,7 +1645,7 @@ async function attachRevenueHistory(projectKey, revenue, scale, yieldMode, prevR
     const n = Number(byIso.get(d)?.[key]);
     return Number.isFinite(n) ? +n.toFixed(2) : 0;
   });
-  revenue.historyDates = dates.map(mdFromIso);
+  revenue.historyDates = dates;
   revenue.historyAmm = col("amm");
   revenue.historyBox = col("box");
   revenue.historyVolume = col("volume");
@@ -1819,8 +1837,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
   const zeros = () => Array(nDays).fill(0);
   const dailyDates = [];
   for (let i = 0; i < nDays; i++) {
-    const d = new Date((sevenDaysAgo + (i * oneDay)) * 1000);
-    dailyDates.push(`${d.getMonth() + 1}/${d.getDate()}`);
+    dailyDates.push(dates.utcIsoFromTs(sevenDaysAgo + (i * oneDay)));
   }
 
   let totalSampleUsd = 0;
@@ -1876,7 +1893,8 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
   }
 
   function quotePriceUsd(quote) {
-    if (!quote || quote === "ybtc") return 0;
+    if (!quote) return 0;
+    if (quote === "ybtc") return tokenPrices.ybtc || tokenPrices.YBTC || 0;
     if (quote === WETH) return marketData.ethPriceUsd || 0;
     if (quote === "usdg") return 1;
     return tokenPrices[quote] || 0;
@@ -2539,7 +2557,7 @@ async function run() {
         };
         };
 
-        const todayStr = new Date().toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', timeZone: 'UTC' });
+        const todayStr = dates.utcIso();
         if (projectKey === "cardwall" && histDates.length && histDelivered.length) {
           const prevPxByDate = {};
           for (const s of prevProjData.dailySnapshots || []) {
@@ -2612,7 +2630,7 @@ async function run() {
           }
       }
 
-      const todayStamp = new Date().toLocaleDateString("en-US", { month: "numeric", day: "numeric", timeZone: "UTC" });
+      const todayStamp = dates.utcIso();
       overlayDailyStreams(dailySnapshots, revenueBreakdown, mappedTiers?.[0]?.dailyDates);
       const modeTvl = tvlByMode(revenueBreakdown?.smartLp?.vaults);
       stampLiveSnapshot(dailySnapshots, todayStamp, {

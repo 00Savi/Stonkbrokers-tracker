@@ -106,7 +106,7 @@ export default function App() {
   return (
     <div className="flex min-h-full flex-col pb-28">
       <ScrollToTop />
-      <TopNav live={sources.prices === 'ready'} data={data} pending={booting} />
+      <TopNav live={sources.prices === 'ready'} sources={sources} data={data} pending={booting || pending('overlay')} />
       <ChartMobileSync />
       <ChartShareLayer />
 

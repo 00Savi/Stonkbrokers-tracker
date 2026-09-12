@@ -4,6 +4,7 @@ import {
 } from 'chart.js';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import { burnSeries, burnRateSeries } from '../../lib/burn';
+import { formatLabels } from '../../lib/dates';
 import { windowSnapshots, tierRoiDatasets, protocolRevenueChart, sliceCols, windowPeriodLabel, windowLen, seriesHasInk } from '../../lib/yieldHistory';
 import { compactUsd, compactNum } from '../kit';
 import { baseChartOptions, compactTick, compactUsdTick, dualAxisOptions, STREAM_COLORS } from '../../lib/charts';
@@ -46,7 +47,7 @@ export default function MancerDetailView({ data, activeTab }) {
   const hasSnaps = Array.isArray(dailySnapshots) && dailySnapshots.length > 0 && dailySnapshots[0].date;
 
   const roiSnaps = windowSnapshots(dailySnapshots, timeframe);
-  const histLabels = roiSnaps.map(s => s.date);
+  const histLabels = formatLabels(roiSnaps.map(s => s.date));
   const histDatasets = tierRoiDatasets(roiSnaps, tiers, {
     floorCostUsd,
     tokenPriceUsd: market.tokenPriceUsd,
@@ -86,7 +87,7 @@ export default function MancerDetailView({ data, activeTab }) {
   // 5. Activation Chart
   const actHistory = activation.history || {};
   const hasActHist = Array.isArray(actHistory.labels) && actHistory.labels.length > 0;
-  const actLabels = hasActHist ? actHistory.labels : [];
+  const actLabels = hasActHist ? formatLabels(actHistory.labels) : [];
   const actCum = hasActHist && actHistory.cumulative?.length ? actHistory.cumulative : [];
   const actDAct = hasActHist && actHistory.dailyActivations?.length ? actHistory.dailyActivations : [];
   const actDDeact = hasActHist && actHistory.dailyDeactivations?.length ? actHistory.dailyDeactivations : [];
@@ -99,7 +100,7 @@ export default function MancerDetailView({ data, activeTab }) {
 
   const holdersFull = holderSeries(ownership, dailySnapshots);
   const ownN = windowLen(timeframe, holdersFull.labels.length);
-  const ownLabels = holdersFull.labels.slice(-ownN);
+  const ownLabels = formatLabels(holdersFull.labels.slice(-ownN));
   const ownData = holdersFull.data.slice(-ownN);
   const mancerHolders = Number(ownership.mancerHolders) || Number(ownership.tokenHolders) || Number(ownership.erc20Holders) || 0;
 
@@ -423,14 +424,15 @@ export default function MancerDetailView({ data, activeTab }) {
 
           <ActivationStackPanel snaps={roiSnaps} tiers={tiers} breakdown={activation.breakdown} />
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
-             <h3 className="text-sm font-bold text-white mb-4">Historical Activity (Net vs. Daily)</h3>
+             <h3 className="text-sm font-bold text-white mb-1">Active units vs daily flow</h3>
+             <p className="text-xs text-slate-400 mb-4">The line is currently-active NFTs at end of day (sales deactivate). Bars are new activations and exits, not upgrades.</p>
              <div className="relative h-52 sm:h-64 md:h-80 w-full">
                 {hasActHist ? (
                 <Bar 
                   data={{
                     labels: actLabels.slice(-actN),
                     datasets: [
-                      { type: 'line', label: 'Net Active Units', data: actCum.slice(-actN), borderColor: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.05)', borderWidth: 3, fill: true, tension: 0.3, yAxisID: 'y' },
+                      { type: 'line', label: 'Active units', data: actCum.slice(-actN), borderColor: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.05)', borderWidth: 3, fill: true, tension: 0.3, yAxisID: 'y' },
                       { type: 'bar', label: 'Daily Activations', data: actDAct.slice(-actN), backgroundColor: '#00a804', borderRadius: 4, yAxisID: 'y1' },
                       { type: 'bar', label: 'Daily Deactivations', data: actDDeact.slice(-actN), backgroundColor: '#f43f5e', borderRadius: 4, yAxisID: 'y1' }
                     ]
@@ -497,7 +499,7 @@ export default function MancerDetailView({ data, activeTab }) {
         <div className="text-xs md:text-sm text-slate-300 mb-5 leading-relaxed space-y-4">
           <p><strong className="text-white">Yield & ROI (Global Network Oracle) Methodology:</strong> Cash-on-Cash (CoC) returns are calculated dynamically based on the selected project's architecture and active network weight.</p>
           <p><strong className="text-white">Historical Yield & Payback Horizon Methodology:</strong> Capital recovery timelines are calculated by dividing the total entry cost by annualized trailing yield rates. ROI trajectories map historical performance over rolling epochs.</p>
-          <p><strong className="text-white">Protocol Analytics:</strong> Metrics shown aggregate live on-chain events across registered smart contracts.</p>
+          <p><strong className="text-white">Activation:</strong> Total Active Units is the live set after replaying vault events plus NFT transfers. Mancer emits no Deactivated event — a sale clears the position. The contract&apos;s <code>activeCount()</code> is an upper bound and is not what this page shows. Tier flow cards are gross activate/exit events in the window, not the live mix (that is the doughnut).</p>
           <p><strong className="text-white">Protocol Ownership & Distribution Methodology:</strong> Wallet concentration metrics evaluate unique human holders against true circulating supply, subtracting protocol treasury allocations. Activated-wallet count is unique current owners of NFTs that still have an open activation — a sale clears it.</p>
         </div>
         <p className="text-xs md:text-sm text-slate-400 italic leading-relaxed border-t border-[#1e2228] pt-5">
