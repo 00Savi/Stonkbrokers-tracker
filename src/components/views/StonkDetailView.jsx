@@ -119,7 +119,12 @@ export default function StonkDetailView({ data, activeTab }) {
   const smartLp = revenue.smartLp || {};
   const smartLpVaults = Array.isArray(smartLp.vaults) ? smartLp.vaults : [];
   const smartLpMarkets = useMemo(() => groupSmartLpMarkets(smartLpVaults), [smartLpVaults]);
-  const smartLpCol = REV_STREAMS[3] || { total: 0, color: STREAM_COLORS.smartLp, data: [] };
+  const smartLpCol = (() => {
+    const col = REV_STREAMS[3] || { total: 0, color: STREAM_COLORS.smartLp, data: [] };
+    const live7d = Number(smartLp.protocolFees7dUsd);
+    if (timeframe === '7d' && live7d > 0) return { ...col, total: live7d };
+    return col;
+  })();
 
   // 3. Burn Tracker Data
   const realBurntTokens = Math.max(

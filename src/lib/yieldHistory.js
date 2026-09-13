@@ -129,12 +129,22 @@ function streamOnLabels(labels, snaps, r, meta) {
   const histLookup = windowLookup(r.historyDates || [], histArr);
   const byDate = new Map((snaps || []).map((s) => [mdKey(s.date), s]));
   return labels.map((d) => {
-    const h = histLookup(d);
-    if (h != null) return h;
     const fromWin = shortLookup(d);
-    if (fromWin != null) return fromWin;
     const s = byDate.get(mdKey(d));
     const fromSnap = s ? pickNum(s, meta.snap) : null;
+    const h = histLookup(d);
+    // Smart LP history from /revenue/daily has been missing recent skims
+    // (fold prices the pool tokens; a miss writes 0 and then wins). The
+    // 7-day FeesCollected walk on snapshots / dailySmartLp is the live
+    // series — do not let a stale 0 hide $1.7k of protocol skim.
+    if (meta.key === 'smartLp') {
+      if (fromWin != null) return fromWin;
+      if (fromSnap != null) return fromSnap;
+      if (h != null) return h;
+      return null;
+    }
+    if (h != null) return h;
+    if (fromWin != null) return fromWin;
     if (fromSnap != null) return fromSnap;
     return null;
   });
@@ -143,8 +153,10 @@ function streamOnLabels(labels, snaps, r, meta) {
 /**
  * Date axis + stream columns for a project's revenue chart.
  * Snapshot dates are the axis when they outrun the 7-day walk, so Weekly /
- * Monthly / All actually differ. Completed days prefer gg-index history over
- * the 7-day overlay so a job-clock bucket cannot reprint yesterday as today.
+ * Monthly / All actually differ. Completed AMM / box / tax days prefer
+ * gg-index history over the 7-day overlay so a job-clock bucket cannot
+ * reprint yesterday as today. Smart LP does the opposite: the live
+ * FeesCollected walk is complete and history has been dropping recent days.
  * Launch bonding volume is not a series here — it is swap notional, not
  * protocol-kept revenue.
  */

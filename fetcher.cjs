@@ -149,6 +149,24 @@ function tvlByMode(vaults) {
   return o;
 }
 
+function mergeLiveSmartLpHistory(revenue) {
+  const dates = revenue?.historyDates || [];
+  const daily = revenue?.dailySmartLp || [];
+  if (!dates.length || !daily.length) return;
+  const hist = Array.isArray(revenue.historySmartLp) ? [...revenue.historySmartLp] : [];
+  while (hist.length < dates.length) hist.push(0);
+  const byIso = new Map(dates.map((d, i) => [isoFromMdLabel(d) || d, i]));
+  const dailyDates = revenue.dailyDates || [];
+  const aligned = dailyDates.length === daily.length ? dailyDates : dates.slice(-daily.length);
+  aligned.forEach((d, i) => {
+    const j = byIso.get(isoFromMdLabel(d) || d);
+    const v = Number(daily[i]);
+    if (j == null || !Number.isFinite(v)) return;
+    if (v > 0 || !(Number(hist[j]) > 0)) hist[j] = +v.toFixed(2);
+  });
+  revenue.historySmartLp = hist;
+}
+
 function applySmartLp(revenueBreakdown, smart) {
   if (!smart) return;
   revenueBreakdown.smartLpUsd = smart.protocolFees7dUsd || 0;
@@ -2724,6 +2742,7 @@ async function run() {
 
       const todayStamp = dates.utcIso();
       overlayDailyStreams(dailySnapshots, revenueBreakdown, mappedTiers?.[0]?.dailyDates);
+      if (projectKey === "stonk") mergeLiveSmartLpHistory(revenueBreakdown);
       const modeTvl = tvlByMode(revenueBreakdown?.smartLp?.vaults);
       stampLiveSnapshot(dailySnapshots, todayStamp, {
         nftFloorEth: markets[projectKey].nftFloorEth || 0,
