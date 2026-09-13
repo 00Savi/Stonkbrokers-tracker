@@ -1,11 +1,12 @@
 // Cumulative burn over each token's recorded life.
 //
 // Snapshots only started when the hourly job did (~2026-08-20 for brokers,
-// ~2026-09-01 for specials). Activation logs go back to genesis. We scale
-// cumulative activations to the first trusted snapshot so the line starts
-// when the token did, then prefer snapshot / live supply reads after that.
-// Quiet days carry the last cumulative forward — a burn cannot shrink, and
-// a missing fetch is not a reset.
+// ~2026-09-01 for specials). gg-index Transfer folds go back to first mint
+// but have been overstating Mancer and even falling — a high index day
+// must not freeze later live reads. Index (or activation volume) is only
+// used before the first trusted snapshot, scaled to meet it. After that,
+// snapshots and the live dual-burn read own the line. Quiet days carry
+// the last cumulative forward — a burn cannot shrink.
 
 import { usableSnapshots } from './snapshots';
 import { windowLen } from './yieldHistory';
@@ -112,16 +113,58 @@ function priceByDate(project) {
   return px;
 }
 
+function lastValue(map, before) {
+  const keys = Object.keys(map)
+    .filter((k) => !before || k < before)
+    .sort();
+  const k = keys[keys.length - 1];
+  return k ? Number(map[k]) || 0 : 0;
+}
+
+function scaleMap(map, factor) {
+  if (!(factor > 0) || factor === 1) return { ...map };
+  const out = {};
+  for (const [k, v] of Object.entries(map)) out[k] = Number(v) * factor;
+  return out;
+}
+
 function burnPath(project) {
   const snapMap = snapshotBurnMap(project.dailySnapshots);
   const histMap = indexBurnMap(project);
-  const known = { ...histMap, ...snapMap };
-  const map = { ...activationBurnGuess(project, known), ...histMap, ...snapMap };
   const live = liveBurn(project);
   const today = utcIso();
+  const firstSnap = Object.keys(snapMap).sort()[0];
+  const map = {};
+
+  if (firstSnap) {
+    const firstBurn = Number(snapMap[firstSnap]) || 0;
+    const preHist = {};
+    for (const [k, v] of Object.entries(histMap)) {
+      if (k < firstSnap && v > 0) preHist[k] = v;
+    }
+    const preGuess = activationBurnGuess(project, { [firstSnap]: firstBurn });
+    // Index owns days it actually recorded. Activation volume only fills
+    // holes before the first snapshot.
+    const pre = { ...preGuess, ...preHist };
+    const preEnd = lastValue(pre, firstSnap);
+    // Index fold has been running ahead of the live dual-burn read. Scale
+    // the pre-snapshot days down to the first trusted snapshot so the line
+    // never drops at the stitch, then snapshots own every day after.
+    const scaled = preEnd > firstBurn && firstBurn > 0 ? scaleMap(pre, firstBurn / preEnd) : pre;
+    Object.assign(map, scaled, snapMap);
+  } else if (live > 0) {
+    const lastHist = lastValue(histMap);
+    const scaled = lastHist > live ? scaleMap(histMap, live / lastHist) : histMap;
+    Object.assign(map, scaled);
+  } else {
+    Object.assign(map, histMap);
+  }
+
   if (live > 0) {
-    const lastKey = Object.keys(map).sort().pop();
-    map[today] = Math.max(live, lastKey ? Number(map[lastKey]) || 0 : 0);
+    const lastSnap = Object.keys(snapMap).sort().pop();
+    const floor = lastSnap ? Number(snapMap[lastSnap]) || 0 : 0;
+    // Live read is current truth. Do not raise it to a stale index peak.
+    map[today] = Math.max(live, floor);
   }
   return fillCarry(map, today);
 }
