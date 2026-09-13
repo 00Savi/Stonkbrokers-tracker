@@ -116,12 +116,14 @@ function overlayDailyStreams(snaps, revenue, extraDates) {
 function overlayHistoryStreams(snaps, revenue) {
   const dates = revenue.historyDates || [];
   if (!dates.length) return snaps;
+  const today = dates.utcIso();
   const idx = new Map(dates.map((d, i) => [mdSnapKey(d), i]));
   const pick = (arr, j) => {
     const n = Number(arr?.[j]);
     return Number.isFinite(n) ? n : null;
   };
   for (const s of snaps) {
+    if (mdSnapKey(s.date) === today) continue;
     const j = idx.get(mdSnapKey(s.date));
     if (j == null) continue;
     const fill = (field, arr) => {
@@ -149,22 +151,44 @@ function tvlByMode(vaults) {
   return o;
 }
 
-function mergeLiveSmartLpHistory(revenue) {
-  const dates = revenue?.historyDates || [];
-  const daily = revenue?.dailySmartLp || [];
-  if (!dates.length || !daily.length) return;
-  const hist = Array.isArray(revenue.historySmartLp) ? [...revenue.historySmartLp] : [];
-  while (hist.length < dates.length) hist.push(0);
-  const byIso = new Map(dates.map((d, i) => [isoFromMdLabel(d) || d, i]));
+const LIVE_TODAY_STREAMS = [
+  ["dailyAmm", "historyAmm"],
+  ["dailySecurityBox", "historyBox"],
+  ["dailyDex", "historyDex"],
+  ["dailyLaunchpad", "historyVolume"],
+  ["dailyBondingTax", "historyTax"],
+  ["dailySmartLp", "historySmartLp"],
+];
+
+/** In-progress UTC day: write the live 7-day walk into history so each pull fills today's bar. */
+function mergeLiveTodayHistory(revenue) {
+  const today = dates.utcIso();
+  const histDates = revenue?.historyDates || [];
+  if (!histDates.length) return;
+  const byIso = new Map(histDates.map((d, i) => [isoFromMdLabel(d) || d, i]));
+  let todayIdx = byIso.get(today);
+  if (todayIdx == null) {
+    todayIdx = histDates.length;
+    histDates.push(today);
+    revenue.historyDates = histDates;
+  }
   const dailyDates = revenue.dailyDates || [];
-  const aligned = dailyDates.length === daily.length ? dailyDates : dates.slice(-daily.length);
-  aligned.forEach((d, i) => {
-    const j = byIso.get(isoFromMdLabel(d) || d);
-    const v = Number(daily[i]);
-    if (j == null || !Number.isFinite(v)) return;
-    if (v > 0 || !(Number(hist[j]) > 0)) hist[j] = +v.toFixed(2);
-  });
-  revenue.historySmartLp = hist;
+  const n = Math.max(
+    dailyDates.length,
+    (revenue.dailyAmm || []).length,
+    (revenue.dailySmartLp || []).length,
+  );
+  const slot = dailyDates.length
+    ? dailyDates.findIndex((d) => (isoFromMdLabel(d) || d) === today)
+    : n - 1;
+  if (slot < 0) return;
+  for (const [dailyKey, histKey] of LIVE_TODAY_STREAMS) {
+    const v = Number(revenue[dailyKey]?.[slot]);
+    if (!Number.isFinite(v)) continue;
+    if (!Array.isArray(revenue[histKey])) revenue[histKey] = histDates.map(() => 0);
+    while (revenue[histKey].length < histDates.length) revenue[histKey].push(0);
+    revenue[histKey][todayIdx] = +v.toFixed(2);
+  }
 }
 
 function applySmartLp(revenueBreakdown, smart) {
@@ -1915,6 +1939,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
     ammFeesUsd: 0, securityBoxUsd: 0, launchpadUsd: 0, dexFeesUsd: 0,
     launchCreateUsd: 0, bondingFeesUsd: 0, bondingVolumeUsd: 0,
     smartLpUsd: 0,
+    dailyDates,
     dailyAmm: zeros(), dailySecurityBox: zeros(), dailyLaunchpad: zeros(), dailyDex: zeros(),
     dailyBondingTax: zeros(), dailySmartLp: zeros(),
   };
@@ -2742,7 +2767,7 @@ async function run() {
 
       const todayStamp = dates.utcIso();
       overlayDailyStreams(dailySnapshots, revenueBreakdown, mappedTiers?.[0]?.dailyDates);
-      if (projectKey === "stonk") mergeLiveSmartLpHistory(revenueBreakdown);
+      mergeLiveTodayHistory(revenueBreakdown);
       const modeTvl = tvlByMode(revenueBreakdown?.smartLp?.vaults);
       stampLiveSnapshot(dailySnapshots, todayStamp, {
         nftFloorEth: markets[projectKey].nftFloorEth || 0,
