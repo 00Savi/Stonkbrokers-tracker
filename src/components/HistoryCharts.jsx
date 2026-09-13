@@ -25,6 +25,7 @@ import {
   percentStackOptions,
   usdStackOptions,
   PAIR_COLORS,
+  STREAM_COLORS,
 } from '../lib/charts';
 
 export function EmptyChart({ children = 'No series recorded yet' }) {
@@ -84,8 +85,43 @@ export function PaybackPanel({ snaps, tiers, floorCostUsd, tokenPriceUsd }) {
   );
 }
 
-export function ProtocolFeeVolumePanels({ labels, cols, kind }) {
-  if (kind === 'ledger' || kind === 'cashflow') return null;
+export function HolderRevenuePanel({ labels, data, note }) {
+  const has = seriesHasInk(data);
+  return (
+    <ChartPanel
+      title="Holder revenue (USD)"
+      note={note || 'What flowed to NFT / token holders that day. This is the payout leg, not protocol-kept revenue.'}
+    >
+      {has ? (
+        <Bar
+          data={{
+            labels,
+            datasets: [{
+              label: 'Holder revenue',
+              data,
+              backgroundColor: STREAM_COLORS.holdersRev,
+              borderRadius: 3,
+              maxBarThickness: 28,
+              skipNull: true,
+            }],
+          }}
+          options={usdStackOptions()}
+        />
+      ) : (
+        <EmptyChart>No holder-revenue days in this window</EmptyChart>
+      )}
+    </ChartPanel>
+  );
+}
+
+export function ProtocolFeeVolumePanels({ labels, cols, kind, holder }) {
+  const holderInk = holder && seriesHasInk(holder.data);
+  const holderPanel = holderInk ? (
+    <HolderRevenuePanel labels={holder.labels || labels} data={holder.data} note={holder.note} />
+  ) : null;
+
+  if (kind === 'ledger' || kind === 'cashflow') return holderPanel;
+
   const fees = protocolFeeCols(cols).filter((c) => seriesHasInk(c.data));
   const mix = mixPercentCols(fees).filter((c) => seriesHasInk(c.data));
   return (
@@ -105,6 +141,7 @@ export function ProtocolFeeVolumePanels({ labels, cols, kind }) {
           <Bar data={{ labels, datasets: barDatasets(mix, { stacked: true }) }} options={percentStackOptions()} />
         </ChartPanel>
       ) : null}
+      {holderPanel}
     </>
   );
 }

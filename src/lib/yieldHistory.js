@@ -215,6 +215,62 @@ export function protocolFeeCols(cols) {
 }
 
 /**
+ * USD paid to NFT / token holders that day.
+ *
+ * Brokers: per-NFT daily yield × active units at that tier.
+ * Cashflow specials: `cashflow.dailyRevenue`.
+ * Card Wall: delivered-to-members landed cost.
+ */
+export function holderRevenueOnLabels(project, labels) {
+  const axis = labels || [];
+  const cf = project?.cashflow;
+  if (cf?.dailyDates?.length) {
+    const lookup = windowLookup(cf.dailyDates, cf.dailyRevenue || []);
+    return axis.map((d) => lookup(d) ?? 0);
+  }
+  const ledger = project?.ledger;
+  if (ledger?.historyDates?.length) {
+    const lookup = windowLookup(ledger.historyDates, ledger.historyDelivered || []);
+    return axis.map((d) => lookup(d) ?? 0);
+  }
+
+  const tiers = project?.tiers || [];
+  const snaps = usableSnapshots(project?.dailySnapshots);
+  const live = project?.activation?.breakdown || project?.activation?.byTier || {};
+  const snapByDate = new Map(snaps.map((s) => [mdKey(s.date), s]));
+
+  return axis.map((d) => {
+    const key = mdKey(d);
+    const snap = snapByDate.get(key);
+    let sum = 0;
+    for (const t of tiers) {
+      const dates = t.dailyDates || [];
+      const i = dates.findIndex((x) => mdKey(x) === key);
+      let perNft = i >= 0 ? Number(t.dailyYields?.[i]) || 0 : 0;
+      if (!(perNft > 0)) {
+        const y = Number(snap?.tiers?.find((st) => st.tier === t.tier)?.yieldUsd);
+        if (y > 0) perNft = y / 365;
+      }
+      const active =
+        Number(snap?.tierActive?.[t.tier]) ||
+        Number(live[t.tier]) ||
+        0;
+      sum += perNft * active;
+    }
+    return sum;
+  });
+}
+
+export function holderRevenueCol(project, rawLabels) {
+  return {
+    key: 'holders',
+    label: 'Holder revenue',
+    color: STREAM_COLORS.holdersRev,
+    data: holderRevenueOnLabels(project, rawLabels || []),
+  };
+}
+
+/**
  * CoC % from cashflow buckets. Oakmont (and any monthly indexer) publishes a
  * month total on the 1st — treating that as a daily print and ×365 is why
  * early Oakmont ROI printed ~1600%. Those series stay on the revenue chart.

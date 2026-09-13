@@ -12,7 +12,8 @@ export const STREAM_COLORS = {
   delivered: '#00a804',
   vaulted: '#f5b700',
   fees: '#00a804',
-  holdersRev: '#8b5cf6',
+  // Payout / received — amber-gold, not protocol green and not burn orange.
+  holdersRev: '#f7931a',
 };
 
 export const TIER_COLORS = ['#00a804', '#8b5cf6', '#38bdf8', '#f5b700', '#f472b6'];

@@ -166,3 +166,26 @@ export function burnRateSeries(source, timeframe = 'all') {
     }),
   };
 }
+
+/** Token-unit cap used for "burnt ÷ total supply". */
+export function tokenSupplyCap(project) {
+  const unit = Number(project?.config?.unitValue) || 1;
+  const nftOrMax =
+    Number(project?.activation?.totalSupply) ||
+    Number(project?.config?.maxSupply) ||
+    Number(project?.ownership?.currentMaxSupply) ||
+    0;
+  const circ = Number(project?.ownership?.circulatingSupply) || 0;
+  const burnt = liveBurn(project);
+  if (unit > 1 && nftOrMax > 0 && nftOrMax < 1e6) return nftOrMax * unit;
+  if (circ > 0) return Math.max(circ + burnt, nftOrMax);
+  return nftOrMax > 0 ? nftOrMax : 0;
+}
+
+/** Burnt tokens as a percent of total supply, or null when we cannot say. */
+export function burnOfSupplyPct(project, burntTokens) {
+  const burnt = Number(burntTokens);
+  const cap = tokenSupplyCap(project);
+  if (!(burnt > 0) || !(cap > 0)) return null;
+  return (burnt / cap) * 100;
+}

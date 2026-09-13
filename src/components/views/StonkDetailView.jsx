@@ -3,9 +3,9 @@ import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, ArcElement, Filler
 } from 'chart.js';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
-import { burnSeries, burnRateSeries } from '../../lib/burn';
+import { burnSeries, burnRateSeries, burnOfSupplyPct } from '../../lib/burn';
 import { formatLabels } from '../../lib/dates';
-import { windowSnapshots, tierRoiDatasets, protocolRevenueChart, sliceCols, windowPeriodLabel, windowLen, seriesHasInk } from '../../lib/yieldHistory';
+import { windowSnapshots, tierRoiDatasets, protocolRevenueChart, sliceCols, windowPeriodLabel, windowLen, seriesHasInk, holderRevenueCol } from '../../lib/yieldHistory';
 import { compactUsd, compactNum } from '../kit';
 import { baseChartOptions, compactTick, compactUsdTick, dualAxisOptions, STREAM_COLORS } from '../../lib/charts';
 import { useChartWindow } from '../../lib/chartWindow';
@@ -105,6 +105,7 @@ export default function StonkDetailView({ data, activeTab }) {
   const revPeriod = windowPeriodLabel(timeframe);
   const rawRev = protocolRevenueChart(project);
   const slicedRev = sliceCols(rawRev.labels, rawRev.cols, timeframe);
+  const slicedHolder = sliceCols(rawRev.labels, [holderRevenueCol(project, rawRev.rawLabels || rawRev.labels)], timeframe);
   const byKey = Object.fromEntries((slicedRev.cols || []).map((c) => [c.key, c]));
   const { labels: revDates, cols: REV_STREAMS } = {
     labels: slicedRev.labels,
@@ -130,6 +131,7 @@ export default function StonkDetailView({ data, activeTab }) {
     Number(ownership.permanentlyBurntUnits || 0),
     Number(ownership.burntNfts || 0)
   );
+  const burnPct = burnOfSupplyPct(project, realBurntTokens);
   
   const burn = burnSeries(project, timeframe);
   const slicedBurnLabels = burn.labels;
@@ -358,7 +360,16 @@ export default function StonkDetailView({ data, activeTab }) {
             </div>
           </div>
 
-          <ProtocolFeeVolumePanels labels={slicedRev.labels} cols={slicedRev.cols} kind={rawRev.kind} />
+          <ProtocolFeeVolumePanels
+            labels={slicedRev.labels}
+            cols={slicedRev.cols}
+            kind={rawRev.kind}
+            holder={{
+              labels: slicedHolder.labels,
+              data: slicedHolder.cols[0]?.data,
+              note: 'Per-NFT daily yield × active units at each tier. The payout that reached holders, not protocol-kept revenue.',
+            }}
+          />
         </div>
       </section>
 
@@ -540,6 +551,9 @@ export default function StonkDetailView({ data, activeTab }) {
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
               <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Total StonkBrokers Burnt</p>
               <p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-orange-400">{formatNumber(realBurntTokens)} StonkBrokers</p>
+              {burnPct != null && (
+                <p className="text-xs text-slate-400 mt-1">{burnPct.toFixed(2)}% of total supply</p>
+              )}
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
               <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Equivalent Units Removed</p>

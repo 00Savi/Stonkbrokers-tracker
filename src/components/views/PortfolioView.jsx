@@ -2,14 +2,15 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ethers } from 'ethers';
 import { SAVI_X } from '../Shell';
-import { compactUsd } from '../kit';
-import { copyElement } from '../../lib/share';
-import { PAIR_COLORS } from '../../lib/charts';
+import { copyPortfolioSnapshot } from '../../lib/share';
+import { PAIR_COLORS, STREAM_COLORS } from '../../lib/charts';
 import { PROJECTS, isProjectLive } from '../../lib/routes';
+import { CURRENCIES, fetchEurPerUsd, formatMoney, moneyTick } from '../../lib/money';
+import { formatLabels } from '../../lib/dates';
 import {
-  Chart as ChartJS, ArcElement, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler
+  Chart as ChartJS, ArcElement, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend, Filler
 } from 'chart.js';
-import { Doughnut, Line } from 'react-chartjs-2';
+import { Doughnut, Bar } from 'react-chartjs-2';
 import {
   aggregateTbaHoldings,
   buildPriceIndex,
@@ -25,6 +26,7 @@ import {
   earnedUsdForTokenPosition,
   fetchMachineMeta,
   fetchNftImage,
+  normalizeNftImageUrl,
   fetchNftTransferLog,
   fetchOwnedNftIdsV2,
   enumerateOwnedIds,
@@ -33,29 +35,84 @@ import {
   formatDate,
   machineAnnualForWeight,
   mapLimited,
+  walletDailyDrops,
+  bucketDropSeries,
 } from '../../lib/portfolioHistory';
 
 const FORECAST_YEARS = [1, 3, 5, 10];
+const GRAINS = [
+  { id: 'd', label: 'D', title: 'Daily' },
+  { id: 'w', label: 'W', title: 'Weekly' },
+  { id: 'm', label: 'M', title: 'Monthly' },
+  { id: 'a', label: 'A', title: 'Annual' },
+];
 const PIE_COLORS = PAIR_COLORS;
 
-function forecastCurve(years) {
-  if (years <= 1) return [0, 0.25, 0.5, 0.75, 1];
-  return Array.from({ length: years + 1 }, (_, i) => i);
-}
+ChartJS.register(ArcElement, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend, Filler);
 
-function forecastAxisLabel(y) {
-  if (y === 0) return 'Now';
-  if (y < 1) return `${Math.round(y * 12)}mo`;
-  return `${y}y`;
+function GrainBar({ value, onChange }) {
+  return (
+    <div className="flex bg-[#0e1013] rounded-lg p-0.5 border border-[#1e2228]">
+      {GRAINS.map((g) => (
+        <button
+          key={g.id}
+          type="button"
+          title={g.title}
+          onClick={() => onChange(g.id)}
+          className={`px-2 py-1 text-[10px] font-bold rounded-md transition ${
+            value === g.id ? 'bg-[#1e2228] text-white' : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          {g.label}
+        </button>
+      ))}
+    </div>
+  );
 }
-
-ChartJS.register(ArcElement, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler);
 
 const projectName = (key, ticker) =>
   PROJECTS.find((p) => p.key === key)?.name || ticker;
 
 const formatAmount = (val) =>
   new Intl.NumberFormat('en-US', { maximumFractionDigits: val >= 1 ? 2 : 4 }).format(val || 0);
+
+/** Header art is Savi's own NFTs, not project marks. Never use these as thumbs. */
+const HEADER_NFT_ART = new Set(['Stonkbroker.png', 'logo.png', 'Yardkeepers.png', 'wall.png']);
+
+function officialLogoSrc(asset) {
+  const meta = PROJECTS.find((p) => p.key === asset.projectKey);
+  const file = meta?.logo || asset.logo;
+  if (!file || HEADER_NFT_ART.has(file)) return '';
+  return `/${file}`;
+}
+
+function pickOwnedNft(nfts, tokenId) {
+  if (!nfts?.length) return null;
+  if (tokenId != null) {
+    return nfts.find((n) => String(n.tokenId) === String(tokenId)) || nfts[0];
+  }
+  return nfts[Math.floor(Math.random() * nfts.length)];
+}
+
+async function resolveThumb(asset, existing) {
+  if (existing?.src) return existing;
+  const pick = pickOwnedNft(asset.nfts, existing?.tokenId);
+  let src = normalizeNftImageUrl(pick?.imageUrl || '');
+  if (!src && pick?.nftCa && pick?.tokenId != null) {
+    try {
+      src = await fetchNftImage(pick.nftCa, pick.tokenId) || '';
+    } catch {
+      src = '';
+    }
+  }
+  if (!src) src = officialLogoSrc(asset);
+  return { src, tokenId: pick?.tokenId ?? existing?.tokenId };
+}
+
+function chartCanvas(ref) {
+  const inst = ref?.current;
+  return inst?.canvas || (inst instanceof HTMLCanvasElement ? inst : null);
+}
 
 function HoldingRows({ tokens, priceIndex, formatCurrency }) {
   if (!tokens.length) {
@@ -129,13 +186,30 @@ export default function PortfolioView({ data }) {
   const [aggregateOpen, setAggregateOpen] = useState(false);
   const [mode, setMode] = useState('forecast');
   const [forecastYears, setForecastYears] = useState(1);
+  const [forecastGrain, setForecastGrain] = useState('d');
+  const [historyGrain, setHistoryGrain] = useState('d');
+  const [ccy, setCcy] = useState('USD');
+  const [eurPerUsd, setEurPerUsd] = useState(0);
   const [copyState, setCopyState] = useState('idle');
-  const snapshotRef = useRef(null);
   const [scanProgress, setScanProgress] = useState('');
+  const [thumbs, setThumbs] = useState({});
+  const pickedThumb = useRef({});
+  const pieRef = useRef(null);
+  const barRef = useRef(null);
 
-  const formatCurrency = compactUsd;
   const priceIndex = buildPriceIndex(data);
   const ethUsd = data?.projects?.stonk?.market?.ethPriceUsd || 0;
+  const rates = { ethUsd, eurPerUsd };
+  const formatCurrency = (usd) => formatMoney(usd, ccy, rates);
+  const tickMoney = moneyTick(ccy, rates);
+
+  useEffect(() => {
+    const ac = new AbortController();
+    fetchEurPerUsd(ac.signal).then((n) => {
+      if (n > 0) setEurPerUsd(n);
+    });
+    return () => ac.abort();
+  }, []);
 
   const loadInventories = (nfts) => {
     const tbas = [...new Set(nfts.map((n) => n.tba).filter(Boolean))];
@@ -170,6 +244,8 @@ export default function PortfolioView({ data }) {
     setOpenProjects({});
     setEnriched({});
     setAggregateOpen(false);
+    setThumbs({});
+    pickedThumb.current = {};
 
     let totalFloorUsd = 0;
     let totalYieldUsd = 0;
@@ -501,13 +577,47 @@ export default function PortfolioView({ data }) {
   const aggregate = aggregateTbaHoldings(allNfts, inventories, priceIndex);
   const inventoriesPending = allNfts.some((n) => n.tba && inventories[n.tba]?.status === 'loading');
   const grouped = useMemo(() => groupByProject(results.ownedAssets), [results.ownedAssets]);
+
+  useEffect(() => {
+    if (!grouped.length) return;
+    let cancelled = false;
+    grouped.forEach(async (asset) => {
+      const prev = pickedThumb.current[asset.projectKey];
+      if (prev?.src) return;
+      if (!prev && (asset.nfts || []).length) {
+        const pick = pickOwnedNft(asset.nfts);
+        pickedThumb.current[asset.projectKey] = { tokenId: pick?.tokenId };
+      } else if (!prev) {
+        pickedThumb.current[asset.projectKey] = { tokenId: null };
+      }
+      const thumb = await resolveThumb(asset, pickedThumb.current[asset.projectKey]);
+      pickedThumb.current[asset.projectKey] = thumb;
+      if (!cancelled) {
+        setThumbs((cur) => ({ ...cur, [asset.projectKey]: thumb }));
+      }
+    });
+    return () => { cancelled = true; };
+  }, [grouped]);
   const hasHoldings = results.ownedAssets.length > 0;
   const forecastUsd = results.yieldUsd * forecastYears;
   const cashLabel = mode === 'history' ? 'Earned in your ownership' : `Forecasted ${forecastYears}y cash-flow`;
   const cashValue = mode === 'history' ? results.earnedUsd : forecastUsd;
   const roiPct =
     results.floorUsd > 0 ? ((mode === 'history' ? results.earnedUsd : forecastUsd) / results.floorUsd) * 100 : 0;
-  const curve = forecastCurve(forecastYears);
+  const runRate = {
+    d: results.yieldUsd / 365,
+    w: results.yieldUsd / 52,
+    m: results.yieldUsd / 12,
+    a: results.yieldUsd,
+  };
+  const dropSeries = useMemo(
+    () => walletDailyDrops(results.ownedAssets, data),
+    [results.ownedAssets, data],
+  );
+  const historyChart = useMemo(
+    () => bucketDropSeries(dropSeries.labels, dropSeries.data, historyGrain),
+    [dropSeries, historyGrain],
+  );
 
   const copyLabel =
     copyState === 'busy' ? 'Copying' :
@@ -517,22 +627,71 @@ export default function PortfolioView({ data }) {
     'Copy';
 
   const handleCopySnapshot = async () => {
-    if (copyState === 'busy' || !snapshotRef.current) return;
+    if (copyState === 'busy') return;
     setCopyState('busy');
     try {
-      const copied = await copyElement(snapshotRef.current);
+      const pieGroups = grouped.filter((g) => g.floorValue > 0);
+      const resolved = {};
+      await Promise.all(grouped.map(async (asset) => {
+        const thumb = await resolveThumb(asset, thumbs[asset.projectKey] || pickedThumb.current[asset.projectKey]);
+        pickedThumb.current[asset.projectKey] = thumb;
+        resolved[asset.projectKey] = thumb;
+      }));
+      setThumbs((cur) => ({ ...cur, ...resolved }));
+      const copied = await copyPortfolioSnapshot({
+        mode,
+        floor: formatCurrency(results.floorUsd),
+        cashLabel,
+        cash: results.hasErrors ? 'ERROR' : formatCurrency(cashValue),
+        roi: results.hasErrors ? 'ERROR' : `${roiPct.toFixed(2)}%`,
+        units: `${results.totalUnits} Units`,
+        pie: pieGroups.map((g, i) => ({
+          label: projectName(g.projectKey, g.ticker),
+          value: g.floorValue,
+          color: PIE_COLORS[i % PIE_COLORS.length],
+        })),
+        pieCanvas: chartCanvas(pieRef),
+        barCanvas: chartCanvas(barRef),
+        bars: mode === 'forecast'
+          ? {
+            title: 'Forecasted cash-flow',
+            headline: `${formatCurrency(runRate[forecastGrain] || 0)} / ${GRAINS.find((g) => g.id === forecastGrain)?.title.toLowerCase()}`,
+            headlineColor: '#00a804',
+            labels: GRAINS.map((g) => g.title),
+            values: GRAINS.map((g) => runRate[g.id]),
+            colors: GRAINS.map((g) => (g.id === forecastGrain ? '#00a804' : 'rgba(0,168,4,0.35)')),
+          }
+          : {
+            title: 'Daily drops',
+            labels: historyGrain === 'd' ? formatLabels(historyChart.labels) : historyChart.labels,
+            values: historyChart.data,
+            colors: historyChart.data.map(() => STREAM_COLORS.holdersRev),
+          },
+        assets: grouped.map((asset) => {
+          const thumb = resolved[asset.projectKey] || {};
+          return {
+            name: `${asset.project} (${asset.tokenPosition ? formatAmount(asset.balance) : `${asset.balance} owned`})`,
+            detail: thumb.tokenId != null
+              ? `#${thumb.tokenId} · Floor ${formatCurrency(asset.floorValue)}`
+              : `Floor ${formatCurrency(asset.floorValue)}`,
+            value: mode === 'history'
+              ? formatCurrency(asset.earnedValue || 0)
+              : `+ ${formatCurrency((asset.yieldValue || 0) * forecastYears)}`,
+            thumb: thumb.src || officialLogoSrc(asset),
+            mark: asset.ticker,
+          };
+        }),
+      });
       setCopyState(copied ? 'copied' : 'saved');
-    } catch {
+    } catch (err) {
+      console.error('portfolio copy failed', err);
       setCopyState('fail');
     }
     window.setTimeout(() => setCopyState('idle'), 2500);
   };
 
   return (
-    <div
-      ref={snapshotRef}
-      className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl mt-6"
-    >
+    <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl mt-6">
       <div className="mb-6 flex items-start justify-between gap-3">
         <div>
           <h2 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
@@ -655,6 +814,21 @@ export default function PortfolioView({ data }) {
                 ))}
               </div>
             )}
+            <div className="flex bg-[#08090b] rounded-lg p-1 border border-[#1e2228] lg:ml-auto">
+              {CURRENCIES.map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  disabled={opt.id === 'EUR' && !(eurPerUsd > 0)}
+                  onClick={() => setCcy(opt.id)}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-md transition disabled:opacity-40 ${
+                    ccy === opt.id ? 'bg-[#1e2228] text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -688,6 +862,7 @@ export default function PortfolioView({ data }) {
                 <h3 className="text-sm font-bold text-white mb-4">Floor allocation</h3>
                 <div className="relative h-52 w-full">
                   <Doughnut
+                    ref={pieRef}
                     data={{
                       labels: grouped.filter((g) => g.floorValue > 0).map((g) => projectName(g.projectKey, g.ticker)),
                       datasets: [{
@@ -700,37 +875,30 @@ export default function PortfolioView({ data }) {
                   />
                 </div>
               </div>
-              {mode === 'forecast' && results.yieldUsd > 0 && (
+              {mode === 'forecast' ? (
                 <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
-                  <div className="flex items-center justify-between gap-2 mb-4">
+                  <div className="flex items-center justify-between gap-2 mb-2">
                     <h3 className="text-sm font-bold text-white">Forecasted cash-flow</h3>
-                    <div className="flex bg-[#0e1013] rounded-lg p-0.5 border border-[#1e2228]">
-                      {FORECAST_YEARS.map((y) => (
-                        <button
-                          key={y}
-                          type="button"
-                          onClick={() => setForecastYears(y)}
-                          className={`px-2 py-1 text-[10px] font-bold rounded-md transition ${
-                            forecastYears === y ? 'bg-[#1e2228] text-white' : 'text-slate-400 hover:text-white'
-                          }`}
-                        >
-                          {y}y
-                        </button>
-                      ))}
-                    </div>
+                    <GrainBar value={forecastGrain} onChange={setForecastGrain} />
                   </div>
-                  <p className="text-xs text-slate-500 mb-3">Current annual yield × years. Not compounded.</p>
-                  <div className="relative h-44 w-full">
-                    <Line
+                  <p className="text-2xl font-extrabold text-emerald-400 mb-1">
+                    {formatCurrency(runRate[forecastGrain] || 0)}
+                    <span className="ml-2 text-xs font-bold uppercase tracking-wide text-slate-500">
+                      / {GRAINS.find((g) => g.id === forecastGrain)?.title.toLowerCase()}
+                    </span>
+                  </p>
+                  <p className="text-xs text-slate-500 mb-3">Current wallet yield as a run-rate. Not compounded.</p>
+                  <div className="relative h-36 w-full">
+                    <Bar
+                      ref={barRef}
                       data={{
-                        labels: curve.map(forecastAxisLabel),
+                        labels: GRAINS.map((g) => g.title),
                         datasets: [{
-                          label: 'Forecasted cash (USD)',
-                          data: curve.map((y) => results.yieldUsd * y),
-                          borderColor: '#00a804',
-                          backgroundColor: 'rgba(0,168,4,0.1)',
-                          fill: true,
-                          tension: 0.3,
+                          label: 'Forecast',
+                          data: GRAINS.map((g) => runRate[g.id]),
+                          backgroundColor: GRAINS.map((g) => (g.id === forecastGrain ? '#00a804' : 'rgba(0,168,4,0.35)')),
+                          borderRadius: 4,
+                          maxBarThickness: 36,
                         }],
                       }}
                       options={{
@@ -739,10 +907,50 @@ export default function PortfolioView({ data }) {
                         plugins: { legend: { display: false } },
                         scales: {
                           x: { ticks: { color: '#94a3b8' }, grid: { color: '#1e2228' } },
-                          y: { ticks: { color: '#94a3b8' }, grid: { color: '#1e2228' } },
+                          y: { ticks: { color: '#94a3b8', callback: tickMoney }, grid: { color: '#1e2228' }, beginAtZero: true },
                         },
                       }}
                     />
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <h3 className="text-sm font-bold text-white">Daily drops</h3>
+                    <GrainBar value={historyGrain} onChange={setHistoryGrain} />
+                  </div>
+                  <p className="text-xs text-slate-500 mb-3">
+                    Yield credited after you received and activated each NFT. {GRAINS.find((g) => g.id === historyGrain)?.title} buckets.
+                  </p>
+                  <div className="relative h-44 w-full">
+                    {historyChart.labels.length ? (
+                      <Bar
+                        ref={barRef}
+                        data={{
+                          labels: historyGrain === 'd' ? formatLabels(historyChart.labels) : historyChart.labels,
+                          datasets: [{
+                            label: 'Drops',
+                            data: historyChart.data,
+                            backgroundColor: STREAM_COLORS.holdersRev,
+                            borderRadius: 3,
+                            maxBarThickness: 22,
+                          }],
+                        }}
+                        options={{
+                          responsive: true,
+                          maintainAspectRatio: false,
+                          plugins: { legend: { display: false } },
+                          scales: {
+                            x: { ticks: { color: '#94a3b8', maxRotation: 0, autoSkip: true, maxTicksLimit: 8 }, grid: { color: '#1e2228' } },
+                            y: { ticks: { color: '#94a3b8', callback: tickMoney }, grid: { color: '#1e2228' }, beginAtZero: true },
+                          },
+                        }}
+                      />
+                    ) : (
+                      <div className="h-full flex items-center justify-center text-sm text-slate-500 text-center px-4">
+                        No dated drops in this wallet yet
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -770,11 +978,17 @@ export default function PortfolioView({ data }) {
                     className="w-full flex items-center justify-between gap-3 text-left"
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <img
-                        src={`/${asset.logo}`}
-                        className="w-10 h-10 rounded-lg object-cover border border-[#1e2228] bg-[#0e1013]"
-                        alt={asset.ticker}
-                      />
+                      {thumbs[asset.projectKey]?.src || officialLogoSrc(asset) ? (
+                        <img
+                          src={thumbs[asset.projectKey]?.src || officialLogoSrc(asset)}
+                          className="w-10 h-10 rounded-lg object-cover border border-[#1e2228] bg-[#0e1013]"
+                          alt={thumbs[asset.projectKey]?.tokenId != null ? `#${thumbs[asset.projectKey].tokenId}` : asset.ticker}
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-lg border border-[#1e2228] bg-[#0e1013] flex items-center justify-center text-[10px] font-extrabold text-slate-400">
+                          {(asset.ticker || '?').slice(0, 2)}
+                        </div>
+                      )}
                       <div className="min-w-0">
                         <h4 className="text-sm font-bold text-white">
                           {asset.project} ({asset.tokenPosition ? formatAmount(asset.balance) : `${asset.balance} owned`})

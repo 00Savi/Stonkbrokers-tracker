@@ -1,5 +1,5 @@
 import { ethers } from 'ethers';
-import { utcIsoFromTs } from './dates';
+import { dateKey, utcIso, utcIsoFromTs } from './dates';
 
 const EXPLORER = 'https://robinhoodchain.blockscout.com';
 const ZERO = '0x0000000000000000000000000000000000000000';
@@ -87,7 +87,7 @@ export function parseMachineMeta(json) {
     ink,
     multiplier,
     status,
-    imageUrl: json?.image_url || json?.metadata?.image || null,
+    imageUrl: normalizeNftImageUrl(json?.image_url || json?.metadata?.image || '') || null,
   };
 }
 
@@ -198,6 +198,113 @@ export async function fetchTokenHoldStartTs(tokenCa, wallet) {
   return holdStart;
 }
 
+function includeDropDate(date, startTs, startLabel, snapTs) {
+  const ts = snapTs?.[date];
+  if (ts > 0) return ts >= startTs;
+  return !startLabel || sameOrAfterDateLabel(date, startLabel);
+}
+
+function addDays(map, date, amount) {
+  const k = dateKey(date);
+  if (!k || !(amount > 0)) return;
+  map[k] = (map[k] || 0) + amount;
+}
+
+function daysFromTs(startTs, through = utcIso()) {
+  const start = utcIsoFromTs(startTs);
+  if (!start) return [];
+  const from = Date.parse(`${start}T00:00:00Z`);
+  const to = Date.parse(`${dateKey(through)}T00:00:00Z`);
+  if (!Number.isFinite(from) || !Number.isFinite(to) || to < from) return [];
+  const out = [];
+  for (let t = from; t <= to; t += 86400000) {
+    out.push(new Date(t).toISOString().slice(0, 10));
+  }
+  return out;
+}
+
+/** Wallet daily USD drops after each NFT / token position started earning. */
+export function walletDailyDrops(ownedAssets, data) {
+  const byDate = {};
+  for (const asset of ownedAssets || []) {
+    const pData = data?.projects?.[asset.projectKey];
+    if (!pData) continue;
+
+    if (asset.tokenPosition) {
+      const start = Number(asset.holdStartTs) || 0;
+      const startLabel = start ? dayKeyFromSeconds(start) : null;
+      const circ = Number(pData.ownership?.circulatingSupply) || 0;
+      const share = circ > 0 ? (Number(asset.balance) || 0) / circ : 0;
+      const dates = pData.cashflow?.dailyDates || [];
+      const revs = pData.cashflow?.dailyRevenue || pData.cashflow?.dailyFees || [];
+      if (share > 0 && dates.length) {
+        dates.forEach((date, i) => {
+          if (!startLabel || sameOrAfterDateLabel(date, startLabel)) {
+            addDays(byDate, date, (Number(revs[i]) || 0) * share);
+          }
+        });
+      }
+      continue;
+    }
+
+    const maps = dailyDropMaps(pData);
+    const snapTs = {};
+    for (const snap of pData.dailySnapshots || []) {
+      const t = Number(snap.timestamp);
+      snapTs[snap.date] = t > 1e12 ? t / 1000 : t;
+    }
+
+    for (const nft of asset.nfts || []) {
+      const start = Number(nft.activationTs || nft.lastTransferTs) > 0
+        ? earningStartTs(nft)
+        : 0;
+      if (!start) continue;
+      const startLabel = dayKeyFromSeconds(start);
+      const map = maps[nft.tierId] || {};
+      const keys = Object.keys(map);
+      if (keys.length) {
+        for (const [date, amount] of Object.entries(map)) {
+          if (includeDropDate(date, start, startLabel, snapTs)) {
+            addDays(byDate, date, Number(amount) || 0);
+          }
+        }
+        continue;
+      }
+      const daily = (Number(nft.yieldValue) || 0) / 365;
+      if (!(daily > 0)) continue;
+      for (const day of daysFromTs(start)) addDays(byDate, day, daily);
+    }
+  }
+
+  const labels = Object.keys(byDate).sort();
+  return { labels, data: labels.map((d) => byDate[d]) };
+}
+
+export function bucketDropSeries(labels, values, grain = 'd') {
+  if (grain === 'd') {
+    return { labels: labels || [], data: (values || []).map((v) => Number(v) || 0) };
+  }
+  const map = new Map();
+  (labels || []).forEach((d, i) => {
+    const iso = dateKey(d) || d;
+    const dt = new Date(`${iso}T00:00:00Z`);
+    if (Number.isNaN(dt.getTime())) return;
+    let key = iso;
+    if (grain === 'w') {
+      const day = dt.getUTCDay() || 7;
+      const monday = new Date(dt);
+      monday.setUTCDate(dt.getUTCDate() - (day - 1));
+      key = monday.toISOString().slice(0, 10);
+    } else if (grain === 'm') {
+      key = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}`;
+    } else if (grain === 'a') {
+      key = String(dt.getUTCFullYear());
+    }
+    map.set(key, (map.get(key) || 0) + (Number(values?.[i]) || 0));
+  });
+  return { labels: [...map.keys()], data: [...map.values()] };
+}
+
 export function earnedUsdForNft(pData, tierId, startTs) {
   const start = Number(startTs) || 0;
   if (!start) return 0;
@@ -220,9 +327,19 @@ export function earnedUsdForNft(pData, tierId, startTs) {
   return sum;
 }
 
+/** Point IPFS URLs at a public gateway so <img> and canvas can load them. */
+export function normalizeNftImageUrl(src) {
+  if (!src) return '';
+  const s = String(src).trim();
+  if (s.startsWith('ipfs://')) {
+    return `https://dweb.link/ipfs/${s.replace(/^ipfs:\/\//, '').replace(/^ipfs\//, '')}`;
+  }
+  return s;
+}
+
 export async function fetchNftImage(nftCa, tokenId) {
   const json = await fetchNftInstance(nftCa, tokenId);
-  return json?.image_url || json?.animation_url || json?.metadata?.image || null;
+  return normalizeNftImageUrl(json?.image_url || json?.animation_url || json?.metadata?.image || null);
 }
 
 export async function fetchNftInstance(nftCa, tokenId) {

@@ -3,7 +3,7 @@ import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, ArcElement, Filler
 } from 'chart.js';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
-import { burnSeries, burnRateSeries } from '../../lib/burn';
+import { burnSeries, burnRateSeries, burnOfSupplyPct } from '../../lib/burn';
 import { formatLabels } from '../../lib/dates';
 import { windowSnapshots, protocolRevenueChart, sliceCols, windowLen, seriesHasInk } from '../../lib/yieldHistory';
 import { BetaTag, compactUsd, compactNum } from '../kit';
@@ -16,6 +16,7 @@ import {
   PaybackPanel,
   ActivationStackPanel,
   OwnershipHistoryPanels,
+  HolderRevenuePanel,
 } from '../HistoryCharts';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
@@ -67,6 +68,7 @@ export default function CardWallDetailView({ data, activeTab }) {
   const revData2 = revCols[1]?.data || zeros;
 
   const realBurntTokens = Math.max(Number(activation.dualBurn?.totalBurnTokens || 0), Number(ownership.permanentlyBurntTokens || 0));
+  const burnPct = burnOfSupplyPct(project, realBurntTokens);
   const realBurntUnits = Math.max(Number(activation.dualBurn?.equivalentBrokersBurnt || 0), Number(ownership.permanentlyBurntUnits || 0), Number(ownership.burntNfts || 0));
   
   const burn = burnSeries(project, timeframe);
@@ -314,6 +316,11 @@ export default function CardWallDetailView({ data, activeTab }) {
               />
             </div>
           </div>
+          <HolderRevenuePanel
+            labels={revDates}
+            data={revData1}
+            note="Landed cost delivered to members that day — holder revenue for the wall."
+          />
         </div>
       </section>
 
@@ -342,6 +349,9 @@ export default function CardWallDetailView({ data, activeTab }) {
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
               <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Total ${config.ticker} Burnt</p>
               <p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-orange-400">{formatNumber(realBurntTokens)} {config.ticker}</p>
+              {burnPct != null && (
+                <p className="text-xs text-slate-400 mt-1">{burnPct.toFixed(2)}% of total supply</p>
+              )}
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
               <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Equivalent Units Removed</p>

@@ -3,7 +3,7 @@ import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler
 } from 'chart.js';
 import { Line, Bar } from 'react-chartjs-2';
-import { burnSeries, burnRateSeries } from '../../lib/burn';
+import { burnSeries, burnRateSeries, burnOfSupplyPct } from '../../lib/burn';
 import { holderSeries } from '../../lib/snapshots';
 import { formatLabels } from '../../lib/dates';
 import { windowSnapshots, protocolRevenueChart, sliceCols, windowPeriodLabel, windowLen } from '../../lib/yieldHistory';
@@ -15,7 +15,7 @@ import {
 } from '../../lib/oakmont';
 import { baseChartOptions, compactTick, compactUsdTick, dualAxisOptions } from '../../lib/charts';
 import { useChartWindow } from '../../lib/chartWindow';
-import { YieldUsdPricePanel, PaybackPanel } from '../HistoryCharts';
+import { YieldUsdPricePanel, PaybackPanel, HolderRevenuePanel } from '../HistoryCharts';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler);
 
@@ -63,6 +63,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
   const holders = { labels: holdersFull.labels.slice(-hN), data: holdersFull.data.slice(-hN) };
 
   const burnTokens = activation.dualBurn?.totalBurnTokens || ownership.permanentlyBurntTokens || 0;
+  const burnPct = burnOfSupplyPct(project, burnTokens);
   const wrapPct = market.wrappedPct ?? (circulating > 0 ? (market.reserveSupply || 0) / circulating : 0);
   const poolVol = market.poolVolume24h || (lockedLp?.pools || []).reduce((s, p) => s + (p.volume24h || 0), 0);
 
@@ -88,6 +89,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
         fdv={fdv}
         circulating={circulating}
         burnTokens={burnTokens}
+        burnPct={burnPct}
         wrapPct={wrapPct}
         poolVol={poolVol}
         cashflow={cashflow}
@@ -216,7 +218,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5">
               <p className="text-xs uppercase text-slate-400 mb-1">Holders / revenue ({revPeriod})</p>
-              <p className="text-2xl font-extrabold" style={{ color: MARK.sky }}>{fmt(revCols[1]?.total || 0)}</p>
+              <p className="text-2xl font-extrabold" style={{ color: '#f7931a' }}>{fmt(revCols[1]?.total || 0)}</p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5">
               <p className="text-xs uppercase text-slate-400 mb-1">Annualized</p>
@@ -245,6 +247,11 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
               )}
             </div>
           </div>
+          <HolderRevenuePanel
+            labels={revDates}
+            data={revCols[1]?.data || []}
+            note="Revenue that reached token / NFT holders. Protocol-kept fees stay in the chart above."
+          />
         </div>
       </section>
 
@@ -280,6 +287,9 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5">
               <p className="text-xs uppercase text-slate-400 mb-1">Tokens burnt / missing</p>
               <p className="text-2xl font-extrabold text-orange-400">{num(burnTokens)} {ticker}</p>
+              {burnPct != null && (
+                <p className="text-xs text-slate-400 mt-1">{burnPct.toFixed(2)}% of total supply</p>
+              )}
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5">
               <p className="text-xs uppercase text-slate-400 mb-1">Circulating</p>
@@ -465,7 +475,7 @@ function Panel({ label, value, color }) {
 
 function VaultView({
   meta, market, ownership, activation, lockedLp, snaps, histLabels, chartOpts,
-  activeTab, fmt, num, tokenUsd, fdv, circulating, burnTokens, wrapPct, poolVol,
+  activeTab, fmt, num, tokenUsd, fdv, circulating, burnTokens, burnPct, wrapPct, poolVol,
   cashflow, tiers, vault, config,
 }) {
   const [timeframe] = useChartWindow();
@@ -705,6 +715,11 @@ function VaultView({
               </div>
             </div>
           )}
+          <HolderRevenuePanel
+            labels={revDates}
+            data={revCols[1]?.data || []}
+            note="Holder / wrap-side cash-flow from the same Oakmont series. Monthly buckets, not daily."
+          />
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 overflow-x-auto">
             <h3 className="text-sm font-bold text-white mb-3">Fee schedule</h3>
             <table className="w-full text-xs">
@@ -771,7 +786,7 @@ function VaultView({
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Panel label="$STRIKE circulating (fixed cap 100M)" value={num(circulating, 0)} color={MARK.sky} />
-            <Panel label="$STRIKE independently burned / missing" value={`${num(burnTokens)} STRIKE`} color="#fb923c" />
+            <Panel label="$STRIKE independently burned / missing" value={`${num(burnTokens)} STRIKE${burnPct != null ? ` · ${burnPct.toFixed(2)}% of supply` : ''}`} color="#fb923c" />
             <Panel label="$RESERVE outstanding" value={num(market.reserveSupply, 0)} color={MARK.lime} />
             <Panel label="$RESERVE FDV" value={fmt(market.reserveFdvUsd)} />
           </div>
