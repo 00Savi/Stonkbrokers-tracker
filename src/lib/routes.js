@@ -58,7 +58,7 @@ export const TABS = [
 export const VAULT_TABS = [
   { slug: 'roi', label: 'Protocol' },
   { slug: 'yield', label: 'Markets' },
-  { slug: 'revenue', label: 'Fees' },
+  { slug: 'revenue', label: 'Revenue' },
   { slug: 'liquidity', label: 'LP' },
   { slug: 'burn', label: 'Supply' },
   { slug: 'activation', label: 'Wrap' },

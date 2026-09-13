@@ -34421,6 +34421,7 @@
       },
       "cashflow": {
         "source": "oakmont-api",
+        "cadence": "month",
         "fees24h": 0,
         "fees7d": 0,
         "fees30d": 0,
@@ -34436,8 +34437,8 @@
         "holders30d": 0,
         "holdersAnnualized": 49607.05618699423,
         "dailyDates": [
-          "08-01",
-          "09-01"
+          "2026-08-01",
+          "2026-09-01"
         ],
         "dailyFees": [
           5136.901411395202,
@@ -34512,14 +34513,8 @@
           "weight": 0,
           "trackedAnnualYieldUsd": 0.0004962363709414356,
           "entryUsd": 0.001227,
-          "dailyDates": [
-            "08-01",
-            "09-01"
-          ],
-          "dailyYields": [
-            5136.901411395202,
-            717.2213589110269
-          ]
+          "dailyDates": [],
+          "dailyYields": []
         },
         {
           "tier": "T1",
@@ -34529,14 +34524,8 @@
           "trackedAnnualYieldUsd": 0.0013655280373935806,
           "entryUsd": 0.001259,
           "claimApyPct": 13.935620636220301,
-          "dailyDates": [
-            "08-01",
-            "09-01"
-          ],
-          "dailyYields": [
-            5136.901411395202,
-            717.2213589110269
-          ]
+          "dailyDates": [],
+          "dailyYields": []
         }
       ],
       "revenue": {

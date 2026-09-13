@@ -69,11 +69,11 @@ export default function CardWallDetailView({ data, activeTab }) {
   const realBurntTokens = Math.max(Number(activation.dualBurn?.totalBurnTokens || 0), Number(ownership.permanentlyBurntTokens || 0));
   const realBurntUnits = Math.max(Number(activation.dualBurn?.equivalentBrokersBurnt || 0), Number(ownership.permanentlyBurntUnits || 0), Number(ownership.burntNfts || 0));
   
-  const burn = burnSeries(dailySnapshots, timeframe);
+  const burn = burnSeries(project, timeframe);
   const slicedBurnLabels = burn.labels;
   const slicedBurnData = burn.data;
 
-  const flywheel = burnRateSeries(dailySnapshots, timeframe);
+  const flywheel = burnRateSeries(project, timeframe);
   const fwPrices = flywheel.prices;
   const fwBurn = flywheel.burn;
 
@@ -300,7 +300,7 @@ export default function CardWallDetailView({ data, activeTab }) {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-1">
               <h3 className="text-sm font-bold text-white">Slab landed cost by day</h3>
             </div>
-            <p className="text-xs text-slate-500 mb-4">From the first vault record through today. Days with no new slabs are omitted. The sticky range control slices this series.</p>
+            <p className="text-xs text-slate-500 mb-4">From the first vault record through today. Quiet days are $0 so the range control still reaches now. The sticky range control slices this series.</p>
             <div className="relative h-52 sm:h-64 md:h-80 w-full">
               <Bar 
                 data={{
@@ -350,7 +350,8 @@ export default function CardWallDetailView({ data, activeTab }) {
           </div>
 
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
-            <h3 className="text-sm font-bold text-white mb-4">Cumulative Token Burn Over Time</h3>
+            <h3 className="text-sm font-bold text-white mb-1">Cumulative Token Burn Over Time</h3>
+            <p className="text-xs text-slate-500 mb-4">From the first recorded day through today. Quiet days keep the last cumulative burn.</p>
             <div className="relative h-52 sm:h-64 md:h-80 w-full">
               {slicedBurnData.length > 0 ? (
                 <Line

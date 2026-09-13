@@ -56,8 +56,8 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
     : [];
 
   const chartOpts = baseChartOptions();
-  const burn = burnSeries(dailySnapshots, timeframe);
-  const flywheel = burnRateSeries(dailySnapshots, timeframe);
+  const burn = burnSeries(project, timeframe);
+  const flywheel = burnRateSeries(project, timeframe);
   const holdersFull = holderSeries(ownership, dailySnapshots);
   const hN = windowLen(timeframe, holdersFull.labels.length);
   const holders = { labels: holdersFull.labels.slice(-hN), data: holdersFull.data.slice(-hN) };
@@ -211,7 +211,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5">
-              <p className="text-xs uppercase text-slate-400 mb-1">Fees ({revPeriod})</p>
+              <p className="text-xs uppercase text-slate-400 mb-1">Protocol Rev ({revPeriod})</p>
               <p className="text-2xl font-extrabold" style={{ color: MARK.green }}>{fmt(revCols[0]?.total || 0)}</p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5">
@@ -224,7 +224,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
             </div>
           </div>
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
-            <h3 className="text-sm font-bold text-white mb-4">Fees vs holders revenue</h3>
+            <h3 className="text-sm font-bold text-white mb-4">Protocol rev vs holders revenue</h3>
             <div className="relative h-52 sm:h-64 md:h-72 w-full">
               {revDates.length ? (
                 <Bar
@@ -288,7 +288,8 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
           </div>
 
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
-            <h3 className="text-sm font-bold text-white mb-4">Cumulative token burn</h3>
+            <h3 className="text-sm font-bold text-white mb-1">Cumulative token burn</h3>
+            <p className="text-xs text-slate-500 mb-4">From the first recorded day through today. Quiet days keep the last cumulative burn.</p>
             <div className="relative h-52 sm:h-64 md:h-80 w-full">
               {burn.data.length > 0 ? (
                 <Line
@@ -687,7 +688,8 @@ function VaultView({
           </div>
           {revDates.length > 0 && (
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
-              <h3 className="text-sm font-bold text-white mb-4">Fees into the vault</h3>
+              <h3 className="text-sm font-bold text-white mb-4">ETH protocol rev into the vault</h3>
+              <p className="text-xs text-slate-500 mb-4">Oakmont’s indexer publishes monthly totals, not daily. Aug and Sep are the full series they expose.</p>
               <div className="relative h-52 sm:h-64 md:h-72 w-full">
                 <Bar
                   data={{

@@ -109,17 +109,16 @@ export default function StonkDetailView({ data, activeTab }) {
   const { labels: revDates, cols: REV_STREAMS } = {
     labels: slicedRev.labels,
     cols: [
-      { ...(byKey.amm || { data: [], total: 0 }), label: 'AMM & Swaps', color: STREAM_COLORS.amm },
+      { ...(byKey.amm || { data: [], total: 0 }), label: 'AMM & Swap Rev', color: STREAM_COLORS.amm },
       { ...(byKey.box || { data: [], total: 0 }), label: 'Clock-In Box', color: STREAM_COLORS.box },
-      { ...(byKey.volume || { data: [], total: 0 }), label: 'Launch + Bonding volume', color: STREAM_COLORS.volume },
-      { ...(byKey.tax || { data: [], total: 0 }), label: 'Curve tax', color: STREAM_COLORS.tax },
-      { ...(byKey.smartLp || { data: [], total: 0 }), label: 'StonkBroker Fees', color: STREAM_COLORS.smartLp },
+      { ...(byKey.tax || { data: [], total: 0 }), label: 'Snipe / curve tax', color: STREAM_COLORS.tax },
+      { ...(byKey.smartLp || { data: [], total: 0 }), label: 'Smart LP Protocol Revenue', color: STREAM_COLORS.smartLp },
     ],
   };
   const smartLp = revenue.smartLp || {};
   const smartLpVaults = Array.isArray(smartLp.vaults) ? smartLp.vaults : [];
   const smartLpMarkets = useMemo(() => groupSmartLpMarkets(smartLpVaults), [smartLpVaults]);
-  const smartLpCol = REV_STREAMS[4] || { total: 0, color: STREAM_COLORS.smartLp, data: [] };
+  const smartLpCol = REV_STREAMS[3] || { total: 0, color: STREAM_COLORS.smartLp, data: [] };
 
   // 3. Burn Tracker Data
   const realBurntTokens = Math.max(
@@ -132,12 +131,12 @@ export default function StonkDetailView({ data, activeTab }) {
     Number(ownership.burntNfts || 0)
   );
   
-  const burn = burnSeries(dailySnapshots, timeframe);
+  const burn = burnSeries(project, timeframe);
   const slicedBurnLabels = burn.labels;
   const slicedBurnData = burn.data;
 
   // 4. Flywheel Chart
-  const flywheel = burnRateSeries(dailySnapshots, timeframe);
+  const flywheel = burnRateSeries(project, timeframe);
   const fwLabels = flywheel.labels;
   const fwPrices = flywheel.prices;
   const fwBurn = flywheel.burn;
@@ -312,7 +311,7 @@ export default function StonkDetailView({ data, activeTab }) {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div>
               <h2 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">Protocol Revenue & Ecosystem Liquidity</h2>
-              <p className="text-xs text-slate-400 mt-1">AMM and Clock-In are protocol fees. StonkBroker Fees are the Smart LP skim. Launch + bonding volume sits beside the fee stack on the same chart — it is not a fee.</p>
+              <p className="text-xs text-slate-400 mt-1">Stacked series are protocol-kept revenue only: AMM, Clock-In, snipe / curve tax, and Smart LP skim. Bonding swap volume is notional and stays off this chart.</p>
             </div>
           </div>
 
@@ -320,7 +319,7 @@ export default function StonkDetailView({ data, activeTab }) {
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
               <p className="text-xs uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-2">
                 <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: REV_STREAMS[0].color }} />
-                AMM & Swap Protocol Fees ({revPeriod})
+                AMM & Swap Protocol Rev ({revPeriod})
               </p>
               <p className="text-2xl font-extrabold" style={{ color: REV_STREAMS[0].color }}>{formatCurrency(REV_STREAMS[0].total)}</p>
             </div>
@@ -334,22 +333,19 @@ export default function StonkDetailView({ data, activeTab }) {
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
               <p className="text-xs uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-2">
                 <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: REV_STREAMS[2].color }} />
-                Launch Fees + Bonding Volume ({revPeriod})
+                Launch Snipe / Curve Rev ({revPeriod})
               </p>
               <p className="text-2xl font-extrabold" style={{ color: REV_STREAMS[2].color }}>{formatCurrency(REV_STREAMS[2].total)}</p>
               <p className="text-[10px] text-slate-500 mt-1.5">
                 Create {formatCurrency(revenue.launchCreateUsd || 0)}
                 <span className="mx-1.5 text-slate-700">·</span>
-                Volume {formatCurrency(revenue.bondingVolumeUsd || 0)}
-                <span className="mx-1.5 text-slate-700">·</span>
-                <span className="inline-block h-1.5 w-1.5 rounded-sm align-middle mr-1" style={{ backgroundColor: REV_STREAMS[3].color }} />
-                Curve tax {formatCurrency(REV_STREAMS[3].total)}
+                Bonding volume {formatCurrency(revenue.bondingVolumeUsd || 0)} (not protocol rev)
               </p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
               <p className="text-xs uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-2">
                 <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: smartLpCol.color }} />
-                StonkBroker Fees ({revPeriod})
+                Smart LP Protocol Revenue ({revPeriod})
               </p>
               <p className="text-2xl font-extrabold" style={{ color: smartLpCol.color }}>{formatCurrency(smartLpCol.total)}</p>
               <p className="text-[10px] text-slate-500 mt-1.5">
@@ -371,7 +367,7 @@ export default function StonkDetailView({ data, activeTab }) {
           <div>
             <h2 className="text-lg md:text-xl font-bold text-white">Liquidity & Smart LPs</h2>
             <p className="text-xs text-slate-400 mt-1">
-              Depositor Fees Generated are Uniswap trading fees the vaults collected. StonkBroker Fees are the {smartLp.perfFeeBps ? `${(smartLp.perfFeeBps / 100).toFixed(0)}%` : '10%'} skim, split 50/50 buyback and StonkBooster.
+              Depositor Fees Generated are Uniswap trading fees the vaults collected. Smart LP Protocol Revenue is the {smartLp.perfFeeBps ? `${(smartLp.perfFeeBps / 100).toFixed(0)}%` : '10%'} skim, split 50/50 buyback and StonkBooster.
             </p>
           </div>
 
@@ -408,7 +404,7 @@ export default function StonkDetailView({ data, activeTab }) {
                     <p className="mt-1.5 text-2xl sm:text-3xl font-extrabold tabular-nums text-amber-400 leading-none">{formatCurrency(smartLp.fees7dUsd || 0)}</p>
                   </div>
                   <div className="rounded-xl border border-sky-400/25 bg-[#0e1013] px-3 py-3 sm:px-4 sm:py-4">
-                    <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">StonkBroker Fees</p>
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">Smart LP Protocol Revenue</p>
                     <p className="mt-1.5 text-2xl sm:text-3xl font-extrabold tabular-nums text-sky-400 leading-none">{formatCurrency(smartLp.protocolFees7dUsd || smartLpCol.total || 0)}</p>
                   </div>
                 </div>
@@ -440,7 +436,7 @@ export default function StonkDetailView({ data, activeTab }) {
                           <p className="text-[11px] text-slate-500 mt-1">TVL {formatCurrency(g.tvlUsd)}</p>
                           <div className="grid grid-cols-2 gap-2 mt-3">
                             <FeeStat label="Depositor Fees" value={formatCurrency(g.fees7dUsd)} />
-                            <FeeStat label="StonkBroker Fees" value={formatCurrency(g.protocolFees7dUsd)} tone="sky" />
+                            <FeeStat label="Smart LP Protocol Revenue" value={formatCurrency(g.protocolFees7dUsd)} tone="sky" />
                           </div>
                           <div className="flex flex-wrap gap-1.5 mt-3">
                             {[0, 1, 2].map((mode) => {
@@ -474,7 +470,7 @@ export default function StonkDetailView({ data, activeTab }) {
                                 <p className="text-[11px] text-slate-500 mb-2">TVL {formatCurrency(v.tvlUsd || 0)}</p>
                                 <div className="grid grid-cols-2 gap-2">
                                   <FeeStat label="Depositor Fees" value={formatCurrency(v.fees7dUsd || 0)} />
-                                  <FeeStat label="StonkBroker Fees" value={formatCurrency(v.protocolFees7dUsd || 0)} tone="sky" />
+                                  <FeeStat label="Smart LP Protocol Revenue" value={formatCurrency(v.protocolFees7dUsd || 0)} tone="sky" />
                                 </div>
                                 <a
                                   href={explorerAddressUrl(v.ca)}
@@ -552,7 +548,8 @@ export default function StonkDetailView({ data, activeTab }) {
           </div>
 
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
-            <h3 className="text-sm font-bold text-white mb-4">Cumulative Token Burn Over Time</h3>
+            <h3 className="text-sm font-bold text-white mb-1">Cumulative Token Burn Over Time</h3>
+            <p className="text-xs text-slate-500 mb-4">First activation through today. Days before hourly snapshots are scaled from activation volume to the first trusted supply read.</p>
             <div className="relative h-52 sm:h-64 md:h-80 w-full">
               {slicedBurnData.length > 0 ? (
                 <Line

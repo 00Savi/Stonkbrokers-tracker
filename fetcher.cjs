@@ -125,7 +125,6 @@ function overlayHistoryStreams(snaps, revenue) {
     const j = idx.get(mdSnapKey(s.date));
     if (j == null) continue;
     const fill = (field, arr) => {
-      if (s[field] != null) return;
       const v = pick(arr, j);
       if (v != null) s[field] = v;
     };
@@ -952,6 +951,29 @@ async function getOwnershipStats(conf, equivBurnt, previousData) {
   };
 }
 
+/** gg-index Transfer fold from first mint. Empty until supply_days is rebuilt. */
+async function fetchBurnHistory(projectKey, previous) {
+  try {
+    const hist = await gg.projectSupplyDaily(projectKey, { days: 365 });
+    const labels = [];
+    const data = [];
+    for (const row of hist?.daily || []) {
+      const n = Number(row.burned);
+      if (row?.date && Number.isFinite(n) && n > 0) {
+        labels.push(String(row.date).slice(0, 10));
+        data.push(n);
+      }
+    }
+    if (labels.length) {
+      console.log(`  burn history: ${labels[0]} → ${labels[labels.length - 1]} (${labels.length}d)`);
+      return { labels, data, source: "gg-index" };
+    }
+  } catch (e) {
+    console.warn(`[warn] ${projectKey} supply daily: ${e.message}`);
+  }
+  return previous && previous.labels?.length ? previous : null;
+}
+
 async function fetchActivations(projectKey, conf) {
   const activationLogs = await fetchAllLogs(projectKey, conf.activationCa, conf.genesisBlock);
 
@@ -1098,7 +1120,7 @@ async function fetchActivations(projectKey, conf) {
   const drift = activeBrokers.size - runningActive;
   const aligned = drift === 0 ? allCum : allCum.map((v) => v + drift);
 
-  const keep = 60;
+  const keep = 365;
   const start = Math.max(0, allLabels.length - keep);
   const history = {
     labels: allLabels.slice(start),
@@ -1471,10 +1493,19 @@ async function fetchVaultLedger(address, sevenDaysAgo) {
   out.dailyVaulted = out.dailyVaulted.map((v) => +v.toFixed(2));
   out.dailyDates = emptyDaily.map((_, i) => dates.utcIsoFromTs(windowStart + i * oneDay));
   const histKeys = [...hist.keys()].sort();
-  out.historyDates = histKeys;
-  out.historyDelivered = histKeys.map((k) => +hist.get(k).delivered.toFixed(2));
-  out.historyVaulted = histKeys.map((k) => +hist.get(k).vaulted.toFixed(2));
-  out.historyTs = histKeys.map((k) => hist.get(k).ts);
+  if (histKeys.length) {
+    const start = dates.utcMidnightSec(new Date(`${histKeys[0]}T00:00:00Z`));
+    const end = dates.utcMidnightSec();
+    for (let t = start; t <= end; t += 86400) {
+      const key = dates.utcIsoFromTs(t);
+      if (key && !hist.has(key)) hist.set(key, { delivered: 0, vaulted: 0, ts: t });
+    }
+  }
+  const filledKeys = [...hist.keys()].sort();
+  out.historyDates = filledKeys;
+  out.historyDelivered = filledKeys.map((k) => +hist.get(k).delivered.toFixed(2));
+  out.historyVaulted = filledKeys.map((k) => +hist.get(k).vaulted.toFixed(2));
+  out.historyTs = filledKeys.map((k) => hist.get(k).ts);
   out.firstRecordedAt = firstRecorded === Infinity ? 0 : firstRecorded;
   out.firstDeliveredAt = firstDelivered === Infinity ? 0 : firstDelivered;
   return out;
@@ -1504,8 +1535,23 @@ function rainAnnualFromLedger(ledger, nowSec = Math.floor(Date.now() / 1000)) {
   };
 }
 
-function yieldDayIdx(ts, sevenDaysAgo, oneDay) {
-  return Math.max(0, Math.min(YIELD_LOOKBACK_DAYS - 1, Math.floor((ts - sevenDaysAgo) / oneDay)));
+function yieldWindowStartSec(now = new Date()) {
+  return dates.utcMidnightSec(now) - (YIELD_LOOKBACK_DAYS - 1) * 86400;
+}
+
+function yieldSlotMidTs(i, now = new Date()) {
+  return yieldWindowStartSec(now) + i * 86400 + 43200;
+}
+
+/** UTC calendar day in the current 7-day window, or null if outside it. */
+function yieldDayIdx(ts, _sevenDaysAgo, _oneDay) {
+  const start = yieldWindowStartSec();
+  const sec = Number(ts);
+  if (!Number.isFinite(sec) || sec <= 0) return null;
+  const day = dates.utcMidnightSec(new Date(sec > 1e12 ? sec : sec * 1000));
+  const i = Math.floor((day - start) / 86400);
+  if (i < 0 || i >= YIELD_LOOKBACK_DAYS) return null;
+  return i;
 }
 
 function asUsd(v) {
@@ -1513,11 +1559,10 @@ function asUsd(v) {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
-function persistYieldSample(projectKey, sevenDaysAgo, dailySampleUsd) {
-  const oneDay = 86400;
+function persistYieldSample(projectKey, _sevenDaysAgo, dailySampleUsd) {
   const dayUsd = {};
   for (let i = 0; i < dailySampleUsd.length; i++) {
-    dayUsd[yieldDays.utcKey(sevenDaysAgo + i * oneDay + oneDay / 2)] = dailySampleUsd[i];
+    dayUsd[yieldDays.utcKey(yieldSlotMidTs(i))] = dailySampleUsd[i];
   }
   yieldDays.save(yieldDays.merge(yieldDays.load(), projectKey, dayUsd));
 }
@@ -1658,10 +1703,9 @@ async function attachRevenueHistory(projectKey, revenue, scale, yieldMode, prevR
 function cachedYieldSample(projectKey, sevenDaysAgo) {
   const all = yieldDays.load();
   const days = all[projectKey] || {};
-  const oneDay = 86400;
   const out = [];
   for (let i = 0; i < YIELD_LOOKBACK_DAYS; i++) {
-    const key = yieldDays.utcKey(sevenDaysAgo + i * oneDay + oneDay / 2);
+    const key = yieldDays.utcKey(yieldSlotMidTs(i));
     const usd = days[key];
     const n = typeof usd === "number" ? usd : Number(usd?.amm);
     if (typeof n !== "number" || !Number.isFinite(n)) return null;
@@ -1762,7 +1806,9 @@ async function fetchOracleNativeEth(projectKey, oracle, sevenDaysAgo, ethPriceUs
     }
     if (flows?.watched && usable.length >= nDays - 1) {
       for (const { ts, usd } of usable) {
-        if (usd > 0) daily[yieldDayIdx(ts, sevenDaysAgo, oneDay)] += usd;
+        const dayIdx = yieldDayIdx(ts, sevenDaysAgo, oneDay);
+        if (dayIdx == null || !(usd > 0)) continue;
+        daily[dayIdx] += usd;
       }
       persistYieldSample(`${projectKey}:eth`, sevenDaysAgo, daily);
       return { daily, source: "gg-index" };
@@ -1775,7 +1821,7 @@ async function fetchOracleNativeEth(projectKey, oracle, sevenDaysAgo, ethPriceUs
   let until = sevenDaysAgo;
   if (cached) {
     for (let i = 0; i < nDays - 1; i++) daily[i] = cached[i];
-    until = sevenDaysAgo + (nDays - 1) * oneDay;
+    until = yieldWindowStartSec() + (nDays - 1) * oneDay;
   }
 
   const reason = await walkPagesBackTo(
@@ -1787,7 +1833,9 @@ async function fetchOracleNativeEth(projectKey, oracle, sevenDaysAgo, ethPriceUs
       if (!PROTOCOL_CONTRACTS.includes(fromAddr) || toAddr !== oracleAddr) return;
       const eth = Number(tx.value || 0) / 1e18;
       if (!(eth > 0)) return;
-      daily[yieldDayIdx(ts, sevenDaysAgo, oneDay)] += eth * (ethPriceUsd || 0);
+      const dayIdx = yieldDayIdx(ts, sevenDaysAgo, oneDay);
+      if (dayIdx == null) return;
+      daily[dayIdx] += eth * (ethPriceUsd || 0);
     },
   );
 
@@ -1823,6 +1871,7 @@ async function fetchVaultTokenOutflows(conf, marketData, sevenDaysAgo, oneDay, s
     const usdVal = (Number(amount) / 1e18) * marketData.tokenPriceUsd;
     if (!(usdVal > 0)) continue;
     const dayIdx = yieldDayIdx(ts, sevenDaysAgo, oneDay);
+    if (dayIdx == null) continue;
     sink.dailyUsdPerWeight[dayIdx] += (usdVal / sink.totalNetworkWeight);
     sink.addSample(usdVal);
     if (sink.dailySampleUsd) sink.dailySampleUsd[dayIdx] += usdVal;
@@ -1835,9 +1884,10 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
   const oneDay = 86400;
   const nDays = YIELD_LOOKBACK_DAYS;
   const zeros = () => Array(nDays).fill(0);
+  const windowStart = yieldWindowStartSec();
   const dailyDates = [];
   for (let i = 0; i < nDays; i++) {
-    dailyDates.push(dates.utcIsoFromTs(sevenDaysAgo + (i * oneDay)));
+    dailyDates.push(dates.utcIsoFromTs(windowStart + i * oneDay));
   }
 
   let totalSampleUsd = 0;
@@ -1860,6 +1910,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
   function creditSample(usdVal, ts, { perWeight, amm, dex } = {}) {
     if (!(usdVal > 0)) return;
     const dayIdx = yieldDayIdx(ts, sevenDaysAgo, oneDay);
+    if (dayIdx == null) return;
     totalSampleUsd += usdVal;
     dailySampleUsd[dayIdx] += usdVal;
     dailyUsdPerWeight[dayIdx] += usdVal / (perWeight || totalNetworkWeight);
@@ -1880,16 +1931,21 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
   function creditLaunchpad(usdVal, ts, bucket) {
     if (!(usdVal > 0)) return;
     const i = launchpadDay(ts);
+    if (i == null) return;
     if (bucket === "tax") {
       revenueBreakdown.bondingFeesUsd += usdVal;
       revenueBreakdown.dailyBondingTax[i] += usdVal;
+      revenueBreakdown.launchpadUsd += usdVal;
       return;
     }
-    // Headline is launch fees + bonding-phase quote volume.
-    revenueBreakdown.launchpadUsd += usdVal;
+    if (bucket === "create") {
+      revenueBreakdown.launchCreateUsd += usdVal;
+      revenueBreakdown.launchpadUsd += usdVal;
+      return;
+    }
+    // Bonding quote volume is swap notional, not protocol-kept revenue.
+    revenueBreakdown.bondingVolumeUsd += usdVal;
     revenueBreakdown.dailyLaunchpad[i] += usdVal;
-    if (bucket === "create") revenueBreakdown.launchCreateUsd += usdVal;
-    else revenueBreakdown.bondingVolumeUsd += usdVal;
   }
 
   function quotePriceUsd(quote) {
@@ -1981,6 +2037,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
       if (ts < sevenDaysAgo) continue;
       const usdVal = (Number(amount) / 1e18) * price;
       const dayIdx = yieldDayIdx(ts, sevenDaysAgo, oneDay);
+      if (dayIdx == null) continue;
       revenueBreakdown.securityBoxUsd += usdVal;
       revenueBreakdown.dailySecurityBox[dayIdx] += usdVal;
     }
@@ -2004,7 +2061,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
         for (let i = 0; i < nDays; i++) {
           const usd = ethIn.daily[i];
           if (!(usd > 0)) continue;
-          const ts = sevenDaysAgo + i * oneDay + oneDay / 2;
+          const ts = yieldSlotMidTs(i);
           creditSample(usd, ts, { perWeight: conf.oracleWeight });
           oracleAmmSampleUsd += usd;
           dailyOracleAmmSample[i] += usd;
@@ -2032,9 +2089,11 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
             if (ts < sevenDaysAgo) continue;
             const usdVal = (Number(amount) / 1e18) * price;
             if (!(usdVal > 0)) continue;
+            const dayIdx = yieldDayIdx(ts, sevenDaysAgo, oneDay);
+            if (dayIdx == null) continue;
             creditSample(usdVal, ts, { perWeight: conf.oracleWeight });
             oracleAmmSampleUsd += usdVal;
-            dailyOracleAmmSample[yieldDayIdx(ts, sevenDaysAgo, oneDay)] += usdVal;
+            dailyOracleAmmSample[dayIdx] += usdVal;
           }
         } catch (e) {
           truncatedWalks.push(`oracle token logs: ${e.message || e}`);
@@ -2077,8 +2136,9 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
       if (hasActivation) {
         try {
           const cumulative = [];
+          const paidWindowStart = yieldWindowStartSec();
           for (let i = 0; i <= nDays; i++) {
-            const fromBlock = blockTime.blockAt(sevenDaysAgo + i * oneDay);
+            const fromBlock = blockTime.blockAt(paidWindowStart + i * oneDay);
             const t = await gg.activations(projectKey, { fromBlock });
             const paid = (t.totals || []).filter(
               (x) => x.kind === "reward_paid" &&
@@ -2095,7 +2155,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
             const amount = Math.max(0, cumulative[i] - cumulative[i + 1]);
             if (amount <= 0) continue;
             const usdVal = amount * marketData.tokenPriceUsd;
-            creditSample(usdVal, sevenDaysAgo + i * oneDay + oneDay / 2, { amm: true });
+            creditSample(usdVal, yieldSlotMidTs(i), { amm: true });
           }
         } catch (e) {
           const msg = String(e.message || e);
@@ -2447,6 +2507,7 @@ async function run() {
         ? await fetchCardWallLiveActivations(conf, prevProjData.activation || {})
         : await fetchActivations(projectKey, conf);
       const ownershipStats = await getOwnershipStats(conf, activationStats.dualBurn.equivalentBrokersBurnt, prevProjData);
+      ownershipStats.burnHistory = await fetchBurnHistory(projectKey, prevProjData?.ownership?.burnHistory);
 
       const ledger = conf.vaultLedger ? await fetchVaultLedger(conf.vaultLedger, sevenDaysAgo) : null;
       if (ledger) {
@@ -2560,8 +2621,11 @@ async function run() {
         const todayStr = dates.utcIso();
         if (projectKey === "cardwall" && histDates.length && histDelivered.length) {
           const prevPxByDate = {};
+          const prevByDate = {};
           for (const s of prevProjData.dailySnapshots || []) {
-            if (s.date && s.tokenPriceUsd > 0 && s.tokenPriceUsd !== 0.03) prevPxByDate[s.date] = s.tokenPriceUsd;
+            if (!s?.date) continue;
+            prevByDate[dates.dateKey(s.date)] = s;
+            if (s.tokenPriceUsd > 0 && s.tokenPriceUsd !== 0.03) prevPxByDate[s.date] = s.tokenPriceUsd;
           }
           let lastPx = markets[projectKey].tokenPriceUsd;
           let cum = 0;
@@ -2576,7 +2640,12 @@ async function run() {
               annualByTier[t.tier] = annualNet * ((t.rainWeight || 0) / rainNetworkForDaily);
             }
             if (prevPxByDate[date] > 0) lastPx = prevPxByDate[date];
-            return snapshotRow(date, dayTs * 1000, annualByTier, lastPx);
+            const row = snapshotRow(date, dayTs * 1000, annualByTier, lastPx);
+            const prev = prevByDate[dates.dateKey(date)];
+            if (prev && Number(prev.totalBurn) > 0 && dates.dateKey(date) !== todayStr) {
+              row.totalBurn = prev.totalBurn;
+            }
+            return row;
           });
         } else {
           const currentSnapshot = snapshotRow(todayStr, Date.now());
@@ -2586,6 +2655,29 @@ async function run() {
               dailySnapshots.push(currentSnapshot);
           }
           if (dailySnapshots.length > 365) dailySnapshots.shift();
+        }
+      }
+
+      {
+        const todayStr = dates.utcIso();
+        const liveBurnTok = (activationStats.dualBurn || {}).totalBurnTokens || 0;
+        const lastSnap = dailySnapshots[dailySnapshots.length - 1];
+        if (!lastSnap || dates.dateKey(lastSnap.date) !== todayStr) {
+          dailySnapshots = [...dailySnapshots, {
+            ...(lastSnap || {}),
+            date: todayStr,
+            timestamp: Date.now(),
+            totalBurn: liveBurnTok || lastSnap?.totalBurn || 0,
+            tokenPriceUsd: markets[projectKey].tokenPriceUsd || lastSnap?.tokenPriceUsd || 0,
+            tokenHolders: ownershipStats.stonkHolders || ownershipStats.tokenHolders || lastSnap?.tokenHolders || 0,
+            nftHolders: ownershipStats.nftHolders || lastSnap?.nftHolders || 0,
+            activeCount: activationStats.activeCount || lastSnap?.activeCount || 0,
+            percentActivated: activationStats.percentActivated || lastSnap?.percentActivated || 0,
+            tierActive: { ...(activationStats.breakdown || lastSnap?.tierActive || {}) },
+          }];
+          if (dailySnapshots.length > 365) dailySnapshots.shift();
+        } else if (liveBurnTok > 0) {
+          lastSnap.totalBurn = liveBurnTok;
         }
       }
 

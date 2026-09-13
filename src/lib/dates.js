@@ -12,7 +12,7 @@ function pad2(n) {
 
 export function utcIso(input = new Date()) {
   const p = utcParts(input);
-  return p ? `${p.y}-${pad2(p.m)}-${pad2(p.d)}` : '';
+  return p ? `${p.y}-${pad2(p.m)}-${pad2(p.day)}` : '';
 }
 
 export function utcIsoFromTs(ts) {

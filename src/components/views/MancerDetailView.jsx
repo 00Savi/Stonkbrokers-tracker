@@ -61,7 +61,7 @@ export default function MancerDetailView({ data, activeTab }) {
   const { labels: revDates, cols: revCols } = sliceCols(
     rawRev.labels,
     [
-      { ...(byKey.dex || { data: [] }), label: 'DEX Swap Fees', color: STREAM_COLORS.dex },
+      { ...(byKey.dex || { data: [] }), label: 'DEX Swap Rev', color: STREAM_COLORS.dex },
       { ...(byKey.amm || { data: [] }), label: 'Vault Inflows', color: STREAM_COLORS.amm },
       { ...(byKey.box || { data: [] }), label: 'Order Layer', color: STREAM_COLORS.box },
     ],
@@ -75,12 +75,12 @@ export default function MancerDetailView({ data, activeTab }) {
   const realBurntTokens = Math.max(Number(activation.dualBurn?.totalBurnTokens || 0), Number(ownership.permanentlyBurntTokens || 0));
   const realBurntUnits = Math.max(Number(activation.dualBurn?.equivalentBrokersBurnt || 0), Number(ownership.permanentlyBurntUnits || 0), Number(ownership.burntNfts || 0));
   
-  const burn = burnSeries(dailySnapshots, timeframe);
+  const burn = burnSeries(project, timeframe);
   const slicedBurnLabels = burn.labels;
   const slicedBurnData = burn.data;
 
   // 4. Flywheel Chart
-  const flywheel = burnRateSeries(dailySnapshots, timeframe);
+  const flywheel = burnRateSeries(project, timeframe);
   const fwPrices = flywheel.prices;
   const fwBurn = flywheel.burn;
 
@@ -252,13 +252,13 @@ export default function MancerDetailView({ data, activeTab }) {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div>
               <h2 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">Protocol Revenue & Ecosystem Liquidity</h2>
-              <p className="text-xs text-slate-400 mt-1">Multi-stream on-chain fee generation and ecosystem liquidity.</p>
+              <p className="text-xs text-slate-400 mt-1">Protocol-kept revenue only. Swap volume is not included.</p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
-              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">DEX Swap Routing Fees ({revPeriod})</p>
+              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">DEX Swap Routing Rev ({revPeriod})</p>
               <p className="text-2xl font-extrabold" style={{ color: STREAM_COLORS.dex }}>{formatCurrency(revCols[0]?.total || 0)}</p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
@@ -333,7 +333,8 @@ export default function MancerDetailView({ data, activeTab }) {
           </div>
 
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
-            <h3 className="text-sm font-bold text-white mb-4">Cumulative Token Burn Over Time</h3>
+            <h3 className="text-sm font-bold text-white mb-1">Cumulative Token Burn Over Time</h3>
+            <p className="text-xs text-slate-500 mb-4">First activation through today. Days before hourly snapshots are scaled from activation volume to the first trusted supply read.</p>
             <div className="relative h-52 sm:h-64 md:h-80 w-full">
               {slicedBurnData.length > 0 ? (
                 <Line

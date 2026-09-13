@@ -8,11 +8,12 @@ import {
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import OverviewView from './OverviewView';
 import { compactUsd, compactNum, WindowBar } from '../kit';
-import { formatLabels } from '../../lib/dates';
-import { protocolRevenueChart, windowSnapshots, seriesHasInk } from '../../lib/yieldHistory';
+import { dateKey, formatLabels } from '../../lib/dates';
+import { burnSeries } from '../../lib/burn';
+import { cashflowRoiByDate, protocolFeeCols, protocolRevenueChart, seriesHasInk } from '../../lib/yieldHistory';
 import { useChartWindow } from '../../lib/chartWindow';
 import { baseChartOptions, compactTick, compactUsdTick, PROJECT_COLORS } from '../../lib/charts';
-import { EmptyChart } from '../HistoryCharts';
+import { ChartPanel, EmptyChart } from '../HistoryCharts';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
@@ -26,81 +27,20 @@ const ECO_TABS = [
   { id: 'rankings', label: 'Rankings' },
 ];
 
-function lastFinite(arr) {
-  if (!Array.isArray(arr)) return null;
-  for (let i = arr.length - 1; i >= 0; i--) {
-    const n = Number(arr[i]);
-    if (Number.isFinite(n)) return n;
-  }
-  return null;
-}
-
-/** One protocol, one Y-axis. Overlaying 8 series on a shared scale hides everyone except the outlier. */
-function EcoMiniChart({ title, value, color, labels, data, kind = 'line', yTick, note, to }) {
-  const has = seriesHasInk(data);
-  const chartData = {
-    labels: labels || [],
-    datasets: [{
-      label: title,
-      data: data || [],
-      borderColor: color,
-      backgroundColor: kind === 'bar' ? color : `${color}22`,
-      borderWidth: kind === 'bar' ? 0 : 2,
-      fill: kind !== 'bar',
-      tension: 0.3,
-      pointRadius: 0,
-      borderRadius: 3,
-      spanGaps: true,
-    }],
-  };
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: { legend: { display: false } },
-    scales: {
-      x: { grid: { display: false }, ticks: { color: '#64748b', maxTicksLimit: 5, maxRotation: 0 } },
-      y: { min: 0, grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: yTick, maxTicksLimit: 4 } },
-    },
-  };
-
-  const body = (
-    <>
-      <div className="mb-3 flex items-start justify-between gap-2">
-        <div>
-          <p className="flex items-center gap-2 text-sm font-bold text-white">
-            <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: color }} />
-            {title}
-          </p>
-          {note ? <p className="mt-0.5 text-[10px] text-slate-500">{note}</p> : null}
-        </div>
-        {value != null ? (
-          <p className="shrink-0 text-sm font-extrabold" style={{ color }}>{value}</p>
-        ) : null}
-      </div>
-      <div className="relative h-36 w-full sm:h-44">
-        {!has ? (
-          <div className="flex h-full items-center justify-center text-xs text-slate-500">No series yet</div>
-        ) : kind === 'bar' ? (
-          <Bar data={chartData} options={options} />
-        ) : (
-          <Line data={chartData} options={options} />
-        )}
-      </div>
-    </>
-  );
-
-  const frame = 'bg-[#0e1013] border border-[#1e2228] rounded-xl p-4';
-  if (!to) return <div className={frame}>{body}</div>;
+function EcoTogether({ title, note, labels, datasets, options, kind = 'line' }) {
+  const ink = (datasets || []).filter((d) => seriesHasInk(d.data));
   return (
-    <Link
-      to={to}
-      onClick={(e) => {
-        if (e.target.closest('button')) e.preventDefault();
-      }}
-      className={`${frame} block cursor-pointer transition hover:border-slate-500 hover:bg-[#101318]`}
-    >
-      {body}
-    </Link>
+    <ChartPanel title={title} note={note}>
+      {ink.length ? (
+        kind === 'bar' ? (
+          <Bar data={{ labels, datasets: ink }} options={options} />
+        ) : (
+          <Line data={{ labels, datasets: ink }} options={options} />
+        )
+      ) : (
+        <EmptyChart />
+      )}
+    </ChartPanel>
   );
 }
 
@@ -172,12 +112,33 @@ export default function EcosystemView({ data, pending = false }) {
     }
   };
 
+  const usdChartOptions = {
+    ...chartOptions,
+    scales: {
+      ...chartOptions.scales,
+      y: {
+        ...chartOptions.scales.y,
+        beginAtZero: true,
+        ticks: { ...chartOptions.scales.y.ticks, callback: compactUsdTick },
+      },
+    },
+  };
+
+  const countChartOptions = {
+    ...chartOptions,
+    scales: {
+      ...chartOptions.scales,
+      y: {
+        ...chartOptions.scales.y,
+        beginAtZero: true,
+        ticks: { ...chartOptions.scales.y.ticks, callback: compactTick },
+      },
+    },
+  };
+
   // =========================================================
   // UNIVERSAL DATA ARRAYS & SAFE-PADDING ENGINES
   // =========================================================
-  const stonk = data.projects.stonk || {};
-  const snapWin = (p) => windowSnapshots(p?.dailySnapshots, timeframe);
-
   const getSliceCount = (tf, totalLen) => {
     if (tf === '1d') return Math.min(1, totalLen);
     if (tf === '7d' || tf === '1w') return Math.min(7, totalLen);
@@ -185,13 +146,52 @@ export default function EcosystemView({ data, pending = false }) {
     return totalLen;
   };
 
-  const labelSortKey = (label) => {
-    const m = String(label || '').match(/^(\d{1,2})\/(\d{1,2})$/);
-    if (!m) return 0;
-    const month = Number(m[1]);
-    const day = Number(m[2]);
-    const year = month >= 7 ? 2026 : 2026;
-    return Date.UTC(year, month - 1, day);
+  const overlayFromMaps = (maps, { keys = order, fill = false } = {}) => {
+    const labelSet = new Set();
+    for (const map of Object.values(maps)) {
+      Object.keys(map || {}).forEach((d) => labelSet.add(dateKey(d)));
+    }
+    const raw = [...labelSet].filter(Boolean).sort();
+    const sliced = raw.slice(-getSliceCount(timeframe, raw.length));
+    const datasets = keys.map((k) => {
+      const map = maps[k] || {};
+      let started = false;
+      let last = null;
+      const dataPts = sliced.map((d) => {
+        const n = Number(map[d]);
+        const val = Number.isFinite(n) ? n : null;
+        if (!fill) return val;
+        if (!started) {
+          if (val == null || val === 0) return null;
+          started = true;
+          last = val;
+          return val;
+        }
+        if (val == null) return last;
+        last = val;
+        return val;
+      });
+      return {
+        label: projectNames[k],
+        data: dataPts,
+        borderColor: projectColors[k],
+        backgroundColor: `${projectColors[k]}12`,
+        borderWidth: 2,
+        tension: 0.3,
+        pointRadius: 0,
+        spanGaps: true,
+        fill: false,
+      };
+    }).filter((ds) => seriesHasInk(ds.data));
+    return { labels: formatLabels(sliced), datasets };
+  };
+
+  const seriesToMap = (labels, data) => {
+    const map = {};
+    (labels || []).forEach((lab, i) => {
+      map[dateKey(lab)] = data?.[i];
+    });
+    return map;
   };
 
   const burnCaps = (p) => {
@@ -225,31 +225,15 @@ export default function EcosystemView({ data, pending = false }) {
     return { tokenPct, nftPct, maxToken, burntTok, tokenOnly };
   };
 
-  const cashflowRoiByDate = (p) => {
-    const dates = p?.cashflow?.dailyDates || [];
-    const revs = p?.cashflow?.dailyRevenue || [];
-    const circ = Number(p?.ownership?.circulatingSupply) || 0;
-    const price = Number(p?.market?.tokenPriceUsd) || 0;
-    const req = Number(p?.tiers?.[0]?.reqTokens) || 0;
-    const map = {};
-    if (!dates.length || !(price > 0)) return map;
-    dates.forEach((date, i) => {
-      const day = Number(revs[i]) || 0;
-      const cost = req > 0 ? req * price : circ * price;
-      const annualForStake = circ > 0 && req > 0 ? day * (req / circ) * 365 : day * 365;
-      map[date] = cost > 0 ? (annualForStake / cost) * 100 : null;
-    });
-    return map;
-  };
-
   // =========================================================
   // REVENUE — per-project series (do not force everyone onto Stonk's dates)
   // =========================================================
   const projectRevenueSeries = (p) => {
     const chart = protocolRevenueChart(p);
     if (chart.labels?.length) {
+      const fees = protocolFeeCols(chart.cols);
       const data = chart.labels.map((_, i) =>
-        (chart.cols || []).reduce((s, c) => s + (Number(c.data?.[i]) || 0), 0)
+        fees.reduce((s, c) => s + (Number(c.data?.[i]) || 0), 0)
       );
       if (data.some((v) => v > 0)) return { labels: chart.labels, data, source: 'protocol' };
     }
@@ -279,57 +263,23 @@ export default function EcosystemView({ data, pending = false }) {
     return Number(cf.revenueAllTime || cf.feesAllTime || cf.revenueAnnualized) || 0;
   };
 
-  const getHistChartData = (timeframe) => {
-    const labelSet = new Set();
+  const getHistChartData = () => {
     const roiMaps = {};
     for (const k of order) {
       const p = data.projects[k];
       const t0 = p?.tiers?.[0];
-      const map = { ...cashflowRoiByDate(p) };
+      const map = {};
+      for (const [d, v] of Object.entries(cashflowRoiByDate(p))) {
+        if (Number.isFinite(Number(v))) map[dateKey(d)] = Number(v);
+      }
       for (const s of p?.dailySnapshots || []) {
         const row = s.tiers?.find((st) => st.tier === (t0?.tier || 'T0'));
         const roi = row?.roi != null ? Number(row.roi) : (s.roi != null ? Number(s.roi) : null);
-        if (Number.isFinite(roi)) map[s.date] = roi;
+        if (Number.isFinite(roi)) map[dateKey(s.date)] = roi;
       }
       roiMaps[k] = map;
-      Object.keys(map).forEach((d) => labelSet.add(d));
     }
-    const labels = [...labelSet]
-      .sort((a, b) => labelSortKey(a) - labelSortKey(b));
-    const sliceCount = getSliceCount(timeframe, labels.length);
-    const slicedLabels = labels.slice(-sliceCount);
-
-    const datasets = order.map((k) => {
-      const raw = slicedLabels.map((d) => {
-        const v = roiMaps[k][d];
-        return Number.isFinite(v) ? v : null;
-      });
-      let started = false;
-      let last = null;
-      const dataPts = raw.map((v) => {
-        if (!started) {
-          if (v == null || v === 0) return null;
-          started = true;
-          last = v;
-          return v;
-        }
-        if (v == null) return last;
-        last = v;
-        return v;
-      });
-      return {
-        label: projectNames[k],
-        data: dataPts,
-        borderColor: projectColors[k],
-        backgroundColor: `${projectColors[k]}10`,
-        borderWidth: 2.5,
-        tension: 0.3,
-        pointRadius: 2,
-        spanGaps: false,
-      };
-    });
-
-    return { labels: slicedLabels, datasets };
+    return overlayFromMaps(roiMaps, { fill: true });
   };
 
   return (
@@ -471,7 +421,7 @@ export default function EcosystemView({ data, pending = false }) {
                               {seriesHasInk(t0?.dailyYields) ? (
                                 <Line 
                                   data={{ 
-                                    labels: t0?.dailyDates?.length ? t0.dailyDates : masterRevLabels.slice(-7), 
+                                    labels: formatLabels(t0?.dailyDates || []), 
                                     datasets: [{ 
                                       label: 'Daily Yield (USD)', 
                                       data: t0.dailyYields, 
@@ -503,35 +453,18 @@ export default function EcosystemView({ data, pending = false }) {
       {/* ========================================================= */}
       <section id="historical" className="scroll-mt-32">
         <div className="space-y-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h3 className="text-lg font-bold text-white">Historical protocol ROI</h3>
-              <p className="text-xs text-slate-400 mt-1">
-                Each project gets its own scale. Overlaying Coattail at 1,000%+ with Stonk at ~8% made everyone else look flat.
-              </p>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            {(() => {
-              const hist = getHistChartData(timeframe);
-              return hist.datasets.map((ds, i) => {
-                const k = order[i];
-                const latest = lastFinite(ds.data);
-                return (
-                  <EcoMiniChart
-                    key={k}
-                    title={ds.label}
-                    color={projectColors[k]}
-                    labels={hist.labels}
-                    data={ds.data}
-                    yTick={(v) => `${compactTick(v)}%`}
-                    value={latest == null ? null : `${latest.toFixed(1)}%`}
-                    to={projectPath(k, 'historical')}
-                  />
-                );
-              });
-            })()}
-          </div>
+          {(() => {
+            const hist = getHistChartData();
+            return (
+              <EcoTogether
+                title="Historical protocol ROI"
+                note="Live projects on one axis. T0 CoC from snapshots. Daily cash-flow projects can backfill from holders rev; Oakmont’s indexer is monthly, so those buckets stay off this chart."
+                labels={hist.labels}
+                datasets={hist.datasets}
+                options={percentChartOptions}
+              />
+            );
+          })()}
         </div>
       </section>
 
@@ -562,31 +495,23 @@ export default function EcosystemView({ data, pending = false }) {
             ))}
           </div>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            {order.map((k) => {
+          {(() => {
+            const maps = {};
+            for (const k of order) {
               const series = projectRevenueSeries(data.projects[k]);
-              const n = getSliceCount(timeframe, series.data.length);
-              const note = k === 'printer'
-                ? (series.source === 'snapshot-est'
-                  ? 'Volume-tax estimate (annual / 365). Stock gacha is not indexed yet.'
-                  : 'Volume-tax estimate. Stock gacha is not indexed yet.')
-                : null;
-              return (
-                <EcoMiniChart
-                  key={k}
-                  title={projectNames[k]}
-                  color={projectColors[k]}
-                  labels={series.labels.slice(-n)}
-                  data={series.data.slice(-n)}
-                  kind="bar"
-                  yTick={compactUsdTick}
-                  value={formatCurrency(getProjectRev(k, timeframe))}
-                  note={note}
-                  to={projectPath(k, 'revenue')}
-                />
-              );
-            })}
-          </div>
+              maps[k] = seriesToMap(series.labels, series.data);
+            }
+            const overlay = overlayFromMaps(maps);
+            return (
+              <EcoTogether
+                title="Daily protocol revenue"
+                note="Protocol-kept rev only — AMM, Clock-In, snipe / curve tax, Smart LP skim. Bonding swap volume is excluded."
+                labels={overlay.labels}
+                datasets={overlay.datasets}
+                options={usdChartOptions}
+              />
+            );
+          })()}
         </div>
       </section>
 
@@ -623,65 +548,54 @@ export default function EcosystemView({ data, pending = false }) {
             })}
           </div>
 
-          <div>
-            <h3 className="text-sm font-bold text-white mb-1">Cumulative token supply burnt (%)</h3>
-            <p className="text-xs text-slate-400 mb-4">From daily snapshots. No invented curves.</p>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              {order.map((k) => {
-                const p = data.projects[k];
-                const { maxToken } = burnCaps(p);
-                const snaps = snapWin(p);
-                const series = snaps.map((s) => {
-                  const burn = Number(s.totalBurn) || 0;
-                  return maxToken > 0 ? +Math.min(100, (burn / maxToken) * 100).toFixed(2) : 0;
-                });
-                const last = series.length ? series[series.length - 1] : null;
-                return (
-                  <EcoMiniChart
-                    key={`burn-${k}`}
-                    title={projectNames[k]}
-                    color={projectColors[k]}
-                    labels={formatLabels(snaps.map((s) => s.date))}
-                    data={series}
-                    yTick={(v) => `${compactTick(v)}%`}
-                    value={last == null ? null : `${last.toFixed(2)}%`}
-                    to={projectPath(k, 'burn')}
-                  />
-                );
-              })}
-            </div>
-          </div>
-
-          <div>
-            <h3 className="text-sm font-bold text-white mb-1">Equivalent NFT supply removed (%)</h3>
-            <p className="text-xs text-slate-400 mb-4">Units removed vs max NFT supply, from the same snapshots.</p>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              {order.filter((k) => burnCaps(data.projects[k]).nftPct != null).map((k) => {
-                const p = data.projects[k];
-                const maxNft = Number(p?.ownership?.currentMaxSupply || p?.config?.maxSupply || 0);
-                const unit = Number(p?.config?.unitValue) || 0;
-                const snaps = snapWin(p);
-                const series = snaps.map((s) => {
-                  if (!(maxNft > 0) || !(unit > 0)) return 0;
-                  const units = (Number(s.totalBurn) || 0) / unit;
-                  return +Math.min(100, (units / maxNft) * 100).toFixed(2);
-                });
-                const last = series.length ? series[series.length - 1] : null;
-                return (
-                  <EcoMiniChart
-                    key={`nftburn-${k}`}
-                    title={projectNames[k]}
-                    color={projectColors[k]}
-                    labels={formatLabels(snaps.map((s) => s.date))}
-                    data={series}
-                    yTick={(v) => `${compactTick(v)}%`}
-                    value={last == null ? null : `${last.toFixed(2)}%`}
-                    to={projectPath(k, 'burn')}
-                  />
-                );
-              })}
-            </div>
-          </div>
+          {(() => {
+            const tokenMaps = {};
+            const nftMaps = {};
+            const nftKeys = [];
+            for (const k of order) {
+              const p = data.projects[k];
+              const { maxToken } = burnCaps(p);
+              const series = burnSeries(p, timeframe);
+              const days = series.rawLabels || [];
+              tokenMaps[k] = seriesToMap(
+                days,
+                (series.data || []).map((burn) => (
+                  maxToken > 0 ? +Math.min(100, ((Number(burn) || 0) / maxToken) * 100).toFixed(2) : null
+                )),
+              );
+              if (burnCaps(p).nftPct == null) continue;
+              nftKeys.push(k);
+              const maxNft = Number(p?.ownership?.currentMaxSupply || p?.config?.maxSupply || 0);
+              const unit = Number(p?.config?.unitValue) || 0;
+              nftMaps[k] = seriesToMap(
+                days,
+                (series.data || []).map((burn) => {
+                  if (!(maxNft > 0) || !(unit > 0)) return null;
+                  return +Math.min(100, (((Number(burn) || 0) / unit) / maxNft) * 100).toFixed(2);
+                }),
+              );
+            }
+            const token = overlayFromMaps(tokenMaps, { fill: true });
+            const nft = overlayFromMaps(nftMaps, { keys: nftKeys, fill: true });
+            return (
+              <>
+                <EcoTogether
+                  title="Cumulative token supply burnt (%)"
+                  note="From each token’s first mint, folded from Transfer history. Quiet days carry the last cumulative burn — a burn cannot reset."
+                  labels={token.labels}
+                  datasets={token.datasets}
+                  options={percentChartOptions}
+                />
+                <EcoTogether
+                  title="Equivalent NFT supply removed (%)"
+                  note="Units removed vs max NFT supply, same full-life series as the token burn chart."
+                  labels={nft.labels}
+                  datasets={nft.datasets}
+                  options={percentChartOptions}
+                />
+              </>
+            );
+          })()}
         </div>
       </section>
 
@@ -743,32 +657,23 @@ export default function EcosystemView({ data, pending = false }) {
             </div>
           </div>
 
-          <div>
-            <h3 className="text-sm font-bold text-white mb-1">Net active units</h3>
-            <p className="text-xs text-slate-400 mb-4">From each project’s recorded activation history. Missing history is a blank mini, not a made-up curve.</p>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              {activationOrder.map((k) => {
-                const p = data.projects[k];
-                const hist = p?.activation?.history || {};
-                const labels = Array.isArray(hist.labels) ? hist.labels : [];
-                const series = Array.isArray(hist.cumulative) ? hist.cumulative : [];
-                const n = getSliceCount(timeframe, labels.length);
-                const last = lastFinite(series);
-                return (
-                  <EcoMiniChart
-                    key={`act-${k}`}
-                    title={projectNames[k]}
-                    color={projectColors[k]}
-                    labels={labels.slice(-n)}
-                    data={series.slice(-n)}
-                    yTick={compactTick}
-                    value={last == null ? null : formatNumber(last)}
-                    to={projectPath(k, 'activation')}
-                  />
-                );
-              })}
-            </div>
-          </div>
+          {(() => {
+            const maps = {};
+            for (const k of activationOrder) {
+              const hist = data.projects[k]?.activation?.history || {};
+              maps[k] = seriesToMap(hist.labels, hist.cumulative);
+            }
+            const overlay = overlayFromMaps(maps, { keys: activationOrder });
+            return (
+              <EcoTogether
+                title="Net active units"
+                note="From each project’s recorded activation history. Missing days stay blank."
+                labels={overlay.labels}
+                datasets={overlay.datasets}
+                options={countChartOptions}
+              />
+            );
+          })()}
         </div>
       </section>
 
@@ -813,64 +718,48 @@ export default function EcosystemView({ data, pending = false }) {
             })}
           </div>
 
-          <div>
-            <h3 className="text-sm font-bold text-white mb-1">NFT holders</h3>
-            <p className="text-xs text-slate-400 mb-4">Snapshot nftHolders when present; otherwise the live count as a single point.</p>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              {order.map((k) => {
-                const p = data.projects[k];
-                const snaps = snapWin(p);
-                const series = snaps.map((s) => Number(s.nftHolders) || null);
-                const live = Number(p?.ownership?.nftHolders) || 0;
-                if (series.length && live > 0 && series[series.length - 1] == null) series[series.length - 1] = live;
-                return (
-                  <EcoMiniChart
-                    key={`nft-h-${k}`}
-                    title={projectNames[k]}
-                    color={projectColors[k]}
-                    labels={formatLabels(snaps.map((s) => s.date))}
-                    data={series}
-                    yTick={compactTick}
-                    value={live > 0 ? formatNumber(live) : null}
-                    to={projectPath(k, 'ownership')}
-                  />
-                );
-              })}
-            </div>
-          </div>
+          {(() => {
+            const nftMaps = {};
+            const tokMaps = {};
+            for (const k of order) {
+              const p = data.projects[k];
+              const snaps = p?.dailySnapshots || [];
+              const nft = snaps.map((s) => (s.nftHolders == null ? null : Number(s.nftHolders)));
+              const liveNft = Number(p?.ownership?.nftHolders) || 0;
+              if (nft.length && liveNft > 0 && nft[nft.length - 1] == null) nft[nft.length - 1] = liveNft;
+              nftMaps[k] = seriesToMap(snaps.map((s) => s.date), nft);
 
-          <div>
-            <h3 className="text-sm font-bold text-white mb-1">Token holders</h3>
-            <p className="text-xs text-slate-400 mb-4">hourly historicalGrowth when it exists; else snapshot tokenHolders.</p>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              {order.map((k) => {
-                const p = data.projects[k];
-                const hist = p?.ownership?.historicalGrowth || {};
-                let labels = Array.isArray(hist.labels) ? hist.labels : [];
-                let series = Array.isArray(hist.data) ? hist.data.map(Number) : [];
-                if (!labels.length) {
-                  const snaps = snapWin(p);
-                  labels = snaps.map((s) => s.date);
-                  series = snaps.map((s) => Number(s.tokenHolders) || null);
-                }
-                labels = formatLabels(labels);
-                const n = getSliceCount(timeframe, labels.length);
-                const live = Number(p?.ownership?.tokenHolders) || Number(p?.ownership?.stonkHolders) || 0;
-                return (
-                  <EcoMiniChart
-                    key={`tok-h-${k}`}
-                    title={projectNames[k]}
-                    color={projectColors[k]}
-                    labels={labels.slice(-n)}
-                    data={series.slice(-n)}
-                    yTick={compactTick}
-                    value={live > 0 ? formatNumber(live) : null}
-                    to={projectPath(k, 'ownership')}
-                  />
+              const hist = p?.ownership?.historicalGrowth || {};
+              if (Array.isArray(hist.labels) && hist.labels.length) {
+                tokMaps[k] = seriesToMap(hist.labels, hist.data);
+              } else {
+                tokMaps[k] = seriesToMap(
+                  snaps.map((s) => s.date),
+                  snaps.map((s) => (s.tokenHolders == null ? null : Number(s.tokenHolders))),
                 );
-              })}
-            </div>
-          </div>
+              }
+            }
+            const nft = overlayFromMaps(nftMaps);
+            const tok = overlayFromMaps(tokMaps);
+            return (
+              <>
+                <EcoTogether
+                  title="NFT holders"
+                  note="Snapshot nftHolders when present; otherwise the live count as the latest point."
+                  labels={nft.labels}
+                  datasets={nft.datasets}
+                  options={countChartOptions}
+                />
+                <EcoTogether
+                  title="Token holders"
+                  note="hourly historicalGrowth when it exists; else snapshot tokenHolders."
+                  labels={tok.labels}
+                  datasets={tok.datasets}
+                  options={countChartOptions}
+                />
+              </>
+            );
+          })()}
         </div>
       </section>
 

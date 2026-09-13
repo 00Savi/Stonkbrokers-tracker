@@ -5,7 +5,6 @@ import {
   barDatasets,
   mixPercentCols,
   protocolFeeCols,
-  volumeCols,
   seriesHasInk,
   tierYieldUsdDatasets,
   tokenPriceDataset,
@@ -88,26 +87,21 @@ export function PaybackPanel({ snaps, tiers, floorCostUsd, tokenPriceUsd }) {
 export function ProtocolFeeVolumePanels({ labels, cols, kind }) {
   if (kind === 'ledger' || kind === 'cashflow') return null;
   const fees = protocolFeeCols(cols).filter((c) => seriesHasInk(c.data));
-  const vol = volumeCols(cols).filter((c) => seriesHasInk(c.data));
   const mix = mixPercentCols(fees).filter((c) => seriesHasInk(c.data));
-  const combined = [
-    ...barDatasets(fees, { stacked: true }),
-    ...barDatasets(vol).map((d) => ({ ...d, stack: 'volume' })),
-  ];
   return (
     <>
       <ChartPanel
-        title="Protocol fees & launch volume (USD)"
-        note="Stacked AMM, Clock-In, curve tax, and Smart LP skim. Purple is launch + bonding quote volume — not a fee, grouped beside the stack."
+        title="Protocol revenue (USD)"
+        note="Money the protocol charged or kept: AMM, Clock-In, snipe / curve tax, and Smart LP skim. Bonding swap volume is not revenue and is not plotted here."
       >
-        {fees.length || vol.length ? (
-          <Bar data={{ labels, datasets: combined }} options={usdStackOptions()} />
+        {fees.length ? (
+          <Bar data={{ labels, datasets: barDatasets(fees, { stacked: true }) }} options={usdStackOptions()} />
         ) : (
-          <EmptyChart>No fee days in this window</EmptyChart>
+          <EmptyChart>No revenue days in this window</EmptyChart>
         )}
       </ChartPanel>
       {mix.length ? (
-        <ChartPanel title="Fee mix (100%)" note="Share of protocol fees that day. Days with no fees are blank. Volume is excluded.">
+        <ChartPanel title="Revenue mix (100%)" note="Share of protocol revenue that day. Days with no rev are blank. Swap volume is excluded.">
           <Bar data={{ labels, datasets: barDatasets(mix, { stacked: true }) }} options={percentStackOptions()} />
         </ChartPanel>
       ) : null}
@@ -162,13 +156,13 @@ export function SmartLpChartPanels({ snaps, smartLp, vaults }) {
         </ChartPanel>
       ) : null}
       {hasFees ? (
-        <ChartPanel title="Daily depositor fees vs StonkBroker skim" note="Gross Uniswap fees collected that day, and the protocol skim. Empty days mean no FeesCollected in the window.">
+        <ChartPanel title="Daily depositor fees vs Smart LP protocol rev" note="Gross Uniswap fees collected that day, and the protocol skim. Empty days mean no FeesCollected in the window.">
           <Bar
             data={{
               labels: hist.labels,
               datasets: [
                 { label: 'Depositor fees', data: hist.gross, backgroundColor: '#fbbf24', maxBarThickness: 22, skipNull: true },
-                { label: 'StonkBroker Fees', data: hist.skim, backgroundColor: '#38bdf8', maxBarThickness: 22, skipNull: true },
+                { label: 'Smart LP Protocol Revenue', data: hist.skim, backgroundColor: '#38bdf8', maxBarThickness: 22, skipNull: true },
               ],
             }}
             options={usdStackOptions()}

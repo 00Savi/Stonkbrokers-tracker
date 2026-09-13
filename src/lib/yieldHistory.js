@@ -1,5 +1,5 @@
 import { STREAM_COLORS, TIER_COLORS } from './charts';
-import { dateKey, formatLabels } from './dates';
+import { dateKey, formatLabels, utcIso } from './dates';
 import { trailingSnapshots, usableSnapshots } from './snapshots';
 
 /** Yield / ROI chart windows. `all` is every usable snapshot we still have. */
@@ -52,6 +52,30 @@ function padLeft(arr, n) {
   return [...Array(Math.max(0, n - a.length)).fill(0), ...a];
 }
 
+/** Fill omitted calendar days so a sparse ledger still reaches today. */
+function fillCalendar(isoLabels, seriesList, through = utcIso()) {
+  const keys = (isoLabels || []).map((d) => dateKey(d)).filter(Boolean).sort();
+  if (!keys.length) return { labels: isoLabels || [], series: seriesList };
+  const start = Date.parse(`${keys[0]}T00:00:00Z`);
+  const endKey = dateKey(through) > keys[keys.length - 1] ? dateKey(through) : keys[keys.length - 1];
+  const end = Date.parse(`${endKey}T00:00:00Z`);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) {
+    return { labels: isoLabels || [], series: seriesList };
+  }
+  const idx = new Map(keys.map((d, i) => [d, i]));
+  const labels = [];
+  for (let t = start; t <= end; t += 86400000) {
+    labels.push(new Date(t).toISOString().slice(0, 10));
+  }
+  const series = (seriesList || []).map((arr) => labels.map((d) => {
+    const j = idx.get(d);
+    if (j == null) return 0;
+    const n = Number(arr?.[j]);
+    return Number.isFinite(n) ? n : 0;
+  }));
+  return { labels, series };
+}
+
 export function mdKey(label) {
   return dateKey(label);
 }
@@ -80,11 +104,11 @@ function pickNum(row, keys, fallback = null) {
 }
 
 const FEE_COL_META = [
-  { key: 'amm', label: 'AMM & protocol', color: STREAM_COLORS.amm, snap: ['revAmm'], daily: 'dailyAmm', hist: 'historyAmm' },
-  { key: 'dex', label: 'DEX fees', color: STREAM_COLORS.dex, snap: ['revDex'], daily: 'dailyDex', hist: 'historyDex' },
-  { key: 'box', label: 'Clock-In / order', color: STREAM_COLORS.box, snap: ['revBox'], daily: 'dailySecurityBox', hist: 'historyBox' },
-  { key: 'tax', label: 'Curve tax', color: STREAM_COLORS.tax, snap: ['revTax'], daily: 'dailyBondingTax', hist: 'historyTax' },
-  { key: 'smartLp', label: 'StonkBroker Fees', color: STREAM_COLORS.smartLp, snap: ['revSmartLp'], daily: 'dailySmartLp', hist: 'historySmartLp' },
+  { key: 'amm', label: 'AMM & swap rev', color: STREAM_COLORS.amm, snap: ['revAmm'], daily: 'dailyAmm', hist: 'historyAmm' },
+  { key: 'dex', label: 'DEX rev', color: STREAM_COLORS.dex, snap: ['revDex'], daily: 'dailyDex', hist: 'historyDex' },
+  { key: 'box', label: 'Clock-In / order rev', color: STREAM_COLORS.box, snap: ['revBox'], daily: 'dailySecurityBox', hist: 'historyBox' },
+  { key: 'tax', label: 'Snipe / curve tax', color: STREAM_COLORS.tax, snap: ['revTax'], daily: 'dailyBondingTax', hist: 'historyTax' },
+  { key: 'smartLp', label: 'Smart LP Protocol Revenue', color: STREAM_COLORS.smartLp, snap: ['revSmartLp'], daily: 'dailySmartLp', hist: 'historySmartLp' },
 ];
 
 const VOLUME_META = {
@@ -105,13 +129,13 @@ function streamOnLabels(labels, snaps, r, meta) {
   const histLookup = windowLookup(r.historyDates || [], histArr);
   const byDate = new Map((snaps || []).map((s) => [mdKey(s.date), s]));
   return labels.map((d) => {
+    const h = histLookup(d);
+    if (h != null) return h;
+    const fromWin = shortLookup(d);
+    if (fromWin != null) return fromWin;
     const s = byDate.get(mdKey(d));
     const fromSnap = s ? pickNum(s, meta.snap) : null;
     if (fromSnap != null) return fromSnap;
-    const fromWin = shortLookup(d);
-    if (fromWin != null) return fromWin;
-    const h = histLookup(d);
-    if (h != null) return h;
     return null;
   });
 }
@@ -119,18 +143,26 @@ function streamOnLabels(labels, snaps, r, meta) {
 /**
  * Date axis + stream columns for a project's revenue chart.
  * Snapshot dates are the axis when they outrun the 7-day walk, so Weekly /
- * Monthly / All actually differ. Volume is a separate column from protocol fees.
+ * Monthly / All actually differ. Completed days prefer gg-index history over
+ * the 7-day overlay so a job-clock bucket cannot reprint yesterday as today.
+ * Launch bonding volume is not a series here — it is swap notional, not
+ * protocol-kept revenue.
  */
 export function protocolRevenueChart(project) {
   const ledger = project?.ledger;
   if (ledger?.historyDates?.length) {
-    const n = ledger.historyDates.length;
+    const filled = fillCalendar(ledger.historyDates, [
+      ledger.historyDelivered,
+      ledger.historyVaulted,
+    ]);
+    const n = filled.labels.length;
     return {
-      labels: formatLabels(ledger.historyDates),
+      labels: formatLabels(filled.labels),
+      rawLabels: filled.labels,
       kind: 'ledger',
       cols: [
-        { key: 'delivered', label: 'Delivered to members', color: STREAM_COLORS.delivered, data: padLeft(ledger.historyDelivered, n) },
-        { key: 'vaulted', label: 'Still on the wall', color: STREAM_COLORS.vaulted, data: padLeft(ledger.historyVaulted, n) },
+        { key: 'delivered', label: 'Delivered to members', color: STREAM_COLORS.delivered, data: padLeft(filled.series[0], n) },
+        { key: 'vaulted', label: 'Still on the wall', color: STREAM_COLORS.vaulted, data: padLeft(filled.series[1], n) },
       ],
     };
   }
@@ -142,7 +174,7 @@ export function protocolRevenueChart(project) {
       labels: formatLabels(cf.dailyDates),
       kind: 'cashflow',
       cols: [
-        { key: 'fees', label: 'Fees', color: STREAM_COLORS.fees, data: padLeft(cf.dailyFees, n) },
+        { key: 'fees', label: 'Protocol rev', color: STREAM_COLORS.fees, data: padLeft(cf.dailyFees, n) },
         { key: 'holders', label: 'Holders revenue', color: STREAM_COLORS.holdersRev, data: padLeft(cf.dailyRevenue, n) },
       ],
     };
@@ -172,13 +204,6 @@ export function protocolRevenueChart(project) {
       data: streamOnLabels(labels, snaps, rWin, m),
     }));
 
-  cols.push({
-    key: VOLUME_META.key,
-    label: VOLUME_META.label,
-    color: VOLUME_META.color,
-    data: streamOnLabels(labels, snaps, rWin, VOLUME_META),
-  });
-
   return { labels: formatLabels(labels), rawLabels: labels, kind: 'protocol', cols };
 }
 
@@ -187,6 +212,30 @@ export const VOLUME_KEYS = ['volume', 'launch'];
 
 export function protocolFeeCols(cols) {
   return (cols || []).filter((c) => ['amm', 'dex', 'box', 'tax', 'smartLp'].includes(c.key));
+}
+
+/**
+ * CoC % from cashflow buckets. Oakmont (and any monthly indexer) publishes a
+ * month total on the 1st — treating that as a daily print and ×365 is why
+ * early Oakmont ROI printed ~1600%. Those series stay on the revenue chart.
+ */
+export function cashflowRoiByDate(p) {
+  const cadence = String(p?.cashflow?.cadence || 'day').toLowerCase();
+  if (cadence === 'month' || p?.config?.kind === 'vault') return {};
+  const dates = p?.cashflow?.dailyDates || [];
+  const revs = p?.cashflow?.dailyRevenue || [];
+  const circ = Number(p?.ownership?.circulatingSupply) || 0;
+  const price = Number(p?.market?.tokenPriceUsd) || 0;
+  const req = Number(p?.tiers?.[0]?.reqTokens) || 0;
+  const map = {};
+  if (!dates.length || !(price > 0)) return map;
+  dates.forEach((date, i) => {
+    const day = Number(revs[i]) || 0;
+    const cost = req > 0 ? req * price : circ * price;
+    const annualForStake = circ > 0 && req > 0 ? day * (req / circ) * 365 : day * 365;
+    map[date] = cost > 0 ? (annualForStake / cost) * 100 : null;
+  });
+  return map;
 }
 
 export function volumeCols(cols) {
