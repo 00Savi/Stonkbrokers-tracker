@@ -121,7 +121,8 @@ const VOLUME_META = {
 };
 
 /** UTC calendar days for the 7-day walk when `dailyDates` was not persisted. */
-function liveWalkDates(r) {
+function liveWalkDates(r, meta) {
+  if (meta?.key === 'smartLp' && r?.smartLp?.dailyDates?.length) return r.smartLp.dailyDates;
   if (r?.dailyDates?.length) return r.dailyDates;
   const n = Math.max(
     (r?.dailyAmm || []).length,
@@ -150,7 +151,7 @@ function throughToday(labels) {
 }
 
 function streamOnLabels(labels, snaps, r, meta) {
-  const shortDates = liveWalkDates(r);
+  const shortDates = liveWalkDates(r, meta);
   const shortLookup = windowLookup(shortDates, r[meta.daily]);
   const histArr = meta.hist === 'historyAmm'
     ? (r.historyAmm || r.historyTotalUsd || [])

@@ -109,7 +109,22 @@ function overlayDailyStreams(snaps, revenue, extraDates) {
     s.revSmartLp = Number(revenue.dailySmartLp?.[j]) || 0;
     s.revSmartLpGross = Number(revenue.dailySmartLpGross?.[j]) || 0;
   }
+  overlaySmartLpDaily(snaps, revenue);
   overlayHistoryStreams(snaps, revenue);
+  return snaps;
+}
+
+function overlaySmartLpDaily(snaps, revenue) {
+  const slDates = revenue?.smartLp?.dailyDates || [];
+  const daily = revenue?.dailySmartLp || [];
+  if (!slDates.length || !daily.length) return snaps;
+  const idx = new Map(slDates.map((d, i) => [mdSnapKey(d), i]));
+  for (const s of snaps) {
+    const j = idx.get(mdSnapKey(s.date));
+    if (j == null) continue;
+    s.revSmartLp = Number(daily[j]) || 0;
+    s.revSmartLpGross = Number(revenue.dailySmartLpGross?.[j]) || 0;
+  }
   return snaps;
 }
 
@@ -136,7 +151,9 @@ function overlayHistoryStreams(snaps, revenue) {
     fill("revBox", revenue.historyBox);
     fill("revVolume", revenue.historyVolume);
     fill("revTax", revenue.historyTax);
-    fill("revSmartLp", revenue.historySmartLp);
+    // Smart LP snapshots stay on the live FeesCollected walk. History from
+    // /revenue/daily has been dropping recent days as $0, which used to freeze
+    // the skim tile after midnight.
   }
   return snaps;
 }
@@ -207,16 +224,68 @@ function mergeLiveTodayHistory(revenue) {
   }
 }
 
+function snapshotLaunchpad(rb) {
+  if (!rb) return null;
+  return {
+    dailyDates: [...(rb.dailyDates || [])],
+    dailyBondingTax: [...(rb.dailyBondingTax || [])],
+    dailyLaunchpad: [...(rb.dailyLaunchpad || [])],
+    bondingFeesUsd: rb.bondingFeesUsd || 0,
+    bondingVolumeUsd: rb.bondingVolumeUsd || 0,
+    launchpadUsd: rb.launchpadUsd || 0,
+    launchCreateUsd: rb.launchCreateUsd || 0,
+  };
+}
+
+/** Keep live snipe/curve tax when AMM yield is carried from a previous run. */
+function applyLaunchpadSnapshot(revenue, snap) {
+  if (!revenue || !snap) return;
+  const start = yieldWindowStartSec();
+  const days = [];
+  for (let i = 0; i < YIELD_LOOKBACK_DAYS; i++) {
+    days.push(dates.utcIsoFromTs(start + i * 86400));
+  }
+  const oldDays = (revenue.dailyDates || []).map((d) => dates.dateKey(d) || d);
+  const remap = (arr) => days.map((d) => {
+    const j = oldDays.indexOf(d);
+    return j >= 0 ? Number(arr?.[j]) || 0 : 0;
+  });
+  revenue.dailyAmm = remap(revenue.dailyAmm);
+  revenue.dailySecurityBox = remap(revenue.dailySecurityBox);
+  revenue.dailyDex = remap(revenue.dailyDex);
+  revenue.dailySmartLp = remap(revenue.dailySmartLp);
+  if (Array.isArray(revenue.dailySmartLpGross)) {
+    revenue.dailySmartLpGross = remap(revenue.dailySmartLpGross);
+  }
+  const snapDays = (snap.dailyDates || []).map((d) => dates.dateKey(d) || d);
+  const at = (arr, d) => {
+    const j = snapDays.indexOf(d);
+    return j >= 0 ? Number(arr?.[j]) || 0 : 0;
+  };
+  revenue.dailyDates = days;
+  revenue.dailyBondingTax = days.map((d) => at(snap.dailyBondingTax, d));
+  revenue.dailyLaunchpad = days.map((d) => at(snap.dailyLaunchpad, d));
+  revenue.bondingFeesUsd = Number(snap.bondingFeesUsd) || 0;
+  revenue.bondingVolumeUsd = Number(snap.bondingVolumeUsd) || 0;
+  revenue.launchpadUsd = Number(snap.launchpadUsd) || 0;
+  revenue.launchCreateUsd = Number(snap.launchCreateUsd) || 0;
+}
+
 function applySmartLp(revenueBreakdown, smart) {
   if (!smart) return;
   revenueBreakdown.smartLpUsd = smart.protocolFees7dUsd || 0;
   if (Array.isArray(smart.daily)) revenueBreakdown.dailySmartLp = smart.daily;
   if (Array.isArray(smart.dailyGross)) revenueBreakdown.dailySmartLpGross = smart.dailyGross;
+  const n = (smart.daily || []).length;
+  const slDates = n
+    ? Array.from({ length: n }, (_, i) => dates.utcIsoFromTs(dates.utcMidnightSec() - (n - 1 - i) * 86400))
+    : [];
   revenueBreakdown.smartLp = {
     vaults: smart.vaults || [],
     totalTvlUsd: smart.totalTvlUsd || 0,
     fees7dUsd: smart.fees7dUsd || 0,
     protocolFees7dUsd: smart.protocolFees7dUsd || 0,
+    dailyDates: slDates,
     feeSplit: smart.feeSplit,
     site: smart.site,
     feeRecipientA: smart.feeRecipientA,
@@ -347,6 +416,10 @@ const LEGACY_LAUNCHPAD = "0xeca5726dae1e53365c37ffc02369d947a91d71f9";
 // SafeBuy / SafeSell on StonkSafeLaunchpadV2 — keccak of the 7-arg signatures.
 const SAFE_BUY_TOPIC = "0xba22b06917da96d20a8f4f80d45cbdaaf3294856de78268558edcce22e4298df";
 const SAFE_SELL_TOPIC = "0x2de6d6d1573ee69658d3daae2e752379e6eb0676622a5ade2812088d7cb56581";
+// Nightshades / Special Project civ pad. Different event layout from V2:
+// indexed (id, buyer), data (quoteIn, taxPaid, netQuote, tokensOut).
+const CIV_BUY_TOPIC = "0x8eabef5bff7d4e7ca4c2c908d2aaf985e647a5009b534a12c423ab7e37a42c86";
+const NIGHTSHADES_PAD = "0xca389585c4940b107d49af4a37ad259c5fb69081";
 const SMART_LAUNCH_PADS = [
   // V2
   { pad: "0xfcd61b25bbf3abd6cf0070d6328e351cc30eec9f", quote: WETH },
@@ -368,6 +441,8 @@ const SMART_LAUNCH_PADS = [
   { pad: "0xd82da1d8ef59959b170b59147283ab1f2f1ca86a", quote: "0x4a0e65a3eccec6dbe60ae065f2e7bb85fae35eea" },
   { pad: "0x644b19512052a1b6d38d7b16c6c3fb1d3f7270d2", quote: "0xa30fa36db767ad9ed3f7a60fc79526fb4d56d344" },
   { pad: "0x2bd7f90cca4660da82aa693cf352ddb6275c76da", quote: "ybtc" },
+  // Nightshades civ / anti-snipe specials (GHOSTS, WATCHERS, KNIGHTS, ZOMBIES).
+  { pad: NIGHTSHADES_PAD, quote: WETH, civ: true },
 ];
 
 const MEMES = [
@@ -2024,24 +2099,30 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
     const fromBlock = blockTime.blockAt(sevenDaysAgo);
     const toBlock = await rpc.blockNumber();
     const padByAddr = new Map(SMART_LAUNCH_PADS.map((p) => [p.pad, p]));
+    const tradeTopics = [SAFE_BUY_TOPIC, SAFE_SELL_TOPIC, CIV_BUY_TOPIC];
 
     const tradeLogs = await rpc.getLogs({
       address: SMART_LAUNCH_PADS.map((p) => p.pad),
       fromBlock,
       toBlock,
-      topics: [[SAFE_BUY_TOPIC, SAFE_SELL_TOPIC]],
+      topics: [tradeTopics],
     });
 
     for (const log of tradeLogs) {
       const pad = padByAddr.get((log.address || "").toLowerCase());
       if (!pad) continue;
       const topic0 = (log.topics && log.topics[0] || "").toLowerCase();
-      const quoteWei = topic0 === SAFE_BUY_TOPIC
-        ? decodeUint(log.data, 0)
-        : decodeUint(log.data, 3);
+      const quoteWei = topic0 === SAFE_SELL_TOPIC
+        ? decodeUint(log.data, 3)
+        : decodeUint(log.data, 0);
       if (quoteWei == null || quoteWei <= 0n) continue;
+      const taxPaid = decodeUint(log.data, 1);
       const taxBps = decodeUint(log.data, 2) || 0n;
-      const taxWei = (quoteWei * taxBps) / 10000n;
+      // V2: taxPaid is word 1 and taxBps is word 2. Civ: taxPaid is word 1
+      // and word 2 is net quote, not bps — never recompute civ tax from it.
+      const taxWei = topic0 === CIV_BUY_TOPIC
+        ? (taxPaid || 0n)
+        : (taxPaid != null && taxPaid > 0n ? taxPaid : (quoteWei * taxBps) / 10000n);
       const price = quotePriceUsd(pad.quote);
       if (!(price > 0)) continue;
       const ts = blockTime.at(parseInt(log.blockNumber, 16));
@@ -2061,7 +2142,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
     });
     for (const log of wethIn) {
       const from = topicAddr(log.topics && log.topics[1]);
-      if (from === LP_LOCKER || from === LAUNCH_FEE_ROUTER) continue;
+      if (from === LP_LOCKER || from === LAUNCH_FEE_ROUTER || from === NIGHTSHADES_PAD) continue;
       const amount = decodeUint(log.data, 0);
       if (amount == null || amount <= 0n) continue;
       const ts = blockTime.at(parseInt(log.blockNumber, 16));
@@ -2171,7 +2252,17 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
       }
 
       if (projectKey === "stonk" && conf.streams?.securityBox) await fetchSecurityBoxYield(conf.streams.securityBox);
-      if (projectKey === "stonk") await fetchLaunchpadRevenue();
+      if (projectKey === "stonk") {
+        try {
+          await fetchLaunchpadRevenue();
+          console.log(
+            `  launchpad tax $${(revenueBreakdown.bondingFeesUsd || 0).toFixed(0)} ` +
+            `vol $${(revenueBreakdown.bondingVolumeUsd || 0).toFixed(0)}`,
+          );
+        } catch (e) {
+          console.warn(`[warn] ${projectKey}: launchpad logs: ${e.message || e}`);
+        }
+      }
   } 
   else if (conf.yieldMode === "protocol_vault") {
       // Yield paid out of the protocol vault, from the index's RewardPaid
@@ -2296,7 +2387,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
         `[warn] ${projectKey}: yield truncated ${truncatedWalks.join("; ")} ` +
         `(window starts ${new Date(sevenDaysAgo * 1000).toISOString()}). Carrying prior yield.`,
       );
-      return { unavailable: true };
+      return { unavailable: true, launchpadSnapshot: snapshotLaunchpad(revenueBreakdown) };
     }
   } else {
     persistYieldSample(projectKey, sevenDaysAgo, dailySampleUsd);
@@ -2591,7 +2682,8 @@ async function run() {
       if (yieldCarried && Array.isArray(prevProjData.tiers) && prevProjData.tiers.length) {
         console.warn(`[warn] ${projectKey}: using previous yield/revenue (window incomplete).`);
         mappedTiers = prevProjData.tiers;
-        revenueBreakdown = prevProjData.revenue || {};
+        revenueBreakdown = { ...(prevProjData.revenue || {}) };
+        if (projectKey === "stonk") applyLaunchpadSnapshot(revenueBreakdown, yieldData.launchpadSnapshot);
       } else {
         if (yieldCarried) {
           throw new Error(`${projectKey}: yield unavailable and no previous snapshot to carry forward.`);
@@ -2758,18 +2850,27 @@ async function run() {
           try {
             let smart = null;
             try {
-              const idx = await gg.smartLps("stonk", { days: YIELD_LOOKBACK_DAYS });
+              const idx = await gg.smartLps("stonk", {
+                days: YIELD_LOOKBACK_DAYS,
+                timeoutMs: 20_000,
+                attempts: 2,
+              });
               smart = await fromGgIndex(idx, {
                 rpc,
                 ethPriceUsd: markets[projectKey]?.ethPriceUsd,
                 tokenPrices,
                 lookbackDays: YIELD_LOOKBACK_DAYS,
+                knownVaults: prevProjData.revenue?.smartLp?.vaults || [],
               });
+              if (smart?.unpriced) {
+                console.warn("[warn] smart LP via gg-index: fees present but unpriced; chain walk");
+                smart = null;
+              }
             } catch (e) {
               console.warn(`[warn] smart LP via gg-index: ${e.message}`);
             }
-            if (!smart?.vaults?.length) {
-              smart = await fetchSmartLps({
+            if (!smart?.vaults?.length || !(Number(smart.protocolFees7dUsd) > 0)) {
+              const walked = await fetchSmartLps({
                 rpc,
                 blockTime,
                 sevenDaysAgo,
@@ -2778,6 +2879,8 @@ async function run() {
                 lookbackDays: YIELD_LOOKBACK_DAYS,
                 knownCas: (prevProjData.revenue?.smartLp?.vaults || []).map((v) => v.ca),
               });
+              if (Number(walked?.protocolFees7dUsd) > 0) smart = walked;
+              else if (!smart?.vaults?.length && walked?.vaults?.length && walked.feeWalkOk) smart = walked;
             }
             carrySmartLp(revenueBreakdown, prevProjData.revenue, smart);
           } catch (e) {
