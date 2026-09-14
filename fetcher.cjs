@@ -114,10 +114,10 @@ function overlayDailyStreams(snaps, revenue, extraDates) {
 }
 
 function overlayHistoryStreams(snaps, revenue) {
-  const dates = revenue.historyDates || [];
-  if (!dates.length) return snaps;
+  const histDates = revenue.historyDates || [];
+  if (!histDates.length) return snaps;
   const today = dates.utcIso();
-  const idx = new Map(dates.map((d, i) => [mdSnapKey(d), i]));
+  const idx = new Map(histDates.map((d, i) => [mdSnapKey(d), i]));
   const pick = (arr, j) => {
     const n = Number(arr?.[j]);
     return Number.isFinite(n) ? n : null;
@@ -128,7 +128,8 @@ function overlayHistoryStreams(snaps, revenue) {
     if (j == null) continue;
     const fill = (field, arr) => {
       const v = pick(arr, j);
-      if (v != null) s[field] = v;
+      // A remote 0 is "not printed yet", not a quiet day — keep the live walk.
+      if (v != null && !(v === 0 && Number(s[field]) > 0)) s[field] = v;
     };
     fill("revAmm", revenue.historyAmm || revenue.historyTotalUsd);
     fill("revDex", revenue.historyDex);
@@ -160,34 +161,49 @@ const LIVE_TODAY_STREAMS = [
   ["dailySmartLp", "historySmartLp"],
 ];
 
-/** In-progress UTC day: write the live 7-day walk into history so each pull fills today's bar. */
+/**
+ * Stamp the live 7-day walk into history. Today always updates so each fetch
+ * fills the in-progress bar. Older days in the window only fill when history
+ * is still a placeholder 0 — otherwise gg-index midnight rollover erases AMM
+ * the moment the day is no longer "today".
+ */
 function mergeLiveTodayHistory(revenue) {
   const today = dates.utcIso();
-  const histDates = revenue?.historyDates || [];
-  if (!histDates.length) return;
-  const byIso = new Map(histDates.map((d, i) => [isoFromMdLabel(d) || d, i]));
-  let todayIdx = byIso.get(today);
-  if (todayIdx == null) {
-    todayIdx = histDates.length;
-    histDates.push(today);
-    revenue.historyDates = histDates;
-  }
-  const dailyDates = revenue.dailyDates || [];
+  const dailyDates = [...(revenue.dailyDates || [])];
   const n = Math.max(
     dailyDates.length,
     (revenue.dailyAmm || []).length,
     (revenue.dailySmartLp || []).length,
   );
-  const slot = dailyDates.length
-    ? dailyDates.findIndex((d) => (isoFromMdLabel(d) || d) === today)
-    : n - 1;
-  if (slot < 0) return;
-  for (const [dailyKey, histKey] of LIVE_TODAY_STREAMS) {
-    const v = Number(revenue[dailyKey]?.[slot]);
-    if (!Number.isFinite(v)) continue;
-    if (!Array.isArray(revenue[histKey])) revenue[histKey] = histDates.map(() => 0);
-    while (revenue[histKey].length < histDates.length) revenue[histKey].push(0);
-    revenue[histKey][todayIdx] = +v.toFixed(2);
+  if (!n) return;
+  if (!dailyDates.length) {
+    const start = dates.utcMidnightSec() - (n - 1) * 86400;
+    for (let i = 0; i < n; i++) dailyDates.push(dates.utcIsoFromTs(start + i * 86400));
+    revenue.dailyDates = dailyDates;
+  }
+  const histDates = revenue?.historyDates || [];
+  if (!histDates.length) return;
+  const byIso = new Map(histDates.map((d, i) => [isoFromMdLabel(d) || d, i]));
+
+  for (let slot = 0; slot < n; slot++) {
+    const day = isoFromMdLabel(dailyDates[slot]) || dailyDates[slot];
+    if (!day) continue;
+    let idx = byIso.get(day);
+    if (idx == null) {
+      idx = histDates.length;
+      histDates.push(day);
+      byIso.set(day, idx);
+      revenue.historyDates = histDates;
+    }
+    const isToday = day === today;
+    for (const [dailyKey, histKey] of LIVE_TODAY_STREAMS) {
+      const v = Number(revenue[dailyKey]?.[slot]);
+      if (!Number.isFinite(v)) continue;
+      if (!Array.isArray(revenue[histKey])) revenue[histKey] = histDates.map(() => 0);
+      while (revenue[histKey].length < histDates.length) revenue[histKey].push(0);
+      const prev = Number(revenue[histKey][idx]);
+      if (isToday || !(prev > 0)) revenue[histKey][idx] = +v.toFixed(2);
+    }
   }
 }
 
@@ -1624,8 +1640,10 @@ function persistStreamDays(projectKey, revenue) {
   );
   const dayMap = {};
   for (let i = 0; i < n; i++) {
-    const ts = todayUtc / 1000 - (n - 1 - i) * 86400 + 43200;
-    dayMap[yieldDays.utcKey(ts)] = {
+    const key = revenue.dailyDates?.[i]
+      ? dates.dateKey(revenue.dailyDates[i])
+      : yieldDays.utcKey(todayUtc / 1000 - (n - 1 - i) * 86400 + 43200);
+    dayMap[key] = {
       amm: Number(revenue.dailyAmm?.[i]) || 0,
       box: Number(revenue.dailySecurityBox?.[i]) || 0,
       volume: Number(revenue.dailyLaunchpad?.[i]) || 0,
@@ -1721,6 +1739,9 @@ async function attachRevenueHistory(projectKey, revenue, scale, yieldMode, prevR
       if (!cell || cell.usd == null) continue;
       const usd = scaleOracleAmm(cell.usd, cell, remoteMode, scale);
       if (usd == null) continue;
+      // gg-index often publishes 0 for the in-progress (and just-closed) UTC
+      // day. That is "not printed yet", not a quiet day — keep the live walk.
+      if (!(usd > 0) && Number(cur[localKey]) > 0) continue;
       cur[localKey] = usd;
     }
     byIso.set(d.date, cur);

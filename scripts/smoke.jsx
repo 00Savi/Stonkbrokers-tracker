@@ -29,6 +29,8 @@ import YardDetailView from '../src/components/views/YardDetailView';
 import CardWallDetailView from '../src/components/views/CardWallDetailView';
 import BonusDetailView from '../src/components/views/BonusDetailView';
 import SpecialDetailView from '../src/components/views/SpecialDetailView';
+import { protocolRevenueChart } from '../src/lib/yieldHistory';
+import { dateKey } from '../src/lib/dates';
 
 const snapshot = JSON.parse(fs.readFileSync('public/data.json', 'utf8'));
 
@@ -148,6 +150,27 @@ for (const [name, View, props] of VIEWS) {
   } catch (err) {
     failed++;
     console.error(`  FAIL  ${name.padEnd(24)} ${err.message}`);
+  }
+}
+
+{
+  const stonk = snapshot.projects?.stonk;
+  const r = stonk?.revenue || {};
+  const chart = protocolRevenueChart(stonk);
+  const amm = (chart.cols || []).find((c) => c.key === 'amm');
+  const lastWalk = Number(r.dailyAmm?.[r.dailyAmm.length - 1]) || 0;
+  const lastHistDate = r.historyDates?.[r.historyDates.length - 1];
+  const i = (chart.rawLabels || []).findIndex((d) => dateKey(d) === dateKey(lastHistDate));
+  const plotted = Number(amm?.data?.[i]);
+  if (lastWalk > 0 && Number(r.historyAmm?.at(-1)) === 0) {
+    if (!(plotted > 0)) {
+      failed++;
+      console.error(
+        `FAIL  stonk AMM ${lastHistDate} plotted ${plotted} while live walk is ${lastWalk}`,
+      );
+    } else {
+      console.log(`ok    stonk AMM ${lastHistDate} uses live walk $${plotted.toFixed(0)}`);
+    }
   }
 }
 

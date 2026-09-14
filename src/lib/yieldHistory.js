@@ -129,12 +129,24 @@ function liveWalkDates(r) {
     (r?.dailySecurityBox || []).length,
   );
   if (!n) return [];
+  // Align to historyDates, not browser "now". Synthesizing through today
+  // slides yesterday's AMM onto today the moment UTC midnight hits and the
+  // payload has not been refetched yet.
+  const hist = (r.historyDates || []).map((d) => dateKey(d)).filter(Boolean);
+  if (hist.length) return hist.slice(-n);
   const end = Date.parse(`${utcIso()}T00:00:00Z`);
   if (!Number.isFinite(end)) return [];
   return Array.from({ length: n }, (_, i) => {
     const t = new Date(end - (n - 1 - i) * 86400000);
     return t.toISOString().slice(0, 10);
   });
+}
+
+function throughToday(labels) {
+  const today = utcIso();
+  const keys = [...new Set((labels || []).map((d) => dateKey(d)).filter(Boolean))];
+  if (today && !keys.includes(today)) keys.push(today);
+  return keys;
 }
 
 function streamOnLabels(labels, snaps, r, meta) {
@@ -152,10 +164,14 @@ function streamOnLabels(labels, snaps, r, meta) {
     const fromSnap = s ? pickNum(s, meta.snap) : null;
     const h = histLookup(d);
     // In-progress UTC day: live oracle / FeesCollected walk, so each pull
-    // fills the bar. Completed days still prefer gg-index history so a
-    // job-clock bucket cannot reprint yesterday as today. Smart LP history
-    // has been dropping recent days, so that stream always prefers live.
-    const liveFirst = meta.key === 'smartLp' || mdKey(d) === today;
+    // fills the bar. A history 0 is "not printed yet" — keep the live walk
+    // after midnight instead of waiting for gg-index to catch up. Completed
+    // days with a real history print still prefer it so a job-clock bucket
+    // cannot reprint yesterday as today. Smart LP history has been dropping
+    // recent days, so that stream always prefers live.
+    const historyEmpty = h == null || h === 0;
+    const livePrinted = fromWin != null && fromWin !== 0;
+    const liveFirst = meta.key === 'smartLp' || mdKey(d) === today || (historyEmpty && livePrinted);
     if (liveFirst) {
       if (fromWin != null) return fromWin;
       if (fromSnap != null) return fromSnap;
@@ -174,8 +190,10 @@ function streamOnLabels(labels, snaps, r, meta) {
  * Snapshot dates are the axis when they outrun the 7-day walk, so Weekly /
  * Monthly / All actually differ. Completed AMM / box / tax days prefer
  * gg-index history over the 7-day overlay so a job-clock bucket cannot
- * reprint yesterday as today. Today's bar uses the live walk so each
- * fetch fills in through the day. Smart LP prefers live on every day.
+ * reprint yesterday as today — unless history is still 0, in which case the
+ * live walk fills the bar until the index prints. Today's bar always uses
+ * the live walk so each fetch fills in through the day. Smart LP prefers
+ * live on every day.
  * Launch bonding volume is not a series here — it is swap notional, not
  * protocol-kept revenue.
  */
@@ -215,14 +233,14 @@ export function protocolRevenueChart(project) {
   const short = r.dailyDates?.length ? r.dailyDates : (project?.tiers?.[0]?.dailyDates || []);
   const snaps = usableSnapshots(project?.dailySnapshots);
   const snapLabels = snaps.map((s) => s.date).filter(Boolean);
-  const labels = (() => {
+  const labels = throughToday((() => {
     const hist = r.historyDates || [];
     if (snapLabels.length >= hist.length && snapLabels.length > short.length) return snapLabels;
     if (hist.length > snapLabels.length && hist.length > short.length) return hist;
     if (snapLabels.length > short.length) return snapLabels;
     if (hist.length) return hist;
     return short;
-  })();
+  })());
   const hasSmart = !!(r.smartLp || r.dailySmartLp?.length || snaps.some((s) => s.revSmartLp != null));
   const rWin = { ...r, dailyDates: short };
 
