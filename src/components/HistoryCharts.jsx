@@ -128,7 +128,7 @@ export function ProtocolFeeVolumePanels({ labels, cols, kind, holder }) {
     <>
       <ChartPanel
         title="Protocol revenue (USD)"
-        note="Money the protocol charged or kept: AMM, Clock-In, snipe / curve tax, and Smart LP skim. Bonding swap volume is not revenue and is not plotted here."
+        note="Money the protocol charged or kept: AMM, Clock-In, snipe / curve tax, StonkBooster inflows, and Smart LP skim. Bonding swap volume is not revenue and is not plotted here."
       >
         {fees.length ? (
           <Bar data={{ labels, datasets: barDatasets(fees, { stacked: true }) }} options={usdStackOptions()} />

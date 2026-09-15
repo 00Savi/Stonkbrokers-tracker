@@ -14,6 +14,8 @@
 // the OpenSea stats floor from the hourly job — recomputing those from token
 // price is what printed Coattail at 0.003 ETH and 2,500% ROI.
 
+import { NIGHTSHADES_FACTIONS, rollupNightshadesMarket } from './nightshades';
+
 const DEXSCREENER = 'https://api.dexscreener.com/latest/dex/tokens';
 
 /**
@@ -102,6 +104,11 @@ export async function loadPrices(projects, signal, snapshot) {
     if (projects?.some((c) => c.slug === slug)) continue;
     const token = p.config?.tokenCa;
     if (token) extra.push({ slug, contracts: [{ kind: 'token', address: token }] });
+    for (const [fslug, fp] of Object.entries(p.factions || {})) {
+      if (projects?.some((c) => c.slug === fslug)) continue;
+      const ftoken = fp.config?.tokenCa;
+      if (ftoken) extra.push({ slug: fslug, contracts: [{ kind: 'token', address: ftoken }] });
+    }
   }
   const list = [...(projects || []), ...extra];
 
@@ -178,6 +185,57 @@ export function applyPrices(base, prices) {
     });
 
     projects[slug] = { ...p, market, tiers };
+  }
+
+  const ns = projects.nightshades;
+  if (ns?.factions) {
+    const factions = { ...ns.factions };
+    for (const fslug of NIGHTSHADES_FACTIONS) {
+      const fp = factions[fslug];
+      if (!fp) continue;
+      const priced = prices.tokens[fslug];
+      const tokenPrice = priced?.usd ?? fp.market?.tokenPriceUsd;
+      if (!(tokenPrice > 0)) continue;
+      const unitValue = fp.config?.unitValue;
+      const market = {
+        ...fp.market,
+        ethPriceUsd: prices.ethPriceUsd,
+        tokenPriceUsd: tokenPrice,
+      };
+      if (unitValue > 0 && fp.config?.nftCa) {
+        const floorEth = priced?.eth
+          ? unitValue * priced.eth * 1.1
+          : (unitValue * tokenPrice * 1.1) / prices.ethPriceUsd;
+        if (floorEth > 0 && Number.isFinite(floorEth)) {
+          market.nftFloorEth = +floorEth.toFixed(3);
+        }
+      }
+      const floorUsd = (market.nftFloorEth || 0) * (market.ethPriceUsd || 0);
+      const tiers = (fp.tiers || []).map((t) => {
+        const cost = floorUsd + (Number(t.reqTokens) || 0) * tokenPrice;
+        const annual = Number(t.trackedAnnualYieldUsd) || 0;
+        return {
+          ...t,
+          currentRoi: cost > 0 && annual > 0 ? +((annual / cost) * 100).toFixed(2) : 0,
+        };
+      });
+      factions[fslug] = { ...fp, market, tiers };
+    }
+    const allMarket = {
+      ...ns.market,
+      ...rollupNightshadesMarket(factions, prices.ethPriceUsd),
+    };
+    const allFloorUsd = (allMarket.nftFloorEth || 0) * (allMarket.ethPriceUsd || 0);
+    const allToken = allMarket.tokenPriceUsd || 0;
+    const allTiers = (ns.tiers || []).map((t) => {
+      const cost = allFloorUsd + (Number(t.reqTokens) || 0) * allToken;
+      const annual = Number(t.trackedAnnualYieldUsd) || 0;
+      return {
+        ...t,
+        currentRoi: cost > 0 && annual > 0 ? +((annual / cost) * 100).toFixed(2) : 0,
+      };
+    });
+    projects.nightshades = { ...ns, factions, market: allMarket, tiers: allTiers };
   }
 
   return { ...base, projects };

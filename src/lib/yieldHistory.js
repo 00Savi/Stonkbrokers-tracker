@@ -108,6 +108,7 @@ const FEE_COL_META = [
   { key: 'dex', label: 'DEX rev', color: STREAM_COLORS.dex, snap: ['revDex'], daily: 'dailyDex', hist: 'historyDex' },
   { key: 'box', label: 'Clock-In / order rev', color: STREAM_COLORS.box, snap: ['revBox'], daily: 'dailySecurityBox', hist: 'historyBox' },
   { key: 'tax', label: 'Snipe / curve tax', color: STREAM_COLORS.tax, snap: ['revTax'], daily: 'dailyBondingTax', hist: 'historyTax' },
+  { key: 'booster', label: 'StonkBooster', color: STREAM_COLORS.booster, snap: ['revBooster'], daily: 'dailyBooster', hist: 'historyBooster' },
   { key: 'smartLp', label: 'Smart LP Protocol Revenue', color: STREAM_COLORS.smartLp, snap: ['revSmartLp'], daily: 'dailySmartLp', hist: 'historySmartLp' },
 ];
 
@@ -257,11 +258,11 @@ export function protocolRevenueChart(project) {
   return { labels: formatLabels(labels), rawLabels: labels, kind: 'protocol', cols };
 }
 
-export const FEE_KEYS = ['amm', 'dex', 'box', 'tax', 'smartLp', 'fees'];
+export const FEE_KEYS = ['amm', 'dex', 'box', 'tax', 'booster', 'smartLp', 'fees'];
 export const VOLUME_KEYS = ['volume', 'launch'];
 
 export function protocolFeeCols(cols) {
-  return (cols || []).filter((c) => ['amm', 'dex', 'box', 'tax', 'smartLp'].includes(c.key));
+  return (cols || []).filter((c) => ['amm', 'dex', 'box', 'tax', 'booster', 'smartLp'].includes(c.key));
 }
 
 /**

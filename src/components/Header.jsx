@@ -32,6 +32,7 @@ export default function Header({ data, activeProject, onSelectProject }) {
     mancer: 'Mancer Tracker',
     tickeryard: 'TickerYard Tracker',
     cardwall: 'The Card Wall Tracker',
+    nightshades: 'Nightshades Tracker',
     ecosystem: 'Full Ecosystem Overview',
     portfolio: 'Portfolio Tracker',
     memes: 'Robinhood Tokens',

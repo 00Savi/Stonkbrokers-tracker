@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { loadProjects, loadOverlay, applyOverlay } from './ggindex';
 import { loadPrices, applyPrices } from './prices';
 import { PROJECTS } from './routes';
+import { NIGHTSHADES_FACTIONS, NIGHTSHADES_FACTION_META } from './nightshades';
 
 /**
  * Loads the dashboard from three independent sources and reports each one's
@@ -56,7 +57,7 @@ function ensureKnownProjects(snapshot, catalog = []) {
     const token = cat?.contracts?.find((c) => c.kind === 'token');
     const nft = cat?.contracts?.find((c) => c.kind === 'nft');
     const cfg = cat?.config || {};
-    projects[meta.key] = {
+    const stub = {
       market: {},
       config: {
         ticker: meta.ticker,
@@ -73,6 +74,32 @@ function ensureKnownProjects(snapshot, catalog = []) {
       cashflow: {},
       dailySnapshots: [],
     };
+    if (meta.key === 'nightshades') {
+      stub.config.factions = [...NIGHTSHADES_FACTIONS];
+      stub.factions = Object.fromEntries(
+        NIGHTSHADES_FACTION_META.map((f) => {
+          const fcat = bySlug[f.id];
+          const ftoken = fcat?.contracts?.find((c) => c.kind === 'token');
+          const fnft = fcat?.contracts?.find((c) => c.kind === 'nft');
+          return [f.id, {
+            market: {},
+            config: {
+              ticker: f.ticker,
+              faction: f.id,
+              tokenCa: ftoken?.address || null,
+              nftCa: fnft?.address || null,
+              unitValue: 1_000_000,
+              logo: meta.logo || null,
+            },
+            activation: {},
+            ownership: {},
+            tiers: [],
+            dailySnapshots: [],
+          }];
+        }),
+      );
+    }
+    projects[meta.key] = stub;
   }
 
   return { ...snapshot, projects };

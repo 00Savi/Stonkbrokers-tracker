@@ -20,6 +20,7 @@ export const PROJECT_BY_SLUG = {
   oakmont: 'oakmont',
   coattail: 'coattail',
   bonus: 'bonus',
+  nightshades: 'nightshades',
 };
 
 export const SLUG_BY_PROJECT = Object.fromEntries(
@@ -91,6 +92,15 @@ export const PROJECTS = [
     logo: 'Bonus.png',
     live: false,
   },
+  {
+    slug: 'nightshades',
+    key: 'nightshades',
+    name: 'Nightshades',
+    ticker: 'NIGHT',
+    kind: 'factions',
+    logo: 'Nightshades.svg',
+    beta: true,
+  },
 ];
 
 /** Flip `live` on a project to show it in nav, home, rankings, and routes. */
@@ -99,9 +109,10 @@ export const isProjectLive = (p) => p?.live !== false;
 export const BONUS_LIVE = PROJECTS.some((p) => p.key === 'bonus' && isProjectLive(p));
 
 /** NFT yield projects — rankings, ecosystem, and the ROI tab bar. */
-export const NFT_PROJECTS = PROJECTS.filter(
-  (p) => isProjectLive(p) && (!p.kind || p.kind === 'machines' || p.kind === 'brokers')
-);
+export const isNftKind = (p) =>
+  !p.kind || p.kind === 'machines' || p.kind === 'brokers' || p.kind === 'factions';
+
+export const NFT_PROJECTS = PROJECTS.filter((p) => isProjectLive(p) && isNftKind(p));
 
 /** Everything shown in the ranked table: NFT units plus cash-flow tokens/vaults. */
 export const RANKING_PROJECTS = PROJECTS.filter((p) => isProjectLive(p) && p.kind !== 'token');

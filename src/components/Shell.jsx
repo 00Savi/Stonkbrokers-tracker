@@ -27,6 +27,7 @@ export const NAV_ITEMS = [
   { to: '/cardwall/roi', label: 'The Card Wall', group: 'yield-nfts', dot: 'bg-[#fbbf24]' },
   { to: '/rhmachines/roi', label: 'RH Machines', group: 'yield-nfts', dot: 'bg-[#fb923c]' },
   { to: '/coattail/roi', label: 'Coattail Brokers', group: 'yield-nfts', dot: 'bg-[#f43f5e]' },
+  { to: '/nightshades/roi', label: 'Nightshades', group: 'yield-nfts', dot: 'bg-[#818cf8]' },
   { to: '/tokens', label: 'Tokens', group: 'chain', dot: 'bg-accent' },
   { to: '/stocks', label: 'Stocks', group: 'chain', dot: 'bg-[#60a5fa]' },
 ].filter((item) => {

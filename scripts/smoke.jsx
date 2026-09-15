@@ -29,6 +29,7 @@ import YardDetailView from '../src/components/views/YardDetailView';
 import CardWallDetailView from '../src/components/views/CardWallDetailView';
 import BonusDetailView from '../src/components/views/BonusDetailView';
 import SpecialDetailView from '../src/components/views/SpecialDetailView';
+import NightshadesDetailView from '../src/components/views/NightshadesDetailView';
 import { protocolRevenueChart } from '../src/lib/yieldHistory';
 import { dateKey } from '../src/lib/dates';
 
@@ -63,6 +64,9 @@ const ROUTES = [
   '/rhmachines/revenue',
   '/oakmont/roi',
   '/coattail/roi',
+  '/nightshades/roi',
+  '/nightshades/yield',
+  '/nightshades/roi?faction=ghosts',
   '/bonus',
   '/bonus/roi',
   '/stonkbrokers',
@@ -136,6 +140,40 @@ for (const [label, View] of [
 ]) {
   for (const tab of TABS) {
     VIEWS.push([`${label}·${tab}`, View, { data: snapshot, activeTab: tab }]);
+  }
+}
+
+{
+  const emptyFaction = {
+    market: { tokenPriceUsd: 0.01, nftFloorEth: 0.1, ethPriceUsd: 2000 },
+    config: { ticker: 'GHOSTS', unitValue: 1_000_000, nftCa: '0x7cd6e36286f92f55cc8f498e36e10a975a332aac', tokenCa: '0xd6b619a75667cfcc827a3b9b75d807d98b5456d2' },
+    activation: { activeCount: 94, percentActivated: 3.13, breakdown: { T0: 40, T1: 20, T2: 20, T3: 10, T4: 4 }, dualBurn: { totalBurnTokens: 0, equivalentBrokersBurnt: 0 }, history: { labels: [], cumulative: [], dailyActivations: [], dailyDeactivations: [] } },
+    ownership: { currentMaxSupply: 3000, nftHolders: 80, stonkHolders: 200, ammVaultNfts: 10, circulatingNftSupply: 2990, ownershipRatio: 2.68 },
+    tiers: [
+      { tier: 'T0', name: 'Shade', reqTokens: 100000, weight: 100, trackedAnnualYieldUsd: 0, dailyDates: [], dailyYields: [] },
+    ],
+    dailySnapshots: [],
+    revenue: {},
+  };
+  const nsSnap = {
+    ...snapshot,
+    projects: {
+      ...snapshot.projects,
+      nightshades: {
+        ...emptyFaction,
+        config: { ticker: 'NIGHT', kind: 'factions', factions: ['ghosts', 'zombies', 'knights', 'watchers'], unitValue: 1_000_000, logo: 'Nightshades.svg', maxSupply: 12000 },
+        ownership: { ...emptyFaction.ownership, currentMaxSupply: 12000 },
+        factions: {
+          ghosts: emptyFaction,
+          zombies: { ...emptyFaction, config: { ...emptyFaction.config, ticker: 'ZOMBIES' } },
+          knights: { ...emptyFaction, config: { ...emptyFaction.config, ticker: 'KNIGHTS' } },
+          watchers: { ...emptyFaction, config: { ...emptyFaction.config, ticker: 'WATCHERS' } },
+        },
+      },
+    },
+  };
+  for (const tab of TABS) {
+    VIEWS.push([`Nightshades·${tab}`, NightshadesDetailView, { data: nsSnap, activeTab: tab }]);
   }
 }
 

@@ -13,6 +13,7 @@ import CardWallDetailView from './components/views/CardWallDetailView';
 import BonusDetailView from './components/views/BonusDetailView';
 import MemesTokensView from './components/views/MemesTokensView';
 import SpecialDetailView from './components/views/SpecialDetailView';
+import NightshadesDetailView, { NightshadesFactionBar } from './components/views/NightshadesDetailView';
 import { useDashboard } from './lib/useDashboard';
 import { PROJECT_BY_SLUG, TAB_BY_SLUG, DEFAULT_TAB, BONUS_LIVE, PROJECTS, isProjectLive } from './lib/routes';
 import { useProjectScrollSpy } from './lib/projectScroll';
@@ -27,6 +28,7 @@ const DETAIL_VIEWS = {
   printer: (props) => <SpecialDetailView {...props} projectKey="printer" />,
   oakmont: (props) => <SpecialDetailView {...props} projectKey="oakmont" />,
   coattail: (props) => <SpecialDetailView {...props} projectKey="coattail" />,
+  nightshades: NightshadesDetailView,
 };
 
 /**
@@ -60,6 +62,7 @@ function ProjectPage({ data }) {
     <>
       <div className="sticky top-[4.25rem] z-20 -mx-3 bg-[#08090b]/90 px-3 backdrop-blur sm:top-[4.75rem]">
         <TabBar />
+        {key === 'nightshades' && <NightshadesFactionBar />}
       </div>
       <div className="pt-5 pb-28">
         {data ? (

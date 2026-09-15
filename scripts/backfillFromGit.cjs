@@ -77,6 +77,7 @@ const STREAMS = [
   ["revBox", "dailySecurityBox", "box"],
   ["revVolume", "dailyLaunchpad", "volume"],
   ["revTax", "dailyBondingTax", "tax"],
+  ["revBooster", "dailyBooster", "booster"],
   ["revSmartLp", "dailySmartLp", "smartLp"],
   ["revSmartLpGross", "dailySmartLpGross", null],
 ];

@@ -113,6 +113,7 @@ export default function StonkDetailView({ data, activeTab }) {
       { ...(byKey.amm || { data: [], total: 0 }), label: 'AMM & Swap Rev', color: STREAM_COLORS.amm },
       { ...(byKey.box || { data: [], total: 0 }), label: 'Clock-In Box', color: STREAM_COLORS.box },
       { ...(byKey.tax || { data: [], total: 0 }), label: 'Snipe / curve tax', color: STREAM_COLORS.tax },
+      { ...(byKey.booster || { data: [], total: 0 }), label: 'StonkBooster', color: STREAM_COLORS.booster },
       { ...(byKey.smartLp || { data: [], total: 0 }), label: 'Smart LP Protocol Revenue', color: STREAM_COLORS.smartLp },
     ],
   };
@@ -120,7 +121,7 @@ export default function StonkDetailView({ data, activeTab }) {
   const smartLpVaults = Array.isArray(smartLp.vaults) ? smartLp.vaults : [];
   const smartLpMarkets = useMemo(() => groupSmartLpMarkets(smartLpVaults), [smartLpVaults]);
   const smartLpCol = (() => {
-    const col = REV_STREAMS[3] || { total: 0, color: STREAM_COLORS.smartLp, data: [] };
+    const col = REV_STREAMS[4] || { total: 0, color: STREAM_COLORS.smartLp, data: [] };
     const live7d = Number(smartLp.protocolFees7dUsd);
     if (timeframe === '7d' && live7d > 0) return { ...col, total: live7d };
     return col;
@@ -318,11 +319,11 @@ export default function StonkDetailView({ data, activeTab }) {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div>
               <h2 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">Protocol Revenue & Ecosystem Liquidity</h2>
-              <p className="text-xs text-slate-400 mt-1">Stacked series are protocol-kept revenue only: AMM, Clock-In, snipe / curve tax, and Smart LP skim. Bonding swap volume is notional and stays off this chart.</p>
+              <p className="text-xs text-slate-400 mt-1">Stacked series are protocol-kept revenue: AMM, Clock-In, snipe / curve tax, StonkBooster inflows (Nightshades 13.33% + Mancer 25%), and Smart LP skim. Bonding swap volume is notional and stays off this chart.</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
               <p className="text-xs uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-2">
                 <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: REV_STREAMS[0].color }} />
@@ -347,6 +348,20 @@ export default function StonkDetailView({ data, activeTab }) {
                 Create {formatCurrency(revenue.launchCreateUsd || 0)}
                 <span className="mx-1.5 text-slate-700">·</span>
                 Bonding volume {formatCurrency(revenue.bondingVolumeUsd || 0)} (not protocol rev)
+              </p>
+            </div>
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
+              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-2">
+                <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: REV_STREAMS[3].color }} />
+                StonkBooster ({revPeriod})
+              </p>
+              <p className="text-2xl font-extrabold" style={{ color: REV_STREAMS[3].color }}>{formatCurrency(REV_STREAMS[3].total)}</p>
+              <p className="text-[10px] text-slate-500 mt-1.5">
+                Nightshades 13.33% anti-snipe
+                <span className="mx-1.5 text-slate-700">·</span>
+                Mancer 25% DEX routing
+                <span className="mx-1.5 text-slate-700">·</span>
+                Night cycle pending vault CA
               </p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">

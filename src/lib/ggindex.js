@@ -19,6 +19,8 @@
 // refuses to replace the local count). Holders still come from the index.
 // Activation stays on the snapshot.
 
+import { isNightshadesFaction, rollupNightshadesOwnership } from './nightshades';
+
 const BASE = (import.meta.env?.VITE_GG_INDEX_URL || 'https://index.ggservices.dev').replace(/\/+$/, '');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -150,5 +152,23 @@ export function applyOverlay(base, overlay) {
       ...(patch.ownership ? { ownership: { ...p.ownership, ...patch.ownership } } : {}),
     };
   }
+
+  const ns = projects.nightshades;
+  if (ns) {
+    const factions = { ...(ns.factions || {}) };
+    for (const [slug, patch] of Object.entries(overlay)) {
+      if (!isNightshadesFaction(slug) || !factions[slug] || !patch.ownership) continue;
+      factions[slug] = {
+        ...factions[slug],
+        ownership: { ...factions[slug].ownership, ...patch.ownership },
+      };
+    }
+    projects.nightshades = {
+      ...ns,
+      factions,
+      ownership: { ...ns.ownership, ...rollupNightshadesOwnership(factions) },
+    };
+  }
+
   return { ...base, projects };
 }

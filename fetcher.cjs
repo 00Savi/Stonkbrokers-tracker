@@ -107,6 +107,7 @@ function overlayDailyStreams(snaps, revenue, extraDates) {
     s.revVolume = Number(revenue.dailyLaunchpad?.[j]) || 0;
     s.revTax = Number(revenue.dailyBondingTax?.[j]) || 0;
     s.revSmartLp = Number(revenue.dailySmartLp?.[j]) || 0;
+    s.revBooster = Number(revenue.dailyBooster?.[j]) || 0;
     s.revSmartLpGross = Number(revenue.dailySmartLpGross?.[j]) || 0;
   }
   overlaySmartLpDaily(snaps, revenue);
@@ -151,6 +152,7 @@ function overlayHistoryStreams(snaps, revenue) {
     fill("revBox", revenue.historyBox);
     fill("revVolume", revenue.historyVolume);
     fill("revTax", revenue.historyTax);
+    fill("revBooster", revenue.historyBooster);
     // Smart LP snapshots stay on the live FeesCollected walk. History from
     // /revenue/daily has been dropping recent days as $0, which used to freeze
     // the skim tile after midnight.
@@ -175,6 +177,7 @@ const LIVE_TODAY_STREAMS = [
   ["dailyDex", "historyDex"],
   ["dailyLaunchpad", "historyVolume"],
   ["dailyBondingTax", "historyTax"],
+  ["dailyBooster", "historyBooster"],
   ["dailySmartLp", "historySmartLp"],
 ];
 
@@ -230,10 +233,12 @@ function snapshotLaunchpad(rb) {
     dailyDates: [...(rb.dailyDates || [])],
     dailyBondingTax: [...(rb.dailyBondingTax || [])],
     dailyLaunchpad: [...(rb.dailyLaunchpad || [])],
+    dailyBooster: [...(rb.dailyBooster || [])],
     bondingFeesUsd: rb.bondingFeesUsd || 0,
     bondingVolumeUsd: rb.bondingVolumeUsd || 0,
     launchpadUsd: rb.launchpadUsd || 0,
     launchCreateUsd: rb.launchCreateUsd || 0,
+    boosterUsd: rb.boosterUsd || 0,
   };
 }
 
@@ -265,10 +270,12 @@ function applyLaunchpadSnapshot(revenue, snap) {
   revenue.dailyDates = days;
   revenue.dailyBondingTax = days.map((d) => at(snap.dailyBondingTax, d));
   revenue.dailyLaunchpad = days.map((d) => at(snap.dailyLaunchpad, d));
+  revenue.dailyBooster = days.map((d) => at(snap.dailyBooster, d));
   revenue.bondingFeesUsd = Number(snap.bondingFeesUsd) || 0;
   revenue.bondingVolumeUsd = Number(snap.bondingVolumeUsd) || 0;
   revenue.launchpadUsd = Number(snap.launchpadUsd) || 0;
   revenue.launchCreateUsd = Number(snap.launchCreateUsd) || 0;
+  revenue.boosterUsd = Number(snap.boosterUsd) || 0;
 }
 
 function applySmartLp(revenueBreakdown, smart) {
@@ -405,7 +412,11 @@ const TOKEN_TICKERS = {
   "0x85a574f2ff0795685f58d1d7b0d4b51f148ac489": "PRINTER",
   "0x5aed379a72bd2533371d153135c47d5eb61babc8": "STRIKE",
   "0x8d6ff05c40899bfbc618e203052a8cd02d0e9581": "RESERVE",
-  "0x93a887beda77a9e2f6d6ed0c9742f04ccebc8833": "COAT"
+  "0x93a887beda77a9e2f6d6ed0c9742f04ccebc8833": "COAT",
+  "0xd6b619a75667cfcc827a3b9b75d807d98b5456d2": "GHOSTS",
+  "0xe4bef9d0845a13bd39c57c7ee4463ff5d0cc20b6": "ZOMBIES",
+  "0xb6062468073a43c79cd7fd07fbe496da9ef544c3": "KNIGHTS",
+  "0x4ffefdfefc16daac253140125f50d8be9baffa52": "WATCHERS"
 };
 
 const WETH = "0x0bd7d308f8e1639fab988df18a8011f41eacad73";
@@ -420,6 +431,13 @@ const SAFE_SELL_TOPIC = "0x2de6d6d1573ee69658d3daae2e752379e6eb0676622a5ade28120
 // indexed (id, buyer), data (quoteIn, taxPaid, netQuote, tokensOut).
 const CIV_BUY_TOPIC = "0x8eabef5bff7d4e7ca4c2c908d2aaf985e647a5009b534a12c423ab7e37a42c86";
 const NIGHTSHADES_PAD = "0xca389585c4940b107d49af4a37ad259c5fb69081";
+// Clock-In StockBooster pot. Nightshades anti-snipe sends 13.33% here; Mancer
+// DEX routing sends 25%. The Night vault (daily strike) is not confirmed yet —
+// fill NIGHT_VAULT after the first cycle and WETH from that address is counted.
+const STOCK_BOOSTER = "0xe998257f8bc38e53fb12858ae4dd38da2682f280";
+const NIGHT_VAULT = null;
+const CIV_BOOSTER_BPS = 1333n;
+const MANCER_STONK_SHARE = 0.25;
 const SMART_LAUNCH_PADS = [
   // V2
   { pad: "0xfcd61b25bbf3abd6cf0070d6328e351cc30eec9f", quote: WETH },
@@ -537,7 +555,8 @@ const PROJECTS = {
       securityBox: "0x55642a3f10f1af5145d3d59021b1d6b03bb8692c".toLowerCase(),
       // Launch Fee Router (Stonk Launcher). Smart Launch bonding tax is
       // counted separately via Clock In Card — see fetchLaunchpadRevenue.
-      launchpad: LAUNCH_FEE_ROUTER
+      launchpad: LAUNCH_FEE_ROUTER,
+      stockBooster: STOCK_BOOSTER,
     },
     tiers: [
       { id: "T0", name: "Floor Trader", reqTokens: 66666, weight: 100 },
@@ -709,6 +728,107 @@ const PROJECTS = {
     teamWallets: 0,
     tiers: [],
   },
+  // One incubator, four Anvil markets. Faction walks live in
+  // NIGHTSHADES_FACTIONS so Home / Rankings stay a single nightshades row.
+  nightshades: {
+    kind: "factions",
+    genesisBlock: 62890000,
+    ticker: "NIGHT",
+    logo: "Nightshades.svg",
+    maxSupply: 12000,
+    unitValue: 1_000_000,
+    underConstruction: false,
+    teamWallets: 0,
+    factions: ["ghosts", "zombies", "knights", "watchers"],
+    tiers: [],
+  },
+};
+
+// SoftStakingVault Anvil markets under Nightshades. Same activation path as
+// Mancer/Yard: lock faction tokens against an NFT; sale clears the slot.
+// Tier views revert on-chain; weights follow the Anvil 100/125/160/200/333
+// ladder scaled to tokensPerNFT = 1e6.
+const NIGHTSHADES_TIER_LADDER = [
+  { id: "T0", name: "Shade", reqTokens: 100000, weight: 100 },
+  { id: "T1", name: "Specter", reqTokens: 220000, weight: 125 },
+  { id: "T2", name: "Wraith", reqTokens: 450000, weight: 160 },
+  { id: "T3", name: "Phantom", reqTokens: 900000, weight: 200 },
+  { id: "T4", name: "Revenant", reqTokens: 2400000, weight: 333 },
+];
+
+const NIGHTSHADES_FACTIONS = {
+  ghosts: {
+    genesisBlock: 62890000,
+    tokenCa: "0xd6b619a75667cfcc827a3b9b75d807d98b5456d2".toLowerCase(),
+    nftCa: "0x7cd6e36286f92f55cc8f498e36e10a975a332aac".toLowerCase(),
+    activationCa: "0xf8de142e9f6c4b5f276416b4bcad01758acdcace".toLowerCase(),
+    ammCa: "0x5c13f5f4bc85205e3aab278f7007b1c17bc958ea".toLowerCase(),
+    maxSupply: 3000,
+    unitValue: 1_000_000,
+    ticker: "GHOSTS",
+    logo: "Nightshades.svg",
+    yieldMode: "protocol_vault",
+    deactivateOnTransfer: true,
+    oracleSource: "0xf8de142e9f6c4b5f276416b4bcad01758acdcace".toLowerCase(),
+    underConstruction: false,
+    teamWallets: 0,
+    streams: { vault: "0xf8de142e9f6c4b5f276416b4bcad01758acdcace".toLowerCase() },
+    tiers: NIGHTSHADES_TIER_LADDER,
+  },
+  zombies: {
+    genesisBlock: 62890000,
+    tokenCa: "0xe4bef9d0845a13bd39c57c7ee4463ff5d0cc20b6".toLowerCase(),
+    nftCa: "0xcc87ff3b3c08fc04c1f60f54989eb7dfab3e0b31".toLowerCase(),
+    activationCa: "0x8fef7779c917ca4db5bd4b2691aaab4122531361".toLowerCase(),
+    ammCa: "0xf816103f6a9722b9256f3ede7d85d9495e46c32d".toLowerCase(),
+    maxSupply: 3000,
+    unitValue: 1_000_000,
+    ticker: "ZOMBIES",
+    logo: "Nightshades.svg",
+    yieldMode: "protocol_vault",
+    deactivateOnTransfer: true,
+    oracleSource: "0x8fef7779c917ca4db5bd4b2691aaab4122531361".toLowerCase(),
+    underConstruction: false,
+    teamWallets: 0,
+    streams: { vault: "0x8fef7779c917ca4db5bd4b2691aaab4122531361".toLowerCase() },
+    tiers: NIGHTSHADES_TIER_LADDER,
+  },
+  knights: {
+    genesisBlock: 62890000,
+    tokenCa: "0xb6062468073a43c79cd7fd07fbe496da9ef544c3".toLowerCase(),
+    nftCa: "0x63a405ef2d9937675925ac8a99ce1694bcfd2922".toLowerCase(),
+    activationCa: "0xe6253d5548844b943ad4ff99680d429fd73d600c".toLowerCase(),
+    ammCa: "0xfd5888e566945d594596bfd6cd60cbbb924553a9".toLowerCase(),
+    maxSupply: 3000,
+    unitValue: 1_000_000,
+    ticker: "KNIGHTS",
+    logo: "Nightshades.svg",
+    yieldMode: "protocol_vault",
+    deactivateOnTransfer: true,
+    oracleSource: "0xe6253d5548844b943ad4ff99680d429fd73d600c".toLowerCase(),
+    underConstruction: false,
+    teamWallets: 0,
+    streams: { vault: "0xe6253d5548844b943ad4ff99680d429fd73d600c".toLowerCase() },
+    tiers: NIGHTSHADES_TIER_LADDER,
+  },
+  watchers: {
+    genesisBlock: 62890000,
+    tokenCa: "0x4ffefdfefc16daac253140125f50d8be9baffa52".toLowerCase(),
+    nftCa: "0x291cbcd1e9f44724ed5acbdc6e1ddd72b28f7911".toLowerCase(),
+    activationCa: "0x9507068897b4f60adb12ca9032e0cf03dfac13d4".toLowerCase(),
+    ammCa: "0x51bc21f0965ed9344a16c62923af1c68deaf6fab".toLowerCase(),
+    maxSupply: 3000,
+    unitValue: 1_000_000,
+    ticker: "WATCHERS",
+    logo: "Nightshades.svg",
+    yieldMode: "protocol_vault",
+    deactivateOnTransfer: true,
+    oracleSource: "0x9507068897b4f60adb12ca9032e0cf03dfac13d4".toLowerCase(),
+    underConstruction: false,
+    teamWallets: 0,
+    streams: { vault: "0x9507068897b4f60adb12ca9032e0cf03dfac13d4".toLowerCase() },
+    tiers: NIGHTSHADES_TIER_LADDER,
+  },
 };
 
 const PROTOCOL_CONTRACTS = [
@@ -810,13 +930,20 @@ async function loadMarketPrices() {
   } catch {}
 
   const markets = {};
-  for (const [key, conf] of Object.entries(PROJECTS)) {
-      const prevPx = previous.projects?.[key]?.market?.tokenPriceUsd;
+  const priceTargets = [
+    ...Object.entries(PROJECTS).filter(([, conf]) => conf.kind !== "factions" && conf.tokenCa),
+    ...Object.entries(NIGHTSHADES_FACTIONS),
+  ];
+  for (const [key, conf] of priceTargets) {
+      const prevPx = previous.projects?.[key]?.market?.tokenPriceUsd
+        || previous.projects?.nightshades?.factions?.[key]?.market?.tokenPriceUsd;
       const carryPx = prevPx > 0 && prevPx !== 0.03 ? prevPx : 0;
       markets[key] = {
         ethPriceUsd,
         tokenPriceUsd: carryPx,
-        nftFloorEth: previous.projects?.[key]?.market?.nftFloorEth || 0,
+        nftFloorEth: previous.projects?.[key]?.market?.nftFloorEth
+          || previous.projects?.nightshades?.factions?.[key]?.market?.nftFloorEth
+          || 0,
       };
       try {
         const r = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${conf.tokenCa}`);
@@ -855,6 +982,18 @@ async function loadMarketPrices() {
       }
       tokenPrices[conf.tokenCa.toLowerCase()] = markets[key].tokenPriceUsd;
       await sleep(250);
+  }
+
+  {
+    const fKeys = Object.keys(NIGHTSHADES_FACTIONS);
+    const px = fKeys.map((k) => markets[k]?.tokenPriceUsd || 0).filter((n) => n > 0);
+    const fl = fKeys.map((k) => markets[k]?.nftFloorEth || 0).filter((n) => n > 0);
+    const avg = (xs) => (xs.length ? xs.reduce((s, n) => s + n, 0) / xs.length : 0);
+    markets.nightshades = {
+      ethPriceUsd,
+      tokenPriceUsd: avg(px),
+      nftFloorEth: +avg(fl).toFixed(3),
+    };
   }
 
   if (PROJECTS.cardwall) {
@@ -1725,6 +1864,7 @@ function persistStreamDays(projectKey, revenue) {
       tax: Number(revenue.dailyBondingTax?.[i]) || 0,
       dex: Number(revenue.dailyDex?.[i]) || 0,
       smartLp: Number(revenue.dailySmartLp?.[i]) || 0,
+      booster: Number(revenue.dailyBooster?.[i]) || 0,
     };
   }
   yieldDays.save(yieldDays.mergeStreams(yieldDays.load(), projectKey, dayMap));
@@ -1749,6 +1889,7 @@ function ingestHistoryArrays(byIso, prev) {
     ["tax", prev.historyTax],
     ["dex", prev.historyDex],
     ["smartLp", prev.historySmartLp],
+    ["booster", prev.historyBooster],
   ];
   for (let i = 0; i < dates.length; i++) {
     const iso = isoFromMdLabel(dates[i]);
@@ -1804,6 +1945,7 @@ async function attachRevenueHistory(projectKey, revenue, scale, yieldMode, prevR
     ["tax", "tax"],
     ["dex", "dex"],
     ["smart_lp", "smartLp"],
+    ["booster", "booster"],
   ];
   for (const d of remote?.daily || []) {
     if (!d?.date) continue;
@@ -1835,6 +1977,7 @@ async function attachRevenueHistory(projectKey, revenue, scale, yieldMode, prevR
   revenue.historyTax = col("tax");
   revenue.historyDex = col("dex");
   revenue.historySmartLp = col("smartLp");
+  revenue.historyBooster = col("booster");
   revenue.historyTotalUsd = revenue.historyAmm;
 }
 
@@ -2034,10 +2177,10 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
   const revenueBreakdown = {
     ammFeesUsd: 0, securityBoxUsd: 0, launchpadUsd: 0, dexFeesUsd: 0,
     launchCreateUsd: 0, bondingFeesUsd: 0, bondingVolumeUsd: 0,
-    smartLpUsd: 0,
+    smartLpUsd: 0, boosterUsd: 0,
     dailyDates,
     dailyAmm: zeros(), dailySecurityBox: zeros(), dailyLaunchpad: zeros(), dailyDex: zeros(),
-    dailyBondingTax: zeros(), dailySmartLp: zeros(),
+    dailyBondingTax: zeros(), dailySmartLp: zeros(), dailyBooster: zeros(),
   };
 
   const truncatedWalks = [];
@@ -2080,6 +2223,11 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
     if (bucket === "create") {
       revenueBreakdown.launchCreateUsd += usdVal;
       revenueBreakdown.launchpadUsd += usdVal;
+      return;
+    }
+    if (bucket === "booster") {
+      revenueBreakdown.boosterUsd += usdVal;
+      revenueBreakdown.dailyBooster[i] += usdVal;
       return;
     }
     // Bonding quote volume is swap notional, not protocol-kept revenue.
@@ -2129,7 +2277,15 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
       if (ts < sevenDaysAgo) continue;
       const quoteUsd = (Number(quoteWei) / 1e18) * price;
       creditLaunchpad(quoteUsd, ts, "volume");
-      creditLaunchpad((Number(taxWei) / 1e18) * price, ts, "tax");
+      const taxUsd = (Number(taxWei) / 1e18) * price;
+      creditLaunchpad(taxUsd, ts, "tax");
+      // Nightshades civ pad: 13.33% of anti-snipe tax to StockBooster.
+      // Gross tax stays on the snipe series (same as V2). This line is the
+      // destination split, plus Mancer 25% after the project loop.
+      if (topic0 === CIV_BUY_TOPIC && taxWei > 0n) {
+        const boosterWei = (taxWei * CIV_BOOSTER_BPS) / 10000n;
+        creditLaunchpad((Number(boosterWei) / 1e18) * price, ts, "booster");
+      }
     }
 
     // Stonk Launcher bonding: WETH arriving at the fee router, excluding
@@ -2151,6 +2307,31 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
     }
   }
 
+  async function fetchNightBoosterInflows() {
+    if (!NIGHT_VAULT || !STOCK_BOOSTER) {
+      console.log("  night booster: vault CA not set; counting civ 13.33% only");
+      return;
+    }
+    const fromBlock = blockTime.blockAt(sevenDaysAgo);
+    const toBlock = await rpc.blockNumber();
+    const logs = await rpc.getLogs({
+      address: WETH,
+      fromBlock,
+      toBlock,
+      topics: [TOPIC.transfer, addrTopic(NIGHT_VAULT), addrTopic(STOCK_BOOSTER)],
+    });
+    let usd = 0;
+    for (const log of logs) {
+      const amount = decodeUint(log.data, 0);
+      if (amount == null || amount <= 0n) continue;
+      const ts = blockTime.at(parseInt(log.blockNumber, 16));
+      if (ts < sevenDaysAgo) continue;
+      const val = (Number(amount) / 1e18) * (marketData.ethPriceUsd || 0);
+      creditLaunchpad(val, ts, "booster");
+      usd += val;
+    }
+    if (usd > 0) console.log(`  night vault → StockBooster $${usd.toFixed(0)}`);
+  }
 
   async function fetchSecurityBoxYield(address) {
     const box = address.toLowerCase();
@@ -2255,9 +2436,11 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
       if (projectKey === "stonk") {
         try {
           await fetchLaunchpadRevenue();
+          await fetchNightBoosterInflows();
           console.log(
             `  launchpad tax $${(revenueBreakdown.bondingFeesUsd || 0).toFixed(0)} ` +
-            `vol $${(revenueBreakdown.bondingVolumeUsd || 0).toFixed(0)}`,
+            `vol $${(revenueBreakdown.bondingVolumeUsd || 0).toFixed(0)} ` +
+            `booster $${(revenueBreakdown.boosterUsd || 0).toFixed(0)}`,
           );
         } catch (e) {
           console.warn(`[warn] ${projectKey}: launchpad logs: ${e.message || e}`);
@@ -2565,6 +2748,262 @@ async function loadTokenListPrices(tokenList) {
   return tokenResults;
 }
 
+function nsAddMaps(a = {}, b = {}) {
+  const out = { ...a };
+  for (const [k, v] of Object.entries(b || {})) out[k] = (Number(out[k]) || 0) + (Number(v) || 0);
+  return out;
+}
+
+function nsSumTail(arrays) {
+  const n = Math.max(0, ...arrays.map((a) => (Array.isArray(a) ? a.length : 0)));
+  const out = Array(n).fill(0);
+  for (const a of arrays) {
+    if (!Array.isArray(a)) continue;
+    const pad = n - a.length;
+    for (let i = 0; i < a.length; i++) out[i + pad] += Number(a[i]) || 0;
+  }
+  return out;
+}
+
+function nsMergeDated(seriesList) {
+  const map = new Map();
+  for (const s of seriesList) {
+    const labels = s?.labels || [];
+    const data = s?.data || [];
+    labels.forEach((d, i) => {
+      const k = String(d).slice(0, 10);
+      map.set(k, (map.get(k) || 0) + (Number(data[i]) || 0));
+    });
+  }
+  const labels = [...map.keys()].sort();
+  return { labels, data: labels.map((k) => map.get(k)) };
+}
+
+function nsMergeTierStats(list) {
+  const windows = ["24h", "7d", "30d", "allTime"];
+  const out = {};
+  for (const p of list) {
+    for (const [tier, stats] of Object.entries(p.activation?.tierStats || {})) {
+      if (!out[tier]) out[tier] = {};
+      for (const w of windows) {
+        const s = stats[w] || {};
+        out[tier][w] = {
+          act: (out[tier][w]?.act || 0) + (Number(s.act) || 0),
+          deact: (out[tier][w]?.deact || 0) + (Number(s.deact) || 0),
+        };
+      }
+    }
+  }
+  return out;
+}
+
+function nsSumRevenue(list) {
+  const first = list.find((p) => p.revenue) || {};
+  const rev = { ...(first.revenue || {}) };
+  const keys = [
+    "ammFeesUsd", "securityBoxUsd", "launchpadUsd", "dexFeesUsd",
+    "bondingFeesUsd", "bondingVolumeUsd", "launchCreateUsd",
+  ];
+  for (const k of keys) {
+    rev[k] = list.reduce((s, p) => s + (Number(p.revenue?.[k]) || 0), 0);
+  }
+  for (const k of ["dailyAmm", "dailySecurityBox", "dailyLaunchpad", "dailyDex", "dailyBondingTax"]) {
+    rev[k] = nsSumTail(list.map((p) => p.revenue?.[k]));
+  }
+  for (const k of ["historyAmm", "historyDex", "historyBox", "historyLaunchpad", "historyTotalUsd", "historyDates"]) {
+    if (k === "historyDates") {
+      const merged = nsMergeDated(list.map((p) => ({
+        labels: p.revenue?.historyDates,
+        data: p.revenue?.historyAmm,
+      })));
+      rev.historyDates = merged.labels;
+      continue;
+    }
+    const merged = nsMergeDated(list.map((p) => ({
+      labels: p.revenue?.historyDates,
+      data: p.revenue?.[k],
+    })));
+    rev[k] = merged.data;
+  }
+  // Launch civ-pad tax stays on Stonk. Do not copy bonding/snipe onto Nightshades.
+  rev.launchpadUsd = 0;
+  rev.bondingFeesUsd = 0;
+  rev.bondingVolumeUsd = 0;
+  rev.launchCreateUsd = 0;
+  rev.dailyLaunchpad = [];
+  rev.dailyBondingTax = [];
+  return rev;
+}
+
+function rollupNightshades(slices, markets, prev) {
+  const keys = Object.keys(NIGHTSHADES_FACTIONS).filter((k) => slices[k]);
+  const list = keys.map((k) => slices[k]);
+  if (!list.length) return prev || null;
+
+  const maxSupply = 12000;
+  const activeCount = list.reduce((s, p) => s + (Number(p.activation?.activeCount) || 0), 0);
+  const breakdown = list.reduce((acc, p) => nsAddMaps(acc, p.activation?.breakdown), {});
+  const dualBurn = {
+    totalBurnTokens: list.reduce((s, p) => s + (Number(p.activation?.dualBurn?.totalBurnTokens) || 0), 0),
+    equivalentBrokersBurnt: list.reduce((s, p) => s + (Number(p.activation?.dualBurn?.equivalentBrokersBurnt) || 0), 0),
+  };
+  const cum = nsMergeDated(list.map((p) => ({
+    labels: p.activation?.history?.labels,
+    data: p.activation?.history?.cumulative,
+  })));
+  const dAct = nsMergeDated(list.map((p) => ({
+    labels: p.activation?.history?.labels,
+    data: p.activation?.history?.dailyActivations,
+  })));
+  const dDeact = nsMergeDated(list.map((p) => ({
+    labels: p.activation?.history?.labels,
+    data: p.activation?.history?.dailyDeactivations,
+  })));
+
+  const ownership = {
+    ammVaultNfts: list.reduce((s, p) => s + (Number(p.ownership?.ammVaultNfts) || 0), 0),
+    burntNfts: list.reduce((s, p) => s + (Number(p.ownership?.burntNfts) || 0), 0),
+    currentMaxSupply: maxSupply,
+    circulatingNftSupply: 0,
+    nftHolders: list.reduce((s, p) => s + (Number(p.ownership?.nftHolders) || 0), 0),
+    stonkHolders: list.reduce((s, p) => s + (Number(p.ownership?.stonkHolders || p.ownership?.tokenHolders) || 0), 0),
+    ownershipRatio: 0,
+    historicalGrowth: nsMergeDated(list.map((p) => p.ownership?.historicalGrowth || {})),
+    burnHistory: (() => {
+      const merged = nsMergeDated(list.map((p) => p.ownership?.burnHistory || {}));
+      return merged.labels.length ? { ...merged, source: "rollup" } : null;
+    })(),
+  };
+  ownership.circulatingNftSupply = Math.max(0, maxSupply - ownership.ammVaultNfts);
+  ownership.ownershipRatio = ownership.circulatingNftSupply > 0
+    ? +Math.min(100, (ownership.nftHolders / ownership.circulatingNftSupply) * 100).toFixed(2)
+    : 0;
+  ownership.tokenHolders = ownership.stonkHolders;
+
+  const template = list.find((p) => Array.isArray(p.tiers) && p.tiers.length)?.tiers || [];
+  const mappedTiers = template.map((t) => {
+    const peers = list.map((p) => (p.tiers || []).find((x) => x.tier === t.tier)).filter(Boolean);
+    return {
+      ...t,
+      trackedAnnualYieldUsd: peers.reduce((s, x) => s + (Number(x.trackedAnnualYieldUsd) || 0), 0),
+      dailyDates: peers.find((x) => x.dailyDates?.length)?.dailyDates || t.dailyDates || [],
+      dailyYields: nsSumTail(peers.map((x) => x.dailyYields)),
+    };
+  });
+
+  const snapByDate = new Map();
+  for (const p of list) {
+    for (const snap of p.dailySnapshots || []) {
+      if (!snap?.date) continue;
+      const k = String(snap.date).slice(0, 10);
+      const cur = snapByDate.get(k) || {
+        date: k,
+        timestamp: snap.timestamp || 0,
+        tokenPriceUsd: 0,
+        nftFloorEth: 0,
+        nftFloorUsd: 0,
+        totalBurn: 0,
+        tokenHolders: 0,
+        nftHolders: 0,
+        ownershipRatio: 0,
+        activeCount: 0,
+        percentActivated: 0,
+        tierActive: {},
+        _pxN: 0,
+        _flN: 0,
+      };
+      cur.timestamp = Math.max(cur.timestamp || 0, snap.timestamp || 0);
+      if (snap.tokenPriceUsd > 0) {
+        cur.tokenPriceUsd += snap.tokenPriceUsd;
+        cur._pxN += 1;
+      }
+      if (snap.nftFloorEth > 0) {
+        cur.nftFloorEth += snap.nftFloorEth;
+        cur._flN += 1;
+      }
+      cur.nftFloorUsd += Number(snap.nftFloorUsd) || 0;
+      cur.totalBurn += Number(snap.totalBurn) || 0;
+      cur.tokenHolders += Number(snap.tokenHolders) || 0;
+      cur.nftHolders += Number(snap.nftHolders) || 0;
+      cur.activeCount += Number(snap.activeCount) || 0;
+      cur.tierActive = nsAddMaps(cur.tierActive, snap.tierActive);
+      snapByDate.set(k, cur);
+    }
+  }
+  const dailySnapshots = [...snapByDate.values()].sort((a, b) => a.date.localeCompare(b.date)).map((s) => {
+    const { _pxN, _flN, ...row } = s;
+    if (_pxN) row.tokenPriceUsd = row.tokenPriceUsd / _pxN;
+    if (_flN) row.nftFloorEth = +(row.nftFloorEth / _flN).toFixed(3);
+    row.percentActivated = maxSupply > 0 ? +((row.activeCount / maxSupply) * 100).toFixed(2) : 0;
+    row.ownershipRatio = row.nftHolders && ownership.circulatingNftSupply
+      ? +Math.min(100, (row.nftHolders / ownership.circulatingNftSupply) * 100).toFixed(2)
+      : 0;
+    return row;
+  });
+
+  return {
+    market: markets.nightshades || list[0].market,
+    activation: {
+      activeCount,
+      percentActivated: maxSupply > 0 ? +((activeCount / maxSupply) * 100).toFixed(2) : 0,
+      breakdown,
+      dualBurn,
+      activeHolders: list.reduce((s, p) => s + (Number(p.activation?.activeHolders) || 0), 0),
+      tierStats: nsMergeTierStats(list),
+      history: {
+        labels: cum.labels,
+        cumulative: cum.data,
+        dailyActivations: dAct.data,
+        dailyDeactivations: dDeact.data,
+      },
+    },
+    ownership,
+    tiers: mappedTiers,
+    revenue: nsSumRevenue(list),
+    lockedLp: null,
+    underConstruction: false,
+    dailySnapshots,
+    config: {
+      ticker: "NIGHT",
+      kind: "factions",
+      factions: Object.keys(NIGHTSHADES_FACTIONS),
+      unitValue: 1_000_000,
+      logo: "Nightshades.svg",
+      maxSupply,
+    },
+    factions: Object.fromEntries(keys.map((k) => [k, {
+      ...slices[k],
+      config: {
+        ...(slices[k].config || {}),
+        ticker: NIGHTSHADES_FACTIONS[k].ticker,
+        faction: k,
+        unitValue: NIGHTSHADES_FACTIONS[k].unitValue,
+        nftCa: NIGHTSHADES_FACTIONS[k].nftCa,
+        tokenCa: NIGHTSHADES_FACTIONS[k].tokenCa,
+      },
+    }])),
+  };
+}
+
+function applyMancerShareToStonk(stonk, mancer) {
+  const rev = stonk?.revenue;
+  if (!rev) return;
+  const dates = rev.dailyDates || [];
+  if (!dates.length) return;
+  if (!Array.isArray(rev.dailyBooster) || rev.dailyBooster.length !== dates.length) {
+    rev.dailyBooster = dates.map((_, i) => Number(rev.dailyBooster?.[i]) || 0);
+  }
+  const mDates = mancer?.revenue?.dailyDates || [];
+  const mDex = mancer?.revenue?.dailyDex || [];
+  const mIdx = new Map(mDates.map((d, i) => [dates.dateKey(d), i]));
+  dates.forEach((d, i) => {
+    const j = mIdx.get(dates.dateKey(d));
+    if (j == null) return;
+    rev.dailyBooster[i] = (Number(rev.dailyBooster[i]) || 0) + (Number(mDex[j]) || 0) * MANCER_STONK_SHARE;
+  });
+  rev.boosterUsd = rev.dailyBooster.reduce((s, v) => s + (Number(v) || 0), 0);
+}
+
 async function run() {
   console.log("Starting Multi-Project Build...");
   let previousData = {};
@@ -2577,7 +3016,8 @@ async function run() {
   // 24h bucket. On a warm cache the chain has only moved ~36k blocks since the
   // last run, so this adds an anchor or two.
   const earliestGenesis = Math.min(
-    ...Object.values(PROJECTS).filter((p) => !isSpecial(p)).map((p) => p.genesisBlock)
+    ...Object.values(PROJECTS).filter((p) => !isSpecial(p) && p.kind !== "factions").map((p) => p.genesisBlock),
+    ...Object.values(NIGHTSHADES_FACTIONS).map((p) => p.genesisBlock),
   );
   let chainHead;
   try {
@@ -2623,16 +3063,25 @@ async function run() {
 
   let projectsOk = 0;
   let projectsFailed = 0;
+  let stonkFetched = false;
 
-  for (const [projectKey, conf] of Object.entries(PROJECTS)) {
+  const loopEntries = [
+    ...Object.entries(PROJECTS).filter(([, conf]) => conf.kind !== "factions"),
+    ...Object.entries(NIGHTSHADES_FACTIONS),
+  ];
+
+  for (const [projectKey, conf] of loopEntries) {
       console.log(`\n--- Processing ${projectKey.toUpperCase()} ---`);
-      const prevProjData = previousData.projects ? previousData.projects[projectKey] : {};
+      const isNsFaction = !!NIGHTSHADES_FACTIONS[projectKey];
+      const prevProjData = isNsFaction
+        ? (previousData.projects?.nightshades?.factions?.[projectKey] || previousData.projects?.[projectKey] || {})
+        : (previousData.projects ? previousData.projects[projectKey] : {});
       const fetchOnly = (process.env.FETCH_ONLY || "")
         .toLowerCase()
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean);
-      if (fetchOnly.length && !fetchOnly.includes(projectKey)) {
+      if (fetchOnly.length && !fetchOnly.includes(projectKey) && !(fetchOnly.includes("nightshades") && isNsFaction)) {
         if (prevProjData && Object.keys(prevProjData).length) {
           finalJson.projects[projectKey] = {
             ...prevProjData,
@@ -2920,6 +3369,7 @@ async function run() {
         dailySnapshots: dailySnapshots,
         config: { ticker: conf.ticker, unitValue: conf.unitValue, logo: conf.logo, nftCa: conf.nftCa, tokenCa: conf.tokenCa }
       };
+      if (projectKey === "stonk") stonkFetched = true;
       projectsOk++;
       } catch (e) {
         projectsFailed++;
@@ -2929,6 +3379,38 @@ async function run() {
           console.warn(`[warn] ${projectKey}: carrying previous snapshot`);
         }
       }
+  }
+
+  {
+    const slices = {};
+    for (const slug of Object.keys(NIGHTSHADES_FACTIONS)) {
+      if (finalJson.projects[slug]) {
+        slices[slug] = finalJson.projects[slug];
+        delete finalJson.projects[slug];
+      }
+    }
+    const rolled = rollupNightshades(slices, markets, previousData.projects?.nightshades);
+    if (rolled) {
+      finalJson.projects.nightshades = rolled;
+      console.log(
+        `\n--- NIGHTSHADES rollup ---  ${rolled.activation.activeCount} active / ${rolled.config.maxSupply}` +
+        ` across ${Object.keys(rolled.factions || {}).length} factions`,
+      );
+    }
+  }
+
+  {
+    const stonk = finalJson.projects.stonk;
+    const mancer = finalJson.projects.mancer;
+    if (stonkFetched && stonk?.revenue && mancer?.revenue) {
+      applyMancerShareToStonk(stonk, mancer);
+      persistStreamDays("stonk", stonk.revenue);
+      mergeLiveTodayHistory(stonk.revenue);
+      overlayDailyStreams(stonk.dailySnapshots, stonk.revenue, stonk.tiers?.[0]?.dailyDates);
+      console.log(
+        `  stonk booster: civ + mancer 25% = $${(stonk.revenue.boosterUsd || 0).toFixed(0)}`,
+      );
+    }
   }
 
   if (!projectsOk) {

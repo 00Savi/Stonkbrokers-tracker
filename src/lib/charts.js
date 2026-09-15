@@ -14,6 +14,7 @@ export const STREAM_COLORS = {
   fees: '#00a804',
   // Payout / received — amber-gold, not protocol green and not burn orange.
   holdersRev: '#f7931a',
+  booster: '#a3e635',
 };
 
 export const TIER_COLORS = ['#00a804', '#8b5cf6', '#38bdf8', '#f5b700', '#f472b6'];
@@ -27,6 +28,7 @@ export const PROJECT_COLORS = {
   printer: '#fb923c',
   oakmont: '#e879f9',
   coattail: '#f43f5e',
+  nightshades: '#818cf8',
 };
 
 export const PAIR_COLORS = [
