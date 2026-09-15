@@ -12,6 +12,7 @@ import { baseChartOptions, compactTick, compactUsdTick, dualAxisOptions, STREAM_
 import { useChartWindow } from '../../lib/chartWindow';
 import { holderSeries } from '../../lib/snapshots';
 import { NIGHTSHADES_FACTION_META } from '../../lib/nightshades';
+import NightshadesAllView from './NightshadesAllView';
 import {
   EmptyChart,
   YieldUsdPricePanel,
@@ -62,31 +63,27 @@ export function NightshadesFactionBar() {
   );
 }
 
-function formatPrice(val) {
-  const n = Number(val);
-  if (!(n > 0)) return '—';
-  if (n < 1) {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 6,
-    }).format(n);
-  }
-  return compactUsd(n);
-}
-
 export default function NightshadesDetailView({ data, activeTab }) {
   const { faction, setFaction } = useNightshadesFaction();
+  const project = data?.projects?.nightshades;
+  if (!project) return <div className="text-center text-slate-400 p-12">Nightshades Data Loading...</div>;
+  if (faction === 'all') return <NightshadesAllView project={project} setFaction={setFaction} />;
+  return (
+    <NightshadesFactionDetail
+      activeTab={activeTab}
+      faction={faction}
+      project={project}
+    />
+  );
+}
+
+function NightshadesFactionDetail({ activeTab, faction, project }) {
   const [timeframe] = useChartWindow();
   const [expandedTier, setExpandedTier] = useState(null);
   const [tierTimeframe, setTierTimeframe] = useState('allTime');
   const [volumeMultiplier, setVolumeMultiplier] = useState(1);
 
-  const project = data?.projects?.nightshades;
-  if (!project) return <div className="text-center text-slate-400 p-12">Nightshades Data Loading...</div>;
-
-  const slice = faction === 'all' ? project : project.factions?.[faction];
+  const slice = project.factions?.[faction];
   if (!slice) return <div className="text-center text-slate-400 p-12">Nightshades Data Loading...</div>;
 
   const { config = {}, market = {}, tiers = [], activation = {}, ownership = {}, dailySnapshots = [] } = slice;
@@ -94,9 +91,9 @@ export default function NightshadesDetailView({ data, activeTab }) {
   const formatNumber = compactNum;
   const floorCostUsd = (market.nftFloorEth || 0) * (market.ethPriceUsd || 0);
   const chartOptions = baseChartOptions();
-  const factionLabel = FACTION_TABS.find((f) => f.id === faction)?.label || 'All';
-  const tokenLabel = faction === 'all' ? 'faction tokens' : `$${config.ticker || 'TOKEN'}`;
-  const yieldTitle = faction === 'all' ? 'Nightshades' : `Nightshades ${factionLabel}`;
+  const factionLabel = FACTION_TABS.find((f) => f.id === faction)?.label || faction;
+  const tokenLabel = `$${config.ticker || 'TOKEN'}`;
+  const yieldTitle = `Nightshades ${factionLabel}`;
 
   const roiSnaps = windowSnapshots(dailySnapshots, timeframe);
   const histLabels = formatLabels(roiSnaps.map((s) => s.date));
@@ -150,28 +147,6 @@ export default function NightshadesDetailView({ data, activeTab }) {
 
   return (
     <div className="space-y-6 relative">
-      {faction === 'all' && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {NIGHTSHADES_FACTION_META.map((f) => {
-            const fm = project.factions?.[f.id]?.market || {};
-            return (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => setFaction(f.id)}
-                className="text-left bg-[#0e1013] border border-[#1e2228] rounded-xl p-4 hover:border-[#818cf8]/50 transition"
-              >
-                <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">{f.label}</p>
-                <p className="text-lg font-extrabold text-white">{formatPrice(fm.tokenPriceUsd)}</p>
-                <p className="text-xs text-indigo-300 mt-1">
-                  {fm.nftFloorEth > 0 ? `${fm.nftFloorEth} ETH floor` : 'Floor pending'}
-                </p>
-              </button>
-            );
-          })}
-        </div>
-      )}
-
       <section id="roi" className="scroll-mt-32">
         <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6">
@@ -180,7 +155,7 @@ export default function NightshadesDetailView({ data, activeTab }) {
             </h3>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-lg px-4 py-2.5 text-sm shadow-inner flex items-center">
               <span className="text-slate-400 mr-2">
-                {faction === 'all' ? 'Avg floor entry:' : 'Floor Entry Cost:'}
+              <span className="text-slate-400 mr-2">Floor Entry Cost:</span>
               </span>
               <span className="text-white font-bold tracking-wide">{formatCurrency(floorCostUsd)}</span>
             </div>
@@ -195,9 +170,7 @@ export default function NightshadesDetailView({ data, activeTab }) {
               <span className="text-xs font-bold text-indigo-300 bg-indigo-900/30 px-2 py-1 rounded border border-indigo-800/50">{parseFloat(volumeMultiplier).toFixed(1)}x Protocol Volume</span>
             </div>
             <p className="text-xs text-slate-400 mb-4">
-              {faction === 'all'
-                ? 'All-factions rollup: 12,000 NFTs, summed activations and vault RewardPaid. Toggle a faction for that market’s token and floor.'
-                : 'Slide to model future yield scenarios based on ecosystem trading volume expansion or contraction.'}
+              Slide to model future yield scenarios based on ecosystem trading volume expansion or contraction.
             </p>
             <input type="range" min="0.1" max="10" step="0.1" value={volumeMultiplier} onChange={(e) => setVolumeMultiplier(e.target.value)} className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-400" />
           </div>
@@ -356,9 +329,9 @@ export default function NightshadesDetailView({ data, activeTab }) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
               <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">
-                {faction === 'all' ? 'Total tokens burnt (all factions)' : `Total $${config.ticker} Burnt`}
+                {`Total $${config.ticker} Burnt`}
               </p>
-              <p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-orange-400">{formatNumber(realBurntTokens)} {faction === 'all' ? 'tokens' : config.ticker}</p>
+              <p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-orange-400">{formatNumber(realBurntTokens)} {config.ticker}</p>
               {burnPct != null && (
                 <p className="text-xs text-slate-400 mt-1">{burnPct.toFixed(2)}% of total supply</p>
               )}
@@ -497,7 +470,7 @@ export default function NightshadesDetailView({ data, activeTab }) {
             <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Unique NFT Holders</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-indigo-300">{formatNumber(ownership.nftHolders || 0)} Wallets</p></div>
             <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm ring-1 ring-indigo-500/20"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Wallets with an activated NFT</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-indigo-200">{activation.activeHolders == null ? '—' : `${formatNumber(activation.activeHolders)} Wallets`}</p></div>
             <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm ring-1 ring-emerald-500/20"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Ownership Concentration</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-emerald-400">{(ownership.ownershipRatio || 0).toFixed(2)}%</p></div>
-            <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">{faction === 'all' ? 'Token holders (sum of four)' : `Unique $${config.ticker} Holders`}</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-indigo-300">{formatNumber(tokenHolders)} Wallets</p></div>
+            <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">{`Unique $${config.ticker} Holders`}</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-indigo-300">{formatNumber(tokenHolders)} Wallets</p></div>
           </div>
 
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
@@ -526,7 +499,7 @@ export default function NightshadesDetailView({ data, activeTab }) {
           <h3 className="text-base md:text-lg font-bold text-white">Methodology & Disclaimer</h3>
         </div>
         <div className="text-xs md:text-sm text-slate-300 mb-5 leading-relaxed space-y-4">
-          <p><strong className="text-white">Four Anvil markets, one incubator:</strong> Ghosts, Zombies, Knights, and Watchers each have 3,000 NFTs, one faction token, and a SoftStakingVault. The All view sums activations and USD streams. Toggle a faction for that market’s price, floor, and RewardPaid.</p>
+          <p><strong className="text-white">Four Anvil markets, one incubator:</strong> Ghosts, Zombies, Knights, and Watchers each have 3,000 NFTs, one faction token, and a SoftStakingVault. The All tab compares the four on one axis. This page is one market.</p>
           <p><strong className="text-white">Activation:</strong> Same mechanic as Mancer/Yard. The vault emits no Deactivated event — a sale clears the position. <code>activeCount()</code> is an upper bound; this page replays Activated plus NFT transfers.</p>
           <p><strong className="text-white">Revenue:</strong> Faction AMM / vault RewardPaid only. The Nightshades civ-pad launch tax is counted on StonkBrokers, not copied here.</p>
           <p><strong className="text-white">The Night</strong> (daily VRF strike, LP move, Sunrise tax) is not on this page yet.</p>

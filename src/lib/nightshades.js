@@ -1,5 +1,8 @@
 /** Nightshades is one dashboard project and four gg-index slugs. */
 
+import { dateKey, formatLabels } from './dates';
+import { protocolFeeCols, protocolRevenueChart, seriesHasInk, windowLen } from './yieldHistory';
+
 export const NIGHTSHADES_FACTIONS = ['ghosts', 'zombies', 'knights', 'watchers'];
 
 export const NIGHTSHADES_FACTION_META = [
@@ -8,6 +11,14 @@ export const NIGHTSHADES_FACTION_META = [
   { id: 'knights', label: 'Knights', ticker: 'KNIGHTS' },
   { id: 'watchers', label: 'Watchers', ticker: 'WATCHERS' },
 ];
+
+/** One hue per faction when they share a chart. */
+export const FACTION_COLORS = {
+  ghosts: '#a78bfa',
+  zombies: '#4ade80',
+  knights: '#eab308',
+  watchers: '#38bdf8',
+};
 
 export function isNightshadesFaction(slug) {
   return NIGHTSHADES_FACTIONS.includes(slug);
@@ -64,4 +75,68 @@ export function rollupNightshadesMarket(factions = {}, ethPriceUsd) {
     tokenPriceUsd,
     nftFloorEth: nftFloorEth ? +nftFloorEth.toFixed(3) : 0,
   };
+}
+
+export function seriesToDateMap(labels, data) {
+  const map = {};
+  (labels || []).forEach((lab, i) => {
+    map[dateKey(lab)] = data?.[i];
+  });
+  return map;
+}
+
+/**
+ * Overlay four faction series on one date axis — compare, do not sum.
+ * Same shape as the ecosystem overlay: missing days stay blank unless `fill`.
+ */
+export function overlayFactionMaps(maps, { timeframe = 'all', fill = false } = {}) {
+  const labelSet = new Set();
+  for (const map of Object.values(maps || {})) {
+    Object.keys(map || {}).forEach((d) => labelSet.add(dateKey(d)));
+  }
+  const raw = [...labelSet].filter(Boolean).sort();
+  const sliced = raw.slice(-windowLen(timeframe, raw.length));
+  const datasets = NIGHTSHADES_FACTION_META.map((meta) => {
+    const color = FACTION_COLORS[meta.id];
+    const map = maps?.[meta.id] || {};
+    let started = false;
+    let last = null;
+    const dataPts = sliced.map((d) => {
+      const n = Number(map[d]);
+      const val = Number.isFinite(n) ? n : null;
+      if (!fill) return val;
+      if (!started) {
+        if (val == null || val === 0) return null;
+        started = true;
+        last = val;
+        return val;
+      }
+      if (val == null) return last;
+      last = val;
+      return val;
+    });
+    return {
+      label: meta.label,
+      data: dataPts,
+      borderColor: color,
+      backgroundColor: `${color}12`,
+      borderWidth: 2,
+      tension: 0.3,
+      pointRadius: 0,
+      spanGaps: true,
+      fill: false,
+    };
+  }).filter((ds) => seriesHasInk(ds.data));
+  return { labels: formatLabels(sliced), datasets };
+}
+
+/** Daily protocol-kept USD for one faction market. */
+export function factionDailyRevenue(slice) {
+  const chart = protocolRevenueChart(slice);
+  if (!chart.labels?.length) return { labels: [], data: [] };
+  const fees = protocolFeeCols(chart.cols).filter((c) => c.key === 'amm' || c.key === 'dex');
+  const data = chart.labels.map((_, i) =>
+    fees.reduce((s, c) => s + (Number(c.data?.[i]) || 0), 0),
+  );
+  return { labels: chart.rawLabels || chart.labels, data };
 }

@@ -166,9 +166,9 @@ for (const [label, View] of [
         ownership: { ...emptyFaction.ownership, currentMaxSupply: 12000 },
         factions: {
           ghosts: emptyFaction,
-          zombies: { ...emptyFaction, config: { ...emptyFaction.config, ticker: 'ZOMBIES' } },
-          knights: { ...emptyFaction, config: { ...emptyFaction.config, ticker: 'KNIGHTS' } },
-          watchers: { ...emptyFaction, config: { ...emptyFaction.config, ticker: 'WATCHERS' } },
+          zombies: { ...emptyFaction, config: { ...emptyFaction.config, ticker: 'ZOMBIES' }, activation: { ...emptyFaction.activation, activeCount: 61, percentActivated: 2.03 } },
+          knights: { ...emptyFaction, config: { ...emptyFaction.config, ticker: 'KNIGHTS' }, activation: { ...emptyFaction.activation, activeCount: 120, percentActivated: 4.0 } },
+          watchers: { ...emptyFaction, config: { ...emptyFaction.config, ticker: 'WATCHERS' }, activation: { ...emptyFaction.activation, activeCount: 44, percentActivated: 1.47 } },
         },
       },
     },
