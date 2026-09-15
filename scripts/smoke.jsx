@@ -67,6 +67,7 @@ const ROUTES = [
   '/nightshades/roi',
   '/nightshades/yield',
   '/nightshades/roi?faction=ghosts',
+  '/nightshades/liquidity',
   '/bonus',
   '/bonus/roi',
   '/stonkbrokers',
@@ -172,7 +173,7 @@ for (const [label, View] of [
       },
     },
   };
-  for (const tab of TABS) {
+  for (const tab of TABS.filter((t) => t !== 'liquidity')) {
     VIEWS.push([`Nightshades·${tab}`, NightshadesDetailView, { data: nsSnap, activeTab: tab }]);
   }
 }

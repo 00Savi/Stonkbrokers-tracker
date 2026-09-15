@@ -15,7 +15,7 @@ import MemesTokensView from './components/views/MemesTokensView';
 import SpecialDetailView from './components/views/SpecialDetailView';
 import NightshadesDetailView, { NightshadesFactionBar } from './components/views/NightshadesDetailView';
 import { useDashboard } from './lib/useDashboard';
-import { PROJECT_BY_SLUG, TAB_BY_SLUG, DEFAULT_TAB, BONUS_LIVE, PROJECTS, isProjectLive } from './lib/routes';
+import { PROJECT_BY_SLUG, TAB_BY_SLUG, DEFAULT_TAB, BONUS_LIVE, PROJECTS, isProjectLive, tabsForProject } from './lib/routes';
 import { useProjectScrollSpy } from './lib/projectScroll';
 import { SkeletonCard } from './components/kit';
 
@@ -54,6 +54,10 @@ function ProjectPage({ data }) {
   if (!key) return <Navigate to="/" replace />;
   if (!isProjectLive(meta)) return <Navigate to={key === 'bonus' && BONUS_LIVE ? '/bonus' : '/'} replace />;
   if (!activeTab) return <Navigate to={`/${project}/${DEFAULT_TAB}`} replace />;
+  const allowedTabs = tabsForProject(meta);
+  if (!allowedTabs.some((t) => t.slug === tab)) {
+    return <Navigate to={`/${project}/${allowedTabs[0]?.slug || DEFAULT_TAB}`} replace />;
+  }
 
   const View = DETAIL_VIEWS[key];
   if (!View) return <Navigate to="/" replace />;

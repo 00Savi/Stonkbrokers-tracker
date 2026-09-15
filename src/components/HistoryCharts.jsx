@@ -114,7 +114,7 @@ export function HolderRevenuePanel({ labels, data, note }) {
   );
 }
 
-export function ProtocolFeeVolumePanels({ labels, cols, kind, holder }) {
+export function ProtocolFeeVolumePanels({ labels, cols, kind, holder, note }) {
   const holderInk = holder && seriesHasInk(holder.data);
   const holderPanel = holderInk ? (
     <HolderRevenuePanel labels={holder.labels || labels} data={holder.data} note={holder.note} />
@@ -128,7 +128,7 @@ export function ProtocolFeeVolumePanels({ labels, cols, kind, holder }) {
     <>
       <ChartPanel
         title="Protocol revenue (USD)"
-        note="Money the protocol charged or kept: AMM, Clock-In, snipe / curve tax, StonkBooster inflows, and Smart LP skim. Bonding swap volume is not revenue and is not plotted here."
+        note={note || "Money the protocol charged or kept: AMM, Clock-In, snipe / curve tax, StonkBooster inflows, and Smart LP skim. Bonding swap volume is not revenue and is not plotted here."}
       >
         {fees.length ? (
           <Bar data={{ labels, datasets: barDatasets(fees, { stacked: true }) }} options={usdStackOptions()} />

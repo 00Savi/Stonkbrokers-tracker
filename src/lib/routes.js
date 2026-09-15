@@ -71,6 +71,9 @@ export function tabsForProject(meta) {
   if (meta?.key === 'stonk') {
     return tabs.map((t) => (t.slug === 'liquidity' ? { ...t, label: 'Smart LPs' } : t));
   }
+  if (meta?.key === 'nightshades' || meta?.kind === 'factions') {
+    return tabs.filter((t) => t.slug !== 'liquidity');
+  }
   return tabs;
 }
 

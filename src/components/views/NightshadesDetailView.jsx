@@ -113,12 +113,12 @@ export default function NightshadesDetailView({ data, activeTab }) {
   const { cols: revCols } = sliceCols(
     rawRev.labels,
     [
-      { ...(byKey.dex || { data: [] }), label: 'DEX Swap Rev', color: STREAM_COLORS.dex },
-      { ...(byKey.amm || { data: [] }), label: 'Vault Inflows', color: STREAM_COLORS.amm },
-      { ...(byKey.box || { data: [] }), label: 'Order Layer', color: STREAM_COLORS.box },
+      { ...(byKey.amm || { data: [] }), label: 'Vault RewardPaid', color: STREAM_COLORS.amm },
+      { ...(byKey.dex || { data: [] }), label: 'Anvil AMM rev', color: STREAM_COLORS.dex },
     ],
     timeframe
   );
+  const chartCols = (slicedRev.cols || []).filter((c) => c.key === 'amm' || c.key === 'dex');
 
   const realBurntTokens = Math.max(Number(activation.dualBurn?.totalBurnTokens || 0), Number(ownership.permanentlyBurntTokens || 0));
   const burnPct = burnOfSupplyPct(slice, realBurntTokens);
@@ -324,38 +324,28 @@ export default function NightshadesDetailView({ data, activeTab }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
-              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">DEX Swap Routing Rev ({revPeriod})</p>
-              <p className="text-2xl font-extrabold" style={{ color: STREAM_COLORS.dex }}>{formatCurrency(revCols[0]?.total || 0)}</p>
+              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Soft-staking vault RewardPaid ({revPeriod})</p>
+              <p className="text-2xl font-extrabold" style={{ color: STREAM_COLORS.amm }}>{formatCurrency(revCols[0]?.total || 0)}</p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
-              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Soft-Staking Vault Inflows ({revPeriod})</p>
-              <p className="text-2xl font-extrabold" style={{ color: STREAM_COLORS.amm }}>{formatCurrency(revCols[1]?.total || 0)}</p>
-            </div>
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
-              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Order Execution Layer ({revPeriod})</p>
-              <p className="text-2xl font-extrabold" style={{ color: STREAM_COLORS.box }}>{formatCurrency(revCols[2]?.total || 0)}</p>
+              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Anvil AMM protocol rev ({revPeriod})</p>
+              <p className="text-2xl font-extrabold" style={{ color: STREAM_COLORS.dex }}>{formatCurrency(revCols[1]?.total || 0)}</p>
             </div>
           </div>
 
           <ProtocolFeeVolumePanels
             labels={slicedRev.labels}
-            cols={slicedRev.cols}
+            cols={chartCols}
             kind={rawRev.kind}
+            note="Faction vault RewardPaid and Anvil AMM fees kept by the protocol. Launch civ-pad tax is counted on StonkBrokers, not here."
             holder={{
               labels: slicedHolder.labels,
               data: slicedHolder.cols[0]?.data,
               note: 'Per-NFT daily yield × active units at each tier. The payout that reached holders, not protocol-kept revenue.',
             }}
           />
-        </div>
-      </section>
-
-      <section id="liquidity" className="scroll-mt-32">
-        <div className="space-y-6">
-          <h2 className="text-lg md:text-xl font-bold text-white">Liquidity</h2>
-          <p className="text-sm text-slate-500">Anvil AMM pairs price each faction token. Locked-LP scan is not wired for Nightshades yet.</p>
         </div>
       </section>
 
@@ -366,7 +356,7 @@ export default function NightshadesDetailView({ data, activeTab }) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
               <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">
-                {faction === 'all' ? 'Tokens locked across factions' : `Total $${config.ticker} Burnt`}
+                {faction === 'all' ? 'Total tokens burnt (all factions)' : `Total $${config.ticker} Burnt`}
               </p>
               <p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-orange-400">{formatNumber(realBurntTokens)} {faction === 'all' ? 'tokens' : config.ticker}</p>
               {burnPct != null && (

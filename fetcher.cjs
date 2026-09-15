@@ -1182,12 +1182,17 @@ async function getOwnershipStats(conf, equivBurnt, previousData) {
   // plain token count, so no decimal scaling applies here.
   let ammVaultNfts = 0;
   if (conf.nftCa && conf.ammCa) {
-    const bals = await gg.balances(conf.nftCa, [conf.ammCa]);
-    const held = bals.get(conf.ammCa.toLowerCase());
-    if (held === null || held === undefined) {
-      throw new Error(`AMM vault balance read failed for ${conf.ticker}`);
+    try {
+      const bals = await gg.balances(conf.nftCa, [conf.ammCa]);
+      const held = bals.get(conf.ammCa.toLowerCase());
+      if (held === null || held === undefined) {
+        console.warn(`[warn] AMM vault balance unknown for ${conf.ticker}`);
+      } else {
+        ammVaultNfts = Number(held);
+      }
+    } catch (e) {
+      console.warn(`[warn] AMM vault balance for ${conf.ticker}: ${e.message}`);
     }
-    ammVaultNfts = Number(held);
   }
 
   let rawNftHolders = await fetchTokenHoldersSafe(conf.nftCa);
@@ -1246,16 +1251,65 @@ async function fetchBurnHistory(projectKey, previous) {
   return previous && previous.labels?.length ? previous : null;
 }
 
-async function fetchActivations(projectKey, conf) {
-  const activationLogs = await fetchAllLogs(projectKey, conf.activationCa, conf.genesisBlock);
+function blankTierStats() {
+  const one = () => ({ '24h': { act: 0, deact: 0 }, '7d': { act: 0, deact: 0 }, '30d': { act: 0, deact: 0 }, allTime: { act: 0, deact: 0 } });
+  return { T0: one(), T1: one(), T2: one(), T3: one(), T4: one() };
+}
 
-  // Cached under a separate projectKey: fetchAllLogs derives its cache file
-  // from that argument, so reusing `projectKey` here would have the NFT
-  // transfers overwrite the activation log cache on every run.
-  const transferLogs = conf.deactivateOnTransfer
-    ? (await fetchAllLogs(`${projectKey}_nft`, conf.nftCa, conf.genesisBlock, TRANSFER_TOPIC))
-        .map(l => ({ ...l, __nftTransfer: true }))
-    : [];
+/** When the public RPC 403s, still publish live burn + activeCount from gg-index. */
+async function fetchActivationsFromIndex(projectKey, conf) {
+  const t = await gg.activations(projectKey);
+  let dualBurn = { totalBurnTokens: 0, equivalentBrokersBurnt: 0 };
+  try {
+    dualBurn = await getTrueDeflationStats(conf);
+  } catch (e) {
+    console.warn(`[warn] ${projectKey}: burn stats: ${e.message}`);
+  }
+  const breakdown = { T0: 0, T1: 0, T2: 0, T3: 0, T4: 0 };
+  if (t?.by_tier && typeof t.by_tier === "object") {
+    for (const [k, v] of Object.entries(t.by_tier)) {
+      const id = /^T/i.test(String(k)) ? String(k).toUpperCase() : `T${k}`;
+      if (breakdown[id] != null) breakdown[id] = Number(v) || 0;
+    }
+  }
+  const fromTiers = Object.values(breakdown).reduce((s, n) => s + n, 0);
+  const activeCount = Number(t?.active) || fromTiers;
+  console.warn(`[warn] ${projectKey}: activations from gg-index (RPC logs unavailable); activeCount is an upper bound`);
+  return {
+    activeCount,
+    activeHolders: null,
+    breakdown,
+    percentActivated: +((activeCount / conf.maxSupply) * 100).toFixed(2),
+    totalSupply: conf.maxSupply,
+    tierStats: blankTierStats(),
+    history: { labels: [], dailyActivations: [], dailyDeactivations: [], cumulative: [], cumulativeGross: [] },
+    dualBurn,
+    activeTokenTiers: {},
+  };
+}
+
+async function fetchActivations(projectKey, conf) {
+  let activationLogs;
+  let transferLogs = [];
+  try {
+    activationLogs = await fetchAllLogs(projectKey, conf.activationCa, conf.genesisBlock);
+
+    // Cached under a separate projectKey: fetchAllLogs derives its cache file
+    // from that argument, so reusing `projectKey` here would have the NFT
+    // transfers overwrite the activation log cache on every run.
+    transferLogs = conf.deactivateOnTransfer
+      ? (await fetchAllLogs(`${projectKey}_nft`, conf.nftCa, conf.genesisBlock, TRANSFER_TOPIC))
+          .map(l => ({ ...l, __nftTransfer: true }))
+      : [];
+  } catch (e) {
+    console.warn(`[warn] ${projectKey}: activation logs: ${e.message}`);
+    try {
+      return await fetchActivationsFromIndex(projectKey, conf);
+    } catch (e2) {
+      console.warn(`[warn] ${projectKey}: gg-index activations: ${e2.message}`);
+      throw e;
+    }
+  }
 
   const mergedLogs = mergeChronological(activationLogs, transferLogs);
   const activeBrokers = new Map(); 
@@ -1410,10 +1464,20 @@ async function fetchActivations(projectKey, conf) {
   }
   let activeHolders = activeOwners.size;
   if (activeBrokers.size && activeHolders === 0) {
-    activeHolders = await countUniqueNftOwners(conf.nftCa, [...activeBrokers.keys()]);
+    try {
+      activeHolders = await countUniqueNftOwners(conf.nftCa, [...activeBrokers.keys()]);
+    } catch (e) {
+      console.warn(`[warn] ${projectKey}: ownerOf scan: ${e.message}`);
+      activeHolders = null;
+    }
   }
 
-  const dualBurn = await getTrueDeflationStats(conf);
+  let dualBurn = { totalBurnTokens: 0, equivalentBrokersBurnt: 0 };
+  try {
+    dualBurn = await getTrueDeflationStats(conf);
+  } catch (e) {
+    console.warn(`[warn] ${projectKey}: burn stats: ${e.message}`);
+  }
 
   return { 
     activeCount: activeBrokers.size,
@@ -2879,6 +2943,8 @@ function rollupNightshades(slices, markets, prev) {
     ? +Math.min(100, (ownership.nftHolders / ownership.circulatingNftSupply) * 100).toFixed(2)
     : 0;
   ownership.tokenHolders = ownership.stonkHolders;
+  ownership.permanentlyBurntTokens = dualBurn.totalBurnTokens;
+  ownership.permanentlyBurntUnits = dualBurn.equivalentBrokersBurnt;
 
   const template = list.find((p) => Array.isArray(p.tiers) && p.tiers.length)?.tiers || [];
   const mappedTiers = template.map((t) => {
@@ -2988,15 +3054,15 @@ function rollupNightshades(slices, markets, prev) {
 function applyMancerShareToStonk(stonk, mancer) {
   const rev = stonk?.revenue;
   if (!rev) return;
-  const dates = rev.dailyDates || [];
-  if (!dates.length) return;
-  if (!Array.isArray(rev.dailyBooster) || rev.dailyBooster.length !== dates.length) {
-    rev.dailyBooster = dates.map((_, i) => Number(rev.dailyBooster?.[i]) || 0);
+  const dayLabels = rev.dailyDates || [];
+  if (!dayLabels.length) return;
+  if (!Array.isArray(rev.dailyBooster) || rev.dailyBooster.length !== dayLabels.length) {
+    rev.dailyBooster = dayLabels.map((_, i) => Number(rev.dailyBooster?.[i]) || 0);
   }
   const mDates = mancer?.revenue?.dailyDates || [];
   const mDex = mancer?.revenue?.dailyDex || [];
   const mIdx = new Map(mDates.map((d, i) => [dates.dateKey(d), i]));
-  dates.forEach((d, i) => {
+  dayLabels.forEach((d, i) => {
     const j = mIdx.get(dates.dateKey(d));
     if (j == null) return;
     rev.dailyBooster[i] = (Number(rev.dailyBooster[i]) || 0) + (Number(mDex[j]) || 0) * MANCER_STONK_SHARE;
@@ -3403,13 +3469,17 @@ async function run() {
     const stonk = finalJson.projects.stonk;
     const mancer = finalJson.projects.mancer;
     if (stonkFetched && stonk?.revenue && mancer?.revenue) {
-      applyMancerShareToStonk(stonk, mancer);
-      persistStreamDays("stonk", stonk.revenue);
-      mergeLiveTodayHistory(stonk.revenue);
-      overlayDailyStreams(stonk.dailySnapshots, stonk.revenue, stonk.tiers?.[0]?.dailyDates);
-      console.log(
-        `  stonk booster: civ + mancer 25% = $${(stonk.revenue.boosterUsd || 0).toFixed(0)}`,
-      );
+      try {
+        applyMancerShareToStonk(stonk, mancer);
+        persistStreamDays("stonk", stonk.revenue);
+        mergeLiveTodayHistory(stonk.revenue);
+        overlayDailyStreams(stonk.dailySnapshots, stonk.revenue, stonk.tiers?.[0]?.dailyDates);
+        console.log(
+          `  stonk booster: civ + mancer 25% = $${(stonk.revenue.boosterUsd || 0).toFixed(0)}`,
+        );
+      } catch (e) {
+        console.warn(`[warn] stonk booster share: ${e.message}`);
+      }
     }
   }
 
