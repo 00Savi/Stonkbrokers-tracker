@@ -98,7 +98,7 @@ export const PROJECTS = [
     name: 'Nightshades',
     ticker: 'NIGHT',
     kind: 'factions',
-    logo: 'Nightshades.svg',
+    logo: 'Knight.png',
     beta: true,
   },
 ];

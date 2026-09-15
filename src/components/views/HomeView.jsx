@@ -21,6 +21,7 @@ const FALLBACK_LOGO = {
   mancer: 'logo.png',
   tickeryard: 'Yardkeepers.png',
   cardwall: 'wall.png',
+  nightshades: 'Knight.png',
 };
 
 export default function HomeView({ data }) {

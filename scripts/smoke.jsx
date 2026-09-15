@@ -161,7 +161,7 @@ for (const [label, View] of [
       ...snapshot.projects,
       nightshades: {
         ...emptyFaction,
-        config: { ticker: 'NIGHT', kind: 'factions', factions: ['ghosts', 'zombies', 'knights', 'watchers'], unitValue: 1_000_000, logo: 'Nightshades.svg', maxSupply: 12000 },
+        config: { ticker: 'NIGHT', kind: 'factions', factions: ['ghosts', 'zombies', 'knights', 'watchers'], unitValue: 1_000_000, logo: 'Knight.png', maxSupply: 12000 },
         ownership: { ...emptyFaction.ownership, currentMaxSupply: 12000 },
         factions: {
           ghosts: emptyFaction,
