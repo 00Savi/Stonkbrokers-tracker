@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useParams, useLocation, useSearchParams } from 'react-router-dom';
 import { TopNav, TabBar, SiteFooter } from './components/Shell';
 import ChartShareLayer from './components/ChartShareLayer';
 import { ChartMobileSync } from './lib/charts';
@@ -45,18 +45,25 @@ const DETAIL_VIEWS = {
  */
 function ProjectPage({ data }) {
   const { project, tab } = useParams();
+  const [searchParams] = useSearchParams();
   const key = PROJECT_BY_SLUG[project];
   const activeTab = TAB_BY_SLUG[tab];
   const meta = PROJECTS.find((p) => p.slug === project);
   const ready = !!(data && key && activeTab && isProjectLive(meta));
   useProjectScrollSpy(ready ? project : null, ready ? tab : null, meta, ready);
 
+  const q = searchParams.toString();
+  const withQuery = (path) => (q ? `${path}?${q}` : path);
+
   if (!key) return <Navigate to="/" replace />;
   if (!isProjectLive(meta)) return <Navigate to={key === 'bonus' && BONUS_LIVE ? '/bonus' : '/'} replace />;
-  if (!activeTab) return <Navigate to={`/${project}/${DEFAULT_TAB}`} replace />;
+  if (!activeTab) return <Navigate to={withQuery(`/${project}/${DEFAULT_TAB}`)} replace />;
   const allowedTabs = tabsForProject(meta);
   if (!allowedTabs.some((t) => t.slug === tab)) {
-    return <Navigate to={`/${project}/${allowedTabs[0]?.slug || DEFAULT_TAB}`} replace />;
+    const fallback = key === 'nightshades' && tab === 'revenue'
+      ? 'night'
+      : (allowedTabs[0]?.slug || DEFAULT_TAB);
+    return <Navigate to={withQuery(`/${project}/${fallback}`)} replace />;
   }
 
   const View = DETAIL_VIEWS[key];

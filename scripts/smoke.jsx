@@ -66,7 +66,10 @@ const ROUTES = [
   '/coattail/roi',
   '/nightshades/roi',
   '/nightshades/yield',
+  '/nightshades/night',
+  '/nightshades/revenue',
   '/nightshades/roi?faction=ghosts',
+  '/nightshades/night?faction=ghosts',
   '/nightshades/liquidity',
   '/bonus',
   '/bonus/roi',
@@ -143,6 +146,7 @@ for (const [label, View] of [
     VIEWS.push([`${label}·${tab}`, View, { data: snapshot, activeTab: tab }]);
   }
 }
+VIEWS.push(['Nightshades·all', NightshadesDetailView, { data: snapshot, activeTab: 'roi' }]);
 
 {
   const emptyFaction = {
@@ -170,10 +174,49 @@ for (const [label, View] of [
           knights: { ...emptyFaction, config: { ...emptyFaction.config, ticker: 'KNIGHTS' }, activation: { ...emptyFaction.activation, activeCount: 120, percentActivated: 4.0 } },
           watchers: { ...emptyFaction, config: { ...emptyFaction.config, ticker: 'WATCHERS' }, activation: { ...emptyFaction.activation, activeCount: 44, percentActivated: 1.47 } },
         },
+        night: {
+          nightId: 1,
+          phase: 'awaiting',
+          startedAt: 1789480810,
+          endsAt: 1789484410,
+          nextStartsAt: 1789567210,
+          favored: ['watchers', 'ghosts'],
+          struck: ['knights', 'zombies'],
+          magnitudeBps: 6285,
+          sunriseBps: 2500,
+          moveBps: 2000,
+          vaultWeth: 49.35,
+          vaultWethUsd: 119000,
+          sunriseWeth: 18.12,
+          sunriseWethUsd: 43600,
+          poolsWeth: 28.0,
+          poolsWethUsd: 67300,
+          moveWethMin: 1.38,
+          moveWethMax: 4.22,
+          moveWethMaxUsd: 10100,
+          pools: {
+            ghosts: { weth: 10.6, usd: 25500 },
+            watchers: { weth: 10.48, usd: 25200 },
+            knights: { weth: 3.48, usd: 8400 },
+            zombies: { weth: 3.43, usd: 8200 },
+          },
+          vaultTokens: { ghosts: 2.19e8, zombies: 4.58e7, knights: 4.29e7, watchers: 2.32e8 },
+          lastStrikeTx: '0x231421da3c994c5ebe841e4164dbea7bcac09dea75461203c5e95432d6e98de4',
+          history: [{
+            nightId: 1,
+            date: '2026-09-15',
+            startedAt: 1789480810,
+            endsAt: 1789484410,
+            favored: ['watchers', 'ghosts'],
+            struck: ['knights', 'zombies'],
+            magnitudeBps: 6285,
+            tx: '0x231421da3c994c5ebe841e4164dbea7bcac09dea75461203c5e95432d6e98de4',
+          }],
+        },
       },
     },
   };
-  for (const tab of TABS.filter((t) => t !== 'liquidity')) {
+  for (const tab of TABS.filter((t) => t !== 'liquidity' && t !== 'revenue').concat(['night'])) {
     VIEWS.push([`Nightshades·${tab}`, NightshadesDetailView, { data: nsSnap, activeTab: tab }]);
   }
 }

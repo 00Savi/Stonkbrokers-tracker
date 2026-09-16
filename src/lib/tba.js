@@ -13,7 +13,8 @@ const ERC20_ABI = [
 
 const ERC721_ABI = ['function balanceOf(address) view returns (uint256)'];
 
-const EXPLORER_ADDR = 'https://robinhoodchain.blockscout.com/address';
+const EXPLORER = 'https://robinhoodchain.blockscout.com';
+const EXPLORER_ADDR = `${EXPLORER}/address`;
 
 /** Card Wall rain lands WrappedSolanaNft slabs in the membership TBA. */
 const SLAB_NFT = {
@@ -24,6 +25,10 @@ const SLAB_NFT = {
 
 export function explorerAddressUrl(address) {
   return `${EXPLORER_ADDR}/${address}`;
+}
+
+export function explorerTxUrl(hash) {
+  return `${EXPLORER}/tx/${hash}`;
 }
 
 export function tbaRegistry(provider, cfg = {}) {

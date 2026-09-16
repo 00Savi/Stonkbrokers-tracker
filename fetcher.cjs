@@ -222,7 +222,11 @@ function mergeLiveTodayHistory(revenue) {
       if (!Array.isArray(revenue[histKey])) revenue[histKey] = histDates.map(() => 0);
       while (revenue[histKey].length < histDates.length) revenue[histKey].push(0);
       const prev = Number(revenue[histKey][idx]);
-      if (isToday || !(prev > 0)) revenue[histKey][idx] = +v.toFixed(2);
+      // Tax is the live pad walk. gg-index used to book Nightshades 99%
+      // anti-snipe as protocol tax; allow the walk (including 0) to replace
+      // that for any day still in the 7-day window.
+      const taxWalk = dailyKey === "dailyBondingTax";
+      if (isToday || taxWalk || !(prev > 0)) revenue[histKey][idx] = +v.toFixed(2);
     }
   }
 }
@@ -306,6 +310,12 @@ function carrySmartLp(revenueBreakdown, prevRevenue, smart) {
   const prevVaults = Array.isArray(prev?.vaults) ? prev.vaults : [];
   const nextVaults = Array.isArray(smart?.vaults) ? smart.vaults : [];
   if (nextVaults.length) {
+    const tvl = Number(smart.totalTvlUsd) || 0;
+    if (!(tvl > 0) && Number(prev?.totalTvlUsd) > 0) {
+      console.warn(`[warn] smart LP TVL came back 0 with ${nextVaults.length} vaults; keeping previous $${Number(prev.totalTvlUsd).toFixed(0)}`);
+      applySmartLp(revenueBreakdown, { ...smart, totalTvlUsd: prev.totalTvlUsd });
+      return;
+    }
     applySmartLp(revenueBreakdown, smart);
     return;
   }
@@ -320,6 +330,19 @@ function carrySmartLp(revenueBreakdown, prevRevenue, smart) {
     return;
   }
   if (smart) applySmartLp(revenueBreakdown, smart);
+}
+
+function carrySnapshotTvl(extra, snaps, todayStr) {
+  const tvl = Number(extra?.smartLpTvl) || 0;
+  if (tvl > 0) return extra;
+  const today = dates.dateKey(todayStr);
+  const prev = [...(snaps || [])].reverse().find((s) => dates.dateKey(s.date) !== today && Number(s.smartLpTvl) > 0);
+  if (!prev) return extra;
+  extra.smartLpTvl = prev.smartLpTvl;
+  if (!(Number(extra.tvlFr) > 0)) extra.tvlFr = prev.tvlFr;
+  if (!(Number(extra.tvlBb) > 0)) extra.tvlBb = prev.tvlBb;
+  if (!(Number(extra.tvlAsk) > 0)) extra.tvlAsk = prev.tvlAsk;
+  return extra;
 }
 
 function stampLiveSnapshot(snaps, todayStr, extra) {
@@ -358,13 +381,14 @@ const RAIN_LOOKBACK_DAYS = 30;
 // Set GG_INDEX_URL to point at a different deployment.
 const { GgIndex } = require("./lib/ggindex.cjs");
 const { Rpc, TOPIC, addrTopic, decodeUint, decodeAddr, encodeUint, topicAddr } = require("./lib/rpc.cjs");
-const { fetchLogsWithTimestamps } = require("./lib/chain.cjs");
+const { fetchLogsWithTimestamps, erc20Transfers } = require("./lib/chain.cjs");
 const { BlockTime } = require("./lib/blocktime.cjs");
 const { buildSpecialProject, isSpecial } = require("./lib/specials.cjs");
 const yieldDays = require("./lib/yieldDays.cjs");
 const vaultFlow = require("./lib/vaultFlow.cjs");
-const { fetchSmartLps, fromGgIndex } = require("./lib/smartLp.cjs");
+const { fetchSmartLps, fromGgIndex, USDG } = require("./lib/smartLp.cjs");
 const dates = require("./lib/dates.cjs");
+const { fetchNight } = require("./lib/night.cjs");
 
 const gg = new GgIndex();
 const rpc = new Rpc();
@@ -431,11 +455,10 @@ const SAFE_SELL_TOPIC = "0x2de6d6d1573ee69658d3daae2e752379e6eb0676622a5ade28120
 // indexed (id, buyer), data (quoteIn, taxPaid, netQuote, tokensOut).
 const CIV_BUY_TOPIC = "0x8eabef5bff7d4e7ca4c2c908d2aaf985e647a5009b534a12c423ab7e37a42c86";
 const NIGHTSHADES_PAD = "0xca389585c4940b107d49af4a37ad259c5fb69081";
-// Clock-In StockBooster pot. Nightshades anti-snipe sends 13.33% here; Mancer
-// DEX routing sends 25%. The Night vault (daily strike) is not confirmed yet —
-// fill NIGHT_VAULT after the first cycle and WETH from that address is counted.
+// Clock-In StockBooster pot. Nightshades anti-snipe tax sends 13.33% here
+// directly from the civ pad; Mancer DEX routing sends 25%. The Night vault
+// does not pay this — it is strike inventory, not a booster hop.
 const STOCK_BOOSTER = "0xe998257f8bc38e53fb12858ae4dd38da2682f280";
-const NIGHT_VAULT = null;
 const CIV_BOOSTER_BPS = 1333n;
 const MANCER_STONK_SHARE = 0.25;
 const SMART_LAUNCH_PADS = [
@@ -831,9 +854,13 @@ const NIGHTSHADES_FACTIONS = {
   },
 };
 
+// Oracle AMM sample: protocol contracts that fund Clock In v2 / the T4 TBA.
+// The Safety Deposit Clock In router (0x55642a3f) is deliberately absent —
+// its outbound STONK/stock is broker claim rounds from locker fees already
+// booked on the box series. Sampling those as AMM and scaling by network
+// weight would double-count locker Clock-In as swap rev.
 const PROTOCOL_CONTRACTS = [
   "0x1f12fe622c11947f93f53d63f68f7f46b6d081c9",
-  "0x55642a3f10f1af5145d3d59021b1d6b03bb8692c",
   "0xeca5726dae1e53365c37ffc02369d947a91d71f9"
 ];
 
@@ -2023,6 +2050,13 @@ async function attachRevenueHistory(projectKey, revenue, scale, yieldMode, prevR
       // gg-index often publishes 0 for the in-progress (and just-closed) UTC
       // day. That is "not printed yet", not a quiet day — keep the live walk.
       if (!(usd > 0) && Number(cur[localKey]) > 0) continue;
+      // Nightshades civ anti-snipe is ~99% of quote. That is curve withhold,
+      // not StonkBrokers-kept. Drop remote tax that is a large fraction of
+      // the same day's bonding volume.
+      if (localKey === "tax") {
+        const vol = Number(cur.volume) || 0;
+        if (usd > 0 && vol > 0 && usd > vol * 0.2) continue;
+      }
       cur[localKey] = usd;
     }
     byIso.set(d.date, cur);
@@ -2342,18 +2376,23 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
       const quoteUsd = (Number(quoteWei) / 1e18) * price;
       creditLaunchpad(quoteUsd, ts, "volume");
       const taxUsd = (Number(taxWei) / 1e18) * price;
-      creditLaunchpad(taxUsd, ts, "tax");
-      // Nightshades civ pad: 13.33% of anti-snipe tax to StockBooster.
-      // Gross tax stays on the snipe series (same as V2). This line is the
-      // destination split, plus Mancer 25% after the project loop.
       if (topic0 === CIV_BUY_TOPIC && taxWei > 0n) {
+        // Nightshades Safe Launch withholds ~99% as anti-snipe. That withhold
+        // stays in the curve; it is not StonkBrokers-kept. The protocol cut is
+        // the 13.33% StockBooster split. Putting the gross tax on the snipe
+        // series stacked that 13.33% twice and printed a ~$286k "protocol"
+        // bar on launch day.
         const boosterWei = (taxWei * CIV_BOOSTER_BPS) / 10000n;
         creditLaunchpad((Number(boosterWei) / 1e18) * price, ts, "booster");
+      } else if (taxUsd > 0) {
+        creditLaunchpad(taxUsd, ts, "tax");
       }
     }
 
     // Stonk Launcher bonding: WETH arriving at the fee router, excluding
-    // graduation transfers from the LP locker.
+    // graduation transfers from the LP locker and tax already counted from
+    // pad trade events.
+    const padAddrs = new Set(SMART_LAUNCH_PADS.map((p) => p.pad));
     const wethIn = await rpc.getLogs({
       address: WETH,
       fromBlock,
@@ -2362,7 +2401,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
     });
     for (const log of wethIn) {
       const from = topicAddr(log.topics && log.topics[1]);
-      if (from === LP_LOCKER || from === LAUNCH_FEE_ROUTER || from === NIGHTSHADES_PAD) continue;
+      if (from === LP_LOCKER || from === LAUNCH_FEE_ROUTER || padAddrs.has(from)) continue;
       const amount = decodeUint(log.data, 0);
       if (amount == null || amount <= 0n) continue;
       const ts = blockTime.at(parseInt(log.blockNumber, 16));
@@ -2371,61 +2410,40 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
     }
   }
 
-  async function fetchNightBoosterInflows() {
-    if (!NIGHT_VAULT || !STOCK_BOOSTER) {
-      console.log("  night booster: vault CA not set; counting civ 13.33% only");
-      return;
-    }
-    const fromBlock = blockTime.blockAt(sevenDaysAgo);
-    const toBlock = await rpc.blockNumber();
-    const logs = await rpc.getLogs({
-      address: WETH,
-      fromBlock,
-      toBlock,
-      topics: [TOPIC.transfer, addrTopic(NIGHT_VAULT), addrTopic(STOCK_BOOSTER)],
-    });
-    let usd = 0;
-    for (const log of logs) {
-      const amount = decodeUint(log.data, 0);
-      if (amount == null || amount <= 0n) continue;
-      const ts = blockTime.at(parseInt(log.blockNumber, 16));
-      if (ts < sevenDaysAgo) continue;
-      const val = (Number(amount) / 1e18) * (marketData.ethPriceUsd || 0);
-      creditLaunchpad(val, ts, "booster");
-      usd += val;
-    }
-    if (usd > 0) console.log(`  night vault → StockBooster $${usd.toFixed(0)}`);
-  }
-
   async function fetchSecurityBoxYield(address) {
+    // Safety Deposit Clock In fee router: locker protocol fees (0.5% at lock
+    // or 20% of swap-fee collects) from the V3 / V4 / up. lockers. Gross
+    // inbound is what the lockers charged; the router then splits 90% to the
+    // community Clock-In pot / broker claims and 10% to Smart LP buyback.
     const box = address.toLowerCase();
     const fromBlock = blockTime.blockAt(sevenDaysAgo);
     const toBlock = await rpc.blockNumber();
     const priceOf = (token) => {
       const t = token.toLowerCase();
       if (t === WETH) return marketData.ethPriceUsd || 0;
+      if (t === USDG) return 1;
       if (t === (conf.tokenCa || "").toLowerCase()) {
         return marketData.tokenPriceUsd || tokenPrices[t] || 0;
       }
       return tokenPrices[t] || 0;
     };
-    const tokens = [...new Set([WETH, ...Object.keys(TOKEN_TICKERS)].map((a) => a.toLowerCase()))]
+    const tokens = [...new Set([WETH, USDG, ...Object.keys(TOKEN_TICKERS)].map((a) => a.toLowerCase()))]
       .filter((t) => priceOf(t) > 0);
 
-    const logs = await rpc.getLogs({
-      address: tokens,
+    const logs = await erc20Transfers(rpc, {
+      tokens,
+      to: box,
       fromBlock,
       toBlock,
-      topics: [TOPIC.transfer, null, addrTopic(box)],
+      label: "security-box",
+      blockTime,
     });
     for (const log of logs) {
-      const price = priceOf(log.address);
-      if (!(price > 0)) continue;
-      const amount = decodeUint(log.data, 0);
-      if (amount == null || amount <= 0n) continue;
-      const ts = blockTime.at(parseInt(log.blockNumber, 16));
+      const price = priceOf(log.token);
+      if (!(price > 0) || !(log.amount > 0)) continue;
+      const ts = log.timeStamp;
       if (ts < sevenDaysAgo) continue;
-      const usdVal = (Number(amount) / 1e18) * price;
+      const usdVal = log.amount * price;
       const dayIdx = yieldDayIdx(ts, sevenDaysAgo, oneDay);
       if (dayIdx == null) continue;
       revenueBreakdown.securityBoxUsd += usdVal;
@@ -2500,7 +2518,6 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
       if (projectKey === "stonk") {
         try {
           await fetchLaunchpadRevenue();
-          await fetchNightBoosterInflows();
           console.log(
             `  launchpad tax $${(revenueBreakdown.bondingFeesUsd || 0).toFixed(0)} ` +
             `vol $${(revenueBreakdown.bondingVolumeUsd || 0).toFixed(0)} ` +
@@ -3408,7 +3425,7 @@ async function run() {
       overlayDailyStreams(dailySnapshots, revenueBreakdown, mappedTiers?.[0]?.dailyDates);
       mergeLiveTodayHistory(revenueBreakdown);
       const modeTvl = tvlByMode(revenueBreakdown?.smartLp?.vaults);
-      stampLiveSnapshot(dailySnapshots, todayStamp, {
+      stampLiveSnapshot(dailySnapshots, todayStamp, carrySnapshotTvl({
         nftFloorEth: markets[projectKey].nftFloorEth || 0,
         nftFloorUsd: (markets[projectKey].nftFloorEth || 0) * (markets[projectKey].ethPriceUsd || 0),
         tokenHolders: ownershipStats.stonkHolders || ownershipStats.tokenHolders || 0,
@@ -3421,7 +3438,7 @@ async function run() {
         ...modeTvl,
         lockedStonk: lockedLpData?.totalStonkLocked || 0,
         lockedLpUsd: lockedLpData?.totalLpUsd || 0,
-      });
+      }, dailySnapshots, todayStamp));
 
       finalJson.projects[projectKey] = {
         market: markets[projectKey],
@@ -3462,6 +3479,27 @@ async function run() {
         `\n--- NIGHTSHADES rollup ---  ${rolled.activation.activeCount} active / ${rolled.config.maxSupply}` +
         ` across ${Object.keys(rolled.factions || {}).length} factions`,
       );
+      try {
+        const night = await fetchNight(rpc, {
+          ethPriceUsd,
+          prev: previousData.projects?.nightshades?.night,
+          blockTime,
+        });
+        finalJson.projects.nightshades.night = night;
+        const fav = (night.favored || []).join("+") || "—";
+        const hit = (night.struck || []).join("+") || "—";
+        console.log(
+          `  night #${night.nightId} ${night.phase}  favored ${fav}  struck ${hit}` +
+          `  vault ${night.vaultWeth != null ? night.vaultWeth.toFixed(2) : "?"} WETH` +
+          `  sunrise ${night.sunriseWeth != null ? night.sunriseWeth.toFixed(2) : "?"} WETH` +
+          `  pools ${night.poolsWeth != null ? night.poolsWeth.toFixed(2) : "?"} WETH` +
+          `  history ${night.history?.length || 0}`,
+        );
+      } catch (e) {
+        const prevNight = previousData.projects?.nightshades?.night;
+        if (prevNight) finalJson.projects.nightshades.night = prevNight;
+        console.warn(`[warn] night: ${e.message}`);
+      }
     }
   }
 

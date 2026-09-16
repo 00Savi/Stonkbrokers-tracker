@@ -106,7 +106,7 @@ function pickNum(row, keys, fallback = null) {
 const FEE_COL_META = [
   { key: 'amm', label: 'AMM & swap rev', color: STREAM_COLORS.amm, snap: ['revAmm'], daily: 'dailyAmm', hist: 'historyAmm' },
   { key: 'dex', label: 'DEX rev', color: STREAM_COLORS.dex, snap: ['revDex'], daily: 'dailyDex', hist: 'historyDex' },
-  { key: 'box', label: 'Clock-In / order rev', color: STREAM_COLORS.box, snap: ['revBox'], daily: 'dailySecurityBox', hist: 'historyBox' },
+  { key: 'box', label: 'Clock-In / locker fees', color: STREAM_COLORS.box, snap: ['revBox'], daily: 'dailySecurityBox', hist: 'historyBox' },
   { key: 'tax', label: 'Snipe / curve tax', color: STREAM_COLORS.tax, snap: ['revTax'], daily: 'dailyBondingTax', hist: 'historyTax' },
   { key: 'booster', label: 'StonkBooster', color: STREAM_COLORS.booster, snap: ['revBooster'], daily: 'dailyBooster', hist: 'historyBooster' },
   { key: 'smartLp', label: 'Smart LP Protocol Revenue', color: STREAM_COLORS.smartLp, snap: ['revSmartLp'], daily: 'dailySmartLp', hist: 'historySmartLp' },
@@ -254,6 +254,20 @@ export function protocolRevenueChart(project) {
       color: m.color,
       data: streamOnLabels(labels, snaps, rWin, m),
     }));
+
+  // Nightshades 99% anti-snipe is curve withhold, not protocol-kept. A tax
+  // bar that is a large fraction of the same day's bonding volume is that
+  // withhold (and used to be stacked on top of the 13.33% StonkBooster cut).
+  const vol = streamOnLabels(labels, snaps, rWin, VOLUME_META);
+  const tax = cols.find((c) => c.key === 'tax');
+  if (tax) {
+    tax.data = tax.data.map((t, i) => {
+      const n = Number(t);
+      const v = Number(vol[i]);
+      if (n > 0 && v > 0 && n > v * 0.2) return 0;
+      return t;
+    });
+  }
 
   return { labels: formatLabels(labels), rawLabels: labels, kind: 'protocol', cols };
 }
@@ -464,10 +478,15 @@ export function tvlByModeFromVaults(vaults) {
 
 export function smartLpHistory(snaps, live = {}) {
   const last = snaps.length - 1;
+  const missZero = (v) => {
+    if (v == null) return null;
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
   const tvl = snaps.map((s, i) => {
-    const v = pickNum(s, ['smartLpTvl']);
+    const v = missZero(pickNum(s, ['smartLpTvl']));
     if (v != null) return v;
-    if (i === last) return Number(live.totalTvlUsd) || 0;
+    if (i === last) return missZero(live.totalTvlUsd);
     return null;
   });
   return {
@@ -475,9 +494,9 @@ export function smartLpHistory(snaps, live = {}) {
     tvl,
     skim: snaps.map((s) => pickNum(s, ['revSmartLp', 'smartLpSkim'])),
     gross: snaps.map((s) => pickNum(s, ['revSmartLpGross', 'smartLpGross'])),
-    fr: snaps.map((s, i) => pickNum(s, ['tvlFr']) ?? (i === last ? Number(live.tvlFr) || null : null)),
-    bb: snaps.map((s, i) => pickNum(s, ['tvlBb']) ?? (i === last ? Number(live.tvlBb) || null : null)),
-    ask: snaps.map((s, i) => pickNum(s, ['tvlAsk']) ?? (i === last ? Number(live.tvlAsk) || null : null)),
+    fr: snaps.map((s, i) => missZero(pickNum(s, ['tvlFr'])) ?? (i === last ? missZero(live.tvlFr) : null)),
+    bb: snaps.map((s, i) => missZero(pickNum(s, ['tvlBb'])) ?? (i === last ? missZero(live.tvlBb) : null)),
+    ask: snaps.map((s, i) => missZero(pickNum(s, ['tvlAsk'])) ?? (i === last ? missZero(live.tvlAsk) : null)),
   };
 }
 

@@ -319,7 +319,7 @@ export default function StonkDetailView({ data, activeTab }) {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div>
               <h2 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">Protocol Revenue & Ecosystem Liquidity</h2>
-              <p className="text-xs text-slate-400 mt-1">Stacked series are protocol-kept revenue: AMM, Clock-In, snipe / curve tax, StonkBooster inflows (Nightshades 13.33% + Mancer 25%), and Smart LP skim. Bonding swap volume is notional and stays off this chart.</p>
+              <p className="text-xs text-slate-400 mt-1">Stacked series are protocol-charged or kept revenue: AMM, Clock-In locker fees, V2 snipe / curve tax, StonkBooster inflows (Nightshades 13.33% + Mancer 25%), and Smart LP skim. Clock-In is Safety Deposit Box lock/collect fees (90% community Clock-In / 10% protocol), not a raffle pot. Nightshades 99% anti-snipe is curve withhold, not this stack. Bonding swap volume is notional and stays off this chart.</p>
             </div>
           </div>
 
@@ -337,6 +337,9 @@ export default function StonkDetailView({ data, activeTab }) {
                 Clock-In Security Box ({revPeriod})
               </p>
               <p className="text-2xl font-extrabold" style={{ color: REV_STREAMS[1].color }}>{formatCurrency(REV_STREAMS[1].total)}</p>
+              <p className="text-[10px] text-slate-500 mt-1.5">
+                Locker protocol fees into the Safety Deposit Clock In router (0.5% at lock or 20% of swap-fee collects). 90% clocks into the community pot / broker claims; 10% is the protocol cut to Smart LP buyback. Spikes are heavy lock days, not a second copy of curve tax.
+              </p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
               <p className="text-xs uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-2">
@@ -345,7 +348,7 @@ export default function StonkDetailView({ data, activeTab }) {
               </p>
               <p className="text-2xl font-extrabold" style={{ color: REV_STREAMS[2].color }}>{formatCurrency(REV_STREAMS[2].total)}</p>
               <p className="text-[10px] text-slate-500 mt-1.5">
-                Create {formatCurrency(revenue.launchCreateUsd || 0)}
+                V2 bonding tax kept by the fee router. Nightshades 99% anti-snipe stays in the curve — only the 13.33% StonkBooster cut is protocol-kept.
                 <span className="mx-1.5 text-slate-700">·</span>
                 Bonding volume {formatCurrency(revenue.bondingVolumeUsd || 0)} (not protocol rev)
               </p>
@@ -360,8 +363,6 @@ export default function StonkDetailView({ data, activeTab }) {
                 Nightshades 13.33% anti-snipe
                 <span className="mx-1.5 text-slate-700">·</span>
                 Mancer 25% DEX routing
-                <span className="mx-1.5 text-slate-700">·</span>
-                Night cycle pending vault CA
               </p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">

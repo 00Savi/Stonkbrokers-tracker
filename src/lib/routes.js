@@ -32,6 +32,7 @@ export const TAB_BY_SLUG = {
   roi: 'roi',
   yield: 'historical',
   revenue: 'revenue',
+  night: 'night',
   liquidity: 'liquidity',
   burn: 'burn',
   activation: 'activation',
@@ -72,7 +73,9 @@ export function tabsForProject(meta) {
     return tabs.map((t) => (t.slug === 'liquidity' ? { ...t, label: 'Smart LPs' } : t));
   }
   if (meta?.key === 'nightshades' || meta?.kind === 'factions') {
-    return tabs.filter((t) => t.slug !== 'liquidity');
+    return tabs
+      .filter((t) => t.slug !== 'liquidity')
+      .map((t) => (t.slug === 'revenue' ? { slug: 'night', label: 'Night' } : t));
   }
   return tabs;
 }

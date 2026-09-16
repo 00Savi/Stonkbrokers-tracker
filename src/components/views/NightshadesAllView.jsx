@@ -12,8 +12,14 @@ import {
   overlayFactionMaps,
   seriesToDateMap,
   factionDailyRevenue,
+  factionLabel,
+  formatNightClock,
+  nightPhaseLabel,
+  nightMagnitudePct,
+  factionNightRecord,
 } from '../../lib/nightshades';
 import { ChartPanel, EmptyChart } from '../HistoryCharts';
+import { explorerTxUrl, explorerAddressUrl } from '../../lib/tba';
 
 function formatPrice(val) {
   const n = Number(val);
@@ -39,6 +45,255 @@ function Together({ title, note, labels, datasets, options }) {
         <EmptyChart />
       )}
     </ChartPanel>
+  );
+}
+
+function TeamPills({ ids, empty = '—' }) {
+  if (!ids?.length) return <span className="text-slate-500">{empty}</span>;
+  return (
+    <span className="inline-flex flex-wrap gap-1">
+      {ids.map((id) => (
+        <span
+          key={id}
+          className="px-2 py-0.5 rounded-md text-[11px] font-bold"
+          style={{ backgroundColor: `${FACTION_COLORS[id] || '#818cf8'}22`, color: FACTION_COLORS[id] || '#818cf8' }}
+        >
+          {factionLabel(id)}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function fmtEth(v, digits = 2) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return '—';
+  return n.toFixed(digits);
+}
+
+function fmtEthRange(min, max) {
+  const a = Number(min);
+  const b = Number(max);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return '—';
+  if (Math.abs(a - b) < 0.05) return a.toFixed(2);
+  return `${Math.min(a, b).toFixed(2)}–${Math.max(a, b).toFixed(2)}`;
+}
+
+function EthStat({ label, eth, usd, note, range }) {
+  return (
+    <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3">
+      <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">{label}</p>
+      <p className="text-white font-bold">
+        {range || fmtEth(eth)}
+        <span className="ml-1 text-sm font-semibold text-slate-400">ETH</span>
+      </p>
+      {Number(usd) > 0 ? <p className="text-xs text-slate-400">{compactUsd(usd)}</p> : null}
+      {note ? <p className="text-[11px] text-slate-500 mt-1">{note}</p> : null}
+    </div>
+  );
+}
+
+function NightCard({ night }) {
+  if (!night?.nightId) {
+    return (
+      <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6">
+        <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">The Night</p>
+        <p className="text-sm text-slate-400">Daily VRF strike is live on-chain. Waiting for the next snapshot to land the first cycle here.</p>
+      </div>
+    );
+  }
+  const mag = Number(night.magnitudeBps);
+  const magPct = nightMagnitudePct(mag);
+  const weth = Number(night.vaultWeth);
+  const wethUsd = Number(night.vaultWethUsd);
+  return (
+    <div className="bg-[#0e1013] border border-[#818cf8]/30 rounded-2xl p-4 md:p-6 shadow-xl">
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+        <div>
+          <p className="text-[10px] uppercase tracking-wider text-indigo-300 mb-1">The Night</p>
+          <h3 className="text-lg font-bold text-white">
+            Night #{night.nightId}
+            <span className="ml-2 text-sm font-semibold text-slate-400">{nightPhaseLabel(night.phase)}</span>
+          </h3>
+          <p className="text-xs text-slate-400 mt-1">
+            {formatNightClock(night.startedAt)} → {formatNightClock(night.endsAt)}
+            {night.nextStartsAt ? ` · next ${formatNightClock(night.nextStartsAt)}` : ''}
+            {night.lastStrikeTx ? (
+              <>
+                {' · '}
+                <a
+                  href={explorerTxUrl(night.lastStrikeTx)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-indigo-300 hover:text-white"
+                >
+                  strike tx
+                </a>
+              </>
+            ) : null}
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="text-[10px] uppercase tracking-wider text-slate-400">
+            {night.vault ? (
+              <a href={explorerAddressUrl(night.vault)} target="_blank" rel="noreferrer" className="hover:text-indigo-300">
+                Night vault
+              </a>
+            ) : (
+              'Vault WETH'
+            )}
+          </p>
+          <p className="text-xl font-extrabold text-white">
+            {weth > 0 ? weth.toFixed(2) : '—'}
+            <span className="ml-1 text-sm font-semibold text-slate-400">ETH</span>
+          </p>
+          {wethUsd > 0 ? <p className="text-xs text-slate-400">{compactUsd(wethUsd)}</p> : null}
+        </div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+        <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3">
+          <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Favored</p>
+          <TeamPills ids={night.favored} />
+        </div>
+        <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3">
+          <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Struck</p>
+          <TeamPills ids={night.struck} />
+        </div>
+        <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3">
+          <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Magnitude</p>
+          <p className="text-white font-bold">{magPct}</p>
+          <p className="text-[11px] text-slate-500 mt-1">Sunrise {(Number(night.sunriseBps) / 100).toFixed(0)}% · LP move {(Number(night.moveBps) / 100).toFixed(0)}%</p>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mt-3">
+        {NIGHTSHADES_FACTION_META.map((f) => {
+          const amt = Number(night.vaultTokens?.[f.id]);
+          return (
+            <div key={f.id} className="bg-[#08090b] border border-[#1e2228] rounded-lg px-3 py-2">
+              <p className="text-[10px] uppercase tracking-wider" style={{ color: FACTION_COLORS[f.id] }}>{f.label}</p>
+              <p className="text-sm font-bold text-white">{amt > 0 ? compactNum(amt) : '—'}</p>
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-4 pt-3 border-t border-[#1e2228]">
+        <p className="text-[10px] uppercase tracking-wider text-indigo-300 mb-1">Next night</p>
+        <p className="text-[11px] text-slate-500 mb-3">
+          The Night vault deploys this. Sunrise is swap fees accrued since the last window.
+          Uniswap v4 WETH is protocol-owned; the strike can move {(Number(night.moveBps) / 100).toFixed(0)}% of whichever pair is hit.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+          <EthStat
+            label="Sunrise fees"
+            eth={night.sunriseWeth}
+            usd={night.sunriseWethUsd}
+            note="Accrued in the vault since last sunrise"
+          />
+          <EthStat
+            label="Pool liquidity"
+            eth={night.poolsWeth}
+            usd={night.poolsWethUsd}
+            note="WETH in the four v4 faction pools"
+          />
+          <EthStat
+            label="LP Night can move"
+            range={fmtEthRange(night.moveWethMin, night.moveWethMax)}
+            usd={night.moveWethMaxUsd}
+            note={`${(Number(night.moveBps) / 100).toFixed(0)}% of the struck pair (range = thinnest–fattest)`}
+          />
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mt-3">
+          {NIGHTSHADES_FACTION_META.map((f) => {
+            const pool = night.pools?.[f.id];
+            const poolWeth = Number(pool?.weth);
+            return (
+              <div key={f.id} className="bg-[#08090b] border border-[#1e2228] rounded-lg px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wider" style={{ color: FACTION_COLORS[f.id] }}>{f.label} LP</p>
+                <p className="text-sm font-bold text-white">
+                  {poolWeth > 0 ? `${poolWeth.toFixed(2)} ETH` : '—'}
+                </p>
+                {Number(pool?.usd) > 0 ? <p className="text-[11px] text-slate-500">{compactUsd(pool.usd)}</p> : null}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NightHistory({ night }) {
+  const rows = [...(night?.history || [])].sort((a, b) => (b.nightId || 0) - (a.nightId || 0));
+  if (!rows.length) return null;
+  return (
+    <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6">
+      <div className="mb-4">
+        <h3 className="text-sm font-bold text-white">Night history</h3>
+        <p className="text-xs text-slate-400 mt-1">One row per VRF strike. Vault inventory is the snapshot from when that night was current.</p>
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-4">
+        {NIGHTSHADES_FACTION_META.map((f) => {
+          const rec = factionNightRecord(rows, f.id);
+          return (
+            <div key={f.id} className="bg-[#08090b] border border-[#1e2228] rounded-lg px-3 py-2">
+              <p className="text-[10px] uppercase tracking-wider" style={{ color: FACTION_COLORS[f.id] }}>{f.label}</p>
+              <p className="text-sm text-white font-bold">{rec.favored} favored</p>
+              <p className="text-[11px] text-slate-500">{rec.struck} struck</p>
+            </div>
+          );
+        })}
+      </div>
+      <div className="overflow-x-auto -mx-1 sm:mx-0">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="border-b border-[#1e2228] text-slate-500 text-xs uppercase tracking-wider">
+              <th className="pb-3 font-medium pl-2">Night</th>
+              <th className="pb-3 font-medium">Window</th>
+              <th className="pb-3 font-medium">Favored</th>
+              <th className="pb-3 font-medium">Struck</th>
+              <th className="pb-3 font-medium">Magnitude</th>
+              <th className="pb-3 font-medium text-right pr-2">Strike</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#1e2228]/50 text-sm">
+            {rows.map((row) => (
+              <tr key={row.nightId}>
+                <td className="py-3 pl-2 font-bold text-white">#{row.nightId}</td>
+                <td className="py-3 text-slate-400 whitespace-nowrap">
+                  {formatNightClock(row.startedAt)}
+                  {row.endsAt ? ` → ${formatNightClock(row.endsAt)}` : ''}
+                </td>
+                <td className="py-3"><TeamPills ids={row.favored} /></td>
+                <td className="py-3"><TeamPills ids={row.struck} /></td>
+                <td className="py-3 text-white font-semibold">{nightMagnitudePct(row.magnitudeBps)}</td>
+                <td className="py-3 text-right pr-2">
+                  {row.tx ? (
+                    <a
+                      href={explorerTxUrl(row.tx)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-indigo-300 hover:text-white text-xs font-bold"
+                    >
+                      tx
+                    </a>
+                  ) : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/** Incubator-wide Night card + history. Lives on the Night tab for All and each faction. */
+export function NightshadesNightSection({ night }) {
+  return (
+    <section id="night" className="scroll-mt-32 space-y-6">
+      <NightCard night={night} />
+      <NightHistory night={night} />
+    </section>
   );
 }
 
@@ -104,6 +359,7 @@ export default function NightshadesAllView({ project, setFaction }) {
     color: FACTION_COLORS[f.id],
     slice: project?.factions?.[f.id] || {},
   }));
+  const night = project?.night;
 
   const windowRev = (slice) => {
     const chart = protocolRevenueChart(slice);
@@ -344,10 +600,7 @@ export default function NightshadesAllView({ project, setFaction }) {
           datasets={roiOverlay.datasets}
           options={percentChartOptions}
         />
-      </section>
-
-      <section id="revenue" className="scroll-mt-32">
-        <div className="space-y-6">
+        <div className="space-y-6 mt-6">
           <h2 className="text-lg md:text-xl font-bold text-white">Faction protocol revenue</h2>
           <p className="text-xs text-slate-400 -mt-4">Vault RewardPaid and Anvil AMM fees kept by each market. Civ-pad tax stays on StonkBrokers.</p>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -375,6 +628,8 @@ export default function NightshadesAllView({ project, setFaction }) {
           />
         </div>
       </section>
+
+      <NightshadesNightSection night={night} />
 
       <section id="burn" className="scroll-mt-32">
         <div className="space-y-6">
@@ -548,6 +803,7 @@ export default function NightshadesAllView({ project, setFaction }) {
         <div className="text-xs md:text-sm text-slate-300 mb-5 leading-relaxed space-y-4">
           <p><strong className="text-white">All is a comparison, not a rollup:</strong> Ghosts, Zombies, Knights, and Watchers stay four series on one axis. Totals are not added together. Open a faction for that market’s tiers, simulator, and vault detail.</p>
           <p><strong className="text-white">Revenue:</strong> Faction AMM / vault RewardPaid only. The Nightshades civ-pad launch tax is counted on StonkBrokers.</p>
+          <p><strong className="text-white">The Night</strong> is the daily VRF strike. A one-hour window commits a favored pair vs a struck pair; the Night vault pulls Uniswap v4 LP on the struck side and sells those tokens. Sunrise tax is 25%. The same vault is the next-night deployer: sunrise fees are its accrued swap-fee bucket, and usable LP is 20% of whichever two-faction pair is struck (keep 80%). Live strike, next-night ammo, and history sit on the Night tab. StockBooster is civ-pad tax on StonkBrokers, not a Night vault hop.</p>
         </div>
         <p className="text-xs md:text-sm text-slate-400 italic leading-relaxed border-t border-[#1e2228] pt-5">
           <strong className="text-slate-300 not-italic">Disclaimer:</strong> Tracked yield values use mark-to-market spot pricing at the last sync. This is a community-built tracking tool and does not guarantee future returns.

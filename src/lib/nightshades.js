@@ -12,6 +12,48 @@ export const NIGHTSHADES_FACTION_META = [
   { id: 'watchers', label: 'Watchers', ticker: 'WATCHERS' },
 ];
 
+export function factionLabel(id) {
+  return NIGHTSHADES_FACTION_META.find((f) => f.id === id)?.label || id;
+}
+
+export function formatNightClock(ts) {
+  const n = Number(ts);
+  if (!Number.isFinite(n) || n <= 0) return '—';
+  const d = new Date(n * 1000);
+  if (Number.isNaN(d.getTime())) return '—';
+  const mo = d.getUTCMonth() + 1;
+  const day = d.getUTCDate();
+  const hh = String(d.getUTCHours()).padStart(2, '0');
+  const mm = String(d.getUTCMinutes()).padStart(2, '0');
+  return `${mo}/${day} ${hh}:${mm} UTC`;
+}
+
+export function nightPhaseLabel(phase) {
+  return {
+    open: 'Window open',
+    moving: 'LP moving',
+    settled: 'Settled',
+    awaiting: 'Until next night',
+    idle: 'Idle',
+  }[phase] || phase || '—';
+}
+
+export function nightMagnitudePct(bps) {
+  const n = Number(bps);
+  return Number.isFinite(n) ? `${(n / 100).toFixed(2)}%` : '—';
+}
+
+/** How often a faction was favored vs struck across completed nights. */
+export function factionNightRecord(history, factionId) {
+  let favored = 0;
+  let struck = 0;
+  for (const row of history || []) {
+    if ((row.favored || []).includes(factionId)) favored += 1;
+    if ((row.struck || []).includes(factionId)) struck += 1;
+  }
+  return { favored, struck };
+}
+
 /** One hue per faction when they share a chart. */
 export const FACTION_COLORS = {
   ghosts: '#a78bfa',

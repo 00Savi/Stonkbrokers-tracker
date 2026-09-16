@@ -128,7 +128,7 @@ export function ProtocolFeeVolumePanels({ labels, cols, kind, holder, note }) {
     <>
       <ChartPanel
         title="Protocol revenue (USD)"
-        note={note || "Money the protocol charged or kept: AMM, Clock-In, snipe / curve tax, StonkBooster inflows, and Smart LP skim. Bonding swap volume is not revenue and is not plotted here."}
+        note={note || "Money the protocol charged or kept: AMM, Clock-In locker fees, V2 snipe / curve tax, StonkBooster inflows, and Smart LP skim. Clock-In bars are Safety Deposit locker fees (then 90% community / 10% protocol). Nightshades 99% anti-snipe stays in the curve and is not this stack. Bonding swap volume is not revenue and is not plotted here."}
       >
         {fees.length ? (
           <Bar data={{ labels, datasets: barDatasets(fees, { stacked: true }) }} options={usdStackOptions()} />
@@ -156,7 +156,7 @@ export function SmartLpChartPanels({ snaps, smartLp, vaults }) {
   if (!hasTvl && !hasFees && !slices.length) return null;
   return (
     <>
-      <ChartPanel title="Smart LP TVL" note="Point-in-time vault TVL. History starts when snapshots record it; the latest point is live.">
+      <ChartPanel title="Smart LP TVL" note="Point-in-time vault TVL. A $0 hourly stamp is treated as a missed read and spanned, not a drained vault.">
         {hasTvl ? (
           <Line
             data={{

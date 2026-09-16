@@ -481,7 +481,7 @@ export default function EcosystemView({ data, pending = false }) {
             {order.map(k => (
               <Link
                 key={k}
-                to={projectPath(k, 'revenue')}
+                to={projectPath(k, k === 'nightshades' ? 'night' : 'revenue')}
                 className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm transition hover:border-slate-500 hover:bg-[#101318]"
               >
                 <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-1">
@@ -505,7 +505,7 @@ export default function EcosystemView({ data, pending = false }) {
             return (
               <EcoTogether
                 title="Daily protocol revenue"
-                note="Protocol-kept rev only — AMM, Clock-In, snipe / curve tax, Smart LP skim. Bonding swap volume is excluded."
+                note="Protocol-charged or kept rev only — AMM, Clock-In locker fees, snipe / curve tax, Smart LP skim. Bonding swap volume is excluded."
                 labels={overlay.labels}
                 datasets={overlay.datasets}
                 options={usdChartOptions}
