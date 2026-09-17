@@ -28,8 +28,7 @@ export const NAV_ITEMS = [
   { to: '/rhmachines/roi', label: 'RH Machines', group: 'yield-nfts', dot: 'bg-[#fb923c]' },
   { to: '/coattail/roi', label: 'Coattail Brokers', group: 'yield-nfts', dot: 'bg-[#f43f5e]' },
   { to: '/nightshades/roi', label: 'Nightshades', group: 'yield-nfts', dot: 'bg-[#818cf8]' },
-  { to: '/tokens', label: 'Tokens', group: 'chain', dot: 'bg-accent' },
-  { to: '/stocks', label: 'Stocks', group: 'chain', dot: 'bg-[#60a5fa]' },
+  { to: '/tokens', label: 'Markets & Swap', group: 'chain', dot: 'bg-accent' },
 ].filter((item) => {
   const slug = item.to.split('/').filter(Boolean)[0];
   const project = PROJECTS.find((p) => p.slug === slug);
@@ -42,8 +41,7 @@ function titleForPath(pathname) {
   if (first === 'ecosystem') return 'Ecosystem';
   if (first === 'portfolio') return 'Portfolio';
   if (first === 'rankings') return 'Rankings';
-  if (first === 'tokens') return 'Robinhood Tokens';
-  if (first === 'stocks') return 'Robinhood Stock Tokens';
+  if (first === 'tokens' || first === 'stocks') return 'Markets & Swap';
   const project = PROJECTS.find((p) => p.slug === first);
   if (project?.kind === 'token') return project.name;
   return project ? project.name : 'StonkBrokers Tracker';
@@ -60,6 +58,7 @@ function logoForPath(pathname, data) {
 export function itemIsActive(pathname, to) {
   const dest = to.split('/').filter(Boolean)[0] || '';
   const here = pathname.split('/').filter(Boolean)[0] || '';
+  if (dest === 'tokens' && (here === 'tokens' || here === 'stocks')) return true;
   return here === dest;
 }
 

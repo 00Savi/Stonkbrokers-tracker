@@ -147,7 +147,7 @@ export default function App() {
           <Route
             path="/tokens"
             element={
-              <Section title="Robinhood Tokens">
+              <Section title="Markets & Swap">
                 {data ? <MemesTokensView data={data} type="memes" /> : <SkeletonCard rows={5} />}
               </Section>
             }
@@ -155,7 +155,7 @@ export default function App() {
           <Route
             path="/stocks"
             element={
-              <Section title="Robinhood Stock Tokens">
+              <Section title="Markets & Swap">
                 {data ? <MemesTokensView data={data} type="stocks" /> : <SkeletonCard rows={5} />}
               </Section>
             }
