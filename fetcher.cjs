@@ -513,6 +513,18 @@ const MEMES = [
   { name: "PAIR", ca: "0x6b1d42927b1a84ec28fa88d4fc6fa7af404966be" },
   { name: "RSTR", ca: "0x78b96280c3347e0f58a7147b73eb0ec5ffff025d" },
   { name: "Robin", ca: "0x11b70d0243baf75e85ce03201a92b5b7c33beb59" },
+  { name: "STANDARD", ca: "0x88ad8DdF1E3898412146a534538d418c6F8A9062" },
+  { name: "INU", ca: "0x63Ee32Ac3077d1fbd8a77eBBA2a6ed4b8e9c1e18" },
+  { name: "WALLET", ca: "0x0339f5459FC690aC85F1782e15782A151b4A9E1b" },
+  { name: "ORBIO", ca: "0xAa07A0e9209e16aC99708C3EC70159c6eF3128A3" },
+  { name: "NetNet", ca: "0xCA9c78Dd337A67F6e0077F65F5E9218719d30eDf" },
+  { name: "PARE", ca: "0x15d36B6A28d8327ABc7aFABF0F106AE2c9Af5C4d" },
+  { name: "HOODRAT", ca: "0x8e62F281f282686fCa6dCB39288069a93fC23F1c" },
+  { name: "RAXOL", ca: "0xf44702b17d9abD53815F703e772F35E9c71A53af" },
+  { name: "Ghosts", ca: "0xd6b619a75667cfcc827a3b9b75d807d98b5456d2" },
+  { name: "Zombies", ca: "0xe4bef9d0845a13bd39c57c7ee4463ff5d0cc20b6" },
+  { name: "Knights", ca: "0xb6062468073a43c79cd7fd07fbe496da9ef544c3" },
+  { name: "Watchers", ca: "0x4ffefdfefc16daac253140125f50d8be9baffa52" },
 ];
 
 const STOCKS_FALLBACK = [
@@ -2718,8 +2730,8 @@ async function loadTokenListPrices(tokenList) {
   //
   // This was the single largest metered cost after holder counts: two calls per
   // token, walked one at a time with a 200ms pause between each. The meme and
-  // stock lists together are 30 tokens, so ~60 credits and ~12 seconds of
-  // sleeping per run become one call.
+  // stock lists together are ~40 curated tokens plus the RHJ stock universe, so
+  // walking them one-by-one used to be tens of credits per run.
   const supplyByToken = await gg.supplies(validTokens.map(m => m.ca)).catch((e) => {
     console.warn(`[warn] token supplies: ${e.message}; DexScreener prices still apply`);
     return new Map();
