@@ -113,7 +113,7 @@ export default function StonkDetailView({ data, activeTab }) {
       { ...(byKey.amm || { data: [], total: 0 }), label: 'AMM & Swap Rev', color: STREAM_COLORS.amm },
       { ...(byKey.box || { data: [], total: 0 }), label: 'Clock-In Box', color: STREAM_COLORS.box },
       { ...(byKey.tax || { data: [], total: 0 }), label: 'Snipe / curve tax', color: STREAM_COLORS.tax },
-      { ...(byKey.booster || { data: [], total: 0 }), label: 'StonkBooster', color: STREAM_COLORS.booster },
+      { ...(byKey.booster || { data: [], total: 0 }), label: 'Partner Revenue Share', color: STREAM_COLORS.booster },
       { ...(byKey.smartLp || { data: [], total: 0 }), label: 'Smart LP Protocol Revenue', color: STREAM_COLORS.smartLp },
     ],
   };
@@ -126,6 +126,12 @@ export default function StonkDetailView({ data, activeTab }) {
     if (timeframe === '7d' && live7d > 0) return { ...col, total: live7d };
     return col;
   })();
+  const stonkBoosterTotal =
+    (Number(REV_STREAMS[0]?.total) || 0) +
+    (Number(REV_STREAMS[1]?.total) || 0) +
+    (Number(REV_STREAMS[2]?.total) || 0) +
+    (Number(REV_STREAMS[3]?.total) || 0) +
+    (Number(smartLpCol.total) || 0);
 
   // 3. Burn Tracker Data
   const realBurntTokens = Math.max(
@@ -285,7 +291,7 @@ export default function StonkDetailView({ data, activeTab }) {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
               <h2 className="text-xl font-bold text-white flex items-center gap-2">Historical Yield & Payback Horizon</h2>
-              <p className="text-xs md:text-sm text-slate-400 mt-1">Daily CoC ROI from the hourly ledger. Range is the sticky Weekly / Monthly / All control.</p>
+              <p className="text-xs md:text-sm text-slate-400 mt-1">Daily CoC ROI. From Aug 20 this is the T4 oracle sample scaled by live network weight. Earlier days estimate the same CoC from Clock In v1 / v2 / Overtime pots ÷ reconstructed active weight, using the first oracle snapshot’s floor and token price as cost basis. A single-day collapse between two hot sessions is treated as a UTC bucket hole, not a crash.</p>
             </div>
           </div>
           
@@ -316,11 +322,10 @@ export default function StonkDetailView({ data, activeTab }) {
       {/* ==================== TAB 3: REVENUE & LPS ==================== */}
       <section id="revenue" className="scroll-mt-32">
         <div className="space-y-6">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-            <div>
-              <h2 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">Protocol Revenue & Ecosystem Liquidity</h2>
-              <p className="text-xs text-slate-400 mt-1">Stacked series are protocol-charged or kept revenue: AMM, Clock-In locker fees, V2 snipe / curve tax, StonkBooster inflows (Nightshades 13.33% + Mancer 25%), and Smart LP skim. Clock-In is Safety Deposit Box lock/collect fees (90% community Clock-In / 10% protocol), not a raffle pot. Nightshades 99% anti-snipe is curve withhold, not this stack. Bonding swap volume is notional and stays off this chart.</p>
-            </div>
+          <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-5 md:p-6 shadow-xl mb-6">
+            <p className="text-xs uppercase tracking-wider text-slate-400">StonkBooster · {revPeriod}</p>
+            <p className="text-4xl md:text-5xl font-extrabold text-white mt-1 tabular-nums">{formatCurrency(stonkBoosterTotal)}</p>
+            <p className="text-xs text-slate-400 mt-2">All protocol-charged or kept revenue: AMM, Clock-In locker fees, V2 snipe / curve tax, Partner Revenue Share, and Smart LP skim. Clock-In is Safety Deposit Box lock/collect fees (90% community Clock-In / 10% protocol), not a raffle pot. Nightshades 99% anti-snipe is curve withhold, not this total. Bonding swap volume is notional and stays off this stack.</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
@@ -348,7 +353,7 @@ export default function StonkDetailView({ data, activeTab }) {
               </p>
               <p className="text-2xl font-extrabold" style={{ color: REV_STREAMS[2].color }}>{formatCurrency(REV_STREAMS[2].total)}</p>
               <p className="text-[10px] text-slate-500 mt-1.5">
-                V2 bonding tax kept by the fee router. Nightshades 99% anti-snipe stays in the curve — only the 13.33% StonkBooster cut is protocol-kept.
+                V2 bonding tax kept by the fee router. Nightshades 99% anti-snipe stays in the curve — only the 13.33% partner share is protocol-kept.
                 <span className="mx-1.5 text-slate-700">·</span>
                 Bonding volume {formatCurrency(revenue.bondingVolumeUsd || 0)} (not protocol rev)
               </p>
@@ -356,7 +361,7 @@ export default function StonkDetailView({ data, activeTab }) {
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
               <p className="text-xs uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-2">
                 <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: REV_STREAMS[3].color }} />
-                StonkBooster ({revPeriod})
+                Partner Revenue Share ({revPeriod})
               </p>
               <p className="text-2xl font-extrabold" style={{ color: REV_STREAMS[3].color }}>{formatCurrency(REV_STREAMS[3].total)}</p>
               <p className="text-[10px] text-slate-500 mt-1.5">
@@ -376,19 +381,22 @@ export default function StonkDetailView({ data, activeTab }) {
                 <span className="mx-1.5 text-slate-700">·</span>
                 {smartLp.perfFeeBps ? `${(smartLp.perfFeeBps / 100).toFixed(0)}% skim` : '10% skim'}
                 <span className="mx-1.5 text-slate-700">·</span>
-                50/50 buyback · booster
+                50/50 buyback · Clock In pot
               </p>
             </div>
           </div>
 
           <ProtocolFeeVolumePanels
             labels={slicedRev.labels}
-            cols={slicedRev.cols}
+            cols={REV_STREAMS}
             kind={rawRev.kind}
+            title="StonkBooster (USD)"
+            mixTitle="StonkBooster mix (100%)"
+            note="StonkBooster is the full protocol mix: AMM, Clock-In locker fees, V2 snipe / curve tax, Partner Revenue Share (Nightshades 13.33% + Mancer 25%), and Smart LP skim. Clock-In bars are Safety Deposit locker fees (then 90% community / 10% protocol). Nightshades 99% anti-snipe stays in the curve and is not this stack. Bonding swap volume is not revenue and is not plotted here."
             holder={{
               labels: slicedHolder.labels,
               data: slicedHolder.cols[0]?.data,
-              note: 'Per-NFT daily yield × active units at each tier. The payout that reached holders, not protocol-kept revenue.',
+              note: 'From Aug 20 this is per-NFT daily yield × active units (T4 oracle sample scaled by network weight). Before that the T4 oracle was not a partner — bars are Clock In v1 / v2 / Overtime pot inflows, the on-chain holder pot.',
             }}
           />
         </div>
@@ -399,7 +407,7 @@ export default function StonkDetailView({ data, activeTab }) {
           <div>
             <h2 className="text-lg md:text-xl font-bold text-white">Liquidity & Smart LPs</h2>
             <p className="text-xs text-slate-400 mt-1">
-              Depositor Fees Generated are Uniswap trading fees the vaults collected. Smart LP Protocol Revenue is the {smartLp.perfFeeBps ? `${(smartLp.perfFeeBps / 100).toFixed(0)}%` : '10%'} skim, split 50/50 buyback and StonkBooster.
+              Depositor Fees Generated are Uniswap trading fees the vaults collected. Smart LP Protocol Revenue is the {smartLp.perfFeeBps ? `${(smartLp.perfFeeBps / 100).toFixed(0)}%` : '10%'} skim, split 50/50 buyback and Clock In pot.
             </p>
           </div>
 
@@ -751,7 +759,7 @@ export default function StonkDetailView({ data, activeTab }) {
           <h3 className="text-base md:text-lg font-bold text-white">Methodology & Disclaimer</h3>
         </div>
         <div className="text-xs md:text-sm text-slate-300 mb-5 leading-relaxed space-y-4">
-          <p><strong className="text-white">Yield & ROI (Global Network Oracle) Methodology:</strong> Cash-on-Cash (CoC) returns are calculated dynamically based on the selected project's architecture and active network weight.</p>
+          <p><strong className="text-white">Yield & ROI (Global Network Oracle) Methodology:</strong> From 2026-08-20, cash-on-cash uses the T4 oracle wallet sample scaled by total network weight / 333. Before that the oracle was not a partner — those ROI days estimate per-weight yield from Clock In v1, v2, and Overtime pot inflows divided by reconstructed active weight, with cost basis taken from the first oracle snapshot (floor + activation tokens). Mid-August is a real FOMO / revenue spike (NFT trades printed around 12 ETH); the % uses a later ~4 ETH floor so it tracks that yield spike rather than repricing entry cost day by day.</p>
           <p><strong className="text-white">Historical Yield & Payback Horizon Methodology:</strong> Capital recovery timelines are calculated by dividing the total entry cost by annualized trailing yield rates. ROI trajectories map historical performance over rolling epochs.</p>
           <p><strong className="text-white">Protocol Analytics:</strong> Metrics shown aggregate live on-chain events across registered smart contracts.</p>
           <p><strong className="text-white">Protocol Ownership & Distribution Methodology:</strong> Wallet concentration metrics evaluate unique human holders against true circulating supply, subtracting protocol treasury allocations. Activated-wallet count is unique current owners of NFTs that still have an open activation — a sale clears it.</p>

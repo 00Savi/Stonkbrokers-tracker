@@ -114,7 +114,7 @@ export function HolderRevenuePanel({ labels, data, note }) {
   );
 }
 
-export function ProtocolFeeVolumePanels({ labels, cols, kind, holder, note }) {
+export function ProtocolFeeVolumePanels({ labels, cols, kind, holder, note, title, mixTitle }) {
   const holderInk = holder && seriesHasInk(holder.data);
   const holderPanel = holderInk ? (
     <HolderRevenuePanel labels={holder.labels || labels} data={holder.data} note={holder.note} />
@@ -127,8 +127,8 @@ export function ProtocolFeeVolumePanels({ labels, cols, kind, holder, note }) {
   return (
     <>
       <ChartPanel
-        title="Protocol revenue (USD)"
-        note={note || "Money the protocol charged or kept: AMM, Clock-In locker fees, V2 snipe / curve tax, StonkBooster inflows, and Smart LP skim. Clock-In bars are Safety Deposit locker fees (then 90% community / 10% protocol). Nightshades 99% anti-snipe stays in the curve and is not this stack. Bonding swap volume is not revenue and is not plotted here."}
+        title={title || "Protocol revenue (USD)"}
+        note={note || "Money the protocol charged or kept: AMM, Clock-In locker fees, V2 snipe / curve tax, Partner Revenue Share, and Smart LP skim. Clock-In bars are Safety Deposit locker fees (then 90% community / 10% protocol). Nightshades 99% anti-snipe stays in the curve and is not this stack. Bonding swap volume is not revenue and is not plotted here."}
       >
         {fees.length ? (
           <Bar data={{ labels, datasets: barDatasets(fees, { stacked: true }) }} options={usdStackOptions()} />
@@ -137,7 +137,7 @@ export function ProtocolFeeVolumePanels({ labels, cols, kind, holder, note }) {
         )}
       </ChartPanel>
       {mix.length ? (
-        <ChartPanel title="Revenue mix (100%)" note="Share of protocol revenue that day. Days with no rev are blank. Swap volume is excluded.">
+        <ChartPanel title={mixTitle || "Revenue mix (100%)"} note="Share of protocol revenue that day. Days with no rev are blank. Swap volume is excluded.">
           <Bar data={{ labels, datasets: barDatasets(mix, { stacked: true }) }} options={percentStackOptions()} />
         </ChartPanel>
       ) : null}

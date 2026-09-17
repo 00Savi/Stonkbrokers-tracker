@@ -78,13 +78,29 @@ function MancerTradeCard({ buy, height, onHeight }) {
   return <div ref={hostRef} className="w-full" style={{ minHeight: height || SWAP_HEIGHT }} />;
 }
 
-function SwapDock({ token, stocks }) {
+function rowKey(token, i) {
+  return token.ca || `name:${token.name || i}`;
+}
+
+function SwapDock({ token, stocks, sticky, onDockHeight }) {
   const [paneH, setPaneH] = useState(SWAP_HEIGHT);
+  const dockRef = useRef(null);
   const name = token?.name || 'token';
 
+  useEffect(() => {
+    const el = dockRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(() => {
+      if (typeof onDockHeight === 'function') onDockHeight(el.offsetHeight);
+    });
+    ro.observe(el);
+    if (typeof onDockHeight === 'function') onDockHeight(el.offsetHeight);
+    return () => ro.disconnect();
+  }, [onDockHeight, token?.ca, stocks]);
+
   return (
-    <aside className="w-full max-w-[400px] mx-auto lg:max-w-none lg:w-full lg:sticky lg:top-20 lg:self-start">
-      <div className="rounded-xl border border-accent/40 bg-[#08090b] overflow-hidden">
+    <aside className={`w-full max-w-[400px] mx-auto lg:max-w-none lg:w-full lg:self-start ${sticky ? 'lg:sticky lg:top-20' : ''}`}>
+      <div ref={dockRef} className="rounded-xl border border-accent/40 bg-[#08090b] overflow-hidden">
         <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-[#1e2228] bg-[#0e1013]">
           <div className="flex items-center gap-2 min-w-0">
             <span className="shrink-0 rounded-md bg-accent px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-[#08090b]">
@@ -112,18 +128,19 @@ function SwapDock({ token, stocks }) {
   );
 }
 
-function ChartPane({ token }) {
+function ChartPane({ token, height }) {
+  const h = height || CHART_HEIGHT;
   return (
     <div className="rounded-xl overflow-hidden border border-[#1e2228] bg-[#08090b]">
       {token.ca ? (
         <iframe
           src={`https://dexscreener.com/robinhood/${token.ca}?embed=1&theme=dark&trades=0&info=0`}
           className="w-full border-0"
-          style={{ height: CHART_HEIGHT }}
+          style={{ height: h }}
           title={`${token.name} Chart`}
         />
       ) : (
-        <div className="flex items-center justify-center text-slate-500 text-sm italic" style={{ height: CHART_HEIGHT }}>
+        <div className="flex items-center justify-center text-slate-500 text-sm italic" style={{ height: h }}>
           Chart unavailable (no contract address).
         </div>
       )}
@@ -162,6 +179,7 @@ export default function MemesTokensView({ data, type }) {
 
   const [selectedCa, setSelectedCa] = useState(null);
   const [expandedCa, setExpandedCa] = useState(null);
+  const [dockH, setDockH] = useState(SWAP_HEIGHT);
   const [sortCol, setSortCol] = useState('volume24h');
   const [sortAsc, setSortAsc] = useState(false);
 
@@ -189,13 +207,17 @@ export default function MemesTokensView({ data, type }) {
   });
 
   const swapToken = sortedTokens.find((t) => t.ca && t.ca === selectedCa) || sortedTokens.find((t) => t.ca) || null;
+  const expandedToken = sortedTokens.find((t, i) => rowKey(t, i) === expandedCa) || null;
+  const displayTokens = expandedToken
+    ? [expandedToken, ...sortedTokens.filter((t) => t !== expandedToken)]
+    : sortedTokens;
 
   return (
     <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl mt-6">
       <div className="mb-4">
         <h2 className="text-lg md:text-xl font-bold text-white">Markets & Swap</h2>
         <p className="text-xs md:text-sm text-slate-400 mt-1">
-          Swap sits in the corner and follows the highlighted row. Open a row for its chart.
+          Open a token to pin it next to the swap. Close the row to restore the list order.
         </p>
       </div>
 
@@ -203,7 +225,8 @@ export default function MemesTokensView({ data, type }) {
       {isStocks && <UsStockWarning />}
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px] gap-4 items-start">
-        <div className="min-w-0 order-2 lg:order-1">
+        <div className="min-w-0 order-2 lg:order-1 space-y-3">
+          {expandedToken && <ChartPane token={expandedToken} height={dockH} />}
           <div className="overflow-x-auto pb-2">
             <table className="w-full text-left border-collapse min-w-[950px]">
               <thead>
@@ -219,21 +242,21 @@ export default function MemesTokensView({ data, type }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#1e2228]/50 text-sm">
-                {sortedTokens.map((token, index) => {
+                {displayTokens.map((token, index) => {
                   const roiColor = (token.priceChange24h || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400';
                   const roiSign = (token.priceChange24h || 0) >= 0 ? '+' : '';
                   const totalSupply = token.totalSupply || 1000000000;
                   const burntPct = token.burnt > 0 ? ((token.burnt / totalSupply) * 100).toFixed(2) + '%' : '0.00%';
+                  const key = rowKey(token, index);
                   const isSelected = swapToken?.ca && token.ca === swapToken.ca;
-                  const isExpanded = token.ca ? expandedCa === token.ca : expandedCa === `row-${index}`;
+                  const isExpanded = expandedCa === key || (!!token.ca && expandedCa === token.ca);
 
                   return (
-                    <React.Fragment key={token.ca || index}>
+                    <React.Fragment key={token.ca || key}>
                       <tr
                         onClick={() => {
                           if (token.ca) setSelectedCa(token.ca);
-                          const key = token.ca || `row-${index}`;
-                          setExpandedCa(isExpanded ? null : key);
+                          setExpandedCa(isExpanded ? null : (token.ca || key));
                         }}
                         className={`hover:bg-[#1e2228]/20 transition cursor-pointer group ${
                           isSelected ? 'bg-accent/10' : isExpanded ? 'bg-[#1e2228]/30' : ''
@@ -280,13 +303,6 @@ export default function MemesTokensView({ data, type }) {
                         </td>
                       </tr>
 
-                      {isExpanded && (
-                        <tr className="bg-[#08090b]/60 border-b border-[#1e2228]/50">
-                          <td colSpan="8" className="p-3">
-                            <ChartPane token={token} />
-                          </td>
-                        </tr>
-                      )}
                     </React.Fragment>
                   );
                 })}
@@ -296,7 +312,7 @@ export default function MemesTokensView({ data, type }) {
         </div>
 
         <div className="order-1 lg:order-2">
-          <SwapDock token={swapToken} stocks={isStocks} />
+          <SwapDock token={swapToken} stocks={isStocks} sticky={!expandedToken} onDockHeight={setDockH} />
         </div>
       </div>
     </div>

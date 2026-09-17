@@ -1981,6 +1981,7 @@ function ingestHistoryArrays(byIso, prev) {
     ["dex", prev.historyDex],
     ["smartLp", prev.historySmartLp],
     ["booster", prev.historyBooster],
+    ["holders", prev.historyHolder],
   ];
   for (let i = 0; i < dates.length; i++) {
     const iso = isoFromMdLabel(dates[i]);
@@ -2076,6 +2077,7 @@ async function attachRevenueHistory(projectKey, revenue, scale, yieldMode, prevR
   revenue.historyDex = col("dex");
   revenue.historySmartLp = col("smartLp");
   revenue.historyBooster = col("booster");
+  revenue.historyHolder = col("holders");
   revenue.historyTotalUsd = revenue.historyAmm;
 }
 

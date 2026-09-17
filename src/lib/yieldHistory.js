@@ -108,7 +108,7 @@ const FEE_COL_META = [
   { key: 'dex', label: 'DEX rev', color: STREAM_COLORS.dex, snap: ['revDex'], daily: 'dailyDex', hist: 'historyDex' },
   { key: 'box', label: 'Clock-In / locker fees', color: STREAM_COLORS.box, snap: ['revBox'], daily: 'dailySecurityBox', hist: 'historyBox' },
   { key: 'tax', label: 'Snipe / curve tax', color: STREAM_COLORS.tax, snap: ['revTax'], daily: 'dailyBondingTax', hist: 'historyTax' },
-  { key: 'booster', label: 'StonkBooster', color: STREAM_COLORS.booster, snap: ['revBooster'], daily: 'dailyBooster', hist: 'historyBooster' },
+  { key: 'booster', label: 'Partner Revenue Share', color: STREAM_COLORS.booster, snap: ['revBooster'], daily: 'dailyBooster', hist: 'historyBooster' },
   { key: 'smartLp', label: 'Smart LP Protocol Revenue', color: STREAM_COLORS.smartLp, snap: ['revSmartLp'], daily: 'dailySmartLp', hist: 'historySmartLp' },
 ];
 
@@ -299,12 +299,16 @@ export function holderRevenueOnLabels(project, labels) {
     return axis.map((d) => lookup(d) ?? 0);
   }
 
+  const r = project?.revenue || {};
+  const holderHist = windowLookup(r.historyDates || [], r.historyHolder || []);
   const tiers = project?.tiers || [];
   const snaps = usableSnapshots(project?.dailySnapshots);
   const live = project?.activation?.breakdown || project?.activation?.byTier || {};
   const snapByDate = new Map(snaps.map((s) => [mdKey(s.date), s]));
 
   return axis.map((d) => {
+    const fromHist = holderHist(d);
+    if (fromHist > 0) return fromHist;
     const key = mdKey(d);
     const snap = snapByDate.get(key);
     let sum = 0;
