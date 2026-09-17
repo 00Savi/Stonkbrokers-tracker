@@ -16,6 +16,26 @@ export function factionLabel(id) {
   return NIGHTSHADES_FACTION_META.find((f) => f.id === id)?.label || id;
 }
 
+export function factionList(ids) {
+  if (!ids?.length) return '—';
+  return ids.map(factionLabel).join(' + ');
+}
+
+/** Daily pool-WETH series for the Night LP health chart. Falls back to the live stamp. */
+export function nightLpPoints(night) {
+  const hist = Array.isArray(night?.lpHistory) ? night.lpHistory.filter((r) => r && r.date) : [];
+  if (hist.length) return hist;
+  const total = Number(night?.poolsWeth);
+  if (!(total > 0) && !night?.pools) return [];
+  return [{
+    date: night?.history?.[(night.history || []).length - 1]?.date || 'live',
+    nightId: night?.nightId,
+    totalWeth: total || 0,
+    totalUsd: Number(night?.poolsWethUsd) || 0,
+    pools: night?.pools || {},
+  }];
+}
+
 export function formatNightClock(ts) {
   const n = Number(ts);
   if (!Number.isFinite(n) || n <= 0) return '—';

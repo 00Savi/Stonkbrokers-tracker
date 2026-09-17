@@ -154,12 +154,13 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
               <span>🌙</span> {yieldTitle} Yield ROI Benchmarks
             </h3>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-lg px-4 py-2.5 text-sm shadow-inner flex items-center">
-              <span className="text-slate-400 mr-2">
               <span className="text-slate-400 mr-2">Floor Entry Cost:</span>
-              </span>
               <span className="text-white font-bold tracking-wide">{formatCurrency(floorCostUsd)}</span>
             </div>
           </div>
+          <p className="text-xs text-slate-400 mb-4">
+            Est. ROI is cash-on-cash: annualized vault yield ÷ (this floor + activation tokens at spot). Yield is the trailing 7-day RewardPaid sample, allocated by tier weight. The slider only scales the yield leg.
+          </p>
 
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-2">
@@ -258,7 +259,7 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
               <h2 className="text-xl font-bold text-white flex items-center gap-2">Historical Yield & Payback Horizon</h2>
-              <p className="text-xs md:text-sm text-slate-400 mt-1">Daily CoC ROI from the hourly ledger. Range is the sticky Weekly / Monthly / All control.</p>
+              <p className="text-xs text-slate-400 mt-1">Cash-on-cash: (annualized vault RewardPaid) ÷ (NFT floor + activation tokens at spot). The 7-day sample is split by tier weight. The slider scales yield only — cost stays at live floor and token price.</p>
             </div>
           </div>
 
@@ -320,7 +321,7 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
         </div>
       </section>
 
-      <NightshadesNightSection night={project.night} />
+      <NightshadesNightSection night={project.night} faction={faction} />
 
       <section id="burn" className="scroll-mt-32">
         <div className="space-y-6">

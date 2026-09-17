@@ -1,22 +1,24 @@
 import React, { useState } from 'react';
 import { Line, Doughnut } from 'react-chartjs-2';
 import { burnSeries, burnOfSupplyPct } from '../../lib/burn';
-import { dateKey } from '../../lib/dates';
+import { dateKey, formatLabels } from '../../lib/dates';
 import { protocolFeeCols, protocolRevenueChart, seriesHasInk, windowPeriodLabel } from '../../lib/yieldHistory';
 import { compactUsd, compactNum } from '../kit';
 import { baseChartOptions, compactTick, compactUsdTick } from '../../lib/charts';
 import { useChartWindow } from '../../lib/chartWindow';
 import {
-  NIGHTSHADES_FACTION_META,
-  FACTION_COLORS,
-  overlayFactionMaps,
-  seriesToDateMap,
-  factionDailyRevenue,
-  factionLabel,
-  formatNightClock,
-  nightPhaseLabel,
-  nightMagnitudePct,
-  factionNightRecord,
+    NIGHTSHADES_FACTION_META,
+    FACTION_COLORS,
+    overlayFactionMaps,
+    seriesToDateMap,
+    factionDailyRevenue,
+    factionLabel,
+    factionList,
+    formatNightClock,
+    nightPhaseLabel,
+    nightMagnitudePct,
+    factionNightRecord,
+    nightLpPoints,
 } from '../../lib/nightshades';
 import { ChartPanel, EmptyChart } from '../HistoryCharts';
 import { explorerTxUrl, explorerAddressUrl } from '../../lib/tba';
@@ -102,13 +104,14 @@ function NightCard({ night }) {
       </div>
     );
   }
-  const mag = Number(night.magnitudeBps);
-  const magPct = nightMagnitudePct(mag);
+  const magPct = nightMagnitudePct(night.magnitudeBps);
   const weth = Number(night.vaultWeth);
   const wethUsd = Number(night.vaultWethUsd);
+  const movePct = (Number(night.moveBps) / 100).toFixed(0);
+  const sunrisePct = (Number(night.sunriseBps) / 100).toFixed(0);
   return (
     <div className="bg-[#0e1013] border border-[#818cf8]/30 rounded-2xl p-4 md:p-6 shadow-xl">
-      <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
         <div>
           <p className="text-[10px] uppercase tracking-wider text-indigo-300 mb-1">The Night</p>
           <h3 className="text-lg font-bold text-white">
@@ -121,103 +124,191 @@ function NightCard({ night }) {
             {night.lastStrikeTx ? (
               <>
                 {' · '}
-                <a
-                  href={explorerTxUrl(night.lastStrikeTx)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-indigo-300 hover:text-white"
-                >
+                <a href={explorerTxUrl(night.lastStrikeTx)} target="_blank" rel="noreferrer" className="text-indigo-300 hover:text-white">
                   strike tx
                 </a>
               </>
             ) : null}
           </p>
         </div>
-        <div className="text-right">
-          <p className="text-[10px] uppercase tracking-wider text-slate-400">
-            {night.vault ? (
-              <a href={explorerAddressUrl(night.vault)} target="_blank" rel="noreferrer" className="hover:text-indigo-300">
-                Night vault
-              </a>
-            ) : (
-              'Vault WETH'
-            )}
-          </p>
-          <p className="text-xl font-extrabold text-white">
-            {weth > 0 ? weth.toFixed(2) : '—'}
-            <span className="ml-1 text-sm font-semibold text-slate-400">ETH</span>
-          </p>
-          {wethUsd > 0 ? <p className="text-xs text-slate-400">{compactUsd(wethUsd)}</p> : null}
-        </div>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-        <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3">
-          <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Favored</p>
+
+      <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 mb-4">
+        <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">This window</p>
+        <div className="flex flex-wrap items-center gap-2 text-sm">
           <TeamPills ids={night.favored} />
-        </div>
-        <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3">
-          <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Struck</p>
+          <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400/80">favored</span>
+          <span className="text-slate-600">vs</span>
           <TeamPills ids={night.struck} />
+          <span className="text-[11px] font-bold uppercase tracking-wider text-rose-400/80">struck</span>
+          <span className="text-slate-500">·</span>
+          <span className="text-white font-bold">{magPct}</span>
+          <span className="text-[11px] text-slate-500">magnitude</span>
         </div>
-        <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3">
-          <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Magnitude</p>
-          <p className="text-white font-bold">{magPct}</p>
-          <p className="text-[11px] text-slate-500 mt-1">Sunrise {(Number(night.sunriseBps) / 100).toFixed(0)}% · LP move {(Number(night.moveBps) / 100).toFixed(0)}%</p>
-        </div>
-      </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mt-3">
-        {NIGHTSHADES_FACTION_META.map((f) => {
-          const amt = Number(night.vaultTokens?.[f.id]);
-          return (
-            <div key={f.id} className="bg-[#08090b] border border-[#1e2228] rounded-lg px-3 py-2">
-              <p className="text-[10px] uppercase tracking-wider" style={{ color: FACTION_COLORS[f.id] }}>{f.label}</p>
-              <p className="text-sm font-bold text-white">{amt > 0 ? compactNum(amt) : '—'}</p>
-            </div>
-          );
-        })}
-      </div>
-      <div className="mt-4 pt-3 border-t border-[#1e2228]">
-        <p className="text-[10px] uppercase tracking-wider text-indigo-300 mb-1">Next night</p>
-        <p className="text-[11px] text-slate-500 mb-3">
-          The Night vault deploys this. Sunrise is swap fees accrued since the last window.
-          Uniswap v4 WETH is protocol-owned; the strike can move {(Number(night.moveBps) / 100).toFixed(0)}% of whichever pair is hit.
+        <p className="text-[12px] text-slate-400 mt-3 leading-relaxed">
+          Favored factions keep their pools. The Night can pull {movePct}% of WETH from the <strong className="text-white">struck</strong> pair
+          ({factionList(night.struck)}) and sell those tokens into the vault. Sunrise tax is {sunrisePct}%.
         </p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-          <EthStat
-            label="Sunrise fees"
-            eth={night.sunriseWeth}
-            usd={night.sunriseWethUsd}
-            note="Accrued in the vault since last sunrise"
-          />
-          <EthStat
-            label="Pool liquidity"
-            eth={night.poolsWeth}
-            usd={night.poolsWethUsd}
-            note="WETH in the four v4 faction pools"
-          />
-          <EthStat
-            label="LP Night can move"
-            range={fmtEthRange(night.moveWethMin, night.moveWethMax)}
-            usd={night.moveWethMaxUsd}
-            note={`${(Number(night.moveBps) / 100).toFixed(0)}% of the struck pair (range = thinnest–fattest)`}
-          />
-        </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mt-3">
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-sm mb-4">
+        <EthStat
+          label="Night vault"
+          eth={weth}
+          usd={wethUsd}
+          note={night.vault ? (
+            <a href={explorerAddressUrl(night.vault)} target="_blank" rel="noreferrer" className="hover:text-indigo-300">Vault contract</a>
+          ) : 'WETH sitting in the vault'}
+        />
+        <EthStat
+          label="Pool liquidity"
+          eth={night.poolsWeth}
+          usd={night.poolsWethUsd}
+          note="WETH in all four faction pools — system health"
+        />
+        <EthStat
+          label="Sunrise fees"
+          eth={night.sunriseWeth}
+          usd={night.sunriseWethUsd}
+          note="Swap fees accrued since last sunrise"
+        />
+        <EthStat
+          label="LP Night can move"
+          range={fmtEthRange(night.moveWethMin, night.moveWethMax)}
+          usd={night.moveWethMaxUsd}
+          note={`${movePct}% of a two-faction pair (thinnest–fattest)`}
+        />
+      </div>
+
+      <div className="mb-4">
+        <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Pool WETH by faction</p>
+        <p className="text-[11px] text-slate-500 mb-2">Uniswap v4 WETH on each token pair. After a night, struck pools should dip then stick — not drain to zero.</p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
           {NIGHTSHADES_FACTION_META.map((f) => {
             const pool = night.pools?.[f.id];
             const poolWeth = Number(pool?.weth);
+            const hit = (night.struck || []).includes(f.id);
             return (
-              <div key={f.id} className="bg-[#08090b] border border-[#1e2228] rounded-lg px-3 py-2">
-                <p className="text-[10px] uppercase tracking-wider" style={{ color: FACTION_COLORS[f.id] }}>{f.label} LP</p>
-                <p className="text-sm font-bold text-white">
-                  {poolWeth > 0 ? `${poolWeth.toFixed(2)} ETH` : '—'}
+              <div key={f.id} className={`bg-[#08090b] border rounded-lg px-3 py-2 ${hit ? 'border-rose-500/40' : 'border-[#1e2228]'}`}>
+                <p className="text-[10px] uppercase tracking-wider" style={{ color: FACTION_COLORS[f.id] }}>
+                  {f.label}{hit ? ' · struck' : ''}
                 </p>
+                <p className="text-sm font-bold text-white">{poolWeth > 0 ? `${poolWeth.toFixed(2)} ETH` : '—'}</p>
                 {Number(pool?.usd) > 0 ? <p className="text-[11px] text-slate-500">{compactUsd(pool.usd)}</p> : null}
               </div>
             );
           })}
         </div>
       </div>
+
+      <div>
+        <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Vault token inventory</p>
+        <p className="text-[11px] text-slate-500 mb-2">
+          Faction tokens the Night vault is holding — loot from past strikes, not “how hard they were hit.”
+        </p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+          {NIGHTSHADES_FACTION_META.map((f) => {
+            const amt = Number(night.vaultTokens?.[f.id]);
+            return (
+              <div key={f.id} className="bg-[#08090b] border border-[#1e2228] rounded-lg px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wider" style={{ color: FACTION_COLORS[f.id] }}>{f.ticker}</p>
+                <p className="text-sm font-bold text-white">{amt > 0 ? compactNum(amt) : '—'}</p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function lpEthAxis() {
+  const base = baseChartOptions();
+  return {
+    ...base,
+    scales: {
+      ...base.scales,
+      y: {
+        ...base.scales.y,
+        beginAtZero: true,
+        ticks: { ...base.scales.y.ticks, callback: (v) => `${compactTick(v)} ETH` },
+      },
+    },
+  };
+}
+
+function lpSlice(night, timeframe) {
+  const points = nightLpPoints(night);
+  const n = timeframe === '7d' ? 7 : timeframe === '30d' ? 30 : points.length;
+  const sliced = points.slice(-Math.max(1, n));
+  return {
+    labels: formatLabels(sliced.map((r) => r.date)),
+    sliced,
+  };
+}
+
+function NightLiquidity({ night, timeframe, faction }) {
+  const { labels, sliced } = lpSlice(night, timeframe);
+  const ethAxis = lpEthAxis();
+  const dots = sliced.length < 8 ? 3 : 0;
+  const meta = NIGHTSHADES_FACTION_META.find((f) => f.id === faction);
+
+  if (meta) {
+    return (
+      <Together
+        title={`${meta.label} pool liquidity`}
+        note={`${meta.label} WETH in its Uniswap v4 pair. After that faction is struck, this line should dip and then stick — a slide toward zero is LP leaving.`}
+        labels={labels}
+        datasets={[{
+          label: `${meta.label} pool`,
+          data: sliced.map((r) => Number(r.pools?.[meta.id]?.weth) || 0),
+          borderColor: FACTION_COLORS[meta.id],
+          backgroundColor: `${FACTION_COLORS[meta.id]}15`,
+          borderWidth: 3,
+          tension: 0.3,
+          pointRadius: dots,
+          spanGaps: true,
+          fill: true,
+        }]}
+        options={ethAxis}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <Together
+        title="Pool liquidity by faction"
+        note="Each Anvil pair on its own line. Not stacked — Ghosts is not added into Knights here."
+        labels={labels}
+        datasets={NIGHTSHADES_FACTION_META.map((f) => ({
+          label: `${f.label} pool`,
+          data: sliced.map((r) => Number(r.pools?.[f.id]?.weth) || 0),
+          borderColor: FACTION_COLORS[f.id],
+          borderWidth: 2,
+          tension: 0.3,
+          pointRadius: dots,
+          spanGaps: true,
+        }))}
+        options={ethAxis}
+      />
+      <Together
+        title="Total Nightshades pool liquidity"
+        note="All four faction pools added together. This is system health: after a night, total WETH should dip on the struck side and then stick."
+        labels={labels}
+        datasets={[{
+          label: 'All four pools',
+          data: sliced.map((r) => Number(r.totalWeth) || 0),
+          borderColor: '#818cf8',
+          backgroundColor: '#818cf815',
+          borderWidth: 3,
+          tension: 0.3,
+          pointRadius: dots,
+          spanGaps: true,
+          fill: true,
+        }]}
+        options={ethAxis}
+      />
     </div>
   );
 }
@@ -229,7 +320,7 @@ function NightHistory({ night }) {
     <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6">
       <div className="mb-4">
         <h3 className="text-sm font-bold text-white">Night history</h3>
-        <p className="text-xs text-slate-400 mt-1">One row per VRF strike. Vault inventory is the snapshot from when that night was current.</p>
+        <p className="text-xs text-slate-400 mt-1">One row per VRF strike. Favored vs struck is the matchup. Pool WETH is the four-faction total when we had a stamp for that night.</p>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-4">
         {NIGHTSHADES_FACTION_META.map((f) => {
@@ -252,6 +343,7 @@ function NightHistory({ night }) {
               <th className="pb-3 font-medium">Favored</th>
               <th className="pb-3 font-medium">Struck</th>
               <th className="pb-3 font-medium">Magnitude</th>
+              <th className="pb-3 font-medium text-right">Pools</th>
               <th className="pb-3 font-medium text-right pr-2">Strike</th>
             </tr>
           </thead>
@@ -266,6 +358,9 @@ function NightHistory({ night }) {
                 <td className="py-3"><TeamPills ids={row.favored} /></td>
                 <td className="py-3"><TeamPills ids={row.struck} /></td>
                 <td className="py-3 text-white font-semibold">{nightMagnitudePct(row.magnitudeBps)}</td>
+                <td className="py-3 text-right text-slate-300">
+                  {Number(row.poolsWeth) > 0 ? `${Number(row.poolsWeth).toFixed(1)} ETH` : '—'}
+                </td>
                 <td className="py-3 text-right pr-2">
                   {row.tx ? (
                     <a
@@ -288,10 +383,12 @@ function NightHistory({ night }) {
 }
 
 /** Incubator-wide Night card + history. Lives on the Night tab for All and each faction. */
-export function NightshadesNightSection({ night }) {
+export function NightshadesNightSection({ night, faction }) {
+  const [timeframe] = useChartWindow();
   return (
     <section id="night" className="scroll-mt-32 space-y-6">
       <NightCard night={night} />
+      <NightLiquidity night={night} timeframe={timeframe} faction={faction} />
       <NightHistory night={night} />
     </section>
   );
@@ -475,7 +572,9 @@ export default function NightshadesAllView({ project, setFaction }) {
           <div className="flex justify-between items-start mb-6 gap-4">
             <div>
               <h3 className="text-lg font-bold text-white">Nightshades faction ROI</h3>
-              <p className="text-xs text-slate-400 mt-1">Each Anvil market on its own row. Click a name to open that faction.</p>
+              <p className="text-xs text-slate-400 mt-1">
+                Cash-on-cash for a T0 Shade: annualized vault yield ÷ (NFT floor USD + activation tokens at spot). Yield is the 7-day RewardPaid sample, split by tier weight. Open a faction for the full table and volume slider.
+              </p>
             </div>
           </div>
           <div className="overflow-x-auto -mx-1 sm:mx-0">
@@ -803,7 +902,7 @@ export default function NightshadesAllView({ project, setFaction }) {
         <div className="text-xs md:text-sm text-slate-300 mb-5 leading-relaxed space-y-4">
           <p><strong className="text-white">All is a comparison, not a rollup:</strong> Ghosts, Zombies, Knights, and Watchers stay four series on one axis. Totals are not added together. Open a faction for that market’s tiers, simulator, and vault detail.</p>
           <p><strong className="text-white">Revenue:</strong> Faction AMM / vault RewardPaid only. The Nightshades civ-pad launch tax is counted on StonkBrokers.</p>
-          <p><strong className="text-white">The Night</strong> is the daily VRF strike. A one-hour window commits a favored pair vs a struck pair; the Night vault pulls Uniswap v4 LP on the struck side and sells those tokens. Sunrise tax is 25%. The same vault is the next-night deployer: sunrise fees are its accrued swap-fee bucket, and usable LP is 20% of whichever two-faction pair is struck (keep 80%). Live strike, next-night ammo, and history sit on the Night tab. StockBooster is civ-pad tax on StonkBrokers, not a Night vault hop.</p>
+          <p><strong className="text-white">The Night</strong> is the daily VRF strike. Favored factions keep their pools; struck factions can lose 20% of that pair’s WETH to the vault (tokens sold for WETH). The unlabeled millions were vault token inventory — loot the vault is holding, not strike size. Pool WETH over time is the health chart: after each night, liquidity should dip on the struck side and then stick.</p>
         </div>
         <p className="text-xs md:text-sm text-slate-400 italic leading-relaxed border-t border-[#1e2228] pt-5">
           <strong className="text-slate-300 not-italic">Disclaimer:</strong> Tracked yield values use mark-to-market spot pricing at the last sync. This is a community-built tracking tool and does not guarantee future returns.
