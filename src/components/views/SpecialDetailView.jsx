@@ -447,7 +447,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
         </div>
       </section>
 
-      <div className="bg-[#0e1013] rounded-xl p-5 border border-[#1e2228] mt-8">
+      <div data-share-omit className="bg-[#0e1013] rounded-xl p-5 border border-[#1e2228] mt-8">
         <h3 className="text-base font-bold text-white mb-3">Methodology &amp; Disclaimer</h3>
         <p className="text-xs text-slate-300 leading-relaxed">
           {kind === 'cashflow' && 'Fees and holders revenue are DefiLlama The Index (original INDEX swap tax settled into tokenized stocks). CoC is annualized holders revenue ÷ circulating supply ÷ token price. That is cash-flow against INDEX cost basis, not a points program.'}
@@ -848,7 +848,7 @@ function VaultView({
         </div>
       </section>
 
-      <div className="bg-[#0e1013] rounded-xl p-5 border border-[#1e2228] mt-8">
+      <div data-share-omit className="bg-[#0e1013] rounded-xl p-5 border border-[#1e2228] mt-8">
         <h3 className="text-base font-bold text-white mb-3">Methodology &amp; Disclaimer</h3>
         <p className="text-xs text-slate-300 leading-relaxed">
           Mechanics follow the Oakmont docs and the live indexer (api.oakmontvault.xyz).

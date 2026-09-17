@@ -8,6 +8,9 @@ import {
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import OverviewView from './OverviewView';
 import { compactUsd, compactNum, WindowBar } from '../kit';
+import { CopyPageButton } from '../CopyControl';
+import { copyShareCard } from '../../lib/share';
+import { buildEcosystemShareCard } from '../../lib/projectShare';
 import { dateKey, formatLabels } from '../../lib/dates';
 import { burnSeries } from '../../lib/burn';
 import { cashflowRoiByDate, protocolFeeCols, protocolRevenueChart, seriesHasInk } from '../../lib/yieldHistory';
@@ -287,7 +290,7 @@ export default function EcosystemView({ data, pending = false }) {
     <div className="space-y-6 pt-4 relative">
       
       {/* ECOSYSTEM TAB NAVIGATION */}
-      <div className="sticky top-[4.25rem] z-20 -mx-1 mb-6 flex w-full items-center gap-2 overflow-x-auto bg-[#08090b]/90 px-1 py-2 backdrop-blur sm:top-[4.75rem]">
+      <div className="sticky top-[4.25rem] z-20 -mx-1 mb-6 flex w-full items-center gap-2 overflow-x-auto bg-[#08090b]/90 px-1 py-2 backdrop-blur sm:top-[4.75rem]" data-share-omit>
         <div className="flex min-w-0 flex-1 gap-2">
         {ECO_TABS.map((tab) => (
           <button
@@ -305,6 +308,11 @@ export default function EcosystemView({ data, pending = false }) {
         ))}
         </div>
         <WindowBar compact value={timeframe} onChange={setTimeframe} />
+        <CopyPageButton
+          idleLabel="Copy for X"
+          title="Copy a compact 16:9 image for X"
+          onCopy={() => copyShareCard(buildEcosystemShareCard(data, { timeframe }))}
+        />
       </div>
 
       {/* ========================================================= */}

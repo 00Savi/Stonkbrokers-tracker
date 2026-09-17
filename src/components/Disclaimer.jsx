@@ -53,7 +53,7 @@ export function DisclaimerCopy({ extra }) {
 
 export function MethodologyCard({ accent = 'text-blue-500', children }) {
   return (
-    <div className="bg-[#0e1013] rounded-xl p-5 md:p-6 border border-[#1e2228] shadow-lg mt-8">
+    <div data-share-omit className="bg-[#0e1013] rounded-xl p-5 md:p-6 border border-[#1e2228] shadow-lg mt-8">
       <div className="flex items-center gap-2 mb-4">
         <InfoIcon className={`w-5 h-5 ${accent}`} />
         <h3 className="text-base md:text-lg font-bold text-white">Methodology & Disclaimer</h3>

@@ -72,10 +72,10 @@ function ProjectPage({ data }) {
   return (
     <>
       <div className="sticky top-[4.25rem] z-20 -mx-3 bg-[#08090b]/90 px-3 backdrop-blur sm:top-[4.75rem]">
-        <TabBar />
+        <TabBar data={data} />
         {key === 'nightshades' && <NightshadesFactionBar />}
       </div>
-      <div className="pt-5 pb-28">
+      <div className="pt-5 pb-28" id="project-share">
         {data ? (
           <View data={data} activeTab={activeTab} />
         ) : (
@@ -131,8 +131,10 @@ export default function App() {
           <Route
             path="/ecosystem"
             element={
-              <Section title="Ecosystem Overview">
-                {data ? <EcosystemView data={data} pending={booting} /> : <SkeletonCard rows={6} />}
+              <Section>
+                <div id="ecosystem-share">
+                  {data ? <EcosystemView data={data} pending={booting} /> : <SkeletonCard rows={6} />}
+                </div>
               </Section>
             }
           />

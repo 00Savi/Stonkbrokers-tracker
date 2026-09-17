@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { PROJECTS, isProjectLive, tabsForProject } from '../lib/routes';
-import { LAUNCHER_REF, SAVI_X } from '../lib/share';
+import { copyShareCard, LAUNCHER_REF, SAVI_X } from '../lib/share';
+import { buildProjectShareCard } from '../lib/projectShare';
 import { Value, price, usd, eth, BetaTag, WindowBar } from './kit';
+import { CopyPageButton } from './CopyControl';
 import { useChartWindow } from '../lib/chartWindow';
 
 export { LAUNCHER_REF, SAVI_X };
@@ -264,7 +266,7 @@ export function TopNav({ live, sources, data, pending }) {
 }
 
 /** Project tab bar. Every tab is a real link, so each is refresh-safe. */
-export function TabBar() {
+export function TabBar({ data }) {
   const { project } = useParams();
   const [searchParams] = useSearchParams();
   const [timeframe, setTimeframe] = useChartWindow();
@@ -288,7 +290,20 @@ export function TabBar() {
           </NavLink>
         ))}
       </div>
-      <div className="flex shrink-0 justify-end">
+      <div className="flex shrink-0 items-center justify-end gap-2">
+        <CopyPageButton
+          idleLabel="Copy for X"
+          title="Copy a compact 16:9 image for X"
+          onCopy={() => {
+            const payload = buildProjectShareCard(data, {
+              projectKey: meta?.key,
+              faction: searchParams.get('faction'),
+              timeframe,
+            });
+            if (!payload) throw new Error('Nothing to copy');
+            return copyShareCard(payload);
+          }}
+        />
         <WindowBar compact value={timeframe} onChange={setTimeframe} />
         {meta?.beta && (
           <span className="ml-2 hidden sm:block">
