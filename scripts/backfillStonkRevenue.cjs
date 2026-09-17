@@ -188,8 +188,13 @@ function fillHolderAndRoi(stonk) {
   const floorUsd = Number(anchor.nftFloorUsd) || 0;
   const floorEth = Number(anchor.nftFloorEth) || 0;
   const px = Number(anchor.tokenPriceUsd) || 0;
-  const burn = Number(firstSnap?.totalBurn) || Number(anchor.totalBurn) || 1;
   const maxSupply = Number(stonk.config?.maxSupply) || 4444;
+  const burnBy = new Map();
+  const bh = stonk.ownership?.burnHistory || {};
+  (bh.labels || []).forEach((d, i) => {
+    const iso = dates.dateKey(d);
+    if (iso) burnBy.set(iso, Number(bh.data[i]) || 0);
+  });
 
   const cumBy = new Map();
   const ah = stonk.activation?.history || {};
@@ -235,7 +240,7 @@ function fillHolderAndRoi(stonk) {
       tokenPriceUsd: px,
       nftFloorEth: floorEth,
       nftFloorUsd: floorUsd,
-      totalBurn: burn,
+      totalBurn: burnBy.get(d) || 0,
       yieldSource: "clock_in",
       activeCount,
       percentActivated: +((activeCount / maxSupply) * 100).toFixed(2),

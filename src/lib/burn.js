@@ -1,12 +1,11 @@
 // Cumulative burn over each token's recorded life.
 //
 // Snapshots only started when the hourly job did (~2026-08-20 for brokers,
-// ~2026-09-01 for specials). gg-index Transfer folds go back to first mint
-// but have been overstating Mancer and even falling — a high index day
-// must not freeze later live reads. Index (or activation volume) is only
-// used before the first trusted snapshot, scaled to meet it. After that,
-// snapshots and the live dual-burn read own the line. Quiet days carry
-// the last cumulative forward — a burn cannot shrink.
+// ~2026-09-01 for specials). clock_in ROI rows are not supply reads.
+// Transfer-fold / gg-index burnHistory fills days before the first trusted
+// snapshot, scaled to meet it. After that, snapshots and the live dual-burn
+// read own the line. Quiet days carry the last cumulative forward — a burn
+// cannot shrink.
 
 import { usableSnapshots } from './snapshots';
 import { windowLen } from './yieldHistory';
@@ -29,6 +28,12 @@ function liveBurn(p) {
 function snapshotBurnMap(snaps) {
   const map = {};
   for (const s of usableSnapshots(snaps)) {
+    // clock_in rows exist for pre-oracle ROI. The revenue backfill copied
+    // the first live burn onto every one of them, which flattened the
+    // chart until hourly snapshots started. Ignore those placeholders;
+    // burnHistory from the Transfer fold owns the days before the first
+    // trusted supply read.
+    if (s?.yieldSource === 'clock_in') continue;
     const k = dateKey(s.date);
     const n = Number(s.totalBurn);
     if (k && Number.isFinite(n) && n > 0) map[k] = n;

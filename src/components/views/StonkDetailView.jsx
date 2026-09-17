@@ -593,7 +593,7 @@ export default function StonkDetailView({ data, activeTab }) {
 
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
             <h3 className="text-sm font-bold text-white mb-1">Cumulative Token Burn Over Time</h3>
-            <p className="text-xs text-slate-500 mb-4">First activation through today. Days before hourly snapshots are scaled from activation volume to the first trusted supply read.</p>
+            <p className="text-xs text-slate-500 mb-4">First mint through today. Days before hourly snapshots are reconstructed from burns that lower totalSupply (Transfer to 0x0), plus dead, scaled to the first trusted supply read.</p>
             <div className="relative h-52 sm:h-64 md:h-80 w-full">
               {slicedBurnData.length > 0 ? (
                 <Line
