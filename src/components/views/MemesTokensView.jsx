@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 
 import { compactUsd } from '../kit';
+import { NfaNote } from '../Disclaimer';
 
 const MANCER_ORIGIN = 'https://mancer.xyz';
 const MANCER_SCRIPT = `${MANCER_ORIGIN}/embed.js`;
@@ -222,6 +223,7 @@ export default function MemesTokensView({ data, type }) {
       </div>
 
       <MarketsTabs stocks={isStocks} />
+      <NfaNote className="mb-4" />
       {isStocks && <UsStockWarning />}
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px] gap-4 items-start">

@@ -11,6 +11,7 @@ import { baseChartOptions, compactTick, compactUsdTick, dualAxisOptions, STREAM_
 import { useChartWindow } from '../../lib/chartWindow';
 import { explorerAddressUrl } from '../../lib/tba';
 import { holderSeries } from '../../lib/snapshots';
+import { MethodologyCard } from '../Disclaimer';
 import {
   EmptyChart,
   YieldUsdPricePanel,
@@ -750,24 +751,12 @@ export default function StonkDetailView({ data, activeTab }) {
         </div>
       </section>
 
-      {/* ========================================================================= */}
-      {/* DYNAMIC DISCLAIMER FOOTER */}
-      {/* ========================================================================= */}
-      <div className="bg-[#0e1013] rounded-xl p-5 md:p-6 border border-[#1e2228] shadow-lg mt-8">
-        <div className="flex items-center gap-2 mb-4">
-          <svg className="w-5 h-5 text-blue-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd"></path></svg>
-          <h3 className="text-base md:text-lg font-bold text-white">Methodology & Disclaimer</h3>
-        </div>
-        <div className="text-xs md:text-sm text-slate-300 mb-5 leading-relaxed space-y-4">
-          <p><strong className="text-white">Yield & ROI (Global Network Oracle) Methodology:</strong> From 2026-08-20, cash-on-cash uses the T4 oracle wallet sample scaled by total network weight / 333. Before that the oracle was not a partner — those ROI days estimate per-weight yield from Clock In v1, v2, and Overtime pot inflows divided by reconstructed active weight, with cost basis taken from the first oracle snapshot (floor + activation tokens). Mid-August is a real FOMO / revenue spike (NFT trades printed around 12 ETH); the % uses a later ~4 ETH floor so it tracks that yield spike rather than repricing entry cost day by day.</p>
-          <p><strong className="text-white">Historical Yield & Payback Horizon Methodology:</strong> Capital recovery timelines are calculated by dividing the total entry cost by annualized trailing yield rates. ROI trajectories map historical performance over rolling epochs.</p>
-          <p><strong className="text-white">Protocol Analytics:</strong> Metrics shown aggregate live on-chain events across registered smart contracts.</p>
-          <p><strong className="text-white">Protocol Ownership & Distribution Methodology:</strong> Wallet concentration metrics evaluate unique human holders against true circulating supply, subtracting protocol treasury allocations. Activated-wallet count is unique current owners of NFTs that still have an open activation — a sale clears it.</p>
-        </div>
-        <p className="text-xs md:text-sm text-slate-400 italic leading-relaxed border-t border-[#1e2228] pt-5">
-          <strong className="text-slate-300 not-italic">Disclaimer:</strong> Tracked yield values are calculated using Mark-to-Market spot pricing at the exact time of the dashboard's last automated sync, rather than the historical price at the time of the drop. Yields fluctuate based on network activation weight, market token prices, and community protocol volume. This is a community-built tracking tool and does not guarantee future returns.
-        </p>
-      </div>
+      <MethodologyCard accent="text-blue-500">
+          <p><strong className="text-white">Yield &amp; ROI:</strong> Live cash-on-cash is a trailing sample of the T4 Partner oracle wallet, scaled by total network weight / 333, annualized, then divided by (NFT floor USD + activation tokens at DexScreener spot). From 2026-08-20 that oracle is live. Earlier ROI days estimate the same CoC from Clock In v1, v2, and Overtime pot inflows ÷ reconstructed active weight, with cost basis frozen at the first oracle snapshot. Mid-August is a real FOMO / revenue spike (NFT trades printed around 12 ETH); the % uses the later ~4 ETH floor so it tracks that yield spike rather than repricing entry cost day by day. A one-day collapse between two hot UTC sessions is treated as a bucket hole, not a crash.</p>
+          <p><strong className="text-white">Protocol revenue (StonkBooster mix):</strong> AMM collector, Clock In locker fees (v1 retired, v2, Overtime retired), launchpad tax, Partner Revenue Share (Nightshades 13.33% civ-pad + Mancer 25% dex), and Smart LP skim. Clock In is Safety Deposit lock/collect fees (90% community / 10% protocol), not a raffle. Nightshades Night vault WETH is The Night inventory and is never counted here. Bonding swap volume is notional and is not revenue.</p>
+          <p><strong className="text-white">Payback:</strong> Entry cost ÷ annualized trailing yield. Charts reprice cost at the last sync.</p>
+          <p><strong className="text-white">Ownership:</strong> Unique holders vs circulating supply after treasury wallets. Activated-wallet count is unique current owners of NFTs that still have an open activation — a sale clears it.</p>
+      </MethodologyCard>
 
     </div>
   );

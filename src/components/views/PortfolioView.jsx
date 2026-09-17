@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ethers } from 'ethers';
 import { SAVI_X } from '../Shell';
+import { NfaNote } from '../Disclaimer';
 import { copyPortfolioSnapshot } from '../../lib/share';
 import { PAIR_COLORS, STREAM_COLORS } from '../../lib/charts';
 import { PROJECTS, isProjectLive } from '../../lib/routes';
@@ -776,6 +777,10 @@ export default function PortfolioView({ data }) {
             </a>{' '}
             for new projects and daily changes.
           </p>
+          <NfaNote
+            className="mb-5"
+            extra="The 1Y / 3Y / 5Y / 10Y figures multiply the current trailing run-rate. They are not a prediction that yield stays constant."
+          />
           {!hasHoldings ? (
             <p className="text-sm text-slate-400">No ecosystem NFTs found in the provided wallet(s).</p>
           ) : (

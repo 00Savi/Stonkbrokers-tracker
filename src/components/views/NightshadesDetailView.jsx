@@ -13,6 +13,7 @@ import { useChartWindow } from '../../lib/chartWindow';
 import { holderSeries } from '../../lib/snapshots';
 import { NIGHTSHADES_FACTION_META } from '../../lib/nightshades';
 import NightshadesAllView, { NightshadesNightSection } from './NightshadesAllView';
+import { MethodologyCard } from '../Disclaimer';
 import {
   EmptyChart,
   YieldUsdPricePanel,
@@ -494,21 +495,13 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
         </div>
       </section>
 
-      <div className="bg-[#0e1013] rounded-xl p-5 md:p-6 border border-[#1e2228] shadow-lg mt-8">
-        <div className="flex items-center gap-2 mb-4">
-          <svg className="w-5 h-5 text-indigo-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd"></path></svg>
-          <h3 className="text-base md:text-lg font-bold text-white">Methodology & Disclaimer</h3>
-        </div>
-        <div className="text-xs md:text-sm text-slate-300 mb-5 leading-relaxed space-y-4">
+      <MethodologyCard accent="text-indigo-400">
           <p><strong className="text-white">Four Anvil markets, one incubator:</strong> Ghosts, Zombies, Knights, and Watchers each have 3,000 NFTs, one faction token, and a SoftStakingVault. The All tab compares the four on one axis. This page is one market.</p>
+          <p><strong className="text-white">Yield &amp; ROI:</strong> Cash-on-cash is annualized vault RewardPaid ÷ (this floor + activation tokens at spot). The 7-day sample is split by tier weight. The volume slider scales yield only — cost stays at live floor and token price. Night vault WETH is The Night inventory, not StonkBooster.</p>
           <p><strong className="text-white">Activation:</strong> Same mechanic as Mancer/Yard. The vault emits no Deactivated event — a sale clears the position. <code>activeCount()</code> is an upper bound; this page replays Activated plus NFT transfers.</p>
           <p><strong className="text-white">Revenue:</strong> Faction AMM / vault RewardPaid only. The Nightshades civ-pad launch tax is counted on StonkBrokers, not copied here.</p>
           <p><strong className="text-white">The Night</strong> is incubator-wide (one VRF over all four factions). Live strike, history, sunrise fees, and usable v4 LP sit on the Night tab.</p>
-        </div>
-        <p className="text-xs md:text-sm text-slate-400 italic leading-relaxed border-t border-[#1e2228] pt-5">
-          <strong className="text-slate-300 not-italic">Disclaimer:</strong> Tracked yield values use mark-to-market spot pricing at the last sync. This is a community-built tracking tool and does not guarantee future returns.
-        </p>
-      </div>
+      </MethodologyCard>
     </div>
   );
 }

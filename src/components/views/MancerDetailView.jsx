@@ -10,6 +10,7 @@ import { compactUsd, compactNum } from '../kit';
 import { baseChartOptions, compactTick, compactUsdTick, dualAxisOptions, STREAM_COLORS } from '../../lib/charts';
 import { useChartWindow } from '../../lib/chartWindow';
 import { holderSeries } from '../../lib/snapshots';
+import { MethodologyCard } from '../Disclaimer';
 import {
   EmptyChart,
   YieldUsdPricePanel,
@@ -503,24 +504,13 @@ export default function MancerDetailView({ data, activeTab }) {
         </div>
       </section>
 
-      {/* ========================================================================= */}
-      {/* DYNAMIC DISCLAIMER FOOTER */}
-      {/* ========================================================================= */}
-      <div className="bg-[#0e1013] rounded-xl p-5 md:p-6 border border-[#1e2228] shadow-lg mt-8">
-        <div className="flex items-center gap-2 mb-4">
-          <svg className="w-5 h-5 text-purple-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd"></path></svg>
-          <h3 className="text-base md:text-lg font-bold text-white">Methodology & Disclaimer</h3>
-        </div>
-        <div className="text-xs md:text-sm text-slate-300 mb-5 leading-relaxed space-y-4">
-          <p><strong className="text-white">Yield & ROI (Global Network Oracle) Methodology:</strong> Cash-on-Cash (CoC) returns are calculated dynamically based on the selected project's architecture and active network weight.</p>
-          <p><strong className="text-white">Historical Yield & Payback Horizon Methodology:</strong> Capital recovery timelines are calculated by dividing the total entry cost by annualized trailing yield rates. ROI trajectories map historical performance over rolling epochs.</p>
+      <MethodologyCard accent="text-purple-500">
+          <p><strong className="text-white">Yield &amp; ROI:</strong> Mancer is a SoftStakingVault, not the StonkBrokers T4 oracle. Cash-on-cash is annualized vault / protocol yield ÷ (NFT floor USD + activation tokens at DexScreener spot), split by Anvil tier weight (100 / 125 / 160 / 200 / 333). Live yield is a trailing sample, not a promised APY.</p>
           <p><strong className="text-white">Activation:</strong> Total Active Units is the live set after replaying vault events plus NFT transfers. Mancer emits no Deactivated event — a sale clears the position. The contract&apos;s <code>activeCount()</code> is an upper bound and is not what this page shows. Tier flow cards are gross activate/exit events in the window, not the live mix (that is the doughnut).</p>
-          <p><strong className="text-white">Protocol Ownership & Distribution Methodology:</strong> Wallet concentration metrics evaluate unique human holders against true circulating supply, subtracting protocol treasury allocations. Activated-wallet count is unique current owners of NFTs that still have an open activation — a sale clears it.</p>
-        </div>
-        <p className="text-xs md:text-sm text-slate-400 italic leading-relaxed border-t border-[#1e2228] pt-5">
-          <strong className="text-slate-300 not-italic">Disclaimer:</strong> Tracked yield values are calculated using Mark-to-Market spot pricing at the exact time of the dashboard's last automated sync, rather than the historical price at the time of the drop. Yields fluctuate based on network activation weight, market token prices, and community protocol volume. This is a community-built tracking tool and does not guarantee future returns.
-        </p>
-      </div>
+          <p><strong className="text-white">Revenue:</strong> Dex collector plus vault RewardPaid. 25% of Mancer dex tax is also credited to StonkBrokers Partner Revenue Share. This page still shows Mancer&apos;s full collector — do not add the two protocol totals together.</p>
+          <p><strong className="text-white">Payback:</strong> Entry cost ÷ annualized trailing yield, repriced at the last sync.</p>
+          <p><strong className="text-white">Ownership:</strong> Unique holders vs circulating supply after treasury wallets. Activated-wallet count is unique current owners of NFTs that still have an open activation.</p>
+      </MethodologyCard>
 
     </div>
   );

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { PROJECTS, projectPath } from '../../lib/routes';
+import { NfaBanner } from '../Disclaimer';
 import { BetaTag } from '../kit';
 
 function parseWallets(raw) {
@@ -62,6 +63,7 @@ export default function HomeView({ data }) {
           Track floor, yield, burns, and activations across Robinhood Chain projects. Scan a wallet
           or open a collection.
         </p>
+        <NfaBanner className="mt-6 max-w-2xl" />
 
         <form onSubmit={goScan} className="mt-7 flex max-w-2xl flex-col gap-3 sm:flex-row">
           <label className="sr-only" htmlFor="home-wallet">

@@ -21,6 +21,7 @@ import {
     nightLpPoints,
 } from '../../lib/nightshades';
 import { ChartPanel, EmptyChart } from '../HistoryCharts';
+import { MethodologyCard } from '../Disclaimer';
 import { explorerTxUrl, explorerAddressUrl } from '../../lib/tba';
 
 function formatPrice(val) {
@@ -894,20 +895,12 @@ export default function NightshadesAllView({ project, setFaction }) {
         </div>
       </section>
 
-      <div className="bg-[#0e1013] rounded-xl p-5 md:p-6 border border-[#1e2228] shadow-lg mt-8">
-        <div className="flex items-center gap-2 mb-4">
-          <svg className="w-5 h-5 text-indigo-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" /></svg>
-          <h3 className="text-base md:text-lg font-bold text-white">Methodology & Disclaimer</h3>
-        </div>
-        <div className="text-xs md:text-sm text-slate-300 mb-5 leading-relaxed space-y-4">
-          <p><strong className="text-white">All is a comparison, not a rollup:</strong> Ghosts, Zombies, Knights, and Watchers stay four series on one axis. Totals are not added together. Open a faction for that market’s tiers, simulator, and vault detail.</p>
-          <p><strong className="text-white">Revenue:</strong> Faction AMM / vault RewardPaid only. The Nightshades civ-pad launch tax is counted on StonkBrokers.</p>
-          <p><strong className="text-white">The Night</strong> is the daily VRF strike. Favored factions keep their pools; struck factions can lose 20% of that pair’s WETH to the vault (tokens sold for WETH). The unlabeled millions were vault token inventory — loot the vault is holding, not strike size. Pool WETH over time is the health chart: after each night, liquidity should dip on the struck side and then stick.</p>
-        </div>
-        <p className="text-xs md:text-sm text-slate-400 italic leading-relaxed border-t border-[#1e2228] pt-5">
-          <strong className="text-slate-300 not-italic">Disclaimer:</strong> Tracked yield values use mark-to-market spot pricing at the last sync. This is a community-built tracking tool and does not guarantee future returns.
-        </p>
-      </div>
+      <MethodologyCard accent="text-indigo-400">
+          <p><strong className="text-white">All is a comparison, not a rollup:</strong> Ghosts, Zombies, Knights, and Watchers stay four series on one axis. Totals are not added together except on the Night LP health chart&apos;s combined line. Open a faction for that market&apos;s tiers, simulator, and vault detail.</p>
+          <p><strong className="text-white">Yield &amp; ROI:</strong> Cash-on-cash for a Shade is annualized vault RewardPaid ÷ (NFT floor USD + activation tokens at spot). Yield is the trailing 7-day RewardPaid sample, split by Anvil tier weight. Night vault WETH is loot for The Night and is never counted as StonkBrokers StonkBooster.</p>
+          <p><strong className="text-white">Revenue:</strong> Faction AMM / vault RewardPaid only. The Nightshades civ-pad launch tax is counted on StonkBrokers Partner Revenue Share.</p>
+          <p><strong className="text-white">The Night</strong> is the daily VRF strike. Favored factions keep their pools; struck factions can lose 20% of that pair&apos;s WETH to the vault (tokens sold for WETH). Unlabeled millions under Struck are vault token inventory, not strike size. Pool WETH over time overwrites the same UTC day on each hourly run until the series grows.</p>
+      </MethodologyCard>
     </div>
   );
 }

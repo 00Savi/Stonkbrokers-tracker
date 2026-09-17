@@ -369,7 +369,8 @@ export default function OverviewView({ data, pending, compact = false }) {
         <span className="text-muted">gg-index</span>, which folds Transfer events into balances and
         reconciles against <span className="text-muted">totalSupply()</span>. Prices are read from
         the pools directly. Yields are a trailing sample annualised — past distributions, not a
-        forecast. Not financial advice.
+        forecast. This is not financial advice. Double-check contracts, prices, and your own records
+        before you act.
       </p>
     </div>
   );

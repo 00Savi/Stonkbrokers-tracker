@@ -14,6 +14,7 @@ import { cashflowRoiByDate, protocolFeeCols, protocolRevenueChart, seriesHasInk 
 import { useChartWindow } from '../../lib/chartWindow';
 import { baseChartOptions, compactTick, compactUsdTick, PROJECT_COLORS } from '../../lib/charts';
 import { ChartPanel, EmptyChart } from '../HistoryCharts';
+import { MethodologyCard } from '../Disclaimer';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
@@ -767,19 +768,11 @@ export default function EcosystemView({ data, pending = false }) {
         <OverviewView data={data} pending={pending} compact />
       </section>
 
-      {/* DYNAMIC DISCLAIMER */}
-      <div className="bg-[#0e1013] rounded-xl p-5 md:p-6 border border-[#1e2228] shadow-lg mt-8">
-        <div className="flex items-center gap-2 mb-4">
-          <svg className="w-5 h-5 text-blue-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd"></path></svg>
-          <h3 className="text-base md:text-lg font-bold text-white">Methodology & Disclaimer</h3>
-        </div>
-        <div className="text-xs md:text-sm text-slate-300 mb-5 leading-relaxed space-y-4">
-          <p><strong className="text-white">Global Ecosystem Analytics:</strong> Metrics shown aggregate live on-chain events across all registered Robinhood Network protocols.</p>
-        </div>
-        <p className="text-xs md:text-sm text-slate-400 italic leading-relaxed border-t border-[#1e2228] pt-5">
-          <strong className="text-slate-300 not-italic">Disclaimer:</strong> Tracked yield values are calculated using Mark-to-Market spot pricing at the exact time of the dashboard's last automated sync. Yields fluctuate based on network activation weight, market token prices, and community protocol volume. This is a community-built tracking tool and does not guarantee future returns.
-        </p>
-      </div>
+      <MethodologyCard>
+          <p><strong className="text-white">What this board aggregates:</strong> Each project is fetched on its own contracts. Holder and activation counts come from gg-index (Transfer folds vs totalSupply). Prices are DexScreener Robinhood-chain pools. Yields are trailing samples annualized — not one shared oracle and not a forecast.</p>
+          <p><strong className="text-white">Revenue:</strong> Protocol-kept fees only. StonkBrokers StonkBooster is the mix on that project page (Clock In, AMM, Partner Revenue Share, Smart LP). Nightshades Night vault WETH is not copied here. Bonding volume is notional.</p>
+          <p><strong className="text-white">Rankings:</strong> Cost repriced on each load. Yield is the same trailing sample as the project ROI tab. Cross-project APY is not comparable 1:1 because cost basis and payout mechanics differ.</p>
+      </MethodologyCard>
 
     </div>
   );

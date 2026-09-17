@@ -16,6 +16,7 @@ import {
 import { baseChartOptions, compactTick, compactUsdTick, dualAxisOptions } from '../../lib/charts';
 import { useChartWindow } from '../../lib/chartWindow';
 import { YieldUsdPricePanel, PaybackPanel, HolderRevenuePanel } from '../HistoryCharts';
+import { DisclaimerCopy } from '../Disclaimer';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler);
 
@@ -447,7 +448,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
       </section>
 
       <div className="bg-[#0e1013] rounded-xl p-5 border border-[#1e2228] mt-8">
-        <h3 className="text-base font-bold text-white mb-3">Methodology</h3>
+        <h3 className="text-base font-bold text-white mb-3">Methodology &amp; Disclaimer</h3>
         <p className="text-xs text-slate-300 leading-relaxed">
           {kind === 'cashflow' && 'Fees and holders revenue are DefiLlama The Index (original INDEX swap tax settled into tokenized stocks). CoC is annualized holders revenue ÷ circulating supply ÷ token price. That is cash-flow against INDEX cost basis, not a points program.'}
           {kind === 'machines' && 'PRINTER burn is max supply minus live totalSupply plus dead/zero balances. Yield is the fee pot split across awake Machines by on-chain weight (ink + Proton fuses). Floor uses 4,250 ink × 1.10. Dormant (un-inked) Machines do not earn.'}
@@ -459,6 +460,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
             <a className="text-slate-300 underline" href={config.site} target="_blank" rel="noreferrer">{config.site}</a>
           </p>
         )}
+        <DisclaimerCopy />
       </div>
     </div>
   );
@@ -847,7 +849,7 @@ function VaultView({
       </section>
 
       <div className="bg-[#0e1013] rounded-xl p-5 border border-[#1e2228] mt-8">
-        <h3 className="text-base font-bold text-white mb-3">Methodology</h3>
+        <h3 className="text-base font-bold text-white mb-3">Methodology &amp; Disclaimer</h3>
         <p className="text-xs text-slate-300 leading-relaxed">
           Mechanics follow the Oakmont docs and the live indexer (api.oakmontvault.xyz).
           Reserve holder APY is annualized (STRIKE-per-RESERVE − 1) from the first history sample, same formula as the dapp.
@@ -860,6 +862,7 @@ function VaultView({
           {' · '}
           <a className="text-slate-300 underline" href={OAKMONT_DAPP} target="_blank" rel="noreferrer">dapp</a>
         </p>
+        <DisclaimerCopy />
       </div>
     </div>
   );
