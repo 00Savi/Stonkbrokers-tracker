@@ -10,7 +10,7 @@ import { windowSnapshots, protocolRevenueChart, sliceCols, windowPeriodLabel, wi
 import { PROJECTS } from '../../lib/routes';
 import { BetaTag, compactUsd, compactNum } from '../kit';
 import {
-  OAKMONT_ACTIONS, OAKMONT_BASKET, OAKMONT_DOCS, OAKMONT_DAPP, OAKMONT_FEES,
+  OAKMONT_ACTIONS, OAKMONT_BASKET, OAKMONT_DOCS, OAKMONT_DAPP, OAKMONT_SITE, OAKMONT_FEES,
   fetchGeckoTokenHolders,
 } from '../../lib/oakmont';
 import { baseChartOptions, compactTick, compactUsdTick, dualAxisOptions } from '../../lib/charts';
@@ -490,7 +490,12 @@ function VaultView({
   const reserveHist = snaps.map((s) => s.reservePriceUsd || 0);
   const hasWrapSeries = wrapHist.some((v) => v > 0);
   const strikeLockedEst = market.reserveSupply || 0;
-  const claimApy = market.claimApyPct;
+  const lastNavSnap = [...snaps].reverse().find((s) => Number(s.vaultNavUsdg) > 0);
+  const lastApySnap = [...snaps].reverse().find((s) => Number(s.claimApyPct) > 0);
+  const liveNav = Number(market.vaultNavUsdg) > 0 ? market.vaultNavUsdg : (lastNavSnap?.vaultNavUsdg || 0);
+  const claimApy = market.claimApyPct != null && Number(market.claimApyPct) > 0
+    ? market.claimApyPct
+    : (lastApySnap?.claimApyPct ?? null);
   const feeAnnual = cashflow?.feesAnnualized || 0;
   const rateHist = (vault?.history || []).filter((r) => r.exchangeRate > 0);
   const navHist = (vault?.history || []).filter((r) => r.nav > 0);
@@ -527,13 +532,15 @@ function VaultView({
             </p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
               <Panel label="Reserve holder APY" value={claimApy == null ? '—' : `${claimApy.toFixed(2)}%`} color={MARK.lime} />
-              <Panel label="Vault NAV (USDG)" value={fmt(market.vaultNavUsdg)} color={MARK.green} />
-              <Panel label="STRIKE per $RESERVE" value={(market.protocolExchangeRate || 0).toFixed(4)} color={MARK.sky} />
+              <Panel label={market.vaultNavKind === 'wrapped-strike' ? 'Wrapped $STRIKE (on-chain)' : 'Vault NAV (USDG)'} value={fmt(liveNav)} color={MARK.green} />
+              <Panel label="STRIKE per $RESERVE" value={market.protocolExchangeRate > 0 ? market.protocolExchangeRate.toFixed(4) : '—'} color={MARK.sky} />
               <Panel label="ETH fees → vault /yr" value={fmt(feeAnnual)} color={MARK.amber} />
             </div>
             <p className="text-[11px] text-slate-500 mb-4">
               Claim APY matches Oakmont: annualized growth of the protocol STRIKE:RESERVE rate above 1.0.
-              Fee CoC is annualized ETH fee revenue (2% wrap/unwrap leg, plus other ETH fees) ÷ spot cost. Indexer NAV is USDG; USDG is treated as $1.
+              {market.vaultSource === 'onchain-erc4626'
+                ? ' The dapp indexer is down, so the rate is read on-chain from $RESERVE.convertToAssets and NAV is escrowed $STRIKE × DexScreener spot — not the basket appraisal.'
+                : ' Fee CoC is annualized ETH fee revenue (2% wrap/unwrap leg, plus other ETH fees) ÷ spot cost. Indexer NAV is USDG; USDG is treated as $1.'}
             </p>
             <div className="overflow-x-auto mb-6">
               <table className="w-full text-left text-sm">
@@ -594,7 +601,7 @@ function VaultView({
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5">
             <h3 className="text-sm font-bold text-white mb-2">Vault basket (new revenue split)</h3>
             <p className="text-xs text-slate-500 mb-4">
-              All protocol fees buy this basket. Weights are for new deposits only — the index does not rebalance, so winners keep weight.
+              All protocol fees buy this basket (dapp target weights). Weights are for new deposits only — the index does not rebalance, so winners keep weight.
             </p>
             <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
               {OAKMONT_BASKET.map((b) => (
@@ -617,7 +624,7 @@ function VaultView({
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Panel label="$STRIKE" value={fmt(tokenUsd)} />
             <Panel label="$RESERVE" value={fmt(market.reservePriceUsd)} color={MARK.lime} />
-            <Panel label="STRIKE per $RESERVE" value={(market.protocolExchangeRate || 0).toFixed(4)} color={MARK.green} />
+            <Panel label="STRIKE per $RESERVE" value={market.protocolExchangeRate > 0 ? market.protocolExchangeRate.toFixed(4) : '—'} color={MARK.green} />
             <Panel label="Claim APY" value={claimApy == null ? '—' : `${claimApy.toFixed(2)}%`} color={MARK.lime} />
           </div>
           {rateHist.length > 1 && (
@@ -851,14 +858,17 @@ function VaultView({
       <div data-share-omit className="bg-[#0e1013] rounded-xl p-5 border border-[#1e2228] mt-8">
         <h3 className="text-base font-bold text-white mb-3">Methodology &amp; Disclaimer</h3>
         <p className="text-xs text-slate-300 leading-relaxed">
-          Mechanics follow the Oakmont docs and the live indexer (api.oakmontvault.xyz).
-          Reserve holder APY is annualized (STRIKE-per-RESERVE − 1) from the first history sample, same formula as the dapp.
-          Fee CoC is ETH fee revenue annualized at the live ETH price, then split per $STRIKE or per $RESERVE against DexScreener spot.
-          Vault NAV is the indexer's USDG total (USDG ≈ $1 here). It can lag on-chain holdings. Claim APY and fee CoC are not additive.
+          Mechanics follow the Oakmont docs. Live wrap math is on-chain ERC-4626 ($RESERVE.convertToAssets / totalAssets).
+          The public indexer (api.oakmontvault.xyz) is currently undeployed, so basket NAV and ETH-fee history are unavailable until it returns.
+          Reserve holder APY is annualized (STRIKE-per-RESERVE − 1) from wrap inception, same formula as the dapp.
+          Fee CoC is ETH fee revenue when the indexer publishes it. Wrapped-$STRIKE NAV is escrow value, not a full index mark-to-market.
+          Claim APY and fee CoC are not additive.
         </p>
         <p className="text-xs text-slate-500 mt-3">
           Docs:{' '}
-          <a className="text-slate-300 underline" href={OAKMONT_DOCS} target="_blank" rel="noreferrer">{OAKMONT_DOCS}</a>
+          <a className="text-slate-300 underline" href={OAKMONT_SITE} target="_blank" rel="noreferrer">{OAKMONT_SITE}</a>
+          {' · '}
+          <a className="text-slate-300 underline" href={OAKMONT_DOCS} target="_blank" rel="noreferrer">docs</a>
           {' · '}
           <a className="text-slate-300 underline" href={OAKMONT_DAPP} target="_blank" rel="noreferrer">dapp</a>
         </p>

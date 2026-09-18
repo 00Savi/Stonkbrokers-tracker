@@ -2,16 +2,17 @@
 
 export const OAKMONT_DOCS = 'https://dapp.oakmontvault.xyz/docs';
 export const OAKMONT_DAPP = 'https://dapp.oakmontvault.xyz/';
+export const OAKMONT_SITE = 'https://oakmontvault.xyz/';
 
 export const OAKMONT_BASKET = [
   { asset: 'SPCX', share: 11.875 },
   { asset: 'NVDA', share: 11.875 },
   { asset: 'AAPL', share: 11.875 },
   { asset: 'QQQ', share: 11.875 },
-  { asset: 'GME', share: 11.875 },
-  { asset: 'OIL', share: 11.875 },
   { asset: 'TSLA', share: 11.875 },
-  { asset: 'ETH', share: 11.875 },
+  { asset: 'USO', share: 11.875 },
+  { asset: 'GME', share: 11.875 },
+  { asset: 'WETH', share: 11.875 },
   { asset: 'STONKBROKER', share: 5 },
 ];
 
@@ -19,7 +20,7 @@ export const OAKMONT_FEES = [
   { fee: 'Wrap ($STRIKE → $RESERVE)', rate: '2.5%', dest: '2% ETH → Vault; 0.5% $RESERVE burned' },
   { fee: 'Unwrap ($RESERVE → $STRIKE)', rate: '2.5%', dest: '2% ETH → Vault; 0.5% $RESERVE burned' },
   { fee: 'Redemption ($RESERVE → assets)', rate: '5%', dest: 'Fully burned as $RESERVE' },
-  { fee: 'Loan origination', rate: '3%', dest: 'Borrowed index assets → Vault' },
+  { fee: 'Loan origination', rate: '5%', dest: 'Borrowed index assets → Vault' },
   { fee: 'Loan interest', rate: '2% APY', dest: 'Vault' },
   { fee: 'Liquidation penalty', rate: '10% total', dest: '5% liquidator + 5% protocol' },
   { fee: 'ETH zap (loan repay)', rate: '0.5%', dest: 'Protocol / Vault' },
@@ -38,7 +39,7 @@ export const OAKMONT_ACTIONS = [
   },
   {
     name: 'Borrow vs $RESERVE',
-    cost: '3% + 2% APY',
+    cost: '5% + 2% APY',
     note: 'Up to 75% LTV, paid in the actual index assets (not USDG). Collateral is staked and illiquid for the loan.',
   },
   {

@@ -105,7 +105,7 @@ export default function MancerDetailView({ data, activeTab }) {
   const ownN = windowLen(timeframe, holdersFull.labels.length);
   const ownLabels = formatLabels(holdersFull.labels.slice(-ownN));
   const ownData = holdersFull.data.slice(-ownN);
-  const mancerHolders = Number(ownership.mancerHolders) || Number(ownership.tokenHolders) || Number(ownership.erc20Holders) || 0;
+  const mancerHolders = Number(ownership.mancerHolders) || Number(ownership.tokenHolders) || Number(ownership.stonkHolders) || Number(ownership.erc20Holders) || 0;
 
   const actN = windowLen(timeframe, actLabels.length);
 

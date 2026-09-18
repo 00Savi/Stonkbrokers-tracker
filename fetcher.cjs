@@ -1370,7 +1370,8 @@ async function getOwnershipStats(conf, equivBurnt, previousData) {
 
   return {
     ammVaultNfts, burntNfts: equivBurnt, currentMaxSupply, circulatingNftSupply,
-    nftHolders: trueUniqueNftHolders, stonkHolders: trueUniqueStonkHolders, ownershipRatio,
+    nftHolders: trueUniqueNftHolders, stonkHolders: trueUniqueStonkHolders,
+    tokenHolders: trueUniqueStonkHolders, ownershipRatio,
     historicalGrowth: { labels: histLabels, data: histData }
   };
 }
@@ -3506,9 +3507,8 @@ async function run() {
         await attachRevenueHistory(projectKey, revenueBreakdown, scale, conf.yieldMode, prevProjData.revenue);
       }
 
-      let lockedLpData = null;
+      let lockedLpData = scanLockedStonkLiquidity(conf.tokenCa, markets[projectKey].tokenPriceUsd);
       if (projectKey === "stonk") {
-          lockedLpData = scanLockedStonkLiquidity(conf.tokenCa, markets[projectKey].tokenPriceUsd);
           try {
             let smart = null;
             try {

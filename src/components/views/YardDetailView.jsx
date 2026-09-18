@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, ArcElement, Filler
 } from 'chart.js';
@@ -22,17 +22,71 @@ import {
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
+function scanTokenLp(pairs, tokenCa, tokenPriceUsd) {
+  const unique = new Map();
+  let totalStonkLocked = 0;
+  let totalLpUsd = 0;
+  const addr = String(tokenCa || '').toLowerCase();
+  for (const pair of pairs || []) {
+    if (pair.chainId !== 'robinhood' && !(pair.url || '').includes('robinhood')) continue;
+    const pairAddress = (pair.pairAddress || '').toLowerCase();
+    if (!pairAddress || unique.has(pairAddress)) continue;
+    const isBase = pair.baseToken?.address?.toLowerCase() === addr;
+    const isQuote = pair.quoteToken?.address?.toLowerCase() === addr;
+    if (!isBase && !isQuote) continue;
+    const pairLiquidityUsd = pair.liquidity?.usd || 0;
+    if (pairLiquidityUsd <= 0) continue;
+    const stonkCount = tokenPriceUsd > 0 ? pairLiquidityUsd / 2 / tokenPriceUsd : 0;
+    totalStonkLocked += stonkCount;
+    totalLpUsd += pairLiquidityUsd;
+    unique.set(pairAddress, {
+      pairName: `${pair.baseToken?.symbol || '?'}/${pair.quoteToken?.symbol || '?'}`,
+      dex: pair.dexId || 'DEX',
+      liquidityUsd: Math.round(pairLiquidityUsd),
+      stonkAmount: Math.round(stonkCount),
+    });
+  }
+  return {
+    totalStonkLocked: Math.round(totalStonkLocked),
+    totalLpUsd: Math.round(totalLpUsd),
+    pools: [...unique.values()].sort((a, b) => b.liquidityUsd - a.liquidityUsd),
+  };
+}
+
 export default function YardDetailView({ data, activeTab }) {
   const [timeframe] = useChartWindow();
   const [expandedTier, setExpandedTier] = useState(null);
   const [tierTimeframe, setTierTimeframe] = useState('allTime');
   const [lpTableOpen, setLpTableOpen] = useState(true);
   const [volumeMultiplier, setVolumeMultiplier] = useState(1);
+  const [liveLp, setLiveLp] = useState(null);
 
   const project = data?.projects?.tickeryard || data?.projects?.yard;
+  const lockedLpSnap = project?.lockedLp || null;
+  const tokenCa = project?.config?.tokenCa;
+  const tokenPx = project?.market?.tokenPriceUsd || 0;
+
+  useEffect(() => {
+    if (lockedLpSnap?.pools?.length || !tokenCa) return undefined;
+    let gone = false;
+    (async () => {
+      try {
+        const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${tokenCa}`);
+        if (!res.ok) return;
+        const j = await res.json();
+        const scanned = scanTokenLp(j.pairs || [], tokenCa, tokenPx);
+        if (!gone && scanned.pools.length) setLiveLp(scanned);
+      } catch {
+        /* DexScreener fills the LP table until the hourly job writes lockedLp. */
+      }
+    })();
+    return () => { gone = true; };
+  }, [tokenCa, lockedLpSnap, tokenPx]);
+
   if (!project) return <div className="text-center text-slate-400 p-12">TickerYard Data Loading...</div>;
 
-  const { config = {}, market = {}, tiers = [], activation = {}, ownership = {}, revenue = {}, lockedLp = null, dailySnapshots = [] } = project;
+  const { config = {}, market = {}, tiers = [], activation = {}, ownership = {}, revenue = {}, dailySnapshots = [] } = project;
+  const lockedLp = lockedLpSnap?.pools?.length ? lockedLpSnap : liveLp;
 
   const formatCurrency = compactUsd;
   const formatNumber = compactNum;
@@ -100,21 +154,13 @@ export default function YardDetailView({ data, activeTab }) {
   const ownN = windowLen(timeframe, holdersFull.labels.length);
   const ownLabels = holdersFull.labels.slice(-ownN);
   const ownData = holdersFull.data.slice(-ownN);
-  const yardHolders = Number(ownership.yardHolders) || Number(ownership.tokenHolders) || Number(ownership.erc20Holders) || 0;
+  const yardHolders = Number(ownership.yardHolders) || Number(ownership.tokenHolders) || Number(ownership.stonkHolders) || Number(ownership.erc20Holders) || 0;
 
   const actN = windowLen(timeframe, actLabels.length);
 
   return (
     <div className="space-y-6 relative">
       
-      {/* BETA / UNDER CONSTRUCTION NOTICE BANNER */}
-      <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-xl p-4 flex items-center gap-3 text-cyan-400">
-        <svg className="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd"></path></svg>
-        <div className="text-xs">
-          <strong className="font-bold uppercase tracking-wider">Beta / Under Construction:</strong> TickerYard metrics and on-chain event indexers are currently initializing. Data streams may undergo frequent refinement.
-        </div>
-      </div>
-
       {/* ==================== TAB 1: ROI BENCHMARKS ==================== */}
       <section id="roi" className="scroll-mt-32">
         <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl">
@@ -167,7 +213,7 @@ export default function YardDetailView({ data, activeTab }) {
                             <span className="bg-[#08090b] border border-[#1e2228] text-cyan-400 px-2.5 py-1 rounded text-xs font-bold shadow-inner">{t.tier}</span>
                             <div>
                               <div className="font-bold text-white">{t.name}</div>
-                              <div className="text-xs text-slate-500 mt-0.5">Weight: <span className="text-yellow-500 font-semibold">{t.weight}x</span></div>
+                              <div className="text-xs text-slate-500 mt-0.5">Weight: <span className="text-yellow-500 font-semibold">{((t.weight || 100) / 100).toFixed(2)}x</span></div>
                             </div>
                           </div>
                         </td>
@@ -505,7 +551,7 @@ export default function YardDetailView({ data, activeTab }) {
       </section>
 
       <MethodologyCard accent="text-cyan-500">
-          <p><strong className="text-white">Yield &amp; ROI:</strong> TickerYard is a SoftStakingVault, not the StonkBrokers T4 oracle. Cash-on-cash is annualized vault yield ÷ (NFT floor USD + activation tokens at DexScreener spot), split by Anvil tier weight. Live yield is a trailing sample, not a promised APY.</p>
+          <p><strong className="text-white">Yield &amp; ROI:</strong> TickerYard is a SoftStakingVault, not the StonkBrokers T4 oracle. Cash-on-cash is annualized vault yield ÷ (NFT floor USD + activation tokens at DexScreener spot), split by Anvil tier weight (1.00×–3.33×). Live yield is a trailing sample, not a promised APY. Keeper jobs described in the TickerYard whitepaper are extra work for enrolled T4 operators and are not in these CoC numbers.</p>
           <p><strong className="text-white">Activation:</strong> Same reconstruction as Mancer. The vault emits no Deactivated event — a sale clears the position. <code>activeCount()</code> is an upper bound; this page replays Activated plus NFT transfers.</p>
           <p><strong className="text-white">Payback:</strong> Entry cost ÷ annualized trailing yield, repriced at the last sync.</p>
           <p><strong className="text-white">Ownership:</strong> Circulating NFTs are collection size minus AMM vault inventory. Concentration is unique NFT wallets (vault and burn addresses excluded) divided by that circulating number. Activated-wallet count is unique current owners of NFTs that still have an open activation.</p>
