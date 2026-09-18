@@ -19,6 +19,7 @@ const LIVE_PROJECTS = PROJECTS.filter((p) => p.live !== false);
 
 const FALLBACK_LOGO = {
   stonk: 'Stonkbroker.png',
+  interns: 'Interns.svg',
   mancer: 'logo.png',
   tickeryard: 'Yardkeepers.png',
   cardwall: 'wall.png',

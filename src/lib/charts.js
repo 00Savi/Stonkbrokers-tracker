@@ -21,6 +21,7 @@ export const TIER_COLORS = ['#00a804', '#8b5cf6', '#38bdf8', '#f5b700', '#f472b6
 
 export const PROJECT_COLORS = {
   stonk: '#00a804',
+  interns: '#fbbf24',
   mancer: '#8b5cf6',
   tickeryard: '#38bdf8',
   cardwall: '#f5b700',

@@ -253,7 +253,7 @@ export function BlackHoleChartPanels({ snaps, lockedLp, ticker = 'STONK' }) {
           />
         </ChartPanel>
       ) : null}
-      <ChartPanel title={`${ticker} locked over time`} note="Tokens sitting in scanned LP. History starts when snapshots record it; the latest point is live.">
+      <ChartPanel title={`${ticker} locked over time`} note="Tokens sitting in Uniswap v4 PoolManager and DexScreener pool contracts. History is reconstructed from Transfer folds; the latest point is live.">
         {hasLock ? (
           <Line
             data={{
@@ -321,7 +321,7 @@ export function OwnershipHistoryPanels({ snaps, live }) {
   const hasConc = seriesHasInk(hist.concentration);
   return (
     <>
-      <ChartPanel title="NFT holders vs token holders" note="Two different crowds. History uses snapshot counts; the last point is live.">
+      <ChartPanel title="NFT holders vs token holders" note="NFT wallets exclude the AMM vault. Token holders are addresses with at least one whole token. Last point is live.">
         {hasHolders ? (
           <Line
             data={{
@@ -337,7 +337,7 @@ export function OwnershipHistoryPanels({ snaps, live }) {
           <EmptyChart />
         )}
       </ChartPanel>
-      <ChartPanel title="Ownership concentration" note="Unique NFT holders ÷ circulating NFT supply.">
+      <ChartPanel title="Ownership concentration" note="Unique NFT wallets ÷ (collection size − AMM vault).">
         {hasConc ? (
           <Line
             data={{

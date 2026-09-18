@@ -24,6 +24,7 @@ export const NAV_ITEMS = [
   { to: '/oakmont/roi', label: 'Oakmont Vault', group: 'yield-tokens', dot: 'bg-[#e879f9]' },
   { to: '/bonus', label: '$Bonus', group: 'yield-tokens', dot: 'bg-[#e8c547]' },
   { to: '/stonkbrokers/roi', label: 'StonkBrokers', group: 'yield-nfts', dot: 'bg-[#60a5fa]' },
+  { to: '/interns/roi', label: 'Interns', group: 'yield-nfts', dot: 'bg-[#fbbf24]' },
   { to: '/mancer/roi', label: 'Mancer', group: 'yield-nfts', dot: 'bg-[#a78bfa]' },
   { to: '/tickeryard/roi', label: 'TickerYard', group: 'yield-nfts', dot: 'bg-[#22d3ee]' },
   { to: '/cardwall/roi', label: 'The Card Wall', group: 'yield-nfts', dot: 'bg-[#fbbf24]' },

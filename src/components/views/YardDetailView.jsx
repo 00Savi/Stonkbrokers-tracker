@@ -508,7 +508,7 @@ export default function YardDetailView({ data, activeTab }) {
           <p><strong className="text-white">Yield &amp; ROI:</strong> TickerYard is a SoftStakingVault, not the StonkBrokers T4 oracle. Cash-on-cash is annualized vault yield ÷ (NFT floor USD + activation tokens at DexScreener spot), split by Anvil tier weight. Live yield is a trailing sample, not a promised APY.</p>
           <p><strong className="text-white">Activation:</strong> Same reconstruction as Mancer. The vault emits no Deactivated event — a sale clears the position. <code>activeCount()</code> is an upper bound; this page replays Activated plus NFT transfers.</p>
           <p><strong className="text-white">Payback:</strong> Entry cost ÷ annualized trailing yield, repriced at the last sync.</p>
-          <p><strong className="text-white">Ownership:</strong> Unique holders vs circulating supply after treasury wallets. Activated-wallet count is unique current owners of NFTs that still have an open activation.</p>
+          <p><strong className="text-white">Ownership:</strong> Circulating NFTs are collection size minus AMM vault inventory. Concentration is unique NFT wallets (vault and burn addresses excluded) divided by that circulating number. Activated-wallet count is unique current owners of NFTs that still have an open activation.</p>
       </MethodologyCard>
 
     </div>

@@ -24,6 +24,7 @@ import EcosystemView from '../src/components/views/EcosystemView';
 import PortfolioView from '../src/components/views/PortfolioView';
 import MemesTokensView from '../src/components/views/MemesTokensView';
 import StonkDetailView from '../src/components/views/StonkDetailView';
+import InternDetailView from '../src/components/views/InternDetailView';
 import MancerDetailView from '../src/components/views/MancerDetailView';
 import YardDetailView from '../src/components/views/YardDetailView';
 import CardWallDetailView from '../src/components/views/CardWallDetailView';
@@ -56,6 +57,9 @@ const ROUTES = [
   '/stonkbrokers/burn',
   '/stonkbrokers/activation',
   '/stonkbrokers/ownership',
+  '/interns/roi',
+  '/interns/yield',
+  '/interns/ownership',
   '/mancer/roi',
   '/mancer/yield',
   '/tickeryard/revenue',
@@ -138,6 +142,7 @@ const VIEWS = [
 const TABS = ['roi', 'historical', 'revenue', 'liquidity', 'burn', 'activation', 'ownership'];
 for (const [label, View] of [
   ['Stonk', StonkDetailView],
+  ['Interns', InternDetailView],
   ['Mancer', MancerDetailView],
   ['Yard', YardDetailView],
   ['CardWall', CardWallDetailView],
@@ -232,6 +237,31 @@ for (const [name, View, props] of VIEWS) {
   } catch (err) {
     failed++;
     console.error(`  FAIL  ${name.padEnd(24)} ${err.message}`);
+  }
+}
+
+{
+  const stonk = snapshot.projects?.stonk;
+  const o = stonk?.ownership || {};
+  const circ = (o.currentMaxSupply || 0) - (o.ammVaultNfts || 0);
+  const ratio = circ > 0 ? +((o.nftHolders / circ) * 100).toFixed(2) : 0;
+  if (o.circulatingNftSupply !== circ || o.ownershipRatio !== ratio) {
+    failed++;
+    console.error(
+      `FAIL  stonk circulating ${o.circulatingNftSupply} ratio ${o.ownershipRatio}% (want ${circ} / ${ratio}%)`,
+    );
+  } else {
+    console.log(`ok    stonk circulating ${circ}  concentration ${ratio}%`);
+  }
+  const row = (stonk?.dailySnapshots || []).find((s) => String(s.date).startsWith('2026-08-23'));
+  if (row && Number(row.tokenHolders) < 15000) {
+    failed++;
+    console.error(`FAIL  8/23 token holders still a dip (${row.tokenHolders})`);
+  }
+  const cliff = (stonk?.dailySnapshots || []).find((s) => Number(s.ownershipRatio) > 40);
+  if (cliff) {
+    failed++;
+    console.error(`FAIL  concentration cliff still in snapshots ${cliff.date} ${cliff.ownershipRatio}%`);
   }
 }
 

@@ -134,11 +134,31 @@ export async function loadOverlay(signal, known) {
   return overlay;
 }
 
+/** gg-index counts the AMM vault as an NFT holder. Circulating supply does not. */
+function mergeOwnership(baseOwn = {}, patchOwn) {
+  const own = { ...baseOwn, ...patchOwn };
+  const vault = Number(own.ammVaultNfts) || 0;
+  if (patchOwn?.nftHolders != null) {
+    const raw = Number(patchOwn.nftHolders);
+    if (Number.isFinite(raw)) own.nftHolders = vault > 0 ? Math.max(0, raw - 1) : raw;
+  }
+  const max = Number(own.currentMaxSupply) || 0;
+  if (max > 0) {
+    own.circulatingNftSupply = Math.max(0, max - vault);
+    const wallets = Number(own.nftHolders) || 0;
+    own.ownershipRatio = own.circulatingNftSupply > 0
+      ? +Math.min(100, (wallets / own.circulatingNftSupply) * 100).toFixed(2)
+      : 0;
+  }
+  return own;
+}
+
 /**
  * Merge an overlay onto a `data.json` payload without disturbing the rest.
  *
  * Only `ownership` is touched, and only the keys the index actually returned.
- * Activation stays on the snapshot (see file header).
+ * Activation stays on the snapshot (see file header). NFT holder counts from
+ * the index include the AMM vault; circulating and concentration do not.
  */
 export function applyOverlay(base, overlay) {
   if (!base?.projects || !overlay) return base;
@@ -149,7 +169,7 @@ export function applyOverlay(base, overlay) {
     if (!p) continue;
     projects[slug] = {
       ...p,
-      ...(patch.ownership ? { ownership: { ...p.ownership, ...patch.ownership } } : {}),
+      ...(patch.ownership ? { ownership: mergeOwnership(p.ownership, patch.ownership) } : {}),
     };
   }
 
@@ -160,7 +180,7 @@ export function applyOverlay(base, overlay) {
       if (!isNightshadesFaction(slug) || !factions[slug] || !patch.ownership) continue;
       factions[slug] = {
         ...factions[slug],
-        ownership: { ...factions[slug].ownership, ...patch.ownership },
+        ownership: mergeOwnership(factions[slug].ownership, patch.ownership),
       };
     }
     projects.nightshades = {

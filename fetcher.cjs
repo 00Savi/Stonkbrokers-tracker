@@ -698,6 +698,38 @@ const PROJECTS = {
       { id: "T4", name: "5-Star", reqTokens: 1200000, weight: 333, rainWeight: 5 }
     ]
   },
+  // Interns by StonkBrokers. Mint tomorrow. Leave CAs empty until they
+  // are published — the intern page stays up as a mint desk, and the
+  // next hourly run turns tiles/charts on the moment nftCa +
+  // activationCa are filled. Do not put placeholder addresses here.
+  interns: {
+    genesisBlock: 0,
+    tokenCa: "",
+    nftCa: "",
+    activationCa: "",
+    ammCa: "",
+    clockInCa: "",
+    internExchangeCa: "",
+    namesCa: "",
+    lendingCa: "",
+    maxSupply: 8888,
+    unitValue: 0,
+    ticker: "STONKBROKER",
+    logo: "Interns.svg",
+    yieldMode: "intern_clockin",
+    deactivateOnTransfer: true,
+    site: "https://www.stonkbrokers.cash/docs/interns",
+    underConstruction: true,
+    teamWallets: 0,
+    streams: {},
+    tiers: [
+      { id: "T0", name: "Desk", reqTokens: 6666, weight: 100 },
+      { id: "T1", name: "Junior", reqTokens: 13333, weight: 125 },
+      { id: "T2", name: "Analyst", reqTokens: 26666, weight: 160 },
+      { id: "T3", name: "Associate", reqTokens: 46666, weight: 200 },
+      { id: "T4", name: "Senior", reqTokens: 113333, weight: 333 },
+    ],
+  },
   index: {
     kind: "cashflow",
     genesisBlock: 40000000,
@@ -1052,7 +1084,79 @@ async function loadMarketPrices() {
     }
   }
 
+  // Interns activate in $STONKBROKER. There is no intern ERC-20 yet, so the
+  // activation-cost tiles reuse the parent token's DexScreener print.
+  if (PROJECTS.interns) {
+    markets.interns = {
+      ethPriceUsd,
+      tokenPriceUsd: markets.stonk?.tokenPriceUsd || 0,
+      nftFloorEth: 0,
+    };
+  }
+
   return markets;
+}
+
+function internContractsReady(conf) {
+  return !!(conf?.nftCa && conf?.activationCa);
+}
+
+function buildInternStub(conf, markets, prev = {}) {
+  const stonkPx = Number(markets.interns?.tokenPriceUsd) || Number(markets.stonk?.tokenPriceUsd) || 0;
+  const eth = Number(markets.interns?.ethPriceUsd) || Number(markets.stonk?.ethPriceUsd) || ethPriceUsd;
+  const tiers = (conf.tiers || []).map((t) => ({
+    tier: t.id,
+    name: t.name,
+    reqTokens: t.reqTokens,
+    multiplier: `${((t.weight || 100) / 100).toFixed(2)}x`,
+    weight: t.weight,
+    floorEth: 0,
+    trackedAnnualYieldUsd: 0,
+    dailyDates: [],
+    dailyYields: [],
+  }));
+  return {
+    market: {
+      ethPriceUsd: eth,
+      tokenPriceUsd: stonkPx,
+      nftFloorEth: Number(prev.market?.nftFloorEth) || 0,
+    },
+    activation: prev.activation || {
+      activeCount: 0,
+      percentActivated: 0,
+      breakdown: {},
+      dualBurn: { totalBurnTokens: 0, equivalentBrokersBurnt: 0 },
+      history: { labels: [], cumulative: [], dailyActivations: [], dailyDeactivations: [] },
+    },
+    ownership: prev.ownership || {
+      currentMaxSupply: conf.maxSupply,
+      ammVaultNfts: 0,
+      circulatingNftSupply: 0,
+      nftHolders: 0,
+      stonkHolders: 0,
+      ownershipRatio: 0,
+      liveInterns: 0,
+      dormantInterns: conf.maxSupply,
+    },
+    tiers,
+    revenue: prev.revenue || {},
+    lockedLp: prev.lockedLp || null,
+    dailySnapshots: prev.dailySnapshots || [],
+    underConstruction: true,
+    config: {
+      ticker: conf.ticker,
+      unitValue: conf.unitValue || 0,
+      logo: conf.logo,
+      nftCa: conf.nftCa || "",
+      tokenCa: conf.tokenCa || "",
+      activationCa: conf.activationCa || "",
+      ammCa: conf.ammCa || "",
+      clockInCa: conf.clockInCa || "",
+      site: conf.site,
+      maxSupply: conf.maxSupply,
+      parentKey: "stonk",
+    },
+  };
 }
 
 async function fetchAllLogs(projectKey, address, genesisBlock, topic0 = null) {
@@ -1235,15 +1339,19 @@ async function getOwnershipStats(conf, equivBurnt, previousData) {
   }
 
   let rawNftHolders = await fetchTokenHoldersSafe(conf.nftCa);
-  let trueUniqueNftHolders = rawNftHolders > (conf.teamWallets || 0) ? rawNftHolders - (conf.teamWallets || 0) : 0;
+  // The AMM vault is a holder in the index fold, but those NFTs are not
+  // circulating. Concentration is wallets ÷ (maxSupply − vault), so the
+  // vault itself must not sit in the numerator.
+  if (ammVaultNfts > 0) rawNftHolders = Math.max(0, rawNftHolders - 1);
+  const trueUniqueNftHolders = rawNftHolders;
 
   const rawStonkHolders = await fetchTokenHoldersSafe(conf.tokenCa);
   const trueUniqueStonkHolders = rawStonkHolders > (conf.teamWallets || 0) ? rawStonkHolders - (conf.teamWallets || 0) : 0;
 
-  const circulatingNftSupply = Math.max(0, conf.maxSupply - ammVaultNfts);
+  const circulatingNftSupply = Math.max(0, (conf.maxSupply || 0) - ammVaultNfts);
   const currentMaxSupply = conf.maxSupply;
   const ownershipRatio = circulatingNftSupply > 0
-    ? Math.min(100, (trueUniqueNftHolders / circulatingNftSupply) * 100)
+    ? parseFloat(Math.min(100, (trueUniqueNftHolders / circulatingNftSupply) * 100).toFixed(2))
     : 0;
 
   let histLabels = previousData?.ownership?.historicalGrowth?.labels || [];
@@ -1262,7 +1370,7 @@ async function getOwnershipStats(conf, equivBurnt, previousData) {
 
   return {
     ammVaultNfts, burntNfts: equivBurnt, currentMaxSupply, circulatingNftSupply,
-    nftHolders: trueUniqueNftHolders, stonkHolders: trueUniqueStonkHolders, ownershipRatio: parseFloat(ownershipRatio.toFixed(2)),
+    nftHolders: trueUniqueNftHolders, stonkHolders: trueUniqueStonkHolders, ownershipRatio,
     historicalGrowth: { labels: histLabels, data: histData }
   };
 }
@@ -3113,7 +3221,7 @@ async function run() {
   // 24h bucket. On a warm cache the chain has only moved ~36k blocks since the
   // last run, so this adds an anchor or two.
   const earliestGenesis = Math.min(
-    ...Object.values(PROJECTS).filter((p) => !isSpecial(p) && p.kind !== "factions").map((p) => p.genesisBlock),
+    ...Object.values(PROJECTS).filter((p) => !isSpecial(p) && p.kind !== "factions" && Number(p.genesisBlock) > 0).map((p) => p.genesisBlock),
     ...Object.values(NIGHTSHADES_FACTIONS).map((p) => p.genesisBlock),
   );
   let chainHead;
@@ -3186,6 +3294,13 @@ async function run() {
           };
           console.log(`  skipped (FETCH_ONLY=${fetchOnly.join(",")}); prices refreshed`);
         }
+        continue;
+      }
+
+      if (projectKey === "interns" && !internContractsReady(conf)) {
+        finalJson.projects.interns = buildInternStub(conf, markets, prevProjData);
+        console.log("  intern CAs empty; mint-desk stub (fill nftCa + activationCa to go live)");
+        projectsOk++;
         continue;
       }
 
@@ -3305,6 +3420,7 @@ async function run() {
             totalBurn: (activationStats.dualBurn || {}).totalBurnTokens || 0,
             tokenHolders: ownershipStats.stonkHolders || ownershipStats.tokenHolders || 0,
             nftHolders: ownershipStats.nftHolders || 0,
+            ammVaultNfts: ownershipStats.ammVaultNfts || 0,
             ownershipRatio: ownershipStats.ownershipRatio || 0,
             activeCount: activationStats.activeCount || 0,
             percentActivated: activationStats.percentActivated || 0,
@@ -3444,6 +3560,7 @@ async function run() {
         nftFloorUsd: (markets[projectKey].nftFloorEth || 0) * (markets[projectKey].ethPriceUsd || 0),
         tokenHolders: ownershipStats.stonkHolders || ownershipStats.tokenHolders || 0,
         nftHolders: ownershipStats.nftHolders || 0,
+        ammVaultNfts: ownershipStats.ammVaultNfts || 0,
         ownershipRatio: ownershipStats.ownershipRatio || 0,
         activeCount: activationStats.activeCount || 0,
         percentActivated: activationStats.percentActivated || 0,
@@ -3462,7 +3579,7 @@ async function run() {
         revenue: revenueBreakdown,
         lockedLp: lockedLpData,
         ledger: ledger,
-        underConstruction: conf.underConstruction,
+        underConstruction: projectKey === "interns" ? !internContractsReady(conf) : conf.underConstruction,
         dailySnapshots: dailySnapshots,
         config: { ticker: conf.ticker, unitValue: conf.unitValue, logo: conf.logo, nftCa: conf.nftCa, tokenCa: conf.tokenCa }
       };

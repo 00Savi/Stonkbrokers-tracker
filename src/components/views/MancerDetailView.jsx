@@ -509,7 +509,7 @@ export default function MancerDetailView({ data, activeTab }) {
           <p><strong className="text-white">Activation:</strong> Total Active Units is the live set after replaying vault events plus NFT transfers. Mancer emits no Deactivated event — a sale clears the position. The contract&apos;s <code>activeCount()</code> is an upper bound and is not what this page shows. Tier flow cards are gross activate/exit events in the window, not the live mix (that is the doughnut).</p>
           <p><strong className="text-white">Revenue:</strong> Dex collector plus vault RewardPaid. 25% of Mancer dex tax is also credited to StonkBrokers Partner Revenue Share. This page still shows Mancer&apos;s full collector — do not add the two protocol totals together.</p>
           <p><strong className="text-white">Payback:</strong> Entry cost ÷ annualized trailing yield, repriced at the last sync.</p>
-          <p><strong className="text-white">Ownership:</strong> Unique holders vs circulating supply after treasury wallets. Activated-wallet count is unique current owners of NFTs that still have an open activation.</p>
+          <p><strong className="text-white">Ownership:</strong> Circulating NFTs are collection size minus AMM vault inventory. Concentration is unique NFT wallets (vault and burn addresses excluded) divided by that circulating number. Activated-wallet count is unique current owners of NFTs that still have an open activation.</p>
       </MethodologyCard>
 
     </div>

@@ -7,6 +7,7 @@ import HomeView from './components/views/HomeView';
 import EcosystemView from './components/views/EcosystemView';
 import PortfolioView from './components/views/PortfolioView';
 import StonkDetailView from './components/views/StonkDetailView';
+import InternDetailView from './components/views/InternDetailView';
 import MancerDetailView from './components/views/MancerDetailView';
 import YardDetailView from './components/views/YardDetailView';
 import CardWallDetailView from './components/views/CardWallDetailView';
@@ -21,6 +22,7 @@ import { SkeletonCard } from './components/kit';
 
 const DETAIL_VIEWS = {
   stonk: StonkDetailView,
+  interns: InternDetailView,
   mancer: MancerDetailView,
   tickeryard: YardDetailView,
   cardwall: CardWallDetailView,

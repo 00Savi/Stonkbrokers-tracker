@@ -500,6 +500,7 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
           <p><strong className="text-white">Yield &amp; ROI:</strong> Cash-on-cash is annualized vault RewardPaid ÷ (this floor + activation tokens at spot). The 7-day sample is split by tier weight. The volume slider scales yield only — cost stays at live floor and token price. Night vault WETH is The Night inventory, not StonkBooster.</p>
           <p><strong className="text-white">Activation:</strong> Same mechanic as Mancer/Yard. The vault emits no Deactivated event — a sale clears the position. <code>activeCount()</code> is an upper bound; this page replays Activated plus NFT transfers.</p>
           <p><strong className="text-white">Revenue:</strong> Faction AMM / vault RewardPaid only. The Nightshades civ-pad launch tax is counted on StonkBrokers, not copied here.</p>
+          <p><strong className="text-white">Ownership:</strong> Circulating NFTs are collection size minus AMM vault inventory. Concentration is unique NFT wallets (vault and burn addresses excluded) divided by that circulating number.</p>
           <p><strong className="text-white">The Night</strong> is incubator-wide (one VRF over all four factions). Live strike, history, sunrise fees, and usable v4 LP sit on the Night tab.</p>
       </MethodologyCard>
     </div>
