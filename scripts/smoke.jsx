@@ -273,6 +273,24 @@ for (const [name, View, props] of VIEWS) {
 
 {
   const html = renderToString(
+    <StaticRouter location="/interns/roi">
+      <InternDetailView data={snapshot} activeTab="roi" />
+    </StaticRouter>
+  );
+  const banned = ['97,902', '97.9k', '+10%/day', 'flat from day 375', 'then compounds'];
+  const missing = ['9,999', 'First 24h', 'Day 10', 'Ceiling 9,999'];
+  const leftover = banned.filter((s) => html.includes(s));
+  const absent = missing.filter((s) => !html.includes(s));
+  if (leftover.length || absent.length) {
+    failed++;
+    console.error(`FAIL  intern mint ladder leftover=${leftover.join('|') || 'none'} missing=${absent.join('|') || 'none'}`);
+  } else {
+    console.log('ok    intern mint ladder caps at 9,999 from day 10');
+  }
+}
+
+{
+  const html = renderToString(
     <StaticRouter location="/tickeryard/revenue">
       <YardDetailView data={snapshot} activeTab="revenue" />
     </StaticRouter>

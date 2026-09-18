@@ -163,28 +163,25 @@ export default function InternDetailView({ data, activeTab }) {
           </div>
 
           <div>
-            <h4 className="text-sm font-bold text-white mb-2">Mint $STONKBROKER rung</h4>
-            <p className="text-xs text-slate-400 mb-3">Plus $20 in ETH on every intern. First 24h is 999 $STONKBROKER, then +10%/day for 10 days, then +1%/day for 365 days, flat from day 375. Only the owner can lower a step, never raise it.</p>
-            <div className="overflow-x-auto -mx-1">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-[#1e2228] text-slate-500 uppercase tracking-wider">
-                    <th className="pb-2 pl-2 font-medium">Window</th>
-                    <th className="pb-2 font-medium">$STONKBROKER</th>
-                    <th className="pb-2 font-medium text-right pr-2">At live $STONKBROKER</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#1e2228]/60">
-                  {INTERNS_MINT_RUNGS.map((r) => (
-                    <tr key={r.day} className={r.day === 0 ? 'bg-amber-950/30' : ''}>
-                      <td className="py-2 pl-2 text-slate-300">{r.label}</td>
-                      <td className="py-2 text-white font-bold">{formatNumber(r.stonk)}</td>
-                      <td className="py-2 text-right pr-2 text-slate-400">{stonkPx > 0 ? formatCurrency(INTERNS_ETH_USD + r.stonk * stonkPx) : '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <h4 className="text-sm font-bold text-white uppercase tracking-wider">Mint price per intern · $20 in ETH flat + $STONKBROKER leg by day</h4>
+            <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {INTERNS_MINT_RUNGS.map((r) => (
+                <div
+                  key={r.day}
+                  className={`rounded-xl px-3 py-3 text-center ${
+                    r.cap
+                      ? 'bg-emerald-950/40 border border-emerald-700/70'
+                      : r.after
+                        ? 'bg-[#08090b] border border-dashed border-[#334155]'
+                        : 'bg-[#08090b] border border-[#1e2228]'
+                  }`}
+                >
+                  <p className="text-[10px] uppercase tracking-wider text-slate-500">{r.label}</p>
+                  <p className="text-lg font-extrabold text-white mt-1">{formatNumber(r.stonk)}</p>
+                </div>
+              ))}
             </div>
+            <p className="text-xs text-slate-400 mt-3">$STONKBROKER per intern. Plus $20 in ETH on every mint. Ceiling 9,999 $STONKBROKER from day 10 onward.</p>
           </div>
 
           <div>
@@ -493,7 +490,7 @@ export default function InternDetailView({ data, activeTab }) {
 
       <MethodologyCard accent="text-amber-400">
         <p><strong className="text-white">What this is:</strong> Interns by StonkBrokers is the companion NFT to StonkBrokers, not a second broker seat. Paper at <a className="text-amber-300 underline" href={INTERNS_DOCS} target="_blank" rel="noreferrer">stonkbrokers.cash/docs/interns</a>. Holding an intern is not equity and is not a guaranteed share of revenue.</p>
-        <p><strong className="text-white">Mint:</strong> Only an activated parent broker can release its intern(s). $20 in ETH (flat, Chainlink-priced) plus a $STONKBROKER leg that starts at 999 for 24 hours, then compounds. 25% of the ETH leg funds Intern Clock In; 75% goes to treasury. The $STONKBROKER leg is treasury. A dormant sweep puts all 8,888 into parent TBAs on mint open; they cannot move until released.</p>
+        <p><strong className="text-white">Mint:</strong> Only an activated parent broker can release its intern(s). $20 in ETH (flat, Chainlink-priced) plus a $STONKBROKER leg that starts at 999 for 24 hours, then +999/day, hard-capped at 9,999 from day 10. 25% of the ETH leg funds Intern Clock In; 75% goes to treasury. The $STONKBROKER leg is treasury. A dormant sweep puts all 8,888 into parent TBAs on mint open; they cannot move until released.</p>
         <p><strong className="text-white">Yield &amp; ROI:</strong> Intern Clock In weight is job-title slice × intern activation tier (same 1.00 / 1.25 / 1.60 / 2.00 / 3.33 multipliers as brokers). CoC is that trailing intern yield ÷ (intern floor USD + activation $STONKBROKER at spot). Parent-broker Clock In that is delegated as base pay is a separate cashflow and is not added into intern CoC until we can split it onchain.</p>
         <p><strong className="text-white">Ownership:</strong> Circulating live interns are released supply minus Intern Exchange / AMM vault inventory. Dormant tokens in parent TBAs are not circulating. Concentration is unique intern wallets (vault and burn excluded) ÷ that circulating number.</p>
         <p><strong className="text-white">Turning the page on:</strong> Paste nftCa and activationCa (and later ammCa / clockInCa) into fetcher.cjs PROJECTS.interns. The next hourly run fills these tiles. Empty CAs keep the mint desk up and the live series blank.</p>

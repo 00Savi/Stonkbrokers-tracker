@@ -15,10 +15,15 @@ export const INTERNS_ONE_OF_ONES = 56;
 export const INTERNS_ROYALTY_BPS = 999;
 export const INTERNS_ETH_USD = 20;
 export const INTERNS_OPENING_STONK = 999;
+export const INTERNS_STONK_STEP = 999;
 export const INTERNS_RAMP_DAYS = 10;
-export const INTERNS_RAMP_STEP = 0.1;
-export const INTERNS_TAIL_DAYS = 365;
-export const INTERNS_TAIL_STEP = 0.01;
+export const INTERNS_STONK_CAP = 9999;
+
+/** $STONKBROKER mint leg for that calendar day after the 24h opener. Caps at 9,999. */
+export function internMintStonk(day) {
+  const d = Math.max(0, Math.floor(Number(day) || 0));
+  return Math.min(INTERNS_OPENING_STONK + INTERNS_STONK_STEP * d, INTERNS_STONK_CAP);
+}
 
 /** Job title from the parent broker's Clock In revenue slice. Titles only rise. */
 export const INTERNS_TITLES = [
@@ -50,30 +55,14 @@ export function internParentBroker(tokenId) {
   return n <= 4444 ? n : n - 4444;
 }
 
-/** Published $STONKBROKER mint rungs from the intern paper (plus $20 ETH every mint). */
+/** Published $STONKBROKER mint rungs: +999/day after the opener, hard cap 9,999 from day 10. */
 export const INTERNS_MINT_RUNGS = [
-  { day: 0, label: 'First 24h', stonk: 999 },
-  { day: 1, label: 'Day 1', stonk: 1098 },
-  { day: 2, label: 'Day 2', stonk: 1208 },
-  { day: 3, label: 'Day 3', stonk: 1329 },
-  { day: 4, label: 'Day 4', stonk: 1462 },
-  { day: 5, label: 'Day 5', stonk: 1608 },
-  { day: 6, label: 'Day 6', stonk: 1769 },
-  { day: 7, label: 'Day 7', stonk: 1946 },
-  { day: 8, label: 'Day 8', stonk: 2141 },
-  { day: 9, label: 'Day 9', stonk: 2355 },
-  { day: 10, label: 'Day 10', stonk: 2591 },
-  { day: 11, label: 'Day 11', stonk: 2617 },
-  { day: 20, label: 'Day 20', stonk: 2862 },
-  { day: 30, label: 'Day 30', stonk: 3161 },
-  { day: 60, label: 'Day 60', stonk: 4261 },
-  { day: 90, label: 'Day 90', stonk: 5743 },
-  { day: 120, label: 'Day 120', stonk: 7741 },
-  { day: 180, label: 'Day 180', stonk: 14064 },
-  { day: 240, label: 'Day 240', stonk: 25551 },
-  { day: 300, label: 'Day 300', stonk: 46418 },
-  { day: 365, label: 'Day 365', stonk: 88629 },
-  { day: 375, label: 'Day 375+', stonk: 97902 },
+  { day: 0, label: 'First 24h', stonk: internMintStonk(0) },
+  ...Array.from({ length: INTERNS_RAMP_DAYS }, (_, i) => {
+    const day = i + 1;
+    return { day, label: `Day ${day}`, stonk: internMintStonk(day), cap: day === INTERNS_RAMP_DAYS };
+  }),
+  { day: INTERNS_RAMP_DAYS + 1, label: 'After', stonk: INTERNS_STONK_CAP, after: true },
 ];
 
 export function internContractsReady(config = {}) {
