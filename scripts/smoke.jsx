@@ -272,6 +272,24 @@ for (const [name, View, props] of VIEWS) {
 }
 
 {
+  const html = renderToString(
+    <StaticRouter location="/tickeryard/revenue">
+      <YardDetailView data={snapshot} activeTab="revenue" />
+    </StaticRouter>
+  );
+  const banned = ['Protocol Vault Inflows', 'Yard AMM Protocol Rev', 'Snipe / Curve Tax', 'Protocol Revenue & Ecosystem Liquidity'];
+  const missing = ['Vault distributions', 'Holder payout', 'yBTC wrap fee'];
+  const leftover = banned.filter((s) => html.includes(s));
+  const absent = missing.filter((s) => !html.includes(s));
+  if (leftover.length || absent.length) {
+    failed++;
+    console.error(`FAIL  yard revenue headings leftover=${leftover.join('|') || 'none'} missing=${absent.join('|') || 'none'}`);
+  } else {
+    console.log('ok    yard revenue headings are vault distributions / holder payout');
+  }
+}
+
+{
   const stonk = snapshot.projects?.stonk;
   const r = stonk?.revenue || {};
   const chart = protocolRevenueChart(stonk);

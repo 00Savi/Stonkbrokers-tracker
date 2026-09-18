@@ -85,11 +85,11 @@ export function PaybackPanel({ snaps, tiers, floorCostUsd, tokenPriceUsd }) {
   );
 }
 
-export function HolderRevenuePanel({ labels, data, note }) {
+export function HolderRevenuePanel({ labels, data, note, title }) {
   const has = seriesHasInk(data);
   return (
     <ChartPanel
-      title="Holder revenue (USD)"
+      title={title || 'Holder revenue (USD)'}
       note={note || 'What flowed to NFT / token holders that day. This is the payout leg, not protocol-kept revenue.'}
     >
       {has ? (
@@ -117,7 +117,7 @@ export function HolderRevenuePanel({ labels, data, note }) {
 export function ProtocolFeeVolumePanels({ labels, cols, kind, holder, note, title, mixTitle }) {
   const holderInk = holder && seriesHasInk(holder.data);
   const holderPanel = holderInk ? (
-    <HolderRevenuePanel labels={holder.labels || labels} data={holder.data} note={holder.note} />
+    <HolderRevenuePanel labels={holder.labels || labels} data={holder.data} note={holder.note} title={holder.title} />
   ) : null;
 
   if (kind === 'ledger' || kind === 'cashflow') return holderPanel;
@@ -136,7 +136,7 @@ export function ProtocolFeeVolumePanels({ labels, cols, kind, holder, note, titl
           <EmptyChart>No revenue days in this window</EmptyChart>
         )}
       </ChartPanel>
-      {mix.length ? (
+      {mix.length > 1 ? (
         <ChartPanel title={mixTitle || "Revenue mix (100%)"} note="Share of protocol revenue that day. Days with no rev are blank. Swap volume is excluded.">
           <Bar data={{ labels, datasets: barDatasets(mix, { stacked: true }) }} options={percentStackOptions()} />
         </ChartPanel>

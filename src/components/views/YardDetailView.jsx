@@ -11,6 +11,7 @@ import { baseChartOptions, compactTick, compactUsdTick, dualAxisOptions, STREAM_
 import { useChartWindow } from '../../lib/chartWindow';
 import { holderSeries } from '../../lib/snapshots';
 import { MethodologyCard } from '../Disclaimer';
+import { YARD_WRAP, fetchYardWrap } from '../../lib/yardWrap';
 import {
   EmptyChart,
   YieldUsdPricePanel,
@@ -60,6 +61,7 @@ export default function YardDetailView({ data, activeTab }) {
   const [lpTableOpen, setLpTableOpen] = useState(true);
   const [volumeMultiplier, setVolumeMultiplier] = useState(1);
   const [liveLp, setLiveLp] = useState(null);
+  const [wrap, setWrap] = useState(null);
 
   const project = data?.projects?.tickeryard || data?.projects?.yard;
   const lockedLpSnap = project?.lockedLp || null;
@@ -83,9 +85,15 @@ export default function YardDetailView({ data, activeTab }) {
     return () => { gone = true; };
   }, [tokenCa, lockedLpSnap, tokenPx]);
 
+  useEffect(() => {
+    let gone = false;
+    fetchYardWrap().then((w) => { if (!gone) setWrap(w); }).catch(() => {});
+    return () => { gone = true; };
+  }, []);
+
   if (!project) return <div className="text-center text-slate-400 p-12">TickerYard Data Loading...</div>;
 
-  const { config = {}, market = {}, tiers = [], activation = {}, ownership = {}, revenue = {}, dailySnapshots = [] } = project;
+  const { config = {}, market = {}, tiers = [], activation = {}, ownership = {}, dailySnapshots = [] } = project;
   const lockedLp = lockedLpSnap?.pools?.length ? lockedLpSnap : liveLp;
 
   const formatCurrency = compactUsd;
@@ -106,21 +114,13 @@ export default function YardDetailView({ data, activeTab }) {
 
   const revPeriod = windowPeriodLabel(timeframe);
   const rawRev = protocolRevenueChart(project);
-  const slicedRev = sliceCols(rawRev.labels, rawRev.cols, timeframe);
-  const slicedHolder = sliceCols(rawRev.labels, [holderRevenueCol(project, rawRev.rawLabels || rawRev.labels)], timeframe);
-  const byKey = Object.fromEntries((slicedRev.cols || []).map((c) => [c.key, c]));
-  const { labels: revDates, cols: revCols } = sliceCols(
+  const byKey = Object.fromEntries((rawRev.cols || []).map((c) => [c.key, c]));
+  const slicedVault = sliceCols(
     rawRev.labels,
-    [
-      { ...(byKey.amm || { data: [] }), label: 'Vault Distributions', color: STREAM_COLORS.amm },
-      { ...(byKey.dex || { data: [] }), label: 'Yard AMM Rev', color: STREAM_COLORS.dex },
-      { ...(byKey.tax || { data: [] }), label: 'Snipe / curve tax', color: STREAM_COLORS.tax },
-    ],
-    timeframe
+    [{ ...(byKey.amm || { data: [] }), label: 'Vault distributions', color: STREAM_COLORS.amm }],
+    timeframe,
   );
-  const revData1 = revCols[0]?.data || [];
-  const revData2 = revCols[1]?.data || [];
-  const revData3 = revCols[2]?.data || [];
+  const slicedHolder = sliceCols(rawRev.labels, [holderRevenueCol(project, rawRev.rawLabels || rawRev.labels)], timeframe);
 
   // 3. Burn Tracker Data (Cumulative Ratchet: prevents values from dropping)
   const realBurntTokens = Math.max(Number(activation.dualBurn?.totalBurnTokens || 0), Number(ownership.permanentlyBurntTokens || 0));
@@ -298,39 +298,56 @@ export default function YardDetailView({ data, activeTab }) {
         </div>
       </section>
 
-      {/* ==================== TAB 3: REVENUE & LPS ==================== */}
+      {/* ==================== TAB 3: VAULT DISTRIBUTIONS ==================== */}
       <section id="revenue" className="scroll-mt-32">
         <div className="space-y-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div>
-              <h2 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">Protocol Revenue & Ecosystem Liquidity</h2>
-              <p className="text-xs text-slate-400 mt-1">Protocol-kept revenue only. Swap volume is not included.</p>
+              <h2 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">Vault distributions</h2>
+              <p className="text-xs text-slate-400 mt-1">SoftStakingVault RewardPaid is $YARD paid to activated Yardkeepers. The yBTC wrap is a separate 0.30% CCIP fee that still sits in the Arbitrum WBTC vault — it is not in the $YARD RewardPaid series.</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
+              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Vault distributions ({revPeriod})</p>
+              <p className="text-2xl font-extrabold" style={{ color: STREAM_COLORS.amm }}>{formatCurrency(slicedVault.cols[0]?.total || 0)}</p>
+            </div>
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
+              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Holder payout ({revPeriod})</p>
+              <p className="text-2xl font-extrabold" style={{ color: STREAM_COLORS.holdersRev }}>{formatCurrency(slicedHolder.cols[0]?.total || 0)}</p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
-              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Protocol Vault Inflows ({revPeriod})</p>
-              <p className="text-2xl font-extrabold" style={{ color: STREAM_COLORS.amm }}>{formatCurrency(revCols[0]?.total || 0)}</p>
+              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">yBTC wrap fee</p>
+              <p className="text-2xl font-extrabold text-cyan-300">{((wrap?.wrapFeeBps || YARD_WRAP.wrapFeeBps) / 100).toFixed(2)}%</p>
+              <p className="text-[11px] text-slate-500 mt-1">WBTC on Arbitrum → yBTC on Robinhood via Chainlink CCIP. Fee stays in the Arbitrum vault until a Yardkeeper sync.</p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
-              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Yard AMM Protocol Rev ({revPeriod})</p>
-              <p className="text-2xl font-extrabold" style={{ color: STREAM_COLORS.dex }}>{formatCurrency(revCols[1]?.total || 0)}</p>
+              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">yBTC receipts</p>
+              <p className="text-2xl font-extrabold text-white">{wrap?.ybtcSupply > 0 ? `${wrap.ybtcSupply.toFixed(4)} BTC` : '—'}</p>
+              <p className="text-[11px] text-slate-500 mt-1">{wrap?.ybtcUsd > 0 ? `${formatCurrency(wrap.ybtcUsd)} DexScreener` : 'Live supply from the YAssetReceipt'}</p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
-              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Snipe / Curve Tax ({revPeriod})</p>
-              <p className="text-2xl font-extrabold" style={{ color: STREAM_COLORS.tax }}>{formatCurrency(revCols[2]?.total || 0)}</p>
+              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">yXAUT (Chainlink CCIP)</p>
+              <p className="text-2xl font-extrabold text-slate-400">Not live</p>
+              <p className="text-[11px] text-slate-500 mt-1">Same YAssetGateway. Tether Gold receipt is coded; no receipt token is installed yet.</p>
             </div>
           </div>
 
           <ProtocolFeeVolumePanels
-            labels={slicedRev.labels}
-            cols={slicedRev.cols}
+            labels={slicedVault.labels}
+            cols={slicedVault.cols}
             kind={rawRev.kind}
+            title="Daily vault distributions (USD)"
+            note="RewardPaid from the TickerYard SoftStakingVault. This is yield paid to activated Yardkeepers, not a StonkBrokers AMM / Clock-In / snipe mix."
             holder={{
               labels: slicedHolder.labels,
               data: slicedHolder.cols[0]?.data,
-              note: 'Per-NFT daily yield × active units at each tier. The payout that reached holders, not protocol-kept revenue.',
+              title: 'Holder payout (USD)',
+              note: 'Per-NFT daily yield × active Yardkeepers. Same RewardPaid, reconstructed by Anvil tier.',
             }}
           />
         </div>
@@ -552,6 +569,8 @@ export default function YardDetailView({ data, activeTab }) {
 
       <MethodologyCard accent="text-cyan-500">
           <p><strong className="text-white">Yield &amp; ROI:</strong> TickerYard is a SoftStakingVault, not the StonkBrokers T4 oracle. Cash-on-cash is annualized vault yield ÷ (NFT floor USD + activation tokens at DexScreener spot), split by Anvil tier weight (1.00×–3.33×). Live yield is a trailing sample, not a promised APY. Keeper jobs described in the TickerYard whitepaper are extra work for enrolled T4 operators and are not in these CoC numbers.</p>
+          <p><strong className="text-white">Distributions:</strong> The $YARD series is SoftStakingVault RewardPaid. That is holder yield, not Anvil AMM fees or launchpad snipe tax.</p>
+          <p><strong className="text-white">yBTC wrap:</strong> TickerYard&apos;s Bitcoin bridge is a Chainlink CCIP canonical wrap: WBTC locked on Arbitrum (<code>YAssetVault</code>) mints yBTC on Robinhood (<code>YAssetReceipt</code>). Wrap fee is 30 bps, taken on Arbitrum. Extra WBTC vs yBTC supply is un-synced protocol fee; <code>YardkeeperRewardsSynchronized</code> has not fired, so wrap fees are not in the $YARD RewardPaid chart. yXAUT (Tether Gold) is the next CCIP receipt in the same gateway and is not installed yet.</p>
           <p><strong className="text-white">Activation:</strong> Same reconstruction as Mancer. The vault emits no Deactivated event — a sale clears the position. <code>activeCount()</code> is an upper bound; this page replays Activated plus NFT transfers.</p>
           <p><strong className="text-white">Payback:</strong> Entry cost ÷ annualized trailing yield, repriced at the last sync.</p>
           <p><strong className="text-white">Ownership:</strong> Circulating NFTs are collection size minus AMM vault inventory. Concentration is unique NFT wallets (vault and burn addresses excluded) divided by that circulating number. Activated-wallet count is unique current owners of NFTs that still have an open activation.</p>
