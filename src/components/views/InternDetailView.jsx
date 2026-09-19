@@ -114,8 +114,8 @@ export default function InternDetailView({ data, activeTab }) {
               <p className="text-[10px] uppercase tracking-wider text-amber-400 font-bold">Companion collection</p>
               <h3 className="text-lg font-bold text-white mt-1">Interns by StonkBrokers — the desk next to the broker</h3>
               <p className="text-sm text-slate-400 mt-2 max-w-3xl leading-relaxed">
-                8,888 pixel-art interns on Robinhood Chain, two per StonkBroker: V1 Sigma is token id N, V2 Woke is N + 4,444.
-                Each intern has a token-bound wallet. Base pay is a slice of the parent broker&apos;s Clock In. Mint is tomorrow —
+                8,888 pixel-art interns on Robinhood Chain, two per StonkBroker: V1 Sigma is token id N, V2 Divergent is N + 4,444.
+                Each intern has a token-bound wallet. Base pay is a slice of the parent broker&apos;s Clock In. Mint is open —
                 only the parent activated broker can release its interns.
               </p>
             </div>
@@ -139,7 +139,7 @@ export default function InternDetailView({ data, activeTab }) {
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4"><p className="text-[10px] uppercase tracking-wider text-slate-400">Collection</p><p className="text-2xl font-extrabold text-white">{formatNumber(INTERNS_MAX_SUPPLY)}</p></div>
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4"><p className="text-[10px] uppercase tracking-wider text-slate-400">Per broker</p><p className="text-2xl font-extrabold text-amber-300">{INTERNS_PER_BROKER}</p><p className="text-[10px] text-slate-500 mt-1">Sigma + Woke</p></div>
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4"><p className="text-[10px] uppercase tracking-wider text-slate-400">Per broker</p><p className="text-2xl font-extrabold text-amber-300">{INTERNS_PER_BROKER}</p><p className="text-[10px] text-slate-500 mt-1">Sigma + Divergent</p></div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4"><p className="text-[10px] uppercase tracking-wider text-slate-400">One of ones</p><p className="text-2xl font-extrabold text-white">{INTERNS_ONE_OF_ONES}</p></div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4"><p className="text-[10px] uppercase tracking-wider text-slate-400">Creator royalty</p><p className="text-2xl font-extrabold text-white">{(INTERNS_ROYALTY_BPS / 100).toFixed(2)}%</p></div>
           </div>
@@ -202,7 +202,7 @@ export default function InternDetailView({ data, activeTab }) {
               <h3 className="text-sm font-bold text-white">Activation CoC — intern ladder</h3>
               <span className="text-xs font-bold text-amber-400 bg-amber-900/30 px-2 py-1 rounded border border-amber-800/50">{parseFloat(volumeMultiplier).toFixed(1)}x Intern Clock In volume</span>
             </div>
-            <p className="text-xs text-slate-400 mb-4">Five tiers in $STONKBROKER, same weights as brokers, starting at 6,666 so a first intern is a fraction of a broker seat. Half of every activation fee is burned. Yield stays empty until Intern Clock In is live.</p>
+            <p className="text-xs text-slate-400 mb-4">Five school-year tiers in $STONKBROKER (Freshman 3,333 → Alumnus 83,333), same weights as brokers. Half of every activation fee is burned. Yield stays empty until Intern Clock In is live.</p>
             <input type="range" min="0.1" max="10" step="0.1" value={volumeMultiplier} onChange={(e) => setVolumeMultiplier(e.target.value)} className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500 mb-6" />
 
             <div className="overflow-x-auto -mx-1 sm:mx-0">
@@ -315,7 +315,7 @@ export default function InternDetailView({ data, activeTab }) {
       <section id="revenue" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-lg md:text-xl font-bold text-white">Intern desks</h2>
-          <p className="text-xs text-slate-400">Fees from desks the interns run land in Intern Clock In. Numbers stay blank until those CAs are in the fetcher.</p>
+          <p className="text-xs text-slate-400">Fees from desks the interns run land in Intern Clock In. Clock In, Exchange, names, and lending CAs are not deployed yet.</p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Intern Clock In ({revPeriod})</p><p className="text-2xl font-extrabold text-amber-300">{dash(building, slicedRev.cols?.[0]?.total, formatCurrency)}</p></div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Intern Exchange ({revPeriod})</p><p className="text-2xl font-extrabold" style={{ color: STREAM_COLORS.amm }}>{dash(building, slicedRev.cols?.[1]?.total, formatCurrency)}</p></div>
@@ -493,7 +493,7 @@ export default function InternDetailView({ data, activeTab }) {
         <p><strong className="text-white">Mint:</strong> Only an activated parent broker can release its intern(s). $20 in ETH (flat, Chainlink-priced) plus a $STONKBROKER leg that starts at 999 for 24 hours, then +999/day, hard-capped at 9,999 from day 10. 25% of the ETH leg funds Intern Clock In; 75% goes to treasury. The $STONKBROKER leg is treasury. A dormant sweep puts all 8,888 into parent TBAs on mint open; they cannot move until released.</p>
         <p><strong className="text-white">Yield &amp; ROI:</strong> Intern Clock In weight is job-title slice × intern activation tier (same 1.00 / 1.25 / 1.60 / 2.00 / 3.33 multipliers as brokers). CoC is that trailing intern yield ÷ (intern floor USD + activation $STONKBROKER at spot). Parent-broker Clock In that is delegated as base pay is a separate cashflow and is not added into intern CoC until we can split it onchain.</p>
         <p><strong className="text-white">Ownership:</strong> Circulating live interns are released supply minus Intern Exchange / AMM vault inventory. Dormant tokens in parent TBAs are not circulating. Concentration is unique intern wallets (vault and burn excluded) ÷ that circulating number.</p>
-        <p><strong className="text-white">Turning the page on:</strong> Paste nftCa and activationCa (and later ammCa / clockInCa) into fetcher.cjs PROJECTS.interns. The next hourly run fills these tiles. Empty CAs keep the mint desk up and the live series blank.</p>
+        <p><strong className="text-white">Turning the page on:</strong> Collection and activation CAs are live in fetcher.cjs. Intern Clock In, Intern Exchange, names, and lending stay blank until those desks deploy.</p>
       </MethodologyCard>
     </div>
   );

@@ -698,17 +698,17 @@ const PROJECTS = {
       { id: "T4", name: "5-Star", reqTokens: 1200000, weight: 333, rainWeight: 5 }
     ]
   },
-  // Interns by StonkBrokers. Mint tomorrow. Leave CAs empty until they
-  // are published — the intern page stays up as a mint desk, and the
-  // next hourly run turns tiles/charts on the moment nftCa +
-  // activationCa are filled. Do not put placeholder addresses here.
+  // Interns by StonkBrokers. Collection + activation are live on Robinhood
+  // Chain (mint opened 2026-09-19). Intern Clock In / Exchange / names /
+  // lending stay empty until those desks ship (Clock In is +72h).
   interns: {
-    genesisBlock: 0,
-    tokenCa: "",
-    nftCa: "",
-    activationCa: "",
+    genesisBlock: 66628699,
+    tokenCa: "0xe934e36a439c94017b64a3fece66af12099abf50".toLowerCase(),
+    nftCa: "0xfc4b0c4f464dc3037cf013934648a8a726d565a5".toLowerCase(),
+    activationCa: "0x668ea9e44e0ceb5b203067873e0b9bcdf2214b37".toLowerCase(),
     ammCa: "",
     clockInCa: "",
+    internEngineCa: "0xf58f19be7c3ab385500862dc2391f42b6596f978".toLowerCase(),
     internExchangeCa: "",
     namesCa: "",
     lendingCa: "",
@@ -719,15 +719,15 @@ const PROJECTS = {
     yieldMode: "intern_clockin",
     deactivateOnTransfer: true,
     site: "https://www.stonkbrokers.cash/docs/interns",
-    underConstruction: true,
+    underConstruction: false,
     teamWallets: 0,
     streams: {},
     tiers: [
-      { id: "T0", name: "Desk", reqTokens: 6666, weight: 100 },
-      { id: "T1", name: "Junior", reqTokens: 13333, weight: 125 },
-      { id: "T2", name: "Analyst", reqTokens: 26666, weight: 160 },
-      { id: "T3", name: "Associate", reqTokens: 46666, weight: 200 },
-      { id: "T4", name: "Senior", reqTokens: 113333, weight: 333 },
+      { id: "T0", name: "Freshman", reqTokens: 3333, weight: 100 },
+      { id: "T1", name: "Sophomore", reqTokens: 8333, weight: 125 },
+      { id: "T2", name: "Junior", reqTokens: 18333, weight: 160 },
+      { id: "T3", name: "Senior", reqTokens: 33333, weight: 200 },
+      { id: "T4", name: "Alumnus", reqTokens: 83333, weight: 333 },
     ],
   },
   index: {
@@ -1099,6 +1099,28 @@ async function loadMarketPrices() {
 
 function internContractsReady(conf) {
   return !!(conf?.nftCa && conf?.activationCa);
+}
+
+const DORMANT_COUNT_SEL = ethers.id("dormantCount()").slice(0, 10);
+
+async function attachInternOwnership(conf, ownership) {
+  try {
+    const raw = await rpc.calls([{ to: conf.nftCa, data: DORMANT_COUNT_SEL }]);
+    const dormant = Number(decodeUint(raw[0]) ?? 0n);
+    if (!Number.isFinite(dormant) || dormant < 0) return ownership;
+    const max = Number(conf.maxSupply) || 8888;
+    const live = Math.max(0, max - dormant);
+    ownership.dormantInterns = dormant;
+    ownership.liveInterns = live;
+    ownership.circulatingNftSupply = Math.max(0, live - (ownership.ammVaultNfts || 0));
+    if (ownership.circulatingNftSupply > 0) {
+      ownership.ownershipRatio = parseFloat(Math.min(100, ((ownership.nftHolders || 0) / ownership.circulatingNftSupply) * 100).toFixed(2));
+    }
+    console.log(`  interns live/dormant: ${live}/${dormant}`);
+  } catch (e) {
+    console.warn(`[warn] interns dormantCount: ${e.message}`);
+  }
+  return ownership;
 }
 
 function buildInternStub(conf, markets, prev = {}) {
@@ -3324,6 +3346,7 @@ async function run() {
         ? await fetchCardWallLiveActivations(conf, prevProjData.activation || {})
         : await fetchActivations(projectKey, conf);
       const ownershipStats = await getOwnershipStats(conf, activationStats.dualBurn.equivalentBrokersBurnt, prevProjData);
+      if (projectKey === "interns") await attachInternOwnership(conf, ownershipStats);
       ownershipStats.burnHistory = await fetchBurnHistory(projectKey, prevProjData?.ownership?.burnHistory);
 
       const ledger = conf.vaultLedger ? await fetchVaultLedger(conf.vaultLedger, sevenDaysAgo) : null;
@@ -3581,7 +3604,22 @@ async function run() {
         ledger: ledger,
         underConstruction: projectKey === "interns" ? !internContractsReady(conf) : conf.underConstruction,
         dailySnapshots: dailySnapshots,
-        config: { ticker: conf.ticker, unitValue: conf.unitValue, logo: conf.logo, nftCa: conf.nftCa, tokenCa: conf.tokenCa }
+        config: projectKey === "interns"
+          ? {
+              ticker: conf.ticker,
+              unitValue: conf.unitValue,
+              logo: conf.logo,
+              nftCa: conf.nftCa,
+              tokenCa: conf.tokenCa,
+              activationCa: conf.activationCa || "",
+              ammCa: conf.ammCa || "",
+              clockInCa: conf.clockInCa || "",
+              internEngineCa: conf.internEngineCa || "",
+              site: conf.site,
+              maxSupply: conf.maxSupply,
+              parentKey: "stonk",
+            }
+          : { ticker: conf.ticker, unitValue: conf.unitValue, logo: conf.logo, nftCa: conf.nftCa, tokenCa: conf.tokenCa }
       };
       if (projectKey === "stonk") stonkFetched = true;
       projectsOk++;

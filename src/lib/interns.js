@@ -3,8 +3,8 @@
  *
  * Paper: https://www.stonkbrokers.cash/docs/interns
  * 8,888 ERC-721C interns, two per broker (V1 Sigma = token id N,
- * V2 Woke = N + 4,444). Activation and mint $STONKBROKER leg are the parent
- * token. CAs live in fetcher.cjs — empty until mint.
+ * V2 Divergent = N + 4,444). Activation and mint $STONKBROKER leg are the
+ * parent token. Live CAs are in fetcher.cjs PROJECTS.interns.
  */
 
 export const INTERNS_TOKEN = '$STONKBROKER';
@@ -34,19 +34,19 @@ export const INTERNS_TITLES = [
   { id: 'senior', name: 'Senior Associate', sharePct: 2.5 },
 ];
 
-/** Same Anvil multipliers as StonkBrokers, cheaper $STONKBROKER rungs. */
+/** Live InternActivation.tiers() on 0x668E…4b37. Same weights as brokers. */
 export const INTERNS_TIERS = [
-  { id: 'T0', name: 'Desk', reqTokens: 6666, weight: 100 },
-  { id: 'T1', name: 'Junior', reqTokens: 13333, weight: 125 },
-  { id: 'T2', name: 'Analyst', reqTokens: 26666, weight: 160 },
-  { id: 'T3', name: 'Associate', reqTokens: 46666, weight: 200 },
-  { id: 'T4', name: 'Senior', reqTokens: 113333, weight: 333 },
+  { id: 'T0', name: 'Freshman', reqTokens: 3333, weight: 100 },
+  { id: 'T1', name: 'Sophomore', reqTokens: 8333, weight: 125 },
+  { id: 'T2', name: 'Junior', reqTokens: 18333, weight: 160 },
+  { id: 'T3', name: 'Senior', reqTokens: 33333, weight: 200 },
+  { id: 'T4', name: 'Alumnus', reqTokens: 83333, weight: 333 },
 ];
 
 export function internClass(tokenId) {
   const n = Number(tokenId);
   if (!Number.isFinite(n) || n < 1) return null;
-  return n <= 4444 ? 'sigma' : 'woke';
+  return n <= 4444 ? 'sigma' : 'divergent';
 }
 
 export function internParentBroker(tokenId) {
