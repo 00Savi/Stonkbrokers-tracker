@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, ArcElement, Filler
 } from 'chart.js';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
-import { burnSeries, burnRateSeries, burnOfSupplyPct } from '../../lib/burn';
 import { formatLabels } from '../../lib/dates';
 import { windowSnapshots, tierRoiDatasets, protocolRevenueChart, sliceCols, windowPeriodLabel, windowLen, seriesHasInk, holderRevenueCol } from '../../lib/yieldHistory';
 import { compactUsd, compactNum } from '../kit';
-import { baseChartOptions, compactTick, compactUsdTick, dualAxisOptions, STREAM_COLORS } from '../../lib/charts';
+import { baseChartOptions, STREAM_COLORS } from '../../lib/charts';
 import { useChartWindow } from '../../lib/chartWindow';
 import { holderSeries } from '../../lib/snapshots';
 import { MethodologyCard } from '../Disclaimer';
+import { projectPath } from '../../lib/routes';
 import {
   EmptyChart,
   YieldUsdPricePanel,
@@ -45,14 +46,13 @@ export default function InternDetailView({ data, activeTab }) {
   const [timeframe] = useChartWindow();
   const [expandedTier, setExpandedTier] = useState(null);
   const [tierTimeframe, setTierTimeframe] = useState('allTime');
-  const [lpTableOpen, setLpTableOpen] = useState(true);
   const [volumeMultiplier, setVolumeMultiplier] = useState(1);
 
   const project = data?.projects?.interns;
   const stonk = data?.projects?.stonk;
   if (!project) return <div className="text-center text-slate-400 p-12">Interns Data Loading...</div>;
 
-  const { config = {}, market = {}, tiers = [], activation = {}, ownership = {}, revenue = {}, lockedLp = null, dailySnapshots = [] } = project;
+  const { config = {}, market = {}, tiers = [], activation = {}, ownership = {}, revenue = {}, dailySnapshots = [] } = project;
   const awaitingContracts = !internContractsReady(config);
   const desksPending = !internDesksReady(config);
   const building = awaitingContracts || desksPending;
@@ -81,10 +81,6 @@ export default function InternDetailView({ data, activeTab }) {
   const slicedHolder = sliceCols(rawRev.labels, [holderRevenueCol(project, rawRev.rawLabels || rawRev.labels)], timeframe);
 
   const realBurntTokens = Math.max(Number(activation.dualBurn?.totalBurnTokens || 0), Number(ownership.permanentlyBurntTokens || 0));
-  const burnPct = burnOfSupplyPct(project, realBurntTokens);
-  const realBurntUnits = Math.max(Number(activation.dualBurn?.equivalentBrokersBurnt || 0), Number(ownership.permanentlyBurntUnits || 0), Number(ownership.burntNfts || 0));
-  const burn = burnSeries(project, timeframe);
-  const flywheel = burnRateSeries(project, timeframe);
 
   const actHistory = activation.history || {};
   const hasActHist = Array.isArray(actHistory.labels) && actHistory.labels.length > 0;
@@ -310,70 +306,20 @@ export default function InternDetailView({ data, activeTab }) {
         </div>
       </section>
 
-      <section id="liquidity" className="scroll-mt-32">
-        <div className="space-y-6">
-          <h2 className="text-lg md:text-xl font-bold text-white">Intern Exchange</h2>
-          <p className="text-xs text-slate-400">Pooled intern / $STONKBROKER (or ETH) inventory with a step. AMM vault inventory is subtracted from circulating live interns the same way as brokers.</p>
-          {lockedLp?.pools?.length ? (
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
-              <button type="button" onClick={() => setLpTableOpen((v) => !v)} className="text-sm font-bold text-white mb-3">{lpTableOpen ? 'Hide' : 'Show'} pools</button>
-              {lpTableOpen ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-left">
-                    <thead><tr className="text-slate-500 text-xs uppercase"><th className="pb-2">Pool</th><th className="pb-2">USD</th></tr></thead>
-                    <tbody>
-                      {lockedLp.pools.map((p) => (
-                        <tr key={p.pair || p.pairName} className="border-t border-[#1e2228]"><td className="py-2 text-slate-200">{p.pairName || p.pair}</td><td className="py-2">{formatCurrency(p.liquidityUsd)}</td></tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : null}
-            </div>
-          ) : (
-            <EmptyChart>Intern Exchange pools appear once the exchange CA is set</EmptyChart>
-          )}
-        </div>
-      </section>
-
-      <section id="burn" className="scroll-mt-32">
-        <div className="space-y-6">
-          <h2 className="text-lg md:text-xl font-bold text-white">Activation burn</h2>
-          <p className="text-xs text-slate-400">Half of every intern activation fee is burned $STONKBROKER. This is not intern NFT supply — the collection stays 8,888.</p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">$STONKBROKER burnt</p><p className="text-2xl font-extrabold text-orange-400">{dash(building, realBurntTokens)}</p></div>
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Of intern T0 units</p><p className="text-2xl font-extrabold text-white">{dash(building, realBurntUnits)}</p></div>
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Vs intern token supply</p><p className="text-2xl font-extrabold text-white">{building || !(burnPct > 0) ? '—' : `${burnPct.toFixed(2)}%`}</p></div>
-          </div>
-          <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
-            <h3 className="text-sm font-bold text-white mb-4">Cumulative $STONKBROKER burn</h3>
-            <div className="relative h-52 sm:h-64 md:h-80 w-full">
-              {burn.data?.length ? (
-                <Line data={{ labels: burn.labels, datasets: [{ label: 'Cumulative Burnt', data: burn.data, borderColor: '#fb923c', backgroundColor: 'rgba(251, 146, 60, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] }} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactTick } } } }} />
-              ) : (
-                <EmptyChart>Burn history starts after intern activations hit the chain</EmptyChart>
-              )}
-            </div>
-          </div>
-          <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
-            <h3 className="text-sm font-bold text-white mb-4">$STONKBROKER price vs intern burn velocity</h3>
-            <div className="relative h-52 sm:h-64 md:h-80 w-full">
-              {seriesHasInk(flywheel.burn) ? (
-                <Bar data={{ labels: flywheel.labels, datasets: [{ type: 'line', label: 'Token Price ($)', data: flywheel.prices, borderColor: ACCENT, backgroundColor: ACCENT, borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y1' }, { type: 'bar', label: 'Daily Burn Velocity', data: flywheel.burn, backgroundColor: 'rgba(249, 115, 22, 0.8)', borderRadius: 4, yAxisID: 'y' }] }} options={dualAxisOptions({ leftTick: compactTick, rightTick: compactUsdTick, rightColor: ACCENT })} />
-              ) : (
-                <EmptyChart>No intern burn velocity yet</EmptyChart>
-              )}
-            </div>
-          </div>
-        </div>
-      </section>
-
       <section id="activation" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-lg md:text-xl font-bold text-white">Intern activation</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Activated of collection</p><p className="text-2xl font-extrabold text-emerald-400">{awaitingContracts ? '—' : `${(activation.percentActivated || 0).toFixed(2)}%`}</p></div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Live activated units</p><p className="text-2xl font-extrabold text-amber-300">{dash(awaitingContracts, activation.activeCount)} Units</p></div>
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5">
+              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">$STONKBROKER burnt</p>
+              <p className="text-2xl font-extrabold text-orange-400">{dash(awaitingContracts, realBurntTokens)}</p>
+              <p className="text-xs text-slate-500 mt-1">
+                Half of each intern activation fee.{' '}
+                <Link to={projectPath('stonk', 'burn')} className="text-amber-300 hover:underline">Parent burn chart</Link>
+              </p>
+            </div>
           </div>
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
             <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Tier flow</h3>
@@ -469,6 +415,7 @@ export default function InternDetailView({ data, activeTab }) {
         <p><strong className="text-white">Mint:</strong> Only an activated parent broker can release its intern(s). A dormant sweep puts all 8,888 into parent TBAs on mint open; they cannot move until released.</p>
         <p><strong className="text-white">Yield &amp; ROI:</strong> Intern Clock In weight is job-title slice × intern activation tier (same 1.00 / 1.25 / 1.60 / 2.00 / 3.33 multipliers as brokers). CoC is that trailing intern yield ÷ (intern floor USD + activation $STONKBROKER at spot). Parent-broker Clock In that is delegated as base pay is a separate cashflow and is not added into intern CoC until we can split it onchain.</p>
         <p><strong className="text-white">Ownership:</strong> Circulating live interns are released supply minus Intern Exchange / AMM vault inventory. Dormant tokens in parent TBAs are not circulating. Concentration is unique intern wallets (vault and burn excluded) ÷ that circulating number.</p>
+        <p><strong className="text-white">Burn:</strong> Half of each intern activation fee is $STONKBROKER destroyed. Token-supply charts stay on the parent StonkBrokers burn page — interns are not a second ERC-20.</p>
         <p><strong className="text-white">Turning the page on:</strong> Collection and activation CAs are live in fetcher.cjs. Intern Clock In, Intern Exchange, names, and lending stay blank until those desks deploy.</p>
       </MethodologyCard>
     </div>

@@ -33,6 +33,7 @@ import SpecialDetailView from '../src/components/views/SpecialDetailView';
 import NightshadesDetailView from '../src/components/views/NightshadesDetailView';
 import { protocolRevenueChart } from '../src/lib/yieldHistory';
 import { dateKey } from '../src/lib/dates';
+import { PROJECTS, tabsForProject } from '../src/lib/routes';
 
 const snapshot = JSON.parse(fs.readFileSync('public/data.json', 'utf8'));
 
@@ -59,7 +60,11 @@ const ROUTES = [
   '/stonkbrokers/ownership',
   '/interns/roi',
   '/interns/yield',
+  '/interns/revenue',
+  '/interns/activation',
   '/interns/ownership',
+  '/interns/liquidity',
+  '/interns/burn',
   '/mancer/roi',
   '/mancer/yield',
   '/tickeryard/revenue',
@@ -277,7 +282,7 @@ for (const [name, View, props] of VIEWS) {
       <InternDetailView data={snapshot} activeTab="roi" />
     </StaticRouter>
   );
-  const banned = ['Opening mint', 'Mint price per intern', 'First 24h', '+10%/day', '+999/day', 'Ceiling 9,999', '$20 in ETH'];
+  const banned = ['Opening mint', 'Mint price per intern', 'First 24h', '+10%/day', '+999/day', 'Ceiling 9,999', '$20 in ETH', 'Vs intern token supply', 'intern burn velocity'];
   const leftover = banned.filter((s) => html.includes(s));
   const intern = snapshot.projects?.interns;
   const live = Number(intern?.ownership?.liveInterns);
@@ -285,6 +290,12 @@ for (const [name, View, props] of VIEWS) {
   if (leftover.length) {
     failed++;
     console.error(`FAIL  intern mint price leftover=${leftover.join('|')}`);
+  } else if (html.includes('id="liquidity"') || html.includes('id="burn"')) {
+    failed++;
+    console.error('FAIL  intern page still has liquidity/burn sections');
+  } else if (!html.includes('Parent burn chart') || !html.includes('$STONKBROKER burnt')) {
+    failed++;
+    console.error('FAIL  intern activation burn tile missing');
   } else if (intern?.underConstruction || !intern?.config?.nftCa || !(live > 0)) {
     failed++;
     console.error('FAIL  intern snapshot is still the empty stub');
@@ -293,6 +304,13 @@ for (const [name, View, props] of VIEWS) {
     console.error(`FAIL  intern live count ${live} not on the page`);
   } else {
     console.log(`ok    intern page has no mint schedule; ${liveLabel} live`);
+  }
+  const internTabs = tabsForProject(PROJECTS.find((p) => p.key === 'interns')).map((t) => t.slug);
+  if (internTabs.includes('liquidity') || internTabs.includes('burn')) {
+    failed++;
+    console.error(`FAIL  intern tabs still include ${internTabs.join(',')}`);
+  } else {
+    console.log(`ok    intern tabs ${internTabs.join(',')}`);
   }
 }
 

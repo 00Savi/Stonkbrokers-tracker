@@ -76,6 +76,9 @@ export function tabsForProject(meta) {
   if (meta?.key === 'tickeryard') {
     return tabs.map((t) => (t.slug === 'revenue' ? { ...t, label: 'Distributions' } : t));
   }
+  if (meta?.key === 'interns') {
+    return tabs.filter((t) => t.slug !== 'liquidity' && t.slug !== 'burn');
+  }
   if (meta?.key === 'nightshades' || meta?.kind === 'factions') {
     return tabs
       .filter((t) => t.slug !== 'liquidity')

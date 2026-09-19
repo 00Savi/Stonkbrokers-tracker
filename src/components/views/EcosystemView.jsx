@@ -537,7 +537,7 @@ export default function EcosystemView({ data, pending = false }) {
               return (
                 <Link
                   key={k}
-                  to={projectPath(k, 'burn')}
+                  to={k === 'interns' ? projectPath(k, 'activation') : projectPath(k, 'burn')}
                   className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-4 shadow-sm transition hover:border-slate-500 hover:bg-[#101318]"
                 >
                   <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1">
