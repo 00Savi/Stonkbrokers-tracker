@@ -25,11 +25,9 @@ import {
   INTERNS_PER_BROKER,
   INTERNS_ONE_OF_ONES,
   INTERNS_ROYALTY_BPS,
-  INTERNS_ETH_USD,
-  INTERNS_OPENING_STONK,
   INTERNS_TITLES,
-  INTERNS_MINT_RUNGS,
   internContractsReady,
+  internDesksReady,
   internCirculating,
 } from '../../lib/interns';
 
@@ -55,7 +53,9 @@ export default function InternDetailView({ data, activeTab }) {
   if (!project) return <div className="text-center text-slate-400 p-12">Interns Data Loading...</div>;
 
   const { config = {}, market = {}, tiers = [], activation = {}, ownership = {}, revenue = {}, lockedLp = null, dailySnapshots = [] } = project;
-  const building = !!project.underConstruction || !internContractsReady(config);
+  const awaitingContracts = !internContractsReady(config);
+  const desksPending = !internDesksReady(config);
+  const building = awaitingContracts || desksPending;
   const stonkPx = Number(market.tokenPriceUsd) || Number(stonk?.market?.tokenPriceUsd) || 0;
   const ethUsd = Number(market.ethPriceUsd) || Number(stonk?.market?.ethPriceUsd) || 0;
   const formatCurrency = compactUsd;
@@ -103,7 +103,6 @@ export default function InternDetailView({ data, activeTab }) {
   const ownLabels = formatLabels(holdersFull.labels.slice(-ownN));
   const ownData = holdersFull.data.slice(-ownN);
   const actN = windowLen(timeframe, actLabels.length);
-  const openingUsd = INTERNS_ETH_USD + INTERNS_OPENING_STONK * stonkPx;
 
   return (
     <div className="space-y-6 relative">
@@ -129,11 +128,15 @@ export default function InternDetailView({ data, activeTab }) {
             </a>
           </div>
 
-          {building ? (
+          {awaitingContracts ? (
             <div className="rounded-xl border border-amber-800/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-100">
-              <strong className="text-amber-300">Awaiting contract addresses.</strong> Collection, Intern Clock In, Intern Exchange,
-              and activation CAs drop at mint. Drop them in <code className="text-amber-200">fetcher.cjs</code> PROJECTS.interns
-              to turn the live tiles and charts on. Until then this page is the mint desk: schedule, ladder, and activation cost at live $STONKBROKER.
+              <strong className="text-amber-300">Awaiting contract addresses.</strong> Collection and activation CAs drop at mint.
+              Drop them in <code className="text-amber-200">fetcher.cjs</code> PROJECTS.interns to turn the live tiles on.
+            </div>
+          ) : desksPending ? (
+            <div className="rounded-xl border border-amber-800/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-100">
+              <strong className="text-amber-300">Collection is live.</strong> Mint, live/dormant, and intern activation are on-chain.
+              Intern Clock In, Intern Exchange, names, and lending are still empty — yield tiles stay blank until those desks deploy.
             </div>
           ) : null}
 
@@ -144,44 +147,17 @@ export default function InternDetailView({ data, activeTab }) {
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4"><p className="text-[10px] uppercase tracking-wider text-slate-400">Creator royalty</p><p className="text-2xl font-extrabold text-white">{(INTERNS_ROYALTY_BPS / 100).toFixed(2)}%</p></div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 border-b-4 border-b-amber-500">
-              <p className="text-[10px] uppercase tracking-wider text-slate-400">Opening mint</p>
-              <p className="text-xl font-extrabold text-amber-300">${INTERNS_ETH_USD} ETH + {formatNumber(INTERNS_OPENING_STONK)} $STONKBROKER</p>
-              <p className="text-xs text-slate-500 mt-1">{stonkPx > 0 ? `≈ ${formatCurrency(openingUsd)} at live $STONKBROKER` : 'ETH leg stays $20; $STONKBROKER leg is 999 for 24h'}</p>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4">
               <p className="text-[10px] uppercase tracking-wider text-slate-400">Live / dormant</p>
-              <p className="text-xl font-extrabold text-white">{dash(building, liveInterns)} <span className="text-slate-500 text-sm font-medium">/ {dash(building, dormantInterns)}</span></p>
+              <p className="text-xl font-extrabold text-white">{dash(awaitingContracts, liveInterns)} <span className="text-slate-500 text-sm font-medium">/ {dash(awaitingContracts, dormantInterns)}</span></p>
               <p className="text-xs text-slate-500 mt-1">Sweep mints all 8,888 dormant into parent TBAs. Paying the fee makes one live.</p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4">
               <p className="text-[10px] uppercase tracking-wider text-slate-400">Floor entry</p>
-              <p className="text-xl font-extrabold text-white">{building || !(floorCostUsd > 0) ? '—' : formatCurrency(floorCostUsd)}</p>
+              <p className="text-xl font-extrabold text-white">{awaitingContracts || !(floorCostUsd > 0) ? '—' : formatCurrency(floorCostUsd)}</p>
               <p className="text-xs text-slate-500 mt-1">Intern Exchange / listing floor once the collection is live.</p>
             </div>
-          </div>
-
-          <div>
-            <h4 className="text-sm font-bold text-white uppercase tracking-wider">Mint price per intern · $20 in ETH flat + $STONKBROKER leg by day</h4>
-            <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {INTERNS_MINT_RUNGS.map((r) => (
-                <div
-                  key={r.day}
-                  className={`rounded-xl px-3 py-3 text-center ${
-                    r.cap
-                      ? 'bg-emerald-950/40 border border-emerald-700/70'
-                      : r.after
-                        ? 'bg-[#08090b] border border-dashed border-[#334155]'
-                        : 'bg-[#08090b] border border-[#1e2228]'
-                  }`}
-                >
-                  <p className="text-[10px] uppercase tracking-wider text-slate-500">{r.label}</p>
-                  <p className="text-lg font-extrabold text-white mt-1">{formatNumber(r.stonk)}</p>
-                </div>
-              ))}
-            </div>
-            <p className="text-xs text-slate-400 mt-3">$STONKBROKER per intern. Plus $20 in ETH on every mint. Ceiling 9,999 $STONKBROKER from day 10 onward.</p>
           </div>
 
           <div>
@@ -396,8 +372,8 @@ export default function InternDetailView({ data, activeTab }) {
         <div className="space-y-6">
           <h2 className="text-lg md:text-xl font-bold text-white">Intern activation</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Activated of collection</p><p className="text-2xl font-extrabold text-emerald-400">{building ? '—' : `${(activation.percentActivated || 0).toFixed(2)}%`}</p></div>
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Live activated units</p><p className="text-2xl font-extrabold text-amber-300">{dash(building, activation.activeCount)} Units</p></div>
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Activated of collection</p><p className="text-2xl font-extrabold text-emerald-400">{awaitingContracts ? '—' : `${(activation.percentActivated || 0).toFixed(2)}%`}</p></div>
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Live activated units</p><p className="text-2xl font-extrabold text-amber-300">{dash(awaitingContracts, activation.activeCount)} Units</p></div>
           </div>
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
             <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Tier flow</h3>
@@ -415,8 +391,8 @@ export default function InternDetailView({ data, activeTab }) {
                 <div key={t.tier} className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-4">
                   <div className="flex items-center gap-2 mb-3"><div className={`w-2.5 h-2.5 rounded-sm ${colors[idx % 5]}`} /><p className="text-[10px] uppercase font-bold truncate">{t.tier}: {t.name}</p></div>
                   <div className="flex justify-between items-end">
-                    <div><p className="text-lg font-bold text-emerald-400">{building ? '—' : formatNumber(tData.act)}</p><p className="text-[9px] text-slate-500 uppercase">Act</p></div>
-                    <div className="text-right"><p className="text-lg font-bold text-rose-400">{building ? '—' : formatNumber(tData.deact)}</p><p className="text-[9px] text-slate-500 uppercase">Deact</p></div>
+                    <div><p className="text-lg font-bold text-emerald-400">{awaitingContracts ? '—' : formatNumber(tData.act)}</p><p className="text-[9px] text-slate-500 uppercase">Act</p></div>
+                    <div className="text-right"><p className="text-lg font-bold text-rose-400">{awaitingContracts ? '—' : formatNumber(tData.deact)}</p><p className="text-[9px] text-slate-500 uppercase">Deact</p></div>
                   </div>
                 </div>
               );
@@ -436,7 +412,7 @@ export default function InternDetailView({ data, activeTab }) {
                 {tiers.map((t, idx) => (
                   <div key={t.tier} className="flex justify-between items-center bg-[#0e1013] p-3 rounded-lg border border-[#1e2228]">
                     <div className="flex items-center gap-3"><div className={`w-4 h-4 rounded-md ${['bg-[#00a804]', 'bg-[#8b5cf6]', 'bg-[#38bdf8]', 'bg-[#f5b700]', 'bg-[#f472b6]'][idx % 5]}`} /><span className="text-sm font-bold text-slate-300">{t.tier}: {t.name}</span></div>
-                    <span className="text-white font-bold">{building ? '—' : formatNumber(breakdownArr[idx])}</span>
+                    <span className="text-white font-bold">{awaitingContracts ? '—' : formatNumber(breakdownArr[idx])}</span>
                   </div>
                 ))}
               </div>
@@ -462,14 +438,14 @@ export default function InternDetailView({ data, activeTab }) {
           <h2 className="text-lg md:text-xl font-bold text-white">Intern ownership</h2>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5"><p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Collection</p><p className="text-2xl font-extrabold text-white">{formatNumber(ownership.currentMaxSupply || INTERNS_MAX_SUPPLY)}</p></div>
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5"><p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Live released</p><p className="text-2xl font-extrabold text-amber-300">{dash(building, liveInterns)}</p></div>
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5"><p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Dormant in parent TBAs</p><p className="text-2xl font-extrabold text-slate-300">{dash(building, dormantInterns)}</p></div>
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5"><p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">AMM vault</p><p className="text-2xl font-extrabold text-slate-300">{dash(building, ownership.ammVaultNfts)}</p></div>
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5"><p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Live released</p><p className="text-2xl font-extrabold text-amber-300">{dash(awaitingContracts, liveInterns)}</p></div>
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5"><p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Dormant in parent TBAs</p><p className="text-2xl font-extrabold text-slate-300">{dash(awaitingContracts, dormantInterns)}</p></div>
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5"><p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">AMM vault</p><p className="text-2xl font-extrabold text-slate-300">{dash(awaitingContracts, ownership.ammVaultNfts)}</p></div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 border-b-4 border-b-amber-500"><p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Circulating live interns</p><p className="text-2xl font-extrabold text-amber-300">{dash(building, circ)}</p><p className="text-xs text-slate-500 mt-1">Live released minus Intern Exchange inventory. Dormant are not circulating.</p></div>
-            <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Unique intern wallets</p><p className="text-2xl font-extrabold text-purple-400">{building ? '—' : `${formatNumber(ownership.nftHolders || 0)} Wallets`}</p></div>
-            <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 ring-1 ring-emerald-500/20"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Ownership concentration</p><p className="text-2xl font-extrabold text-emerald-400">{building ? '—' : `${(ownership.ownershipRatio || 0).toFixed(2)}%`}</p></div>
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 border-b-4 border-b-amber-500"><p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Circulating live interns</p><p className="text-2xl font-extrabold text-amber-300">{dash(awaitingContracts, circ)}</p><p className="text-xs text-slate-500 mt-1">Live released minus Intern Exchange inventory. Dormant are not circulating.</p></div>
+            <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Unique intern wallets</p><p className="text-2xl font-extrabold text-purple-400">{awaitingContracts ? '—' : `${formatNumber(ownership.nftHolders || 0)} Wallets`}</p></div>
+            <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 ring-1 ring-emerald-500/20"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Ownership concentration</p><p className="text-2xl font-extrabold text-emerald-400">{awaitingContracts ? '—' : `${(ownership.ownershipRatio || 0).toFixed(2)}%`}</p></div>
           </div>
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
             <h3 className="text-sm font-bold text-white mb-4">Intern holders over time</h3>
@@ -490,7 +466,7 @@ export default function InternDetailView({ data, activeTab }) {
 
       <MethodologyCard accent="text-amber-400">
         <p><strong className="text-white">What this is:</strong> Interns by StonkBrokers is the companion NFT to StonkBrokers, not a second broker seat. Paper at <a className="text-amber-300 underline" href={INTERNS_DOCS} target="_blank" rel="noreferrer">stonkbrokers.cash/docs/interns</a>. Holding an intern is not equity and is not a guaranteed share of revenue.</p>
-        <p><strong className="text-white">Mint:</strong> Only an activated parent broker can release its intern(s). $20 in ETH (flat, Chainlink-priced) plus a $STONKBROKER leg that starts at 999 for 24 hours, then +999/day, hard-capped at 9,999 from day 10. 25% of the ETH leg funds Intern Clock In; 75% goes to treasury. The $STONKBROKER leg is treasury. A dormant sweep puts all 8,888 into parent TBAs on mint open; they cannot move until released.</p>
+        <p><strong className="text-white">Mint:</strong> Only an activated parent broker can release its intern(s). A dormant sweep puts all 8,888 into parent TBAs on mint open; they cannot move until released.</p>
         <p><strong className="text-white">Yield &amp; ROI:</strong> Intern Clock In weight is job-title slice × intern activation tier (same 1.00 / 1.25 / 1.60 / 2.00 / 3.33 multipliers as brokers). CoC is that trailing intern yield ÷ (intern floor USD + activation $STONKBROKER at spot). Parent-broker Clock In that is delegated as base pay is a separate cashflow and is not added into intern CoC until we can split it onchain.</p>
         <p><strong className="text-white">Ownership:</strong> Circulating live interns are released supply minus Intern Exchange / AMM vault inventory. Dormant tokens in parent TBAs are not circulating. Concentration is unique intern wallets (vault and burn excluded) ÷ that circulating number.</p>
         <p><strong className="text-white">Turning the page on:</strong> Collection and activation CAs are live in fetcher.cjs. Intern Clock In, Intern Exchange, names, and lending stay blank until those desks deploy.</p>

@@ -96,7 +96,7 @@ export default function EcosystemView({ data, pending = false }) {
   });
   const projectNames = { stonk: 'StonkBrokers', interns: 'Interns', mancer: 'Mancer', tickeryard: 'TickerYard', cardwall: 'The Card Wall', index: 'The Index', printer: 'RH Machines', oakmont: 'Oakmont', coattail: 'Coattail Brokers', nightshades: 'Nightshades' };
   const projectColors = PROJECT_COLORS;
-  const projectLogos = { stonk: 'Stonkbroker.png', interns: 'Interns.svg', mancer: 'logo.png', tickeryard: 'Yardkeepers.png', cardwall: 'wall.png', index: 'Index.png', printer: 'Printer.png', oakmont: 'Oakmont.png', coattail: 'Coattail.svg', nightshades: 'Knight.png' };
+  const projectLogos = { stonk: 'Stonkbroker.png', interns: 'Intern.svg', mancer: 'logo.png', tickeryard: 'Yardkeepers.png', cardwall: 'wall.png', index: 'Index.png', printer: 'Printer.png', oakmont: 'Oakmont.png', coattail: 'Coattail.svg', nightshades: 'Knight.png' };
 
   const scaleYield = (annual) => {
     if (yieldPeriod === 'D') return (annual || 0) / 365;

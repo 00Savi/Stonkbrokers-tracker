@@ -78,7 +78,7 @@ const formatAmount = (val) =>
   new Intl.NumberFormat('en-US', { maximumFractionDigits: val >= 1 ? 2 : 4 }).format(val || 0);
 
 /** Header art is Savi's own NFTs, not project marks. Never use these as thumbs. */
-const HEADER_NFT_ART = new Set(['Stonkbroker.png', 'logo.png', 'Yardkeepers.png', 'wall.png']);
+const HEADER_NFT_ART = new Set(['Stonkbroker.png', 'Intern.svg', 'logo.png', 'Yardkeepers.png', 'wall.png']);
 
 function officialLogoSrc(asset) {
   const meta = PROJECTS.find((p) => p.key === asset.projectKey);

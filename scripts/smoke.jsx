@@ -277,15 +277,22 @@ for (const [name, View, props] of VIEWS) {
       <InternDetailView data={snapshot} activeTab="roi" />
     </StaticRouter>
   );
-  const banned = ['97,902', '97.9k', '+10%/day', 'flat from day 375', 'then compounds'];
-  const missing = ['9,999', 'First 24h', 'Day 10', 'Ceiling 9,999'];
+  const banned = ['Opening mint', 'Mint price per intern', 'First 24h', '+10%/day', '+999/day', 'Ceiling 9,999', '$20 in ETH'];
   const leftover = banned.filter((s) => html.includes(s));
-  const absent = missing.filter((s) => !html.includes(s));
-  if (leftover.length || absent.length) {
+  const intern = snapshot.projects?.interns;
+  const live = Number(intern?.ownership?.liveInterns);
+  const liveLabel = Number.isFinite(live) ? live.toLocaleString('en-US') : '';
+  if (leftover.length) {
     failed++;
-    console.error(`FAIL  intern mint ladder leftover=${leftover.join('|') || 'none'} missing=${absent.join('|') || 'none'}`);
+    console.error(`FAIL  intern mint price leftover=${leftover.join('|')}`);
+  } else if (intern?.underConstruction || !intern?.config?.nftCa || !(live > 0)) {
+    failed++;
+    console.error('FAIL  intern snapshot is still the empty stub');
+  } else if (!html.includes(liveLabel) && !html.includes(String(live))) {
+    failed++;
+    console.error(`FAIL  intern live count ${live} not on the page`);
   } else {
-    console.log('ok    intern mint ladder caps at 9,999 from day 10');
+    console.log(`ok    intern page has no mint schedule; ${liveLabel} live`);
   }
 }
 

@@ -3,8 +3,8 @@
  *
  * Paper: https://www.stonkbrokers.cash/docs/interns
  * 8,888 ERC-721C interns, two per broker (V1 Sigma = token id N,
- * V2 Divergent = N + 4,444). Activation and mint $STONKBROKER leg are the
- * parent token. Live CAs are in fetcher.cjs PROJECTS.interns.
+ * V2 Divergent = N + 4,444). Activation is in parent $STONKBROKER.
+ * Live CAs are in fetcher.cjs PROJECTS.interns.
  */
 
 export const INTERNS_TOKEN = '$STONKBROKER';
@@ -13,17 +13,6 @@ export const INTERNS_MAX_SUPPLY = 8888;
 export const INTERNS_PER_BROKER = 2;
 export const INTERNS_ONE_OF_ONES = 56;
 export const INTERNS_ROYALTY_BPS = 999;
-export const INTERNS_ETH_USD = 20;
-export const INTERNS_OPENING_STONK = 999;
-export const INTERNS_STONK_STEP = 999;
-export const INTERNS_RAMP_DAYS = 10;
-export const INTERNS_STONK_CAP = 9999;
-
-/** $STONKBROKER mint leg for that calendar day after the 24h opener. Caps at 9,999. */
-export function internMintStonk(day) {
-  const d = Math.max(0, Math.floor(Number(day) || 0));
-  return Math.min(INTERNS_OPENING_STONK + INTERNS_STONK_STEP * d, INTERNS_STONK_CAP);
-}
 
 /** Job title from the parent broker's Clock In revenue slice. Titles only rise. */
 export const INTERNS_TITLES = [
@@ -55,18 +44,13 @@ export function internParentBroker(tokenId) {
   return n <= 4444 ? n : n - 4444;
 }
 
-/** Published $STONKBROKER mint rungs: +999/day after the opener, hard cap 9,999 from day 10. */
-export const INTERNS_MINT_RUNGS = [
-  { day: 0, label: 'First 24h', stonk: internMintStonk(0) },
-  ...Array.from({ length: INTERNS_RAMP_DAYS }, (_, i) => {
-    const day = i + 1;
-    return { day, label: `Day ${day}`, stonk: internMintStonk(day), cap: day === INTERNS_RAMP_DAYS };
-  }),
-  { day: INTERNS_RAMP_DAYS + 1, label: 'After', stonk: INTERNS_STONK_CAP, after: true },
-];
-
 export function internContractsReady(config = {}) {
   return !!(config.nftCa && config.activationCa);
+}
+
+/** Intern Clock In / Exchange are a later desk. Collection + activation can be live without them. */
+export function internDesksReady(config = {}) {
+  return !!(config.clockInCa || config.ammCa || config.internExchangeCa);
 }
 
 export function internCirculating(ownership = {}) {

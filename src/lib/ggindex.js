@@ -66,8 +66,15 @@ const addressOfKind = (contracts, kind) =>
 // carries the top 100 balances, which is a payload the dashboard never reads.
 async function holderCount(address, signal) {
   if (!address) return null;
-  const { holders } = await get(`/tokens/${address}/holders?limit=1`, signal);
-  return typeof holders === 'number' ? holders : null;
+  try {
+    const { holders } = await get(`/tokens/${address}/holders?limit=1`, signal);
+    return typeof holders === 'number' ? holders : null;
+  } catch (e) {
+    // 409 = fold not ready (intern NFT before backfill). Treat as unknown so
+    // the rest of the overlay still lands instead of failing the project.
+    if (/-> 409/.test(String(e.message))) return null;
+    throw e;
+  }
 }
 
 async function projectPatch(project, signal) {

@@ -86,7 +86,7 @@ export function tabsForProject(meta) {
 
 export const PROJECTS = [
   { slug: 'stonkbrokers', key: 'stonk', name: 'StonkBrokers', ticker: 'STONK' },
-  { slug: 'interns', key: 'interns', name: 'Interns', ticker: 'STONKBROKER', logo: 'Interns.svg', beta: true },
+  { slug: 'interns', key: 'interns', name: 'Interns', ticker: 'STONKBROKER', logo: 'Intern.svg', beta: true },
   { slug: 'mancer', key: 'mancer', name: 'Mancer', ticker: 'MANCER' },
   { slug: 'tickeryard', key: 'tickeryard', name: 'TickerYard', ticker: 'YARD' },
   { slug: 'cardwall', key: 'cardwall', name: 'The Card Wall', ticker: 'WALL', beta: true },

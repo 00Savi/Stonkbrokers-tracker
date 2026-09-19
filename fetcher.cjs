@@ -715,7 +715,7 @@ const PROJECTS = {
     maxSupply: 8888,
     unitValue: 0,
     ticker: "STONKBROKER",
-    logo: "Interns.svg",
+    logo: "Intern.svg",
     yieldMode: "intern_clockin",
     deactivateOnTransfer: true,
     site: "https://www.stonkbrokers.cash/docs/interns",
@@ -1102,6 +1102,28 @@ function internContractsReady(conf) {
 }
 
 const DORMANT_COUNT_SEL = ethers.id("dormantCount()").slice(0, 10);
+const INDEX_NOT_READY = /409|404|not indexed|unknown token|backfill|absent|no historical/i;
+
+/** Unique current owners of released interns. A token whose last Transfer is
+ *  still the sweep mint (from = 0) is dormant in a parent TBA and is not a
+ *  circulating holder. gg-index will count those TBA wallets once the NFT is
+ *  folded; this walk is the intern-correct number until then. */
+function internLiveHoldersFromTransfers(logs) {
+  const last = new Map();
+  for (const log of logs || []) {
+    const topics = log.topics && Array.isArray(log.topics) ? log.topics.filter((t) => t !== null) : [];
+    if (topics.length !== 4) continue;
+    const from = topicToAddr(topics[1]);
+    const to = topicToAddr(topics[2]);
+    last.set(BigInt(topics[3]).toString(), { from, to });
+  }
+  const owners = new Set();
+  for (const { from, to } of last.values()) {
+    if (!from || from === ZERO_ADDR) continue;
+    if (to && to !== ZERO_ADDR && to !== "0x000000000000000000000000000000000000dead") owners.add(to);
+  }
+  return owners.size;
+}
 
 async function attachInternOwnership(conf, ownership) {
   try {
@@ -1113,8 +1135,30 @@ async function attachInternOwnership(conf, ownership) {
     ownership.dormantInterns = dormant;
     ownership.liveInterns = live;
     ownership.circulatingNftSupply = Math.max(0, live - (ownership.ammVaultNfts || 0));
+    try {
+      const cacheFile = "cache_interns_nft_logs.json";
+      if (fs.existsSync(cacheFile)) {
+        const n = internLiveHoldersFromTransfers(JSON.parse(fs.readFileSync(cacheFile, "utf8")));
+        if (n > 0) {
+          ownership.nftHolders = n;
+          console.log(`  interns live holders from transfers: ${n}`);
+        }
+      }
+    } catch (e) {
+      console.warn(`[warn] interns live holders: ${e.message}`);
+    }
     if (ownership.circulatingNftSupply > 0) {
       ownership.ownershipRatio = parseFloat(Math.min(100, ((ownership.nftHolders || 0) / ownership.circulatingNftSupply) * 100).toFixed(2));
+    }
+    const holders = Number(ownership.nftHolders) || 0;
+    const dateStr = dates.utcIso();
+    if (!ownership.historicalGrowth) ownership.historicalGrowth = { labels: [], data: [] };
+    const hist = ownership.historicalGrowth;
+    if (hist.labels.length && dates.dateKey(hist.labels[hist.labels.length - 1]) === dateStr) {
+      hist.data[hist.data.length - 1] = holders;
+    } else {
+      hist.labels.push(dateStr);
+      hist.data.push(holders);
     }
     console.log(`  interns live/dormant: ${live}/${dormant}`);
   } catch (e) {
@@ -1335,6 +1379,12 @@ async function getTrueDeflationStats(conf) {
     lockedBalance = Number(locked) / scale;
   }
 
+  // Interns activate in parent $STONKBROKER (unitValue 0). Do not treat
+  // 8888 × 0 − STONK supply as an intern mint, and never divide by zero.
+  if (!(conf.unitValue > 0)) {
+    return { totalBurnTokens: 0, equivalentBrokersBurnt: 0 };
+  }
+
   const nativeBurn = Math.max(0, (conf.maxSupply * conf.unitValue) - currentSupply);
   const totalBurnTokens = nativeBurn + deadBalance + lockedBalance;
 
@@ -1360,7 +1410,19 @@ async function getOwnershipStats(conf, equivBurnt, previousData) {
     }
   }
 
-  let rawNftHolders = await fetchTokenHoldersSafe(conf.nftCa);
+  let rawNftHolders;
+  try {
+    rawNftHolders = await fetchTokenHoldersSafe(conf.nftCa);
+  } catch (e) {
+    // Intern NFT is not in gg-index until seeds + backfill land. Throwing
+    // here used to abort the whole intern rebuild and republish the empty stub.
+    if (conf.yieldMode === "intern_clockin" && INDEX_NOT_READY.test(String(e.message))) {
+      console.warn(`[warn] intern NFT holders via gg-index: ${e.message}`);
+      rawNftHolders = previousData?.ownership?.nftHolders || 0;
+    } else {
+      throw e;
+    }
+  }
   // The AMM vault is a holder in the index fold, but those NFTs are not
   // circulating. Concentration is wallets ÷ (maxSupply − vault), so the
   // vault itself must not sit in the numerator.
@@ -1382,12 +1444,13 @@ async function getOwnershipStats(conf, equivBurnt, previousData) {
   // Past points stay as recorded. Do not backfill today's count onto older days.
 
   const dateStr = dates.utcIso();
+  const seriesHolders = conf.yieldMode === "intern_clockin" ? trueUniqueNftHolders : trueUniqueStonkHolders;
   if (histLabels.length && dates.dateKey(histLabels[histLabels.length - 1]) === dateStr) {
     histLabels[histLabels.length - 1] = dateStr;
-      histData[histData.length - 1] = trueUniqueStonkHolders;
+      histData[histData.length - 1] = seriesHolders;
   } else {
       histLabels.push(dateStr);
-      histData.push(trueUniqueStonkHolders);
+      histData.push(seriesHolders);
   }
 
   return {
@@ -1496,6 +1559,7 @@ async function fetchActivations(projectKey, conf) {
   };
 
   let minTs = now;
+  let internFeePaid = 0;
 
   for (const log of mergedLogs) {
     let ts = log.timeStamp || log.timestamp;
@@ -1548,6 +1612,9 @@ async function fetchActivations(projectKey, conf) {
                 tierId = `T${tierVal.toString()}`;
                 const owner = parsed.args.owner ? String(parsed.args.owner).toLowerCase() : null;
                 activeBrokers.set(tokenId, { t: tierId, ts: ts, tx: log.transactionHash, owner });
+            }
+            if (projectKey === "interns" && parsed.args.feePaid != null) {
+              internFeePaid += Number(parsed.args.feePaid) / 1e18;
             }
           }
           else if (isDeact) {
@@ -1644,7 +1711,16 @@ async function fetchActivations(projectKey, conf) {
 
   let dualBurn = { totalBurnTokens: 0, equivalentBrokersBurnt: 0 };
   try {
-    dualBurn = await getTrueDeflationStats(conf);
+    if (projectKey === "interns") {
+      const t0 = Number(conf.tiers?.[0]?.reqTokens) || 3333;
+      const burnt = internFeePaid * 0.5;
+      dualBurn = {
+        totalBurnTokens: Math.round(burnt),
+        equivalentBrokersBurnt: t0 > 0 ? parseFloat((burnt / t0).toFixed(2)) : 0,
+      };
+    } else {
+      dualBurn = await getTrueDeflationStats(conf);
+    }
   } catch (e) {
     console.warn(`[warn] ${projectKey}: burn stats: ${e.message}`);
   }
@@ -2761,6 +2837,10 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
             truncatedWalks.push(`dex collector logs: ${e.message || e}`);
           }
       }
+  } else if (conf.yieldMode === "intern_clockin") {
+      if (!conf.clockInCa) {
+        console.log("  intern Clock In CA empty; yield left at zero until the desk is live");
+      }
   }
 
   // Refuse to publish a total derived from a window we could not see all of.
@@ -3530,7 +3610,9 @@ async function run() {
         await attachRevenueHistory(projectKey, revenueBreakdown, scale, conf.yieldMode, prevProjData.revenue);
       }
 
-      let lockedLpData = scanLockedStonkLiquidity(conf.tokenCa, markets[projectKey].tokenPriceUsd);
+      let lockedLpData = projectKey === "interns" && !conf.ammCa
+        ? null
+        : scanLockedStonkLiquidity(conf.tokenCa, markets[projectKey].tokenPriceUsd);
       if (projectKey === "stonk") {
           try {
             let smart = null;
