@@ -7,6 +7,7 @@ import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import { formatLabels } from '../../lib/dates';
 import { windowSnapshots, tierRoiDatasets, protocolRevenueChart, sliceCols, windowPeriodLabel, windowLen, seriesHasInk, holderRevenueCol } from '../../lib/yieldHistory';
 import { compactUsd, compactNum } from '../kit';
+import { TierFlowSection, netTierCount } from '../TierFlowCards';
 import { baseChartOptions, STREAM_COLORS } from '../../lib/charts';
 import { useChartWindow } from '../../lib/chartWindow';
 import { holderSeries } from '../../lib/snapshots';
@@ -91,7 +92,7 @@ export default function InternDetailView({ data, activeTab }) {
   const breakdownArr = tiers.map((t) => {
     if (activation.breakdown && activation.breakdown[t.tier] != null) return activation.breakdown[t.tier];
     const s = activation.tierStats?.[t.tier]?.allTime || {};
-    return Math.max(0, (s.act || 0) - (s.deact || 0));
+    return netTierCount(s);
   });
 
   const holdersFull = holderSeries(ownership, dailySnapshots);
@@ -321,29 +322,15 @@ export default function InternDetailView({ data, activeTab }) {
               </p>
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
-            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Tier flow</h3>
-            <div className="flex bg-[#0e1013] rounded-lg p-1 border border-[#1e2228] w-full sm:w-auto">
-              {['24h', '7d', '30d', 'allTime'].map((tf) => (
-                <button key={tf} type="button" onClick={() => setTierTimeframe(tf)} className={`flex-1 sm:flex-none px-4 py-1.5 text-xs font-bold rounded-md transition ${tierTimeframe === tf ? 'bg-[#1e2228] text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>{tf === 'allTime' ? 'ALL' : tf.toUpperCase()}</button>
-              ))}
-            </div>
-          </div>
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-            {tiers.map((t, idx) => {
-              const tData = activation.tierStats?.[t.tier]?.[tierTimeframe] || { act: 0, deact: 0 };
-              const colors = ['bg-[#00a804]', 'bg-[#8b5cf6]', 'bg-[#38bdf8]', 'bg-[#f5b700]', 'bg-[#f472b6]'];
-              return (
-                <div key={t.tier} className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-4">
-                  <div className="flex items-center gap-2 mb-3"><div className={`w-2.5 h-2.5 rounded-sm ${colors[idx % 5]}`} /><p className="text-[10px] uppercase font-bold truncate">{t.tier}: {t.name}</p></div>
-                  <div className="flex justify-between items-end">
-                    <div><p className="text-lg font-bold text-emerald-400">{awaitingContracts ? '—' : formatNumber(tData.act)}</p><p className="text-[9px] text-slate-500 uppercase">Act</p></div>
-                    <div className="text-right"><p className="text-lg font-bold text-rose-400">{awaitingContracts ? '—' : formatNumber(tData.deact)}</p><p className="text-[9px] text-slate-500 uppercase">Deact</p></div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <TierFlowSection
+            title="Tier flow"
+            tiers={tiers}
+            tierStats={activation.tierStats}
+            timeframe={tierTimeframe}
+            onTimeframe={setTierTimeframe}
+            formatNumber={formatNumber}
+            pending={awaitingContracts}
+          />
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
             <h3 className="text-sm font-bold text-white mb-6">Current tier mix</h3>
             <div className="flex flex-col md:flex-row items-center justify-center gap-8">

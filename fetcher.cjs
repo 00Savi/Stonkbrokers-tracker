@@ -1492,9 +1492,46 @@ async function fetchBurnHistory(projectKey, previous) {
   return previous && previous.labels?.length ? previous : null;
 }
 
+function emptyTierWindow() {
+  return { act: 0, deact: 0, up: 0 };
+}
+
 function blankTierStats() {
-  const one = () => ({ '24h': { act: 0, deact: 0 }, '7d': { act: 0, deact: 0 }, '30d': { act: 0, deact: 0 }, allTime: { act: 0, deact: 0 } });
+  const one = () => ({
+    '24h': emptyTierWindow(),
+    '7d': emptyTierWindow(),
+    '30d': emptyTierWindow(),
+    allTime: emptyTierWindow(),
+  });
   return { T0: one(), T1: one(), T2: one(), T3: one(), T4: one() };
+}
+
+function tierIdFrom(val) {
+  if (val === undefined || val === null || val === "") return null;
+  const s = String(val);
+  if (/^T[0-4]$/i.test(s)) return s.toUpperCase();
+  const n = Number(s);
+  if (Number.isInteger(n) && n >= 0 && n <= 4) return `T${n}`;
+  return null;
+}
+
+function bumpTierStat(tierStats, tierId, field, age, oneDay) {
+  const row = tierId && tierStats[tierId];
+  if (!row || row.allTime[field] == null) return;
+  row.allTime[field]++;
+  if (age <= oneDay) row["24h"][field]++;
+  if (age <= 7 * oneDay) row["7d"][field]++;
+  if (age <= 30 * oneDay) row["30d"][field]++;
+}
+
+function parseActivationLog(log) {
+  const topics = log.topics && Array.isArray(log.topics) ? log.topics.filter((t) => t !== null) : [];
+  if (!topics.length) return null;
+  try {
+    return iface.parseLog({ topics, data: log.data || "0x" });
+  } catch {
+    return null;
+  }
 }
 
 /** When the public RPC 403s, still publish live burn + activeCount from gg-index. */
@@ -1558,13 +1595,7 @@ async function fetchActivations(projectKey, conf) {
   const now = Math.floor(Date.now() / 1000);
   const oneDay = 86400;
 
-  const tierStats = {
-    T0: { '24h': { act: 0, deact: 0 }, '7d': { act: 0, deact: 0 }, '30d': { act: 0, deact: 0 }, 'allTime': { act: 0, deact: 0 } },
-    T1: { '24h': { act: 0, deact: 0 }, '7d': { act: 0, deact: 0 }, '30d': { act: 0, deact: 0 }, 'allTime': { act: 0, deact: 0 } },
-    T2: { '24h': { act: 0, deact: 0 }, '7d': { act: 0, deact: 0 }, '30d': { act: 0, deact: 0 }, 'allTime': { act: 0, deact: 0 } },
-    T3: { '24h': { act: 0, deact: 0 }, '7d': { act: 0, deact: 0 }, '30d': { act: 0, deact: 0 }, 'allTime': { act: 0, deact: 0 } },
-    T4: { '24h': { act: 0, deact: 0 }, '7d': { act: 0, deact: 0 }, '30d': { act: 0, deact: 0 }, 'allTime': { act: 0, deact: 0 } }
-  };
+  const tierStats = blankTierStats();
 
   let minTs = now;
   let internFeePaid = 0;
@@ -1578,7 +1609,7 @@ async function fetchActivations(projectKey, conf) {
     try {
       const topics = log.topics && Array.isArray(log.topics) ? log.topics.filter(t => t !== null) : [];
 
-      let tokenId, isAct = false, isDeact = false, tierId = null, parsed = null;
+      let tokenId, isAct = false, isDeact = false, isUpgrade = false, tierId = null, fromTierId = null, parsed = null;
 
       if (log.__nftTransfer) {
           // A 721 indexes from/to/tokenId, so anything without 4 topics is an
@@ -1607,18 +1638,24 @@ async function fetchActivations(projectKey, conf) {
           activeBrokers.delete(tokenId);
           isDeact = true;
       } else {
-          parsed = iface.parseLog({ topics, data: log.data });
+          parsed = parseActivationLog(log);
           if (!parsed) continue;
 
           tokenId = parsed.args.tokenId.toString();
-          isAct = parsed.name === "Activated" || parsed.name === "ActivationUpgraded" || parsed.name.includes("Upgraded");
-          isDeact = parsed.name === "ActivationCleared" || parsed.name === "Deactivated" || parsed.name === "ActivationVoided" || parsed.name.includes("Deact") || parsed.name.includes("Void");
+          const evName = String(parsed.name || "");
+          isUpgrade = evName === "ActivationUpgraded" || evName === "TierUpgraded" || evName.includes("Upgraded");
+          isAct = evName === "Activated" || isUpgrade;
+          isDeact = evName === "ActivationCleared" || evName === "Deactivated" || evName === "ActivationVoided" || evName.includes("Deact") || evName.includes("Void");
 
           if (isAct) {
+            const prev = activeBrokers.get(tokenId);
             const tierVal = parsed.args.toTier !== undefined ? parsed.args.toTier : (parsed.args.newTier !== undefined ? parsed.args.newTier : parsed.args.tier);
-            if (tierVal !== undefined && tierVal !== null) {
-                tierId = `T${tierVal.toString()}`;
+            tierId = tierIdFrom(tierVal);
+            fromTierId = tierIdFrom(parsed.args.fromTier !== undefined ? parsed.args.fromTier : parsed.args.from) || prev?.t || null;
+            if (tierId) {
                 const owner = parsed.args.owner ? String(parsed.args.owner).toLowerCase() : null;
+                // Same-tx multi-hop (T0→T1→…→T4) lands as several upgrade
+                // logs. Process them in logIndex order so each toTier counts.
                 activeBrokers.set(tokenId, { t: tierId, ts: ts, tx: log.transactionHash, owner });
             }
             if (projectKey === "interns" && parsed.args.feePaid != null) {
@@ -1631,22 +1668,22 @@ async function fetchActivations(projectKey, conf) {
           }
       }
 
-      // Upgrades change the live tier but are not a new activation. Counting
-      // them as `act` made history.cumulative climb past activeCount (Mancer
-      // was 1873 vs 1711 on the same snapshot).
-      const isUpgrade = !log.__nftTransfer && isAct && parsed
-        && parsed.name !== "Activated"
-        && (parsed.name === "ActivationUpgraded" || String(parsed.name).includes("Upgraded"));
-
       if (isAct || isDeact) {
-          if (tierId && tierStats[tierId] && !isUpgrade) {
-              if (isAct) tierStats[tierId].allTime.act++;
-              if (isDeact) tierStats[tierId].allTime.deact++;
-              if (age <= oneDay) { if (isAct) tierStats[tierId]['24h'].act++; if (isDeact) tierStats[tierId]['24h'].deact++; }
-              if (age <= 7 * oneDay) { if (isAct) tierStats[tierId]['7d'].act++; if (isDeact) tierStats[tierId]['7d'].deact++; }
-              if (age <= 30 * oneDay) { if (isAct) tierStats[tierId]['30d'].act++; if (isDeact) tierStats[tierId]['30d'].deact++; }
+          if (isUpgrade) {
+            // Reaching a higher tier is an activation at the new rung, not a
+            // sale. Deact stays reserved for transfer / clear / void.
+            bumpTierStat(tierStats, tierId, "act", age, oneDay);
+            if (fromTierId && fromTierId !== tierId) {
+              bumpTierStat(tierStats, fromTierId, "up", age, oneDay);
+            }
+          } else if (tierId) {
+            if (isAct) bumpTierStat(tierStats, tierId, "act", age, oneDay);
+            if (isDeact) bumpTierStat(tierStats, tierId, "deact", age, oneDay);
           }
 
+          // Daily net-active must not count upgrades: T0→T4 in one tx is
+          // still one live broker. That climb used to push cumulative past
+          // activeCount (Mancer 1873 vs 1711).
           const dateStr = dates.utcIsoFromTs(ts) || dates.utcIso();
           const dayTs = dates.utcMidnightSec(new Date((ts > 0 ? ts : now) * 1000));
           if (!dailyData[dateStr]) dailyData[dateStr] = { activated: 0, deactivated: 0, timestamp: dayTs };
@@ -3104,6 +3141,7 @@ function nsMergeTierStats(list) {
         out[tier][w] = {
           act: (out[tier][w]?.act || 0) + (Number(s.act) || 0),
           deact: (out[tier][w]?.deact || 0) + (Number(s.deact) || 0),
+          up: (out[tier][w]?.up || 0) + (Number(s.up) || 0),
         };
       }
     }
@@ -3798,4 +3836,42 @@ async function run() {
   console.log(`\n✓ Complete dashboard payload generated successfully -> ${written.join(", ")}`);
 }
 
-run().catch(err => { console.error(err); process.exit(1); });
+async function rebuildActivations(keys) {
+  const payload = readPreviousData();
+  if (!payload?.projects) throw new Error("public/data.json is missing projects");
+  const want = keys.length ? keys : ["stonk", "interns"];
+  const latest = await rpc.blockNumber();
+  const genesis = Math.min(
+    ...want.map((k) => Number((PROJECTS[k] || NIGHTSHADES_FACTIONS[k])?.genesisBlock) || latest),
+  );
+  try {
+    await blockTime.ensureRange(rpc, genesis, latest);
+  } catch (e) {
+    console.warn(`[warn] block-time anchors: ${e.message}`);
+  }
+  for (const key of want) {
+    const conf = PROJECTS[key] || NIGHTSHADES_FACTIONS[key];
+    if (!conf?.activationCa) {
+      console.warn(`[warn] skip ${key}: no activationCa`);
+      continue;
+    }
+    console.log(`rebuilding activations ${key}…`);
+    const next = await fetchActivations(key, conf);
+    const prev = payload.projects[key]?.activation || {};
+    payload.projects[key].activation = { ...prev, ...next };
+    console.log(
+      `  ${key} T4 ALL act=${next.tierStats.T4.allTime.act} up=${next.tierStats.T4.allTime.up} deact=${next.tierStats.T4.allTime.deact} current=${next.breakdown.T4}`,
+    );
+  }
+  const written = writeData(payload);
+  console.log(`wrote ${written.join(", ")}`);
+}
+
+if (require.main === module) {
+  const argv = process.argv.slice(2);
+  if (argv[0] === "--activations") {
+    rebuildActivations(argv.slice(1)).catch((err) => { console.error(err); process.exit(1); });
+  } else {
+    run().catch((err) => { console.error(err); process.exit(1); });
+  }
+}
