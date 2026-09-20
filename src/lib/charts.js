@@ -177,8 +177,10 @@ export function dualAxisOptions({
       y: {
         ...base.scales.y,
         position: 'left',
+        beginAtZero: true,
         ticks: { ...base.scales.y.ticks, callback: leftTick },
-        ...(Number.isFinite(leftMax) && leftMax > 0 ? { max: leftMax } : {}),
+        // Always set max so switching Weekly/Monthly/ALL drops a prior ALL cap.
+        max: Number.isFinite(leftMax) && leftMax > 0 ? leftMax : undefined,
       },
       y1: {
         type: 'linear',

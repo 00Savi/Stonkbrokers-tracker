@@ -338,6 +338,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
             <div className="relative h-52 sm:h-64 md:h-80 w-full">
               {flywheel.labels.length > 0 ? (
                 <Bar
+                  key={`flywheel-${timeframe}`}
                   data={{
                     labels: flywheel.labels,
                     datasets: [

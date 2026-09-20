@@ -612,17 +612,23 @@ export default function StonkDetailView({ data, activeTab }) {
 
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
             <h3 className="text-sm font-bold text-white mb-1">The Deflationary Flywheel</h3>
-            <p className="text-xs text-slate-400 mb-4">Tracks the correlation between token spot price and daily burn rate.</p>
+            <p className="text-xs text-slate-400 mb-4">
+              Tracks the correlation between token spot price and daily burn rate.
+              {timeframe === 'all'
+                ? ' Launch-week days above 10M are clipped so later burns stay readable. Weekly and Monthly scale to the bars.'
+                : ''}
+            </p>
             <div className="relative h-52 sm:h-64 md:h-80 w-full">
-              <Bar 
+              <Bar
+                key={`flywheel-${timeframe}`}
                 data={{
                   labels: fwLabels,
                   datasets: [
                     { type: 'line', label: 'Token Price ($)', data: fwPrices, borderColor: '#00a804', backgroundColor: '#00a804', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y1' },
                     { type: 'bar', label: 'Daily Burn Velocity', data: fwBurn, backgroundColor: 'rgba(249, 115, 22, 0.8)', borderRadius: 4, yAxisID: 'y' }
                   ]
-                }} 
-                options={dualAxisOptions({ leftTick: compactTick, rightTick: compactUsdTick, rightColor: '#00a804', leftMax: flywheel.burnAxisMax })} 
+                }}
+                options={dualAxisOptions({ leftTick: compactTick, rightTick: compactUsdTick, rightColor: '#00a804', leftMax: flywheel.burnAxisMax })}
               />
             </div>
           </div>

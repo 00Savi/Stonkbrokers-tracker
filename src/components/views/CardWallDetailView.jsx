@@ -383,7 +383,8 @@ export default function CardWallDetailView({ data, activeTab }) {
             <h3 className="text-sm font-bold text-white mb-1">The Deflationary Flywheel</h3>
             <p className="text-xs text-slate-400 mb-4">Tracks the correlation between token spot price and daily burn rate.</p>
             <div className="relative h-52 sm:h-64 md:h-80 w-full">
-              <Bar 
+              <Bar
+                key={`flywheel-${timeframe}`}
                 data={{
                   labels: flywheel.labels,
                   datasets: [

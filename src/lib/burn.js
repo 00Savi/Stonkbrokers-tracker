@@ -227,33 +227,31 @@ export function burnRateSeries(source, timeframe = 'all') {
     labels: formatLabels(labels),
     prices,
     burn,
-    burnAxisMax: robustBurnAxisMax(burn),
+    // Weekly / Monthly scale to the bars in view. ALL ignores launch-week
+    // mega burns (10M+) so later days stay readable.
+    burnAxisMax: timeframe === 'all' ? robustBurnAxisMax(burn) : undefined,
   };
 }
 
 /**
- * Launch-week burns can be 20–80× a typical later day (activation lock +
- * dead-address sinks). Autoscaling to those bars flattens everything after.
- * Tukey fence on the positive days; only applied when the peak is far above.
+ * Launch-week burns ran 10M–160M (activation lock + dead-address sinks).
+ * Those only appear on ALL and flatten every later bar. Weekly / Monthly
+ * leave Chart.js to scale to the window. ALL uses the tallest day under
+ * 10M, with a little headroom.
  */
+export const MEGA_BURN_AXIS = 10_000_000;
+
 export function robustBurnAxisMax(values) {
-  const xs = (values || [])
+  const all = (values || [])
     .map(Number)
-    .filter((n) => Number.isFinite(n) && n > 0)
-    .sort((a, b) => a - b);
-  if (xs.length < 8) return undefined;
-  const at = (p) => {
-    const i = (xs.length - 1) * p;
-    const lo = Math.floor(i);
-    const hi = Math.ceil(i);
-    return xs[lo] + (xs[hi] - xs[lo]) * (i - lo);
-  };
-  const fence = at(0.75) + 1.5 * (at(0.75) - at(0.25));
-  const typical = xs.filter((n) => n <= fence);
-  const cap = typical.length ? typical[typical.length - 1] : at(0.75);
-  const peak = xs[xs.length - 1];
-  if (!(peak > cap * 2.5) || !(cap > 0)) return undefined;
-  return cap * 1.12;
+    .filter((n) => Number.isFinite(n) && n > 0);
+  if (!all.length) return undefined;
+  const typical = all.filter((n) => n < MEGA_BURN_AXIS);
+  if (!typical.length) return undefined;
+  const cap = Math.max(...typical);
+  const peak = Math.max(...all);
+  if (!(peak > cap) || !(cap > 0)) return undefined;
+  return cap * 1.08;
 }
 
 /** Token-unit cap used for "burnt ÷ total supply". */

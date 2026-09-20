@@ -368,6 +368,7 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
             <p className="text-xs text-slate-400 mb-4">Tracks the correlation between token spot price and daily burn rate.</p>
             <div className="relative h-52 sm:h-64 md:h-80 w-full">
               <Bar
+                key={`flywheel-${timeframe}`}
                 data={{
                   labels: flywheel.labels,
                   datasets: [
