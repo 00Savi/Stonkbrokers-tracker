@@ -1,6 +1,93 @@
 import { ethers } from 'ethers';
 import { dateKey, utcIso, utcIsoFromTs } from './dates';
 
+/** Interns (and similar companions) activate in the parent token. */
+export function priceSource(pData, data) {
+  const parent = pData?.config?.parentKey;
+  if (parent && data?.projects?.[parent]) return data.projects[parent];
+  return pData;
+}
+
+function snapTs(snap) {
+  const t = Number(snap?.timestamp);
+  if (t > 1e12) return t / 1000;
+  if (t > 0) return t;
+  const k = dateKey(snap?.date);
+  const ms = Date.parse(`${k}T12:00:00Z`);
+  return Number.isFinite(ms) ? ms / 1000 : 0;
+}
+
+function nearestSnap(snaps, ts, ok) {
+  const rows = (snaps || []).filter((s) => !ok || ok(s));
+  if (!rows.length) return null;
+  const target = Number(ts) || 0;
+  if (!target) return rows[rows.length - 1];
+  const day = utcIsoFromTs(target);
+  const exact = rows.find((s) => dateKey(s.date) === day);
+  if (exact) return exact;
+  let best = rows[0];
+  let bestDist = Infinity;
+  for (const s of rows) {
+    const st = snapTs(s);
+    const dist = st > 0 ? Math.abs(st - target) : Infinity;
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = s;
+    }
+  }
+  return best;
+}
+
+/**
+ * Token USD at a unix second. Prefers priceHistory on clock-in days, then
+ * the nearest snapshot, then the live DexScreener print.
+ */
+export function tokenPriceAtTs(pData, ts) {
+  const day = utcIsoFromTs(ts);
+  const hist = pData?.ownership?.priceHistory;
+  if (day && hist?.labels && hist?.data) {
+    const i = hist.labels.findIndex((d) => dateKey(d) === day);
+    if (i >= 0) {
+      const n = Number(hist.data[i]);
+      if (n > 0 && n !== 0.03) return n;
+    }
+  }
+  const snap = nearestSnap(
+    pData?.dailySnapshots,
+    ts,
+    (s) => Number(s.tokenPriceUsd) > 0 && Number(s.tokenPriceUsd) !== 0.03,
+  );
+  const fromSnap = Number(snap?.tokenPriceUsd) || 0;
+  if (fromSnap > 0) return fromSnap;
+  return Number(pData?.market?.tokenPriceUsd) || 0;
+}
+
+/** ETH/USD at a unix second, from floor prints when both sides exist. */
+export function ethUsdAtTs(pData, ts, fallback = 0) {
+  const snap = nearestSnap(
+    pData?.dailySnapshots,
+    ts,
+    (s) => Number(s.nftFloorEth) > 0 && Number(s.nftFloorUsd) > 0,
+  );
+  const eth = Number(snap?.nftFloorEth) || 0;
+  const usd = Number(snap?.nftFloorUsd) || 0;
+  if (eth > 0 && usd > 0) return usd / eth;
+  return Number(pData?.market?.ethPriceUsd) || fallback;
+}
+
+/**
+ * ~USD spent on activation tokens. `tokenAmount` wins (ink, etc.);
+ * otherwise the tier's reqTokens. Price is the parent token when set.
+ */
+export function activationTokenCostUsd(pData, { tierId, ts, tokenAmount, data } = {}) {
+  const amount = Number(tokenAmount) > 0
+    ? Number(tokenAmount)
+    : Number((pData?.tiers || []).find((t) => t.tier === tierId || t.id === tierId)?.reqTokens) || 0;
+  if (!(amount > 0)) return { usd: 0, tokens: 0, tokenPriceUsd: 0 };
+  const px = tokenPriceAtTs(priceSource(pData, data), ts);
+  return { usd: amount * px, tokens: amount, tokenPriceUsd: px };
+}
+
 const EXPLORER = 'https://robinhoodchain.blockscout.com';
 const ZERO = '0x0000000000000000000000000000000000000000';
 
@@ -358,17 +445,43 @@ export async function fetchMachineMeta(nftCa, tokenId) {
   return parseMachineMeta(json);
 }
 
-export async function fetchTxEthValue(hash) {
-  if (!hash) return 0;
+function transferTokenCa(t) {
+  return String(t?.token?.address_hash || t?.token?.address || t?.token?.hash || '').toLowerCase();
+}
+
+function isNftTransfer(t) {
+  const type = String(t?.token?.type || t?.token_type || '').toUpperCase();
+  if (type.includes('721') || type.includes('1155')) return true;
+  return t?.total?.token_id != null || t?.token_id != null;
+}
+
+/** ETH sent in a tx, split across NFT transfers of this collection when the explorer lists them. */
+export async function fetchTxNftCost(hash, nftCa) {
+  if (!hash) return { eth: 0, nftCount: 0, perNftEth: 0 };
   try {
     const res = await fetch(`${EXPLORER}/api/v2/transactions/${hash}`);
-    if (!res.ok) return 0;
+    if (!res.ok) return { eth: 0, nftCount: 0, perNftEth: 0 };
     const json = await res.json();
     const wei = json.value != null ? BigInt(json.value) : 0n;
-    return Number(ethers.formatEther(wei));
+    const eth = Number(ethers.formatEther(wei));
+    const transfers = json.token_transfers || [];
+    const ca = String(nftCa || '').toLowerCase();
+    const nftXfers = transfers.filter((t) => {
+      if (!isNftTransfer(t)) return false;
+      if (!ca) return true;
+      const addr = transferTokenCa(t);
+      return !addr || addr === ca;
+    });
+    const nftCount = nftXfers.length;
+    return { eth, nftCount, perNftEth: nftCount > 0 ? eth / nftCount : eth };
   } catch {
-    return 0;
+    return { eth: 0, nftCount: 0, perNftEth: 0 };
   }
+}
+
+export async function fetchTxEthValue(hash) {
+  const { eth } = await fetchTxNftCost(hash);
+  return eth;
 }
 
 export async function mapLimited(items, size, fn) {

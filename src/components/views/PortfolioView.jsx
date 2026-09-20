@@ -32,12 +32,14 @@ import {
   fetchOwnedNftIdsV2,
   enumerateOwnedIds,
   fetchTokenHoldStartTs,
-  fetchTxEthValue,
+  fetchTxNftCost,
   formatDate,
   machineAnnualForWeight,
   mapLimited,
   walletDailyDrops,
   bucketDropSeries,
+  activationTokenCostUsd,
+  ethUsdAtTs,
 } from '../../lib/portfolioHistory';
 
 const FORECAST_YEARS = [1, 3, 5, 10];
@@ -157,12 +159,58 @@ function groupByProject(ownedAssets) {
     prev.floorValue += a.floorValue;
     prev.yieldValue += a.yieldValue;
     prev.earnedValue += a.earnedValue || 0;
+    prev.basisUsd = (prev.basisUsd || 0) + (a.basisUsd || 0);
+    prev.activationCostUsd = (prev.activationCostUsd || 0) + (a.activationCostUsd || 0);
+    prev.basisKnown = (prev.basisKnown || 0) + (a.basisKnown || 0);
     prev.idsPartial = prev.idsPartial || a.idsPartial;
     prev.idsFound = (prev.idsFound || 0) + (a.idsFound || 0);
     prev.nfts.push(...(a.nfts || []));
     if (!prev.wallets.includes(a.wallet)) prev.wallets.push(a.wallet);
   }
   return [...map.values()];
+}
+
+function sumNftCosts(nfts) {
+  let basisUsd = 0;
+  let activationCostUsd = 0;
+  let basisKnown = 0;
+  for (const nft of nfts || []) {
+    if (nft.basisKnown) {
+      basisUsd += Number(nft.basisUsd) || 0;
+      basisKnown += 1;
+    }
+    activationCostUsd += Number(nft.activationCostUsd) || 0;
+  }
+  return { basisUsd, activationCostUsd, basisKnown };
+}
+
+async function applyPurchaseCosts(nfts, data, fallbackEthUsd) {
+  const pending = (nfts || []).filter((n) => n.lastTransferHash && !n.basisKnown);
+  if (!pending.length) return;
+  const hashes = [...new Set(pending.map((n) => n.lastTransferHash))];
+  const costByKey = {};
+  await mapLimited(hashes, 4, async (hash) => {
+    const cas = [...new Set(pending.filter((n) => n.lastTransferHash === hash).map((n) => n.nftCa))];
+    for (const ca of cas) {
+      costByKey[`${hash}:${ca}`] = await fetchTxNftCost(hash, ca);
+    }
+  });
+  const ownedPerKey = {};
+  for (const nft of pending) {
+    const key = `${nft.lastTransferHash}:${nft.nftCa}`;
+    ownedPerKey[key] = (ownedPerKey[key] || 0) + 1;
+  }
+  for (const nft of pending) {
+    const key = `${nft.lastTransferHash}:${nft.nftCa}`;
+    const cost = costByKey[key] || { eth: 0, nftCount: 0, perNftEth: 0 };
+    const split = cost.nftCount > 0 ? cost.nftCount : (ownedPerKey[key] || 1);
+    const perNftEth = split > 0 ? (cost.eth || 0) / split : 0;
+    const pData = data?.projects?.[nft.projectKey];
+    const ethPx = ethUsdAtTs(pData, nft.lastTransferTs, fallbackEthUsd);
+    nft.purchaseEth = perNftEth;
+    nft.basisUsd = perNftEth * ethPx;
+    nft.basisKnown = true;
+  }
 }
 
 export default function PortfolioView({ data }) {
@@ -357,11 +405,21 @@ export default function PortfolioView({ data }) {
                   ? earnedUsdForNft(pData, tierId, startTs)
                   : 0;
               earnedForProject += earnedValue;
+              const actTs = Number(tokenData?.ts) || 0;
+              const act = earning
+                ? activationTokenCostUsd(pData, {
+                    tierId,
+                    ts: actTs || lastIn?.ts,
+                    tokenAmount: isMachine ? machine?.ink : undefined,
+                    data,
+                  })
+                : { usd: 0, tokens: 0, tokenPriceUsd: 0 };
               nfts.push({
                 id: `${pKey}-${wallet}-${tokenId}`,
                 projectKey: pKey,
                 nftCa: pData.config.nftCa,
                 tokenId,
+                ticker: pData.config.ticker,
                 tierId,
                 tierName: isMachine
                   ? (earning
@@ -380,13 +438,18 @@ export default function PortfolioView({ data }) {
                 lastTransferTs: lastIn?.ts || 0,
                 lastTransferHash: lastIn?.hash || null,
                 minted: !!lastIn?.mint,
-                activationTs: tokenData?.ts || 0,
+                activationTs: actTs,
                 isActive: earning,
                 alwaysOn: false,
                 machineWeight: machine?.weight || 0,
                 machineInk: machine?.ink || 0,
                 imageUrl: machine?.imageUrl || null,
                 purchaseEth: 0,
+                basisUsd: 0,
+                basisKnown: false,
+                activationCostUsd: act.usd,
+                actTokens: act.tokens,
+                actTokenPriceUsd: act.tokenPriceUsd,
               });
             }
             return {
@@ -409,6 +472,7 @@ export default function PortfolioView({ data }) {
                 idsPartial,
                 idsFound: ids.length,
                 nfts,
+                ...sumNftCosts(nfts),
               },
             };
           } catch (e) {
@@ -499,6 +563,15 @@ export default function PortfolioView({ data }) {
         ownedAssets.push(row.asset);
       }
 
+      const allNfts = ownedAssets.flatMap((a) => a.nfts || []);
+      if (allNfts.some((n) => n.lastTransferHash)) {
+        setScanProgress('Reading purchase and mint costs…');
+        await applyPurchaseCosts(allNfts, data, ethUsd);
+        for (const asset of ownedAssets) {
+          Object.assign(asset, sumNftCosts(asset.nfts));
+        }
+      }
+
       setResults({
         floorUsd: totalFloorUsd,
         yieldUsd: totalYieldUsd,
@@ -531,15 +604,16 @@ export default function PortfolioView({ data }) {
       setEnriched((e) => ({ ...e, [projectKey]: 'done' }));
       return;
     }
-    const hashes = [...new Set(nfts.map((n) => n.lastTransferHash).filter(Boolean))];
-    const ethByHash = {};
-    await mapLimited(hashes, 4, async (hash) => {
-      ethByHash[hash] = await fetchTxEthValue(hash);
-    });
+    await applyPurchaseCosts(nfts, data, ethUsd);
     await mapLimited(nfts, 6, async (nft) => {
       nft.imageUrl = await fetchNftImage(nft.nftCa, nft.tokenId);
-      nft.purchaseEth = nft.lastTransferHash ? ethByHash[nft.lastTransferHash] || 0 : 0;
     });
+    setResults((r) => ({
+      ...r,
+      ownedAssets: r.ownedAssets.map((a) => (
+        a.projectKey === projectKey ? { ...a, ...sumNftCosts(a.nfts) } : a
+      )),
+    }));
     try {
       const provider = new ethers.JsonRpcProvider('https://rpc.mainnet.chain.robinhood.com');
       const cfg = data?.projects?.[projectKey]?.config || {};
@@ -578,6 +652,20 @@ export default function PortfolioView({ data }) {
   const aggregate = aggregateTbaHoldings(allNfts, inventories, priceIndex);
   const inventoriesPending = allNfts.some((n) => n.tba && inventories[n.tba]?.status === 'loading');
   const grouped = useMemo(() => groupByProject(results.ownedAssets), [results.ownedAssets]);
+  const costTotals = useMemo(() => {
+    let basisUsd = 0;
+    let activationCostUsd = 0;
+    let basisKnown = 0;
+    let nftCount = 0;
+    for (const g of grouped) {
+      if (g.tokenPosition) continue;
+      basisUsd += Number(g.basisUsd) || 0;
+      activationCostUsd += Number(g.activationCostUsd) || 0;
+      basisKnown += Number(g.basisKnown) || 0;
+      nftCount += (g.nfts || []).length;
+    }
+    return { basisUsd, activationCostUsd, basisKnown, nftCount, total: basisUsd + activationCostUsd };
+  }, [grouped]);
 
   useEffect(() => {
     if (!grouped.length) return;
@@ -642,6 +730,7 @@ export default function PortfolioView({ data }) {
       const copied = await copyPortfolioSnapshot({
         mode,
         floor: formatCurrency(results.floorUsd),
+        basis: costTotals.nftCount > 0 ? formatCurrency(costTotals.total) : '',
         cashLabel,
         cash: results.hasErrors ? 'ERROR' : formatCurrency(cashValue),
         roi: results.hasErrors ? 'ERROR' : `${roiPct.toFixed(2)}%`,
@@ -672,9 +761,16 @@ export default function PortfolioView({ data }) {
           const thumb = resolved[asset.projectKey] || {};
           return {
             name: `${asset.project} (${asset.tokenPosition ? formatAmount(asset.balance) : `${asset.balance} owned`})`,
-            detail: thumb.tokenId != null
-              ? `#${thumb.tokenId} · Floor ${formatCurrency(asset.floorValue)}`
-              : `Floor ${formatCurrency(asset.floorValue)}`,
+            detail: [
+              thumb.tokenId != null ? `#${thumb.tokenId}` : null,
+              `Floor ${formatCurrency(asset.floorValue)}`,
+              asset.tokenPosition
+                ? null
+                : (asset.basisKnown > 0 ? `Basis ${formatCurrency(asset.basisUsd || 0)}` : null),
+              asset.tokenPosition || !(asset.activationCostUsd > 0)
+                ? null
+                : `Act ~${formatCurrency(asset.activationCostUsd)}`,
+            ].filter(Boolean).join(' · '),
             value: mode === 'history'
               ? formatCurrency(asset.earnedValue || 0)
               : `+ ${formatCurrency((asset.yieldValue || 0) * forecastYears)}`,
@@ -703,7 +799,8 @@ export default function PortfolioView({ data }) {
           </h2>
           <p className="text-xs text-slate-400 mt-1">
             Comma-separated wallets. Forecast uses current yield. History counts drops after you
-            received the NFT (and after activation).
+            received the NFT (and after activation). Basis is the inbound mint or purchase ETH;
+            activation tokens are priced from the daily close nearest that date.
           </p>
         </div>
         {scanComplete && hasHoldings && (
@@ -836,10 +933,28 @@ export default function PortfolioView({ data }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3 sm:p-5 shadow-inner">
               <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Total Floor Value</p>
               <p className="text-xl md:text-2xl font-extrabold text-white">{formatCurrency(results.floorUsd)}</p>
+            </div>
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3 sm:p-5 shadow-inner">
+              <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Cost basis</p>
+              <p className="text-xl md:text-2xl font-extrabold text-white">
+                {costTotals.nftCount === 0
+                  ? '—'
+                  : formatCurrency(costTotals.total)}
+              </p>
+              <p className="text-[10px] text-slate-500 mt-1">
+                {costTotals.nftCount === 0
+                  ? 'No NFT purchases in this scan'
+                  : [
+                      costTotals.basisKnown > 0 ? `NFT ${formatCurrency(costTotals.basisUsd)}` : 'NFT —',
+                      costTotals.activationCostUsd > 0
+                        ? `Act ~${formatCurrency(costTotals.activationCostUsd)}`
+                        : 'Act —',
+                    ].join(' · ')}
+              </p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3 sm:p-5 shadow-inner">
               <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">{cashLabel}</p>
@@ -1023,7 +1138,14 @@ export default function PortfolioView({ data }) {
                         </p>
                       )}
                       <p className="text-[10px] text-slate-400 mt-1">
-                        Floor {formatCurrency(asset.floorValue)} · ROI {assetRoi.toFixed(1)}%
+                        Floor {formatCurrency(asset.floorValue)}
+                        {!asset.tokenPosition && asset.basisKnown > 0
+                          ? ` · Basis ${formatCurrency(asset.basisUsd || 0)}`
+                          : ''}
+                        {!asset.tokenPosition && asset.activationCostUsd > 0
+                          ? ` · Act ~${formatCurrency(asset.activationCostUsd)}`
+                          : ''}
+                        {' · '}ROI {assetRoi.toFixed(1)}%
                       </p>
                     </div>
                     <svg
@@ -1053,7 +1175,7 @@ export default function PortfolioView({ data }) {
                         <thead>
                           <tr className="text-[10px] uppercase tracking-wider text-slate-500">
                             <th className="py-2 pr-2 font-medium">NFT</th>
-                            <th className="py-2 px-2 font-medium">Purchased</th>
+                            <th className="py-2 px-2 font-medium">Basis</th>
                             <th className="py-2 px-2 font-medium">Activated / ink</th>
                             <th className="py-2 pl-2 font-medium text-right">{mode === 'history' ? 'Earned' : 'Forecast'}</th>
                           </tr>
@@ -1062,7 +1184,9 @@ export default function PortfolioView({ data }) {
                           {asset.nfts.map((nft) => {
                             const open = expandedNft === nft.id;
                             const inv = nft.tba ? inventories[nft.tba] : null;
-                            const purchaseUsd = (nft.purchaseEth || 0) * ethUsd;
+                            const basisUsd = Number(nft.basisUsd) || 0;
+                            const actUsd = Number(nft.activationCostUsd) || 0;
+                            const actTokens = Number(nft.actTokens) || Number(nft.machineInk) || 0;
                             return (
                               <React.Fragment key={nft.id}>
                                 <tr
@@ -1091,11 +1215,14 @@ export default function PortfolioView({ data }) {
                                   <td className="py-2 px-2 text-[11px] text-slate-300 whitespace-nowrap">
                                     <div>{formatDate(nft.lastTransferTs)}</div>
                                     <div className="text-slate-500">
-                                      {nft.minted
-                                        ? 'Mint'
-                                        : purchaseUsd > 0
-                                          ? formatCurrency(purchaseUsd)
-                                          : '—'}
+                                      {nft.minted ? 'Mint' : 'Bought'}
+                                      {nft.basisKnown
+                                        ? basisUsd > 0
+                                          ? ` ${formatCurrency(basisUsd)}`
+                                          : nft.minted
+                                            ? ' · free'
+                                            : ' · —'
+                                        : ' …'}
                                     </div>
                                   </td>
                                   <td className="py-2 px-2 text-[11px] text-slate-300 whitespace-nowrap">
@@ -1103,12 +1230,23 @@ export default function PortfolioView({ data }) {
                                       <>
                                         <div>{nft.isActive ? 'Inked' : 'Dormant'}</div>
                                         <div className="text-slate-500">
-                                          {nft.machineInk ? `${nft.machineInk.toLocaleString()} ink` : ''}
+                                          {actUsd > 0 ? `~${formatCurrency(actUsd)}` : ''}
+                                          {nft.machineInk ? ` · ${nft.machineInk.toLocaleString()} ink` : ''}
                                           {nft.machineWeight ? ` · wt ${nft.machineWeight}` : ''}
                                         </div>
                                       </>
                                     ) : nft.isActive ? (
-                                      formatDate(nft.activationTs)
+                                      <>
+                                        <div>{formatDate(nft.activationTs)}</div>
+                                        <div className="text-slate-500">
+                                          {actUsd > 0
+                                            ? `~${formatCurrency(actUsd)}`
+                                            : '—'}
+                                          {actTokens > 0
+                                            ? ` · ${formatAmount(actTokens)} ${nft.ticker || ''}`.trim()
+                                            : ''}
+                                        </div>
+                                      </>
                                     ) : (
                                       'Not active'
                                     )}

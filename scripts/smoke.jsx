@@ -34,6 +34,7 @@ import NightshadesDetailView from '../src/components/views/NightshadesDetailView
 import { protocolRevenueChart } from '../src/lib/yieldHistory';
 import { dateKey } from '../src/lib/dates';
 import { PROJECTS, tabsForProject } from '../src/lib/routes';
+import { activationTokenCostUsd, tokenPriceAtTs } from '../src/lib/portfolioHistory';
 
 const snapshot = JSON.parse(fs.readFileSync('public/data.json', 'utf8'));
 
@@ -350,6 +351,37 @@ for (const [name, View, props] of VIEWS) {
     } else {
       console.log(`ok    stonk AMM ${lastHistDate} uses live walk $${plotted.toFixed(0)}`);
     }
+  }
+}
+
+{
+  const stonk = snapshot.projects?.stonk;
+  const interns = snapshot.projects?.interns;
+  const snap = [...(stonk?.dailySnapshots || [])].reverse().find((s) => Number(s.tokenPriceUsd) > 0 && Number(s.tokenPriceUsd) !== 0.03);
+  const ts = snap ? (Number(snap.timestamp) > 1e12 ? Number(snap.timestamp) / 1000 : Number(snap.timestamp)) : 0;
+  const px = tokenPriceAtTs(stonk, ts);
+  const t0 = activationTokenCostUsd(stonk, { tierId: 'T0', ts });
+  const internAct = activationTokenCostUsd(interns, { tierId: 'T0', ts, data: snapshot });
+  const internReq = Number((interns?.tiers || []).find((t) => t.tier === 'T0' || t.id === 'T0')?.reqTokens) || 3333;
+  if (!(px > 0)) {
+    failed++;
+    console.error(`FAIL  tokenPriceAtTs returned ${px}`);
+  } else {
+    console.log(`ok    tokenPriceAtTs ${px} on ${snap?.date || 'live'}`);
+  }
+  const req = Number((stonk?.tiers || []).find((t) => t.tier === 'T0')?.reqTokens) || 66666;
+  const want = req * px;
+  if (!(t0.usd > 0) || Math.abs(t0.usd - want) > 1) {
+    failed++;
+    console.error(`FAIL  stonk T0 act cost ${t0.usd} want ~${want}`);
+  } else {
+    console.log(`ok    stonk T0 act ~$${t0.usd.toFixed(0)}`);
+  }
+  if (internAct.tokens !== internReq || !(internAct.usd > 0)) {
+    failed++;
+    console.error(`FAIL  intern T0 act ${internAct.tokens} tokens $${internAct.usd} (want ${internReq})`);
+  } else {
+    console.log(`ok    intern T0 act ${internAct.tokens} STONK ~$${internAct.usd.toFixed(0)}`);
   }
 }
 
