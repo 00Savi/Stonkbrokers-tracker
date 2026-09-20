@@ -35,7 +35,7 @@ import { protocolRevenueChart } from '../src/lib/yieldHistory';
 import { dateKey } from '../src/lib/dates';
 import { PROJECTS, tabsForProject } from '../src/lib/routes';
 import { activationTokenCostUsd, tokenPriceAtTs } from '../src/lib/portfolioHistory';
-import { attributedStonkBurn } from '../src/lib/burn';
+import { attributedStonkBurn, dailyAttributedBurnSeries, firstInternActivationDay } from '../src/lib/burn';
 
 const snapshot = JSON.parse(fs.readFileSync('public/data.json', 'utf8'));
 
@@ -393,17 +393,32 @@ for (const [name, View, props] of VIEWS) {
     </StaticRouter>
   );
   const split = attributedStonkBurn(snapshot.projects?.stonk, snapshot.projects?.interns);
+  const daily = dailyAttributedBurnSeries(snapshot.projects?.stonk, snapshot.projects?.interns, 'all');
+  const firstDay = firstInternActivationDay(snapshot.projects?.interns);
   if (!html.includes('Interns burnt') || !html.includes('StonkBrokers burnt') || !html.includes('Separate manager')) {
     failed++;
     console.error('FAIL  stonk burn split tiles missing');
+  } else if (html.includes('Intern activations (amber)')) {
+    failed++;
+    console.error('FAIL  intern overlay still on the total burn chart');
+  } else if (!html.includes('Daily intern vs StonkBrokers burn') || !html.includes('The Deflationary Flywheel')) {
+    failed++;
+    console.error('FAIL  daily intern vs broker burn chart missing under flywheel');
   } else if (!(split.total > 0) || !(split.intern > 0) || split.brokers + split.intern !== split.total && Math.abs(split.brokers + split.intern - split.total) > 1) {
     failed++;
     console.error(`FAIL  burn split total=${split.total} intern=${split.intern} brokers=${split.brokers}`);
   } else if (split.intern >= split.total) {
     failed++;
     console.error(`FAIL  intern burn ${split.intern} is not a subset of token burn ${split.total}`);
+  } else if (!firstDay || daily.startDay !== firstDay || daily.rawLabels[0] !== firstDay) {
+    failed++;
+    console.error(`FAIL  daily split starts ${daily.startDay}/${daily.rawLabels[0]} want ${firstDay}`);
+  } else if (!(daily.intern[0] > 0) || daily.brokers.some((n) => n < 0) || daily.intern.some((n) => n < 0)) {
+    failed++;
+    console.error(`FAIL  daily split intern=${daily.intern.join(',')} brokers=${daily.brokers.join(',')}`);
   } else {
     console.log(`ok    burn split intern=${split.intern} brokers=${split.brokers} total=${split.total}`);
+    console.log(`ok    daily split from ${daily.startDay} intern=${daily.intern.map((n) => Math.round(n)).join('/')} brokers=${daily.brokers.map((n) => Math.round(n)).join('/')}`);
   }
 }
 

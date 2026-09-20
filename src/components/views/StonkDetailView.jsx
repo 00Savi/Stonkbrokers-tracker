@@ -3,7 +3,7 @@ import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, ArcElement, Filler
 } from 'chart.js';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
-import { burnRateSeries, burnOfSupplyPct, attributedStonkBurn, splitBurnSeries } from '../../lib/burn';
+import { burnSeries, burnRateSeries, burnOfSupplyPct, attributedStonkBurn, dailyAttributedBurnSeries } from '../../lib/burn';
 import { formatLabels } from '../../lib/dates';
 import { windowSnapshots, tierRoiDatasets, protocolRevenueChart, sliceCols, windowPeriodLabel, windowLen, seriesHasInk, holderRevenueCol } from '../../lib/yieldHistory';
 import { compactUsd, compactNum } from '../kit';
@@ -149,9 +149,10 @@ export default function StonkDetailView({ data, activeTab }) {
   
   const internProject = data?.projects?.interns;
   const burnSplit = attributedStonkBurn(project, internProject);
-  const splitBurn = splitBurnSeries(project, internProject, timeframe);
-  const slicedBurnLabels = splitBurn.labels;
-  const slicedBurnData = splitBurn.data;
+  const burn = burnSeries(project, timeframe);
+  const slicedBurnLabels = burn.labels;
+  const slicedBurnData = burn.data;
+  const dailySplit = dailyAttributedBurnSeries(project, internProject, timeframe);
 
   // 4. Flywheel Chart
   const flywheel = burnRateSeries(project, timeframe);
@@ -606,19 +607,13 @@ export default function StonkDetailView({ data, activeTab }) {
 
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
             <h3 className="text-sm font-bold text-white mb-1">Cumulative Token Burn Over Time</h3>
-            <p className="text-xs text-slate-500 mb-4">First mint through today. Intern activations (amber) start at intern mint. Days before hourly snapshots are reconstructed from burns that lower totalSupply (Transfer to 0x0), plus dead, scaled to the first trusted supply read.</p>
+            <p className="text-xs text-slate-500 mb-4">First mint through today. Days before hourly snapshots are reconstructed from burns that lower totalSupply (Transfer to 0x0), plus dead, scaled to the first trusted supply read.</p>
             <div className="relative h-52 sm:h-64 md:h-80 w-full">
               {slicedBurnData.length > 0 ? (
                 <Line
                   key={`burn-${timeframe}`}
-                  data={{
-                    labels: slicedBurnLabels,
-                    datasets: [
-                      { label: 'Token total', data: slicedBurnData, borderColor: '#fb923c', backgroundColor: 'rgba(251, 146, 60, 0.08)', borderWidth: 3, fill: true, tension: 0.3 },
-                      { label: 'Interns', data: splitBurn.intern, borderColor: '#fbbf24', backgroundColor: 'rgba(251, 191, 36, 0.12)', borderWidth: 2, fill: true, tension: 0.3 },
-                    ],
-                  }}
-                  options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#94a3b8' } } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactTick } } } }}
+                  data={{ labels: slicedBurnLabels, datasets: [{ label: 'Cumulative Burnt', data: slicedBurnData, borderColor: '#fb923c', backgroundColor: 'rgba(251, 146, 60, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] }}
+                  options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactTick } } } }}
                 />
               ) : (
                 <div className="h-full flex items-center justify-center text-sm text-slate-500">
@@ -648,6 +643,32 @@ export default function StonkDetailView({ data, activeTab }) {
                 }}
                 options={dualAxisOptions({ leftTick: compactTick, rightTick: compactUsdTick, rightColor: '#00a804', leftMax: flywheel.burnAxisMax })}
               />
+            </div>
+          </div>
+
+          <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
+            <h3 className="text-sm font-bold text-white mb-1">Daily intern vs StonkBrokers burn</h3>
+            <p className="text-xs text-slate-400 mb-4">
+              From the first intern activation{dailySplit.startDay ? ` (${dailySplit.startDay})` : ''}. Daily $STONKBROKER destroyed by intern fees versus the rest of token supply burn. Separate activation managers, same token.
+            </p>
+            <div className="relative h-52 sm:h-64 md:h-80 w-full">
+              {dailySplit.rawLabels.length > 0 ? (
+                <Bar
+                  key={`intern-broker-burn-${timeframe}`}
+                  data={{
+                    labels: dailySplit.labels,
+                    datasets: [
+                      { label: 'Interns', data: dailySplit.intern, backgroundColor: '#fbbf24', borderRadius: 4 },
+                      { label: 'StonkBrokers', data: dailySplit.brokers, backgroundColor: '#fb923c', borderRadius: 4 },
+                    ],
+                  }}
+                  options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#94a3b8' } } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactTick }, min: 0 } } }}
+                />
+              ) : (
+                <div className="h-full flex items-center justify-center text-sm text-slate-500">
+                  Daily intern vs broker burn starts on the first intern activation
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -764,7 +785,7 @@ export default function StonkDetailView({ data, activeTab }) {
           <p><strong className="text-white">Protocol revenue (StonkBooster mix):</strong> AMM collector, Clock In locker fees (v1 retired, v2, Overtime retired), launchpad tax, Partner Revenue Share (Nightshades 13.33% civ-pad + Mancer 25% dex), and Smart LP skim. Clock In is Safety Deposit lock/collect fees (90% community / 10% protocol), not a raffle. Nightshades Night vault WETH is The Night inventory and is never counted here. Bonding swap volume is notional and is not revenue.</p>
           <p><strong className="text-white">Payback:</strong> Entry cost ÷ annualized trailing yield. Charts reprice cost at the last sync.</p>
           <p><strong className="text-white">Ownership:</strong> Circulating NFTs are collection size minus AMM vault inventory. Concentration is unique NFT wallets (vault and burn addresses excluded) divided by that circulating number. Activated-wallet count is unique current owners of NFTs that still have an open activation — a sale clears it.</p>
-          <p><strong className="text-white">Burn:</strong> Token-wide $STONKBROKER destroyed (supply deflation + dead + tokens locked in the broker activation manager). Intern activations use a different manager and burn half of each intern fee into the same token; that intern total is subtracted out of the StonkBrokers tile. Hourly snapshots stamp internBurnTokens going forward so the split persists on the parent series.</p>
+          <p><strong className="text-white">Burn:</strong> Token-wide $STONKBROKER destroyed (supply deflation + dead + tokens locked in the broker activation manager). The cumulative chart is that token total. Intern activations use a different manager and burn half of each intern fee into the same token; that intern total is subtracted out of the StonkBrokers tile. The daily intern vs StonkBrokers chart starts on the first intern activation and is the first difference of each series. Hourly snapshots stamp internBurnTokens going forward so the split persists on the parent series.</p>
       </MethodologyCard>
 
     </div>

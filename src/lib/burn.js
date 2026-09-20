@@ -216,22 +216,82 @@ function carryAt(labels, values, day) {
   return last;
 }
 
+/** First UTC day an intern activated. Empty when that history is not in yet. */
+export function firstInternActivationDay(intern) {
+  const labels = intern?.activation?.history?.labels || [];
+  const daily = intern?.activation?.history?.dailyActivations || [];
+  for (let i = 0; i < labels.length; i++) {
+    if ((Number(daily[i]) || 0) > 0) return dateKey(labels[i]);
+  }
+  const snaps = [...(intern?.dailySnapshots || [])].sort((a, b) => dateKey(a.date).localeCompare(dateKey(b.date)));
+  for (const s of snaps) {
+    if ((Number(s.activeCount) || 0) > 0 || (Number(s.totalBurn) || 0) > 0) return dateKey(s.date);
+  }
+  return '';
+}
+
+function alignedInternCumulative(stonk, intern) {
+  const totalFilled = burnPath(asProject(stonk));
+  const internFilled = intern ? burnPath(asProject(intern)) : { labels: [], data: [] };
+  const internCum = (totalFilled.labels || []).map((d) => carryAt(internFilled.labels, internFilled.data, d));
+  const liveIntern = internActivationBurn(intern);
+  if (liveIntern > 0 && internCum.length) {
+    internCum[internCum.length - 1] = Math.max(internCum[internCum.length - 1] || 0, liveIntern);
+  }
+  return { totalFilled, internCum };
+}
+
 /**
  * Token-wide burn plus intern-activation burn, aligned on the same days.
- * Interns start at mint (2026-09-19); earlier days are 0 intern / all brokers.
+ * Interns start at mint; earlier days are 0 intern / all brokers.
  */
 export function splitBurnSeries(stonk, intern, timeframe = 'all') {
   const total = burnSeries(stonk, timeframe);
-  const internFilled = intern ? burnPath(asProject(intern)) : { labels: [], data: [] };
-  const internAligned = (total.rawLabels || []).map((d) => carryAt(internFilled.labels, internFilled.data, d));
-  const liveIntern = internActivationBurn(intern);
-  if (liveIntern > 0 && internAligned.length) {
-    internAligned[internAligned.length - 1] = Math.max(internAligned[internAligned.length - 1] || 0, liveIntern);
-  }
+  const { internCum } = alignedInternCumulative(stonk, intern);
+  const byDay = new Map((burnPath(asProject(stonk)).labels || []).map((d, i) => [dateKey(d), internCum[i] || 0]));
+  const internAligned = (total.rawLabels || []).map((d) => Number(byDay.get(dateKey(d))) || 0);
   return {
     ...total,
     intern: internAligned,
     brokers: total.data.map((t, i) => Math.max(0, (Number(t) || 0) - (internAligned[i] || 0))),
+  };
+}
+
+/**
+ * Daily intern vs broker $STONKBROKER burn, from the first intern activation.
+ * Timeframe still windows the tail (weekly / monthly / all).
+ */
+export function dailyAttributedBurnSeries(stonk, intern, timeframe = 'all') {
+  const startDay = firstInternActivationDay(intern);
+  if (!startDay) return { startDay: '', labels: [], rawLabels: [], intern: [], brokers: [] };
+
+  const { totalFilled, internCum } = alignedInternCumulative(stonk, intern);
+  const startIdx = (totalFilled.labels || []).findIndex((d) => dateKey(d) >= startDay);
+  if (startIdx < 0) return { startDay, labels: [], rawLabels: [], intern: [], brokers: [] };
+
+  const labels = totalFilled.labels.slice(startIdx);
+  const totalCum = totalFilled.data.slice(startIdx);
+  const internSlice = internCum.slice(startIdx);
+  const priorTotal = startIdx > 0 ? Number(totalFilled.data[startIdx - 1]) || 0 : 0;
+  const priorIntern = startIdx > 0 ? Number(internCum[startIdx - 1]) || 0 : 0;
+
+  const internDaily = internSlice.map((v, i) => {
+    const prev = i === 0 ? priorIntern : Number(internSlice[i - 1]) || 0;
+    return Math.max(0, (Number(v) || 0) - prev);
+  });
+  const totalDaily = totalCum.map((v, i) => {
+    const prev = i === 0 ? priorTotal : Number(totalCum[i - 1]) || 0;
+    return Math.max(0, (Number(v) || 0) - prev);
+  });
+  const brokersDaily = totalDaily.map((t, i) => Math.max(0, t - (internDaily[i] || 0)));
+
+  const n = windowLen(timeframe, labels.length);
+  return {
+    startDay,
+    labels: formatLabels(labels.slice(-n)),
+    rawLabels: labels.slice(-n),
+    intern: internDaily.slice(-n),
+    brokers: brokersDaily.slice(-n),
   };
 }
 
