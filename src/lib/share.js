@@ -329,6 +329,7 @@ async function loadShareImage(src) {
   return null;
 }
 
+/** One-page 4:5 X card (1080×1350). Fits the mobile feed without a long screenshot. */
 function drawPortfolioCard({
   mode = 'forecast',
   floor = '—',
@@ -337,122 +338,155 @@ function drawPortfolioCard({
   roi = '—',
   units = '—',
   basis = '',
+  basisDetail = '',
   assets = [],
   pie = [],
   bars = null,
-  pieCanvas = null,
-  barCanvas = null,
 } = {}) {
-  const W = 1200;
-  const header = 110;
-  const tiles = 146;
-  const chartH = 300;
-  const cardH = 92;
-  const shown = assets.slice(0, 12);
-  const rows = Math.max(1, Math.ceil(shown.length / 2));
-  const foot = 56;
+  const W = 1080;
+  const H = 1350;
+  const S = 2;
   const pad = 36;
+  const foot = 58;
   const gap = 14;
-  const H = header + tiles + chartH + 56 + rows * (cardH + gap) + 24 + foot;
 
   const out = document.createElement('canvas');
-  out.width = W;
-  out.height = H;
+  out.width = W * S;
+  out.height = H * S;
   const ctx = out.getContext('2d');
+  ctx.scale(S, S);
   ctx.textBaseline = 'top';
 
-  ctx.fillStyle = '#08090b';
+  ctx.fillStyle = '#07080a';
   ctx.fillRect(0, 0, W, H);
+  const glow = ctx.createRadialGradient(W * 0.82, -40, 20, W * 0.82, 160, 520);
+  glow.addColorStop(0, 'rgba(0,168,4,0.20)');
+  glow.addColorStop(1, 'rgba(0,168,4,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, W, 340);
+  ctx.fillStyle = '#00a804';
+  ctx.fillRect(0, 0, 5, H);
 
-  ctx.fillStyle = '#e7e9ec';
-  ctx.font = '700 34px ui-sans-serif, system-ui, sans-serif';
-  ctx.fillText('Portfolio scan', pad, 28);
   ctx.fillStyle = '#8b929b';
-  ctx.font = '600 16px ui-sans-serif, system-ui, sans-serif';
-  ctx.fillText(mode === 'history' ? 'Earned history' : 'Annual forecast', pad, 70);
+  ctx.font = '600 13px ui-sans-serif, system-ui, sans-serif';
+  ctx.fillText(SITE_MARK, pad, 22);
 
-  const tilesData = [
-    { label: 'Total floor', value: floor, color: '#e7e9ec' },
-    ...(basis ? [{ label: 'Portfolio cost basis', value: basis, color: '#e7e9ec' }] : []),
-    { label: cashLabel, value: cash, color: '#00a804' },
-    { label: mode === 'history' ? 'Realized vs basis' : 'Portfolio ROI', value: roi, color: '#38bdf8' },
-    { label: 'Active units', value: units, color: '#f7931a' },
-  ];
-  const tileW = (W - pad * 2 - gap * (tilesData.length - 1)) / tilesData.length;
-  tilesData.forEach((t, i) => {
-    const x = pad + i * (tileW + gap);
-    const y = header;
-    panel(ctx, x, y, tileW, 128);
+  const follow = FOLLOW_MARK;
+  ctx.font = '700 13px ui-sans-serif, system-ui, sans-serif';
+  const fw = ctx.measureText(follow).width + 28;
+  roundRect(ctx, W - pad - fw, 16, fw, 28, 14);
+  ctx.fillStyle = '#00a804';
+  ctx.fill();
+  ctx.fillStyle = '#041405';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(follow, W - pad - fw + 14, 30);
+  ctx.textBaseline = 'top';
+
+  ctx.fillStyle = '#f4f6f8';
+  ctx.font = '800 36px ui-sans-serif, system-ui, sans-serif';
+  ctx.fillText('Portfolio scan', pad, 54);
+  drawPill(ctx, pad + 268, 60, mode === 'history' ? 'EARNED HISTORY' : 'ANNUAL FORECAST');
+
+  const heroY = 110;
+  const heroH = 126;
+  cardPanel(ctx, pad, heroY, W - pad * 2, heroH);
+  ctx.fillStyle = '#6b7280';
+  ctx.font = '700 11px ui-sans-serif, system-ui, sans-serif';
+  ctx.fillText(String(cashLabel).toUpperCase(), pad + 22, heroY + 18);
+  ctx.fillStyle = '#00a804';
+  ctx.font = '800 52px ui-sans-serif, system-ui, sans-serif';
+  ctx.fillText(fitText(ctx, cash, W - pad * 2 - 48), pad + 22, heroY + 42);
+  if (basisDetail) {
     ctx.fillStyle = '#8b929b';
-    ctx.font = '600 12px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText(t.label.toUpperCase(), x + 16, y + 16);
-    ctx.fillStyle = t.color;
-    ctx.font = '800 26px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText(t.value, x + 16, y + 54);
-  });
-
-  const chartY = header + tiles;
-  const chartW = (W - pad * 2 - gap) / 2;
-  panel(ctx, pad, chartY, chartW, chartH);
-  ctx.fillStyle = '#e7e9ec';
-  ctx.font = '700 16px ui-sans-serif, system-ui, sans-serif';
-  ctx.fillText('Floor allocation', pad + 18, chartY + 16);
-  if (!blitChart(ctx, pieCanvas, pad + 12, chartY + 40, chartW - 24, chartH - 52)) {
-    drawDonut(ctx, pad, chartY + 28, chartW, chartH - 36, pie);
+    ctx.font = '600 13px ui-sans-serif, system-ui, sans-serif';
+    ctx.fillText(fitText(ctx, basisDetail, W - pad * 2 - 48), pad + 22, heroY + 100);
   }
 
-  panel(ctx, pad + chartW + gap, chartY, chartW, chartH);
-  ctx.fillStyle = '#e7e9ec';
-  ctx.font = '700 16px ui-sans-serif, system-ui, sans-serif';
-  ctx.fillText(bars?.title || (mode === 'history' ? 'Daily drops' : 'Forecasted cash-flow'), pad + chartW + gap + 18, chartY + 16);
+  const stats = [
+    { label: 'Floor', value: floor, color: '#e7e9ec' },
+    { label: 'Cost basis', value: basis || '—', color: '#e7e9ec' },
+    { label: mode === 'history' ? 'Realized' : 'ROI', value: roi, color: '#38bdf8' },
+    { label: 'Units', value: units, color: '#f7931a' },
+  ];
+  const statY = heroY + heroH + gap;
+  const statH = 92;
+  const statW = (W - pad * 2 - gap * 3) / 4;
+  stats.forEach((t, i) => {
+    const x = pad + i * (statW + gap);
+    cardPanel(ctx, x, statY, statW, statH);
+    ctx.fillStyle = '#6b7280';
+    ctx.font = '700 10px ui-sans-serif, system-ui, sans-serif';
+    ctx.fillText(t.label.toUpperCase(), x + 12, statY + 14);
+    ctx.fillStyle = t.color;
+    ctx.font = '800 22px ui-sans-serif, system-ui, sans-serif';
+    ctx.fillText(fitText(ctx, t.value, statW - 24), x + 12, statY + 42);
+  });
+
+  const chartY = statY + statH + gap;
+  const chartH = 292;
+  const chartW = (W - pad * 2 - gap) / 2;
+  cardPanel(ctx, pad, chartY, chartW, chartH);
+  ctx.fillStyle = '#6b7280';
+  ctx.font = '700 10px ui-sans-serif, system-ui, sans-serif';
+  ctx.fillText('FLOOR ALLOCATION', pad + 16, chartY + 14);
+  drawDonut(ctx, pad, chartY + 28, chartW, chartH - 36, pie);
+
+  cardPanel(ctx, pad + chartW + gap, chartY, chartW, chartH);
+  ctx.fillStyle = '#6b7280';
+  ctx.font = '700 10px ui-sans-serif, system-ui, sans-serif';
+  ctx.fillText(String(bars?.title || (mode === 'history' ? 'Daily drops' : 'Forecasted cash-flow')).toUpperCase(), pad + chartW + gap + 16, chartY + 14);
   if (bars?.headline) {
     ctx.fillStyle = bars.headlineColor || '#00a804';
     ctx.font = '800 22px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText(bars.headline, pad + chartW + gap + 18, chartY + 40);
+    ctx.fillText(fitText(ctx, bars.headline, chartW - 32), pad + chartW + gap + 16, chartY + 34);
   }
-  const barBoxY = chartY + (bars?.headline ? 72 : 44);
-  const barBoxH = chartH - (bars?.headline ? 84 : 56);
-  if (!blitChart(ctx, barCanvas, pad + chartW + gap + 12, barBoxY, chartW - 24, barBoxH)) {
-    drawBars(ctx, pad + chartW + gap, barBoxY, chartW, barBoxH, bars);
-  }
+  const barTop = chartY + (bars?.headline ? 66 : 40);
+  drawBars(ctx, pad + chartW + gap, barTop, chartW, chartY + chartH - barTop - 10, bars);
 
-  const listY = chartY + chartH + 28;
-  ctx.fillStyle = '#e7e9ec';
+  const listY = chartY + chartH + 18;
+  const shown = assets.slice(0, 8);
+  const extra = assets.length - shown.length;
+  ctx.fillStyle = '#f4f6f8';
   ctx.font = '700 16px ui-sans-serif, system-ui, sans-serif';
-  ctx.fillText('Owned assets', pad, listY);
-  const cardW = (W - pad * 2 - gap) / 2;
+  ctx.fillText(extra > 0 ? `Holdings · ${shown.length} of ${assets.length}` : 'Holdings', pad, listY);
+
+  const listTop = listY + 26;
+  const listBot = H - foot - 16;
+  const rowH = shown.length ? Math.min(64, (listBot - listTop) / shown.length) : 56;
   shown.forEach((a, i) => {
-    const col = i % 2;
-    const row = Math.floor(i / 2);
-    const x = pad + col * (cardW + gap);
-    const y = listY + 26 + row * (cardH + gap);
-    panel(ctx, x, y, cardW, cardH);
-    drawThumb(ctx, a.img, x + 14, y + 18, 56, a.mark || a.name);
+    const y = listTop + i * rowH;
+    if (i % 2 === 0) {
+      ctx.fillStyle = 'rgba(255,255,255,0.03)';
+      roundRect(ctx, pad, y, W - pad * 2, rowH - 4, 12);
+      ctx.fill();
+    }
+    const thumb = Math.round(rowH - 16);
+    drawThumb(ctx, a.img, pad + 10, y + 6, thumb, a.mark || a.name);
     ctx.fillStyle = '#00a804';
-    ctx.font = '800 18px ui-sans-serif, system-ui, sans-serif';
+    ctx.font = '800 16px ui-sans-serif, system-ui, sans-serif';
     const value = a.value || '—';
-    const valueW = ctx.measureText(value).width;
     ctx.textAlign = 'right';
-    ctx.fillText(value, x + cardW - 16, y + 28);
+    ctx.fillText(fitText(ctx, value, 160), W - pad - 14, y + 12);
     ctx.textAlign = 'left';
-    const textW = cardW - 84 - valueW - 28;
-    ctx.fillStyle = '#e7e9ec';
-    ctx.font = '700 18px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText(fitText(ctx, a.name || 'Project', textW), x + 84, y + 20);
+    ctx.fillStyle = '#f4f6f8';
+    ctx.font = '700 16px ui-sans-serif, system-ui, sans-serif';
+    ctx.fillText(fitText(ctx, a.name || 'Project', W - pad * 2 - thumb - 200), pad + thumb + 22, y + 10);
     ctx.fillStyle = '#8b929b';
-    ctx.font = '600 13px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText(fitText(ctx, a.detail || '', cardW - 100), x + 84, y + 48);
+    ctx.font = '600 12px ui-sans-serif, system-ui, sans-serif';
+    ctx.fillText(fitText(ctx, a.detail || '', W - pad * 2 - thumb - 200), pad + thumb + 22, y + 32);
   });
 
-  ctx.fillStyle = '#0e1013';
+  ctx.fillStyle = '#0a0c0e';
   ctx.fillRect(0, H - foot, W, foot);
   ctx.fillStyle = '#1e2228';
   ctx.fillRect(0, H - foot, W, 1);
-  ctx.fillStyle = '#94a3b8';
-  ctx.font = '600 18px ui-sans-serif, system-ui, sans-serif';
+  ctx.fillStyle = '#6b7280';
+  ctx.font = '600 13px ui-sans-serif, system-ui, sans-serif';
   ctx.textBaseline = 'middle';
   const mid = H - foot / 2;
-  ctx.fillText(SITE_MARK, pad, mid);
+  ctx.fillText(`${SITE_MARK}  ·  Not financial advice`, pad, mid);
+  ctx.fillStyle = '#00a804';
+  ctx.font = '700 14px ui-sans-serif, system-ui, sans-serif';
   const followW = ctx.measureText(FOLLOW_MARK).width;
   ctx.fillText(FOLLOW_MARK, W - pad - followW, mid);
   return out;

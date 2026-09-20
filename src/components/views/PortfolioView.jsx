@@ -725,11 +725,13 @@ export default function PortfolioView({ data }) {
   );
 
   const copyLabel =
-    copyState === 'busy' ? 'Copying' :
-    copyState === 'copied' ? 'Copied' :
-    copyState === 'saved' ? 'Saved' :
-    copyState === 'fail' ? 'Failed' :
-    'Copy';
+    copyState === 'busy' ? 'Copying…' :
+    copyState === 'copied' ? 'Copied — paste into X' :
+    copyState === 'saved' ? 'PNG saved' :
+    copyState === 'fail' ? 'Copy failed' :
+    'Copy for X';
+
+  const copyOk = copyState === 'copied' || copyState === 'saved';
 
   const handleCopySnapshot = async () => {
     if (copyState === 'busy') return;
@@ -747,6 +749,12 @@ export default function PortfolioView({ data }) {
         mode,
         floor: formatCurrency(results.floorUsd),
         basis: costTotals.nftCount > 0 ? formatCurrency(costTotals.total) : '',
+        basisDetail: costTotals.nftCount > 0
+          ? [
+              costTotals.basisKnown > 0 ? `NFT ${formatCurrency(costTotals.basisUsd)}` : null,
+              costTotals.activationCostUsd > 0 ? `Act ~${formatCurrency(costTotals.activationCostUsd)}` : null,
+            ].filter(Boolean).join(' · ')
+          : '',
         cashLabel,
         cash: results.hasErrors ? 'ERROR' : formatCurrency(cashValue),
         roi: results.hasErrors ? 'ERROR' : formatRoi(roiPct),
@@ -819,22 +827,6 @@ export default function PortfolioView({ data }) {
             activation tokens are priced from the daily close nearest that date.
           </p>
         </div>
-        {scanComplete && hasHoldings && (
-          <button
-            type="button"
-            data-share-omit
-            onClick={handleCopySnapshot}
-            disabled={copyState === 'busy'}
-            title="Copy portfolio snapshot (no addresses)"
-            className={`shrink-0 rounded-md border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide disabled:opacity-50 ${
-              copyState === 'copied' || copyState === 'saved'
-                ? 'border-emerald-700/60 bg-emerald-950/80 text-emerald-300'
-                : 'border-[#1e2228] bg-[#08090b] text-slate-300 hover:border-slate-500 hover:text-white'
-            }`}
-          >
-            {copyLabel}
-          </button>
-        )}
       </div>
 
       <div data-share-omit className="flex flex-col sm:flex-row gap-3 mb-6">
@@ -852,6 +844,35 @@ export default function PortfolioView({ data }) {
         >
           {isScanning ? 'Scanning Ledger...' : 'Scan Portfolio'}
         </button>
+        {scanComplete && hasHoldings && (
+          <button
+            type="button"
+            data-share-omit
+            onClick={handleCopySnapshot}
+            disabled={copyState === 'busy'}
+            title="Copy a 4:5 portfolio card for X (no addresses)"
+            className={`sm:min-w-[11.5rem] inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-extrabold shadow-md transition disabled:opacity-60 ${
+              copyOk
+                ? 'bg-emerald-950 text-emerald-300 ring-2 ring-emerald-500/70'
+                : copyState === 'fail'
+                  ? 'bg-rose-950 text-rose-300 ring-2 ring-rose-500/60'
+                  : 'bg-white text-[#08090b] hover:bg-emerald-200'
+            }`}
+          >
+            {copyOk ? (
+              <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+                <path d="M5 12l5 5L20 7" />
+              </svg>
+            ) : (
+              <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7" />
+                <path d="M16 6l-4-4-4 4" />
+                <path d="M12 2v14" />
+              </svg>
+            )}
+            {copyLabel}
+          </button>
+        )}
       </div>
 
       {!isScanning && !scanComplete && (
@@ -894,6 +915,41 @@ export default function PortfolioView({ data }) {
             className="mb-5"
             extra="The 1Y / 3Y / 5Y / 10Y figures multiply the current trailing run-rate. They are not a prediction that yield stays constant."
           />
+          {hasHoldings && (
+            <div data-share-omit className="mb-5 flex flex-col gap-3 rounded-xl border border-emerald-500/40 bg-emerald-950/40 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-extrabold text-white">Share this wallet on X</p>
+                <p className="text-[11px] text-emerald-200/80 mt-0.5">
+                  Copies a one-page 4:5 card — floor, cost basis, yield, and holdings. No addresses.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCopySnapshot}
+                disabled={copyState === 'busy'}
+                className={`shrink-0 inline-flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-extrabold shadow-lg shadow-emerald-500/20 transition disabled:opacity-60 ${
+                  copyOk
+                    ? 'bg-emerald-500 text-black'
+                    : copyState === 'fail'
+                      ? 'bg-rose-500 text-white'
+                      : 'bg-emerald-400 text-black hover:bg-emerald-300'
+                }`}
+              >
+                {copyOk ? (
+                  <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+                    <path d="M5 12l5 5L20 7" />
+                  </svg>
+                ) : (
+                  <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                    <path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7" />
+                    <path d="M16 6l-4-4-4 4" />
+                    <path d="M12 2v14" />
+                  </svg>
+                )}
+                {copyLabel}
+              </button>
+            </div>
+          )}
           {!hasHoldings ? (
             <p className="text-sm text-slate-400">No ecosystem NFTs found in the provided wallet(s).</p>
           ) : (
