@@ -170,6 +170,17 @@ function groupByProject(ownedAssets) {
   return [...map.values()];
 }
 
+/** What you paid: inbound NFT ETH + ~activation tokens. Token bags stay at mark. */
+function assetCostBasisUsd(asset) {
+  if (asset?.tokenPosition) return Number(asset.floorValue) || 0;
+  return (Number(asset.basisUsd) || 0) + (Number(asset.activationCostUsd) || 0);
+}
+
+function roiAgainst(numer, denom) {
+  if (!(denom > 0)) return null;
+  return (Number(numer) / denom) * 100;
+}
+
 function sumNftCosts(nfts) {
   let basisUsd = 0;
   let activationCostUsd = 0;
@@ -691,8 +702,13 @@ export default function PortfolioView({ data }) {
   const forecastUsd = results.yieldUsd * forecastYears;
   const cashLabel = mode === 'history' ? 'Earned in your ownership' : `Forecasted ${forecastYears}y cash-flow`;
   const cashValue = mode === 'history' ? results.earnedUsd : forecastUsd;
-  const roiPct =
-    results.floorUsd > 0 ? ((mode === 'history' ? results.earnedUsd : forecastUsd) / results.floorUsd) * 100 : 0;
+  const realizedDenom = costTotals.total + grouped
+    .filter((g) => g.tokenPosition)
+    .reduce((sum, g) => sum + (Number(g.floorValue) || 0), 0);
+  const roiPct = mode === 'history'
+    ? roiAgainst(results.earnedUsd, realizedDenom)
+    : roiAgainst(forecastUsd, results.floorUsd);
+  const formatRoi = (pct, digits = 2) => (pct == null ? '—' : `${pct.toFixed(digits)}%`);
   const runRate = {
     d: results.yieldUsd / 365,
     w: results.yieldUsd / 52,
@@ -733,7 +749,7 @@ export default function PortfolioView({ data }) {
         basis: costTotals.nftCount > 0 ? formatCurrency(costTotals.total) : '',
         cashLabel,
         cash: results.hasErrors ? 'ERROR' : formatCurrency(cashValue),
-        roi: results.hasErrors ? 'ERROR' : `${roiPct.toFixed(2)}%`,
+        roi: results.hasErrors ? 'ERROR' : formatRoi(roiPct),
         units: `${results.totalUnits} Units`,
         pie: pieGroups.map((g, i) => ({
           label: projectName(g.projectKey, g.ticker),
@@ -964,10 +980,10 @@ export default function PortfolioView({ data }) {
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3 sm:p-5 shadow-inner">
               <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">
-                {mode === 'history' ? 'Realized vs floor' : 'Combined Portfolio ROI'}
+                {mode === 'history' ? 'Realized vs basis' : 'Combined Portfolio ROI'}
               </p>
               <p className={`text-xl md:text-2xl font-extrabold ${results.hasErrors ? 'text-rose-400' : 'text-blue-400'}`}>
-                {results.hasErrors ? 'ERROR' : `${roiPct.toFixed(2)}%`}
+                {results.hasErrors ? 'ERROR' : formatRoi(roiPct)}
               </p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3 sm:p-5 shadow-inner">
@@ -1084,12 +1100,9 @@ export default function PortfolioView({ data }) {
             ) : (
               grouped.map((asset) => {
                 const open = !!openProjects[asset.projectKey];
-                const assetRoi =
-                  asset.floorValue > 0
-                    ? (((mode === 'history' ? asset.earnedValue : asset.yieldValue * forecastYears) /
-                        asset.floorValue) *
-                        100)
-                    : 0;
+                const assetRoi = mode === 'history'
+                  ? roiAgainst(asset.earnedValue, assetCostBasisUsd(asset))
+                  : roiAgainst((asset.yieldValue || 0) * forecastYears, asset.floorValue);
                 return (
                 <div key={asset.projectKey} className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 shadow-inner">
                   <button
@@ -1145,7 +1158,7 @@ export default function PortfolioView({ data }) {
                         {!asset.tokenPosition && asset.activationCostUsd > 0
                           ? ` · Act ~${formatCurrency(asset.activationCostUsd)}`
                           : ''}
-                        {' · '}ROI {assetRoi.toFixed(1)}%
+                        {' · '}ROI {formatRoi(assetRoi, 1)}
                       </p>
                     </div>
                     <svg

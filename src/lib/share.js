@@ -375,7 +375,7 @@ function drawPortfolioCard({
     { label: 'Total floor', value: floor, color: '#e7e9ec' },
     ...(basis ? [{ label: 'Portfolio cost basis', value: basis, color: '#e7e9ec' }] : []),
     { label: cashLabel, value: cash, color: '#00a804' },
-    { label: mode === 'history' ? 'Realized vs floor' : 'Portfolio ROI', value: roi, color: '#38bdf8' },
+    { label: mode === 'history' ? 'Realized vs basis' : 'Portfolio ROI', value: roi, color: '#38bdf8' },
     { label: 'Active units', value: units, color: '#f7931a' },
   ];
   const tileW = (W - pad * 2 - gap * (tilesData.length - 1)) / tilesData.length;
