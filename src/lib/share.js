@@ -373,7 +373,7 @@ function drawPortfolioCard({
 
   const tilesData = [
     { label: 'Total floor', value: floor, color: '#e7e9ec' },
-    ...(basis ? [{ label: 'Cost basis', value: basis, color: '#e7e9ec' }] : []),
+    ...(basis ? [{ label: 'Portfolio cost basis', value: basis, color: '#e7e9ec' }] : []),
     { label: cashLabel, value: cash, color: '#00a804' },
     { label: mode === 'history' ? 'Realized vs floor' : 'Portfolio ROI', value: roi, color: '#38bdf8' },
     { label: 'Active units', value: units, color: '#f7931a' },

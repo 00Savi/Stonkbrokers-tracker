@@ -939,7 +939,7 @@ export default function PortfolioView({ data }) {
               <p className="text-xl md:text-2xl font-extrabold text-white">{formatCurrency(results.floorUsd)}</p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3 sm:p-5 shadow-inner">
-              <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Cost basis</p>
+              <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Portfolio cost basis</p>
               <p className="text-xl md:text-2xl font-extrabold text-white">
                 {costTotals.nftCount === 0
                   ? '—'
