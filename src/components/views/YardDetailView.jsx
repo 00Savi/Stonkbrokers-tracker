@@ -441,7 +441,7 @@ export default function YardDetailView({ data, activeTab }) {
                     { type: 'bar', label: 'Daily Burn Velocity', data: fwBurn, backgroundColor: 'rgba(249, 115, 22, 0.8)', borderRadius: 4, yAxisID: 'y' }
                   ]
                 }} 
-                options={dualAxisOptions({ leftTick: compactTick, rightTick: compactUsdTick, rightColor: '#38bdf8' })} 
+                options={dualAxisOptions({ leftTick: compactTick, rightTick: compactUsdTick, rightColor: '#38bdf8', leftMax: flywheel.burnAxisMax })} 
               />
             </div>
           </div>

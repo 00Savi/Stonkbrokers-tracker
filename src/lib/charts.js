@@ -151,7 +151,12 @@ export function percentStackOptions() {
   };
 }
 
-export function dualAxisOptions({ leftTick = compactTick, rightTick = compactUsdTick, rightColor = '#00a804' } = {}) {
+export function dualAxisOptions({
+  leftTick = compactTick,
+  rightTick = compactUsdTick,
+  rightColor = '#00a804',
+  leftMax,
+} = {}) {
   const base = baseChartOptions();
   return {
     ...base,
@@ -169,7 +174,12 @@ export function dualAxisOptions({ leftTick = compactTick, rightTick = compactUsd
     },
     scales: {
       ...base.scales,
-      y: { ...base.scales.y, position: 'left', ticks: { ...base.scales.y.ticks, callback: leftTick } },
+      y: {
+        ...base.scales.y,
+        position: 'left',
+        ticks: { ...base.scales.y.ticks, callback: leftTick },
+        ...(Number.isFinite(leftMax) && leftMax > 0 ? { max: leftMax } : {}),
+      },
       y1: {
         type: 'linear',
         position: 'right',

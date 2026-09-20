@@ -345,7 +345,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
                       { type: 'bar', label: 'Daily burn', data: flywheel.burn, backgroundColor: 'rgba(249, 115, 22, 0.8)', borderRadius: 4, yAxisID: 'y' },
                     ],
                   }}
-                  options={dualAxisOptions({ leftTick: compactTick, rightTick: compactUsdTick, rightColor: '#00a804' })}
+                  options={dualAxisOptions({ leftTick: compactTick, rightTick: compactUsdTick, rightColor: '#00a804', leftMax: flywheel.burnAxisMax })}
                 />
               ) : (
                 <div className="h-full flex items-center justify-center text-sm text-slate-500">No burn history recorded yet</div>

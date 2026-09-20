@@ -105,13 +105,26 @@ function fillCarry(map, through = utcIso()) {
 
 function priceByDate(project) {
   const px = {};
-  let last = 0;
+  // Pool daily closes from first mint. clock_in snapshots used to carry the
+  // first hourly DexScreener print backward, which flattened the flywheel.
+  const hist = project?.ownership?.priceHistory;
+  const hLabels = hist?.labels || [];
+  const hData = hist?.data || [];
+  hLabels.forEach((d, i) => {
+    const k = dateKey(d);
+    const n = Number(hData[i]);
+    if (k && n > 0 && n !== 0.03) px[k] = n;
+  });
+
   const rows = [...(project?.dailySnapshots || [])].sort((a, b) => dateKey(a.date).localeCompare(dateKey(b.date)));
   for (const s of rows) {
     const k = dateKey(s.date);
     const n = Number(s.tokenPriceUsd) || 0;
-    if (n > 0 && n !== 0.03) last = n;
-    if (k && last > 0) px[k] = last;
+    // clock_in used to copy the first DexScreener print onto every earlier
+    // day. Prefer priceHistory for those dates; use the row only when the
+    // backfill has replaced the placeholder and history is missing.
+    if (s?.yieldSource === 'clock_in' && px[k]) continue;
+    if (k && n > 0 && n !== 0.03) px[k] = n;
   }
   const live = Number(project?.market?.tokenPriceUsd) || 0;
   if (live > 0) px[utcIso()] = live;
@@ -199,20 +212,48 @@ export function burnRateSeries(source, timeframe = 'all') {
   const vals = filled.data.slice(start);
   const px = priceByDate(project);
   let lastPx = 0;
+  const prices = labels.map((d) => {
+    const nPx = Number(px[d]) || 0;
+    if (nPx > 0) lastPx = nPx;
+    return lastPx;
+  });
+  const burn = vals.map((v, i) => {
+    const prior = i === 0
+      ? (start > 0 ? Number(filled.data[start - 1]) : Number(v))
+      : Number(vals[i - 1]);
+    return (Number(v) || 0) - (Number(prior) || 0);
+  });
   return {
     labels: formatLabels(labels),
-    prices: labels.map((d) => {
-      const nPx = Number(px[d]) || 0;
-      if (nPx > 0) lastPx = nPx;
-      return lastPx;
-    }),
-    burn: vals.map((v, i) => {
-      const prior = i === 0
-        ? (start > 0 ? Number(filled.data[start - 1]) : Number(v))
-        : Number(vals[i - 1]);
-      return (Number(v) || 0) - (Number(prior) || 0);
-    }),
+    prices,
+    burn,
+    burnAxisMax: robustBurnAxisMax(burn),
   };
+}
+
+/**
+ * Launch-week burns can be 20–80× a typical later day (activation lock +
+ * dead-address sinks). Autoscaling to those bars flattens everything after.
+ * Tukey fence on the positive days; only applied when the peak is far above.
+ */
+export function robustBurnAxisMax(values) {
+  const xs = (values || [])
+    .map(Number)
+    .filter((n) => Number.isFinite(n) && n > 0)
+    .sort((a, b) => a - b);
+  if (xs.length < 8) return undefined;
+  const at = (p) => {
+    const i = (xs.length - 1) * p;
+    const lo = Math.floor(i);
+    const hi = Math.ceil(i);
+    return xs[lo] + (xs[hi] - xs[lo]) * (i - lo);
+  };
+  const fence = at(0.75) + 1.5 * (at(0.75) - at(0.25));
+  const typical = xs.filter((n) => n <= fence);
+  const cap = typical.length ? typical[typical.length - 1] : at(0.75);
+  const peak = xs[xs.length - 1];
+  if (!(peak > cap * 2.5) || !(cap > 0)) return undefined;
+  return cap * 1.12;
 }
 
 /** Token-unit cap used for "burnt ÷ total supply". */

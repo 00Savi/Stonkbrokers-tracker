@@ -390,7 +390,7 @@ export default function CardWallDetailView({ data, activeTab }) {
                     { type: 'bar', label: 'Daily Burn Velocity', data: fwBurn, backgroundColor: 'rgba(249, 115, 22, 0.8)', borderRadius: 4, yAxisID: 'y' }
                   ]
                 }} 
-                options={dualAxisOptions({ leftTick: compactTick, rightTick: compactUsdTick, rightColor: '#f5b700' })} 
+                options={dualAxisOptions({ leftTick: compactTick, rightTick: compactUsdTick, rightColor: '#f5b700', leftMax: flywheel.burnAxisMax })} 
               />
             </div>
           </div>

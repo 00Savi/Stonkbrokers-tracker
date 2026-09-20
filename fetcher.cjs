@@ -389,6 +389,7 @@ const vaultFlow = require("./lib/vaultFlow.cjs");
 const { fetchSmartLps, fromGgIndex, USDG } = require("./lib/smartLp.cjs");
 const dates = require("./lib/dates.cjs");
 const { fetchNight } = require("./lib/night.cjs");
+const priceDays = require("./lib/priceDays.cjs");
 
 const gg = new GgIndex();
 const rpc = new Rpc();
@@ -1453,12 +1454,19 @@ async function getOwnershipStats(conf, equivBurnt, previousData) {
       histData.push(seriesHolders);
   }
 
-  return {
+  const ownership = {
     ammVaultNfts, burntNfts: equivBurnt, currentMaxSupply, circulatingNftSupply,
     nftHolders: trueUniqueNftHolders, stonkHolders: trueUniqueStonkHolders,
     tokenHolders: trueUniqueStonkHolders, ownershipRatio,
     historicalGrowth: { labels: histLabels, data: histData }
   };
+  // Pool daily closes are stamped once (backfillPrices / priceDays cache).
+  // This rebuild used to drop them, which flattened the flywheel again on
+  // the next hourly run.
+  if (previousData?.ownership?.priceHistory) {
+    ownership.priceHistory = previousData.ownership.priceHistory;
+  }
+  return ownership;
 }
 
 /** gg-index Transfer fold from first mint. Empty until supply_days is rebuilt. */
@@ -3783,6 +3791,7 @@ async function run() {
     if (!proj) continue;
     const livePx = markets[key]?.tokenPriceUsd || proj.market?.tokenPriceUsd || 0;
     proj.dailySnapshots = sanitizeDailySnapshots(proj.dailySnapshots, livePx);
+    priceDays.applyToProject(proj, priceDays.loadCache()[key]);
   }
 
   const written = writeData(finalJson);

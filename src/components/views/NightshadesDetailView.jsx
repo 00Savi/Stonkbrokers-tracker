@@ -374,7 +374,7 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
                     { type: 'bar', label: 'Daily Burn Velocity', data: flywheel.burn, backgroundColor: 'rgba(249, 115, 22, 0.8)', borderRadius: 4, yAxisID: 'y' }
                   ]
                 }}
-                options={dualAxisOptions({ leftTick: compactTick, rightTick: compactUsdTick, rightColor: ACCENT })}
+                options={dualAxisOptions({ leftTick: compactTick, rightTick: compactUsdTick, rightColor: ACCENT, leftMax: flywheel.burnAxisMax })}
               />
             </div>
           </div>
