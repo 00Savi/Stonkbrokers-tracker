@@ -13,6 +13,7 @@ import { useChartWindow } from '../../lib/chartWindow';
 import { holderSeries } from '../../lib/snapshots';
 import { MethodologyCard } from '../Disclaimer';
 import { projectPath } from '../../lib/routes';
+import { attributedStonkBurn } from '../../lib/burn';
 import {
   EmptyChart,
   YieldUsdPricePanel,
@@ -82,6 +83,7 @@ export default function InternDetailView({ data, activeTab }) {
   const slicedHolder = sliceCols(rawRev.labels, [holderRevenueCol(project, rawRev.rawLabels || rawRev.labels)], timeframe);
 
   const realBurntTokens = Math.max(Number(activation.dualBurn?.totalBurnTokens || 0), Number(ownership.permanentlyBurntTokens || 0));
+  const burnSplit = attributedStonkBurn(stonk, project);
 
   const actHistory = activation.history || {};
   const hasActHist = Array.isArray(actHistory.labels) && actHistory.labels.length > 0;
@@ -310,16 +312,21 @@ export default function InternDetailView({ data, activeTab }) {
       <section id="activation" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-lg md:text-xl font-bold text-white">Intern activation</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Activated of collection</p><p className="text-2xl font-extrabold text-emerald-400">{awaitingContracts ? '—' : `${(activation.percentActivated || 0).toFixed(2)}%`}</p></div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Live activated units</p><p className="text-2xl font-extrabold text-amber-300">{dash(awaitingContracts, activation.activeCount)} Units</p></div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5">
-              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">$STONKBROKER burnt</p>
-              <p className="text-2xl font-extrabold text-orange-400">{dash(awaitingContracts, realBurntTokens)}</p>
+              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Interns burnt</p>
+              <p className="text-2xl font-extrabold text-amber-300">{dash(awaitingContracts, realBurntTokens)}</p>
               <p className="text-xs text-slate-500 mt-1">
-                Half of each intern activation fee.{' '}
+                Half of each intern fee. Separate activation manager.{' '}
                 <Link to={projectPath('stonk', 'burn')} className="text-amber-300 hover:underline">Parent burn chart</Link>
               </p>
+            </div>
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5">
+              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">StonkBrokers burnt</p>
+              <p className="text-2xl font-extrabold text-orange-400">{dash(awaitingContracts, burnSplit.brokers)}</p>
+              <p className="text-xs text-slate-500 mt-1">Token supply destroyed outside intern activations</p>
             </div>
           </div>
           <TierFlowSection
@@ -402,7 +409,7 @@ export default function InternDetailView({ data, activeTab }) {
         <p><strong className="text-white">Mint:</strong> Only an activated parent broker can release its intern(s). A dormant sweep puts all 8,888 into parent TBAs on mint open; they cannot move until released.</p>
         <p><strong className="text-white">Yield &amp; ROI:</strong> Intern Clock In weight is job-title slice × intern activation tier (same 1.00 / 1.25 / 1.60 / 2.00 / 3.33 multipliers as brokers). CoC is that trailing intern yield ÷ (intern floor USD + activation $STONKBROKER at spot). Parent-broker Clock In that is delegated as base pay is a separate cashflow and is not added into intern CoC until we can split it onchain.</p>
         <p><strong className="text-white">Ownership:</strong> Circulating live interns are released supply minus Intern Exchange / AMM vault inventory. Dormant tokens in parent TBAs are not circulating. Concentration is unique intern wallets (vault and burn excluded) ÷ that circulating number.</p>
-        <p><strong className="text-white">Burn:</strong> Half of each intern activation fee is $STONKBROKER destroyed. Token-supply charts stay on the parent StonkBrokers burn page — interns are not a second ERC-20.</p>
+        <p><strong className="text-white">Burn:</strong> Interns and StonkBrokers do not share an activation manager. Interns use 0x668e…4b37; brokers use 0xacd5…f664. Both burn the same $STONKBROKER token (0xe934…abf50). Half of each intern fee is destroyed; that intern total is a subset of token-wide supply burn. Token-supply charts stay on the parent StonkBrokers burn page — interns are not a second ERC-20.</p>
         <p><strong className="text-white">Turning the page on:</strong> Collection and activation CAs are live in fetcher.cjs. Intern Clock In, Intern Exchange, names, and lending stay blank until those desks deploy.</p>
       </MethodologyCard>
     </div>

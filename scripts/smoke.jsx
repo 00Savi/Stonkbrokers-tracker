@@ -35,6 +35,7 @@ import { protocolRevenueChart } from '../src/lib/yieldHistory';
 import { dateKey } from '../src/lib/dates';
 import { PROJECTS, tabsForProject } from '../src/lib/routes';
 import { activationTokenCostUsd, tokenPriceAtTs } from '../src/lib/portfolioHistory';
+import { attributedStonkBurn } from '../src/lib/burn';
 
 const snapshot = JSON.parse(fs.readFileSync('public/data.json', 'utf8'));
 
@@ -294,9 +295,9 @@ for (const [name, View, props] of VIEWS) {
   } else if (html.includes('id="liquidity"') || html.includes('id="burn"')) {
     failed++;
     console.error('FAIL  intern page still has liquidity/burn sections');
-  } else if (!html.includes('Parent burn chart') || !html.includes('$STONKBROKER burnt')) {
+  } else if (!html.includes('Parent burn chart') || !html.includes('Interns burnt') || !html.includes('StonkBrokers burnt') || !html.includes('do not share an activation manager')) {
     failed++;
-    console.error('FAIL  intern activation burn tile missing');
+    console.error('FAIL  intern activation burn split missing');
   } else if (intern?.underConstruction || !intern?.config?.nftCa || !(live > 0)) {
     failed++;
     console.error('FAIL  intern snapshot is still the empty stub');
@@ -382,6 +383,27 @@ for (const [name, View, props] of VIEWS) {
     console.error(`FAIL  intern T0 act ${internAct.tokens} tokens $${internAct.usd} (want ${internReq})`);
   } else {
     console.log(`ok    intern T0 act ${internAct.tokens} STONK ~$${internAct.usd.toFixed(0)}`);
+  }
+}
+
+{
+  const html = renderToString(
+    <StaticRouter location="/stonkbrokers/burn">
+      <StonkDetailView data={snapshot} activeTab="burn" />
+    </StaticRouter>
+  );
+  const split = attributedStonkBurn(snapshot.projects?.stonk, snapshot.projects?.interns);
+  if (!html.includes('Interns burnt') || !html.includes('StonkBrokers burnt') || !html.includes('Separate manager')) {
+    failed++;
+    console.error('FAIL  stonk burn split tiles missing');
+  } else if (!(split.total > 0) || !(split.intern > 0) || split.brokers + split.intern !== split.total && Math.abs(split.brokers + split.intern - split.total) > 1) {
+    failed++;
+    console.error(`FAIL  burn split total=${split.total} intern=${split.intern} brokers=${split.brokers}`);
+  } else if (split.intern >= split.total) {
+    failed++;
+    console.error(`FAIL  intern burn ${split.intern} is not a subset of token burn ${split.total}`);
+  } else {
+    console.log(`ok    burn split intern=${split.intern} brokers=${split.brokers} total=${split.total}`);
   }
 }
 

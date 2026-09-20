@@ -187,6 +187,54 @@ function burnPath(project) {
   return fillCarry(map, today);
 }
 
+export function internActivationBurn(intern) {
+  return Math.max(
+    Number(intern?.activation?.dualBurn?.totalBurnTokens) || 0,
+    Number(intern?.ownership?.permanentlyBurntTokens) || 0,
+  );
+}
+
+/** Live split: intern activation fees vs the rest of $STONKBROKER destroyed. */
+export function attributedStonkBurn(stonk, intern) {
+  const total = liveBurn(stonk);
+  const internBurn = internActivationBurn(intern);
+  return {
+    total,
+    intern: internBurn,
+    brokers: Math.max(0, total - internBurn),
+  };
+}
+
+function carryAt(labels, values, day) {
+  const k = dateKey(day);
+  let last = 0;
+  for (let i = 0; i < (labels || []).length; i++) {
+    const d = dateKey(labels[i]);
+    if (d <= k && values[i] != null) last = Number(values[i]) || 0;
+    if (d === k) return Number(values[i]) || last;
+  }
+  return last;
+}
+
+/**
+ * Token-wide burn plus intern-activation burn, aligned on the same days.
+ * Interns start at mint (2026-09-19); earlier days are 0 intern / all brokers.
+ */
+export function splitBurnSeries(stonk, intern, timeframe = 'all') {
+  const total = burnSeries(stonk, timeframe);
+  const internFilled = intern ? burnPath(asProject(intern)) : { labels: [], data: [] };
+  const internAligned = (total.rawLabels || []).map((d) => carryAt(internFilled.labels, internFilled.data, d));
+  const liveIntern = internActivationBurn(intern);
+  if (liveIntern > 0 && internAligned.length) {
+    internAligned[internAligned.length - 1] = Math.max(internAligned[internAligned.length - 1] || 0, liveIntern);
+  }
+  return {
+    ...total,
+    intern: internAligned,
+    brokers: total.data.map((t, i) => Math.max(0, (Number(t) || 0) - (internAligned[i] || 0))),
+  };
+}
+
 /** Labels and cumulative burn, windowed. Pass a project for full-life series. */
 export function burnSeries(source, timeframe = 'all') {
   const filled = burnPath(asProject(source));

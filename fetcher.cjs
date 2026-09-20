@@ -3802,6 +3802,20 @@ async function run() {
 
   {
     const stonk = finalJson.projects.stonk;
+    const intern = finalJson.projects.interns;
+    const internBurn = Math.round(Number(intern?.activation?.dualBurn?.totalBurnTokens) || 0);
+    if (stonk?.activation?.dualBurn) {
+      const total = Number(stonk.activation.dualBurn.totalBurnTokens) || 0;
+      stonk.activation.dualBurn.internBurnTokens = internBurn;
+      stonk.activation.dualBurn.brokerBurnTokens = Math.max(0, Math.round(total - internBurn));
+      const today = dates.utcIso();
+      const last = stonk.dailySnapshots?.[stonk.dailySnapshots.length - 1];
+      if (last && dates.dateKey(last.date) === today) last.internBurnTokens = internBurn;
+    }
+  }
+
+  {
+    const stonk = finalJson.projects.stonk;
     const mancer = finalJson.projects.mancer;
     if (stonkFetched && stonk?.revenue && mancer?.revenue) {
       try {
