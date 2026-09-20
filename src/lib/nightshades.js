@@ -1,7 +1,7 @@
 /** Nightshades is one dashboard project and four gg-index slugs. */
 
 import { dateKey, formatLabels } from './dates';
-import { protocolFeeCols, protocolRevenueChart, seriesHasInk, windowLen } from './yieldHistory';
+import { bucketKey, protocolFeeCols, protocolRevenueChart, seriesHasInk, windowLen } from './yieldHistory';
 
 export const NIGHTSHADES_FACTIONS = ['ghosts', 'zombies', 'knights', 'watchers'];
 
@@ -151,13 +151,47 @@ export function seriesToDateMap(labels, data) {
  * Overlay four faction series on one date axis — compare, do not sum.
  * Same shape as the ecosystem overlay: missing days stay blank unless `fill`.
  */
-export function overlayFactionMaps(maps, { timeframe = 'all', fill = false } = {}) {
+export function overlayFactionMaps(maps, { timeframe = 'all', interval = 'daily', fill = false } = {}) {
   const labelSet = new Set();
   for (const map of Object.values(maps || {})) {
     Object.keys(map || {}).forEach((d) => labelSet.add(dateKey(d)));
   }
   const raw = [...labelSet].filter(Boolean).sort();
   const sliced = raw.slice(-windowLen(timeframe, raw.length));
+  if (interval && interval !== 'daily') {
+    const seen = new Set();
+    const buckets = [];
+    for (const d of sliced) {
+      const key = bucketKey(d, interval);
+      if (!seen.has(key)) {
+        seen.add(key);
+        buckets.push(key);
+      }
+    }
+    const datasets = NIGHTSHADES_FACTION_META.map((meta) => {
+      const color = FACTION_COLORS[meta.id];
+      const map = maps?.[meta.id] || {};
+      let last = null;
+      const dataPts = buckets.map((key) => {
+        const days = sliced.filter((d) => bucketKey(d, interval) === key);
+        const vals = days.map((d) => Number(map[d])).filter((n) => Number.isFinite(n));
+        if (vals.length) last = vals[vals.length - 1];
+        else if (!fill) return null;
+        return last;
+      });
+      return {
+        label: meta.label,
+        data: dataPts,
+        borderColor: color,
+        backgroundColor: `${color}22`,
+        borderWidth: 2,
+        tension: 0.3,
+        pointRadius: 0,
+        spanGaps: fill,
+      };
+    });
+    return { labels: formatLabels(buckets), rawLabels: buckets, datasets };
+  }
   const datasets = NIGHTSHADES_FACTION_META.map((meta) => {
     const color = FACTION_COLORS[meta.id];
     const map = maps?.[meta.id] || {};

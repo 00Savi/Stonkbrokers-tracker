@@ -36,6 +36,11 @@ import { dateKey } from '../src/lib/dates';
 import { PROJECTS, tabsForProject } from '../src/lib/routes';
 import { activationTokenCostUsd, tokenPriceAtTs } from '../src/lib/portfolioHistory';
 import { attributedStonkBurn, dailyAttributedBurnSeries, firstInternActivationDay } from '../src/lib/burn';
+import { navNftScanTargets } from '../src/lib/portfolioScan';
+import { windowLen } from '../src/lib/yieldHistory';
+import { CHART_WINDOWS, CHART_INTERVALS } from '../src/lib/chartWindow';
+import { buildTopicShareCard } from '../src/lib/projectShare';
+import { isProjectLive } from '../src/lib/routes';
 
 const snapshot = JSON.parse(fs.readFileSync('public/data.json', 'utf8'));
 
@@ -419,6 +424,65 @@ for (const [name, View, props] of VIEWS) {
   } else {
     console.log(`ok    burn split intern=${split.intern} brokers=${split.brokers} total=${split.total}`);
     console.log(`ok    daily split from ${daily.startDay} intern=${daily.intern.map((n) => Math.round(n)).join('/')} brokers=${daily.brokers.map((n) => Math.round(n)).join('/')}`);
+  }
+}
+
+{
+  const targets = navNftScanTargets(snapshot);
+  const keys = targets.map((t) => t.pKey);
+  const factions = ['nightshades:ghosts', 'nightshades:zombies', 'nightshades:knights', 'nightshades:watchers'];
+  const missing = factions.filter((k) => !keys.includes(k));
+  const hidden = keys.filter((k) => k === 'coattail' || k === 'printer');
+  if (missing.length) {
+    failed++;
+    console.error(`FAIL  portfolio scan missing ${missing.join(',')}`);
+  } else if (hidden.length) {
+    failed++;
+    console.error(`FAIL  portfolio scan still includes hidden ${hidden.join(',')}`);
+  } else if (!keys.includes('stonk') || !keys.includes('interns')) {
+    failed++;
+    console.error(`FAIL  portfolio scan missing core NFT keys ${keys.join(',')}`);
+  } else {
+    console.log(`ok    portfolio scan ${keys.length} collections incl. 4 Nightshades factions`);
+  }
+  if (isProjectLive(PROJECTS.find((p) => p.key === 'coattail')) || isProjectLive(PROJECTS.find((p) => p.key === 'printer'))) {
+    failed++;
+    console.error('FAIL  coattail/printer flipped live');
+  }
+}
+
+{
+  const allHtml = renderToString(
+    <StaticRouter location="/nightshades/roi">
+      <NightshadesDetailView data={snapshot} activeTab="roi" />
+    </StaticRouter>
+  );
+  const factionHtml = renderToString(
+    <StaticRouter location="/nightshades/yield?faction=ghosts">
+      <NightshadesDetailView data={snapshot} activeTab="historical" />
+    </StaticRouter>
+  );
+  if (allHtml.includes('Faction protocol revenue') || allHtml.includes('Daily protocol revenue') || factionHtml.includes('Protocol Revenue')) {
+    failed++;
+    console.error('FAIL  nightshades still shows faction protocol revenue');
+  } else {
+    console.log('ok    nightshades protocol revenue removed');
+  }
+}
+
+{
+  if (windowLen('90d', 200) !== 90 || !CHART_WINDOWS.some((w) => w.id === '90d') || CHART_INTERVALS.length !== 3) {
+    failed++;
+    console.error('FAIL  chart range/interval missing 90D or Daily/Weekly/Monthly');
+  } else {
+    console.log('ok    chart range 7D/30D/90D/All and interval Daily/Weekly/Monthly');
+  }
+  const topic = buildTopicShareCard(snapshot, { projectKey: 'stonk', tab: 'burn', timeframe: 'all' });
+  if (!topic?.page || !String(topic.title || '').includes('Burn')) {
+    failed++;
+    console.error(`FAIL  topic share card ${topic?.title}`);
+  } else {
+    console.log(`ok    topic share card ${topic.title}`);
   }
 }
 

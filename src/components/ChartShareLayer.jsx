@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
-import { CopyChartButton } from './CopyControl';
+import { CopyChartButton, CopyTableButton } from './CopyControl';
 
 function prepareHost(el) {
   if (!el) return null;
@@ -22,6 +22,15 @@ function collectChartHosts() {
     seen.add(host);
     prepareHost(host);
     hosts.push({ el: host, tight: h < 160, kind: 'chart' });
+  }
+  const tables = [...document.querySelectorAll('main table, #project-share table, #ecosystem-share table')];
+  for (const table of tables) {
+    const host = table.closest('.overflow-x-auto') || table.parentElement;
+    if (!host || seen.has(host) || host.closest('[data-share-omit]')) continue;
+    if ((host.clientWidth || 0) < 80 || (host.clientHeight || 0) < 40) continue;
+    seen.add(host);
+    prepareHost(host);
+    hosts.push({ el: host, tight: (host.clientHeight || 0) < 160, kind: 'table' });
   }
   return hosts;
 }
@@ -62,7 +71,12 @@ export default function ChartShareLayer() {
     <>
       {hosts.map(({ el, tight, kind }, i) => (
         <React.Fragment key={`share-${kind}-${i}`}>
-          {createPortal(<CopyChartButton host={el} tight={tight} />, el)}
+          {createPortal(
+            kind === 'table'
+              ? <CopyTableButton host={el} tight={tight} />
+              : <CopyChartButton host={el} tight={tight} />,
+            el
+          )}
         </React.Fragment>
       ))}
     </>

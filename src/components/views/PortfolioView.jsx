@@ -5,7 +5,8 @@ import { SAVI_X } from '../Shell';
 import { NfaNote } from '../Disclaimer';
 import { copyPortfolioSnapshot } from '../../lib/share';
 import { PAIR_COLORS, STREAM_COLORS } from '../../lib/charts';
-import { PROJECTS, isProjectLive } from '../../lib/routes';
+import { PROJECTS } from '../../lib/routes';
+import { navNftScanTargets, portfolioProjectLabel } from '../../lib/portfolioScan';
 import { CURRENCIES, fetchEurPerUsd, formatMoney, moneyTick } from '../../lib/money';
 import { formatLabels } from '../../lib/dates';
 import {
@@ -73,8 +74,7 @@ function GrainBar({ value, onChange }) {
   );
 }
 
-const projectName = (key, ticker) =>
-  PROJECTS.find((p) => p.key === key)?.name || ticker;
+const projectName = (key, ticker) => portfolioProjectLabel(key, ticker);
 
 const formatAmount = (val) =>
   new Intl.NumberFormat('en-US', { maximumFractionDigits: val >= 1 ? 2 : 4 }).format(val || 0);
@@ -326,11 +326,8 @@ export default function PortfolioView({ data }) {
       ];
 
       const nftJobs = [];
-      for (const [pKey, pData] of Object.entries(data.projects || {})) {
-        const meta = PROJECTS.find((p) => p.key === pKey);
-        if (meta && !isProjectLive(meta)) continue;
-        if (!pData.config?.nftCa) continue;
-        for (const wallet of wallets) nftJobs.push({ pKey, pData, wallet });
+      for (const target of navNftScanTargets(data)) {
+        for (const wallet of wallets) nftJobs.push({ ...target, wallet });
       }
 
       const nftChunks = await mapLimited(nftJobs, 1, async ({ pKey, pData, wallet }) => {

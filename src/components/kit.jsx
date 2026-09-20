@@ -252,18 +252,25 @@ export const pct = (v, digits = 1) =>
   v == null || !Number.isFinite(Number(v)) ? '—' : `${Number(v).toFixed(digits)}%`;
 
 export const YIELD_WINDOWS = [
-  { id: '7d', label: 'Weekly' },
-  { id: '30d', label: 'Monthly' },
+  { id: '7d', label: '7D' },
+  { id: '30d', label: '30D' },
+  { id: '90d', label: '90D' },
   { id: 'all', label: 'All' },
 ];
 
-/** Weekly / Monthly / All control. Sticky chrome uses `compact`. */
-export function WindowBar({ value, onChange, windows = YIELD_WINDOWS, compact = false }) {
+export const CHART_INTERVALS = [
+  { id: 'daily', label: 'Daily' },
+  { id: 'weekly', label: 'Weekly' },
+  { id: 'monthly', label: 'Monthly' },
+];
+
+/** Range or interval control. Sticky chrome uses `compact`. */
+export function WindowBar({ value, onChange, windows = YIELD_WINDOWS, compact = false, label = 'Chart range' }) {
   return (
     <div
       className={`flex shrink-0 rounded-lg border border-[#1e2228] bg-[#0e1013] p-1 ${compact ? '' : ''}`}
       role="group"
-      aria-label="Chart range"
+      aria-label={label}
     >
       {windows.map((w) => (
         <button
@@ -280,5 +287,17 @@ export function WindowBar({ value, onChange, windows = YIELD_WINDOWS, compact = 
         </button>
       ))}
     </div>
+  );
+}
+
+export function IntervalBar({ value, onChange, compact = false }) {
+  return (
+    <WindowBar
+      value={value}
+      onChange={onChange}
+      windows={CHART_INTERVALS}
+      compact={compact}
+      label="Chart interval"
+    />
   );
 }

@@ -9,7 +9,7 @@ import { windowSnapshots, tierRoiDatasets, protocolRevenueChart, sliceCols, wind
 import { compactUsd, compactNum } from '../kit';
 import { TierFlowSection, netTierCount } from '../TierFlowCards';
 import { baseChartOptions, compactTick, compactUsdTick, dualAxisOptions, STREAM_COLORS } from '../../lib/charts';
-import { useChartWindow } from '../../lib/chartWindow';
+import { useChartView } from '../../lib/chartWindow';
 import { holderSeries } from '../../lib/snapshots';
 import { MethodologyCard } from '../Disclaimer';
 import {
@@ -24,7 +24,7 @@ import {
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
 export default function MancerDetailView({ data, activeTab }) {
-  const [timeframe] = useChartWindow();
+  const { range: timeframe, interval } = useChartView();
   const [expandedTier, setExpandedTier] = useState(null);
   const [tierTimeframe, setTierTimeframe] = useState('allTime');
   const [lpTableOpen, setLpTableOpen] = useState(true);
@@ -48,7 +48,7 @@ export default function MancerDetailView({ data, activeTab }) {
 
   const hasSnaps = Array.isArray(dailySnapshots) && dailySnapshots.length > 0 && dailySnapshots[0].date;
 
-  const roiSnaps = windowSnapshots(dailySnapshots, timeframe);
+  const roiSnaps = windowSnapshots(dailySnapshots, timeframe, interval);
   const histLabels = formatLabels(roiSnaps.map(s => s.date));
   const histDatasets = tierRoiDatasets(roiSnaps, tiers, {
     floorCostUsd,
@@ -58,8 +58,8 @@ export default function MancerDetailView({ data, activeTab }) {
   // 2. Revenue Chart
   const revPeriod = windowPeriodLabel(timeframe);
   const rawRev = protocolRevenueChart(project);
-  const slicedRev = sliceCols(rawRev.labels, rawRev.cols, timeframe);
-  const slicedHolder = sliceCols(rawRev.labels, [holderRevenueCol(project, rawRev.rawLabels || rawRev.labels)], timeframe);
+  const slicedRev = sliceCols(rawRev.labels, rawRev.cols, timeframe, interval);
+  const slicedHolder = sliceCols(rawRev.labels, [holderRevenueCol(project, rawRev.rawLabels || rawRev.labels)], timeframe, interval);
   const byKey = Object.fromEntries((rawRev.cols || []).map((c) => [c.key, c]));
   const { labels: revDates, cols: revCols } = sliceCols(
     rawRev.labels,
@@ -68,7 +68,8 @@ export default function MancerDetailView({ data, activeTab }) {
       { ...(byKey.amm || { data: [] }), label: 'Vault Inflows', color: STREAM_COLORS.amm },
       { ...(byKey.box || { data: [] }), label: 'Order Layer', color: STREAM_COLORS.box },
     ],
-    timeframe
+    timeframe,
+    interval
   );
   const revDataDex = revCols[0]?.data || [];
   const revDataAmm = revCols[1]?.data || [];
@@ -79,12 +80,12 @@ export default function MancerDetailView({ data, activeTab }) {
   const burnPct = burnOfSupplyPct(project, realBurntTokens);
   const realBurntUnits = Math.max(Number(activation.dualBurn?.equivalentBrokersBurnt || 0), Number(ownership.permanentlyBurntUnits || 0), Number(ownership.burntNfts || 0));
   
-  const burn = burnSeries(project, timeframe);
+  const burn = burnSeries(project, timeframe, interval);
   const slicedBurnLabels = burn.labels;
   const slicedBurnData = burn.data;
 
   // 4. Flywheel Chart
-  const flywheel = burnRateSeries(project, timeframe);
+  const flywheel = burnRateSeries(project, timeframe, interval);
   const fwPrices = flywheel.prices;
   const fwBurn = flywheel.burn;
 

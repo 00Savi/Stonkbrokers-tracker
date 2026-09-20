@@ -6,11 +6,11 @@ import {
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import { burnSeries, burnRateSeries, burnOfSupplyPct } from '../../lib/burn';
 import { formatLabels } from '../../lib/dates';
-import { windowSnapshots, tierRoiDatasets, protocolRevenueChart, sliceCols, windowPeriodLabel, windowLen, seriesHasInk, holderRevenueCol } from '../../lib/yieldHistory';
+import { windowSnapshots, tierRoiDatasets, windowLen, seriesHasInk } from '../../lib/yieldHistory';
 import { compactUsd, compactNum } from '../kit';
 import { TierFlowSection, netTierCount } from '../TierFlowCards';
-import { baseChartOptions, compactTick, compactUsdTick, dualAxisOptions, STREAM_COLORS } from '../../lib/charts';
-import { useChartWindow } from '../../lib/chartWindow';
+import { baseChartOptions, compactTick, compactUsdTick, dualAxisOptions } from '../../lib/charts';
+import { useChartView } from '../../lib/chartWindow';
 import { holderSeries } from '../../lib/snapshots';
 import { NIGHTSHADES_FACTION_META } from '../../lib/nightshades';
 import NightshadesAllView, { NightshadesNightSection } from './NightshadesAllView';
@@ -19,7 +19,6 @@ import {
   EmptyChart,
   YieldUsdPricePanel,
   PaybackPanel,
-  ProtocolFeeVolumePanels,
   ActivationStackPanel,
   OwnershipHistoryPanels,
 } from '../HistoryCharts';
@@ -80,7 +79,7 @@ export default function NightshadesDetailView({ data, activeTab }) {
 }
 
 function NightshadesFactionDetail({ activeTab, faction, project }) {
-  const [timeframe] = useChartWindow();
+  const { range: timeframe, interval } = useChartView();
   const [expandedTier, setExpandedTier] = useState(null);
   const [tierTimeframe, setTierTimeframe] = useState('allTime');
   const [volumeMultiplier, setVolumeMultiplier] = useState(1);
@@ -97,33 +96,18 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
   const tokenLabel = `$${config.ticker || 'TOKEN'}`;
   const yieldTitle = `Nightshades ${factionLabel}`;
 
-  const roiSnaps = windowSnapshots(dailySnapshots, timeframe);
+  const roiSnaps = windowSnapshots(dailySnapshots, timeframe, interval);
   const histLabels = formatLabels(roiSnaps.map((s) => s.date));
   const histDatasets = tierRoiDatasets(roiSnaps, tiers, {
     floorCostUsd,
     tokenPriceUsd: market.tokenPriceUsd,
   });
 
-  const revPeriod = windowPeriodLabel(timeframe);
-  const rawRev = protocolRevenueChart(slice);
-  const slicedRev = sliceCols(rawRev.labels, rawRev.cols, timeframe);
-  const slicedHolder = sliceCols(rawRev.labels, [holderRevenueCol(slice, rawRev.rawLabels || rawRev.labels)], timeframe);
-  const byKey = Object.fromEntries((rawRev.cols || []).map((c) => [c.key, c]));
-  const { cols: revCols } = sliceCols(
-    rawRev.labels,
-    [
-      { ...(byKey.amm || { data: [] }), label: 'Vault RewardPaid', color: STREAM_COLORS.amm },
-      { ...(byKey.dex || { data: [] }), label: 'Anvil AMM rev', color: STREAM_COLORS.dex },
-    ],
-    timeframe
-  );
-  const chartCols = (slicedRev.cols || []).filter((c) => c.key === 'amm' || c.key === 'dex');
-
   const realBurntTokens = Math.max(Number(activation.dualBurn?.totalBurnTokens || 0), Number(ownership.permanentlyBurntTokens || 0));
   const burnPct = burnOfSupplyPct(slice, realBurntTokens);
   const realBurntUnits = Math.max(Number(activation.dualBurn?.equivalentBrokersBurnt || 0), Number(ownership.permanentlyBurntUnits || 0), Number(ownership.burntNfts || 0));
-  const burn = burnSeries(slice, timeframe);
-  const flywheel = burnRateSeries(slice, timeframe);
+  const burn = burnSeries(slice, timeframe, interval);
+  const flywheel = burnRateSeries(slice, timeframe, interval);
 
   const actHistory = activation.history || {};
   const hasActHist = Array.isArray(actHistory.labels) && actHistory.labels.length > 0;
@@ -286,40 +270,6 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
           </div>
           <YieldUsdPricePanel snaps={roiSnaps} tiers={tiers} />
           <PaybackPanel snaps={roiSnaps} tiers={tiers} floorCostUsd={floorCostUsd} tokenPriceUsd={market.tokenPriceUsd} />
-        </div>
-
-        <div className="space-y-6 mt-6">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-            <div>
-              <h2 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">Protocol Revenue</h2>
-              <p className="text-xs text-slate-400 mt-1">
-                Faction AMM / vault RewardPaid only. Launch civ-pad tax stays on StonkBrokers.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
-              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Soft-staking vault RewardPaid ({revPeriod})</p>
-              <p className="text-2xl font-extrabold" style={{ color: STREAM_COLORS.amm }}>{formatCurrency(revCols[0]?.total || 0)}</p>
-            </div>
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
-              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Anvil AMM protocol rev ({revPeriod})</p>
-              <p className="text-2xl font-extrabold" style={{ color: STREAM_COLORS.dex }}>{formatCurrency(revCols[1]?.total || 0)}</p>
-            </div>
-          </div>
-
-          <ProtocolFeeVolumePanels
-            labels={slicedRev.labels}
-            cols={chartCols}
-            kind={rawRev.kind}
-            note="Faction vault RewardPaid and Anvil AMM fees kept by the protocol. Launch civ-pad tax is counted on StonkBrokers, not here."
-            holder={{
-              labels: slicedHolder.labels,
-              data: slicedHolder.cols[0]?.data,
-              note: 'Per-NFT daily yield × active units at each tier. The payout that reached holders, not protocol-kept revenue.',
-            }}
-          />
         </div>
       </section>
 
@@ -484,7 +434,6 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
           <p><strong className="text-white">Four Anvil markets, one incubator:</strong> Ghosts, Zombies, Knights, and Watchers each have 3,000 NFTs, one faction token, and a SoftStakingVault. The All tab compares the four on one axis. This page is one market.</p>
           <p><strong className="text-white">Yield &amp; ROI:</strong> Cash-on-cash is annualized vault RewardPaid ÷ (this floor + activation tokens at spot). The 7-day sample is split by tier weight. The volume slider scales yield only — cost stays at live floor and token price. Night vault WETH is The Night inventory, not StonkBooster.</p>
           <p><strong className="text-white">Activation:</strong> Same mechanic as Mancer/Yard. The vault emits no Deactivated event — a sale clears the position. <code>activeCount()</code> is an upper bound; this page replays Activated plus NFT transfers.</p>
-          <p><strong className="text-white">Revenue:</strong> Faction AMM / vault RewardPaid only. The Nightshades civ-pad launch tax is counted on StonkBrokers, not copied here.</p>
           <p><strong className="text-white">Ownership:</strong> Circulating NFTs are collection size minus AMM vault inventory. Concentration is unique NFT wallets (vault and burn addresses excluded) divided by that circulating number.</p>
           <p><strong className="text-white">The Night</strong> is incubator-wide (one VRF over all four factions). Live strike, history, sunrise fees, and usable v4 LP sit on the Night tab.</p>
       </MethodologyCard>

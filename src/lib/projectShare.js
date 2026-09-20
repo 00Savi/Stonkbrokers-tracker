@@ -116,9 +116,35 @@ function t0RoiSeries(project) {
 
 function windowMeta(timeframe) {
   const tf = parseChartWindow(timeframe);
-  const label = tf === '7d' ? 'Weekly' : tf === '30d' ? 'Monthly' : 'All';
+  const label = tf === '7d' ? '7D' : tf === '30d' ? '30D' : tf === '90d' ? '90D' : 'All';
   const period = windowPeriodLabel(tf);
   return { tf, label, period };
+}
+
+const TOPIC_LABEL = {
+  roi: 'ROI',
+  yield: 'Yield',
+  historical: 'Yield',
+  revenue: 'Revenue',
+  night: 'Night',
+  liquidity: 'Smart LPs',
+  burn: 'Burn',
+  activation: 'Activation',
+  ownership: 'Ownership',
+};
+
+export function buildTopicShareCard(data, opts = {}) {
+  const card = buildProjectShareCard(data, opts);
+  if (!card) return null;
+  const tab = opts.tab || 'roi';
+  const topic = TOPIC_LABEL[tab] || String(tab);
+  const stem = String(card.filename || 'savi-card.png').replace(/\.png$/i, '');
+  return {
+    ...card,
+    page: true,
+    title: `${card.title} · ${topic}`,
+    filename: `${stem}-${tab}.png`,
+  };
 }
 
 function projectStory(project, timeframe) {

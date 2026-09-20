@@ -2,10 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { PROJECTS, isProjectLive, tabsForProject } from '../lib/routes';
 import { copyShareCard, LAUNCHER_REF, SAVI_X } from '../lib/share';
-import { buildProjectShareCard } from '../lib/projectShare';
-import { Value, price, usd, eth, BetaTag, WindowBar } from './kit';
+import { Value, price, usd, eth, BetaTag, WindowBar, IntervalBar } from './kit';
 import { CopyPageButton } from './CopyControl';
-import { useChartWindow } from '../lib/chartWindow';
+import { useChartView } from '../lib/chartWindow';
+import { buildTopicShareCard } from '../lib/projectShare';
 
 export { LAUNCHER_REF, SAVI_X };
 
@@ -268,9 +268,9 @@ export function TopNav({ live, sources, data, pending }) {
 
 /** Project tab bar. Every tab is a real link, so each is refresh-safe. */
 export function TabBar({ data }) {
-  const { project } = useParams();
+  const { project, tab } = useParams();
   const [searchParams] = useSearchParams();
-  const [timeframe, setTimeframe] = useChartWindow();
+  const { range: timeframe, setRange, interval, setInterval } = useChartView();
   const meta = PROJECTS.find((p) => p.slug === project);
   const tabs = tabsForProject(meta);
   const keep = searchParams.toString();
@@ -294,18 +294,21 @@ export function TabBar({ data }) {
       <div className="flex shrink-0 items-center justify-end gap-2">
         <CopyPageButton
           idleLabel="Copy for X"
-          title="Copy a compact 16:9 image for X"
+          title="Copy a full-page image of this tab for X"
           onCopy={() => {
-            const payload = buildProjectShareCard(data, {
+            const payload = buildTopicShareCard(data, {
               projectKey: meta?.key,
               faction: searchParams.get('faction'),
               timeframe,
+              interval,
+              tab,
             });
             if (!payload) throw new Error('Nothing to copy');
-            return copyShareCard(payload);
+            return copyShareCard(payload, { page: true });
           }}
         />
-        <WindowBar compact value={timeframe} onChange={setTimeframe} />
+        <WindowBar compact value={timeframe} onChange={setRange} />
+        <IntervalBar compact value={interval} onChange={setInterval} />
         {meta?.beta && (
           <span className="ml-2 hidden sm:block">
             <BetaTag />

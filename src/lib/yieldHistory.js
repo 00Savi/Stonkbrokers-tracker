@@ -2,45 +2,116 @@ import { STREAM_COLORS, TIER_COLORS } from './charts';
 import { dateKey, formatLabels, utcIso } from './dates';
 import { trailingSnapshots, usableSnapshots } from './snapshots';
 
-/** Yield / ROI chart windows. `all` is every usable snapshot we still have. */
+/** Date range (how far back). Interval (Daily / Weekly / Monthly) is separate. */
 export const YIELD_WINDOWS = [
-  { id: '7d', label: 'Weekly', days: 7 },
-  { id: '30d', label: 'Monthly', days: 30 },
+  { id: '7d', label: '7D', days: 7 },
+  { id: '30d', label: '30D', days: 30 },
+  { id: '90d', label: '90D', days: 90 },
   { id: 'all', label: 'All', days: 0 },
 ];
 
 export const TIER_ROI_COLORS = TIER_COLORS;
 
-/** Usable snapshots for Weekly / Monthly / All (days=0 means the full record). */
-export function windowSnapshots(snapshots, timeframe = 'all') {
-  const days = timeframe === '7d' ? 7 : timeframe === '30d' ? 30 : 0;
-  return trailingSnapshots(snapshots, days);
+function rangeDays(timeframe) {
+  if (timeframe === '7d') return 7;
+  if (timeframe === '30d') return 30;
+  if (timeframe === '90d') return 90;
+  return 0;
+}
+
+/** Monday-UTC week or YYYY-MM month. Daily keeps the calendar day. */
+export function bucketKey(label, interval = 'daily') {
+  const k = dateKey(label);
+  if (!k || interval === 'daily') return k;
+  if (interval === 'monthly') return k.slice(0, 7);
+  const t = Date.parse(`${k}T00:00:00Z`);
+  if (!Number.isFinite(t)) return k;
+  const day = new Date(t).getUTCDay();
+  const mon = new Date(t - ((day + 6) % 7) * 86400000);
+  return mon.toISOString().slice(0, 10);
+}
+
+/**
+ * Compress a daily series after the range slice.
+ * `last` for levels (price, ROI, cumulative burn). `sum` for flows (fees, daily burn).
+ */
+export function resampleSeries(labels, values, interval = 'daily', mode = 'last') {
+  const labs = labels || [];
+  const vals = values || [];
+  if (!interval || interval === 'daily' || labs.length < 2) {
+    return { labels: labs, data: vals };
+  }
+  const order = [];
+  const buckets = new Map();
+  labs.forEach((lab, i) => {
+    const key = bucketKey(lab, interval);
+    if (!key) return;
+    if (!buckets.has(key)) {
+      buckets.set(key, []);
+      order.push(key);
+    }
+    buckets.get(key).push(Number(vals[i]));
+  });
+  return {
+    labels: order,
+    data: order.map((key) => {
+      const nums = (buckets.get(key) || []).filter((n) => Number.isFinite(n));
+      if (!nums.length) return null;
+      if (mode === 'sum') return nums.reduce((s, n) => s + n, 0);
+      if (mode === 'mean') return nums.reduce((s, n) => s + n, 0) / nums.length;
+      return nums[nums.length - 1];
+    }),
+  };
+}
+
+export function windowSeries(labels, values, timeframe = 'all', interval = 'daily', mode = 'last') {
+  const n = windowLen(timeframe, (labels || []).length);
+  const labs = (labels || []).slice(-n);
+  const vals = (values || []).slice(-n);
+  return resampleSeries(labs, vals, interval, mode);
+}
+
+/** Usable snapshots for the selected range, then optional week/month buckets. */
+export function windowSnapshots(snapshots, timeframe = 'all', interval = 'daily') {
+  const sliced = trailingSnapshots(snapshots, rangeDays(timeframe));
+  if (!interval || interval === 'daily') return sliced;
+  const order = [];
+  const buckets = new Map();
+  for (const s of sliced) {
+    const key = bucketKey(s.date, interval);
+    if (!key) continue;
+    if (!buckets.has(key)) order.push(key);
+    buckets.set(key, s);
+  }
+  return order.map((key) => ({ ...buckets.get(key), date: key }));
 }
 
 export function windowLen(timeframe, total) {
   const n = Number(total) || 0;
-  if (timeframe === '7d') return Math.min(7, n);
-  if (timeframe === '30d') return Math.min(30, n);
-  return n;
+  const days = rangeDays(timeframe);
+  return days > 0 ? Math.min(days, n) : n;
 }
 
 export function windowPeriodLabel(timeframe) {
   if (timeframe === '7d') return '7D';
   if (timeframe === '30d') return '30D';
+  if (timeframe === '90d') return '90D';
   return 'All';
 }
 
-/** Slice parallel date/value arrays to weekly, monthly, or all. */
-export function sliceCols(labels, cols, timeframe = 'all') {
+/** Slice parallel date/value arrays to the range, then bucket flows. */
+export function sliceCols(labels, cols, timeframe = 'all', interval = 'daily') {
   const n = windowLen(timeframe, (labels || []).length);
+  const labs = (labels || []).slice(-n);
   return {
-    labels: (labels || []).slice(-n),
+    labels: resampleSeries(labs, labs, interval, 'last').labels,
     cols: (cols || []).map((col) => {
-      const data = (col.data || []).slice(-n);
+      const sliced = (col.data || []).slice(-n);
+      const resampled = resampleSeries(labs, sliced, interval, 'sum');
       return {
         ...col,
-        data,
-        total: data.reduce((s, v) => s + (Number(v) || 0), 0),
+        data: resampled.data,
+        total: resampled.data.reduce((s, v) => s + (Number(v) || 0), 0),
       };
     }),
   };

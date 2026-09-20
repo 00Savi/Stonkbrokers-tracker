@@ -9,7 +9,7 @@ import { windowSnapshots, tierRoiDatasets, protocolRevenueChart, sliceCols, wind
 import { compactUsd, compactNum } from '../kit';
 import { TierFlowSection, netTierCount } from '../TierFlowCards';
 import { baseChartOptions, compactTick, compactUsdTick, dualAxisOptions, STREAM_COLORS } from '../../lib/charts';
-import { useChartWindow } from '../../lib/chartWindow';
+import { useChartView } from '../../lib/chartWindow';
 import { explorerAddressUrl } from '../../lib/tba';
 import { holderSeries } from '../../lib/snapshots';
 import { MethodologyCard } from '../Disclaimer';
@@ -70,7 +70,7 @@ function FeeStat({ label, value, tone = 'amber' }) {
 }
 
 export default function StonkDetailView({ data, activeTab }) {
-  const [timeframe] = useChartWindow();
+  const { range: timeframe, interval } = useChartView();
   const [expandedTier, setExpandedTier] = useState(null);
   const [tierTimeframe, setTierTimeframe] = useState('allTime');
   const [lpTableOpen, setLpTableOpen] = useState(true);
@@ -96,7 +96,7 @@ export default function StonkDetailView({ data, activeTab }) {
 
   // 1. Historical Yield Chart — weekly / monthly / all usable snapshots.
   const hasSnaps = Array.isArray(dailySnapshots) && dailySnapshots.length > 0 && dailySnapshots[0].date;
-  const roiSnaps = windowSnapshots(dailySnapshots, timeframe);
+  const roiSnaps = windowSnapshots(dailySnapshots, timeframe, interval);
   const histLabels = formatLabels(roiSnaps.map(s => s.date));
   const histDatasets = tierRoiDatasets(roiSnaps, tiers, {
     floorCostUsd,
@@ -106,8 +106,8 @@ export default function StonkDetailView({ data, activeTab }) {
   // 2. Revenue Chart — one grouped series per stream, colors locked to the boxes.
   const revPeriod = windowPeriodLabel(timeframe);
   const rawRev = protocolRevenueChart(project);
-  const slicedRev = sliceCols(rawRev.labels, rawRev.cols, timeframe);
-  const slicedHolder = sliceCols(rawRev.labels, [holderRevenueCol(project, rawRev.rawLabels || rawRev.labels)], timeframe);
+  const slicedRev = sliceCols(rawRev.labels, rawRev.cols, timeframe, interval);
+  const slicedHolder = sliceCols(rawRev.labels, [holderRevenueCol(project, rawRev.rawLabels || rawRev.labels)], timeframe, interval);
   const byKey = Object.fromEntries((slicedRev.cols || []).map((c) => [c.key, c]));
   const { labels: revDates, cols: REV_STREAMS } = {
     labels: slicedRev.labels,
@@ -149,13 +149,13 @@ export default function StonkDetailView({ data, activeTab }) {
   
   const internProject = data?.projects?.interns;
   const burnSplit = attributedStonkBurn(project, internProject);
-  const burn = burnSeries(project, timeframe);
+  const burn = burnSeries(project, timeframe, interval);
   const slicedBurnLabels = burn.labels;
   const slicedBurnData = burn.data;
-  const dailySplit = dailyAttributedBurnSeries(project, internProject, timeframe);
+  const dailySplit = dailyAttributedBurnSeries(project, internProject, timeframe, interval);
 
   // 4. Flywheel Chart
-  const flywheel = burnRateSeries(project, timeframe);
+  const flywheel = burnRateSeries(project, timeframe, interval);
   const fwLabels = flywheel.labels;
   const fwPrices = flywheel.prices;
   const fwBurn = flywheel.burn;

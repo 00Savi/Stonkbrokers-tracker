@@ -9,7 +9,7 @@ import { windowSnapshots, protocolRevenueChart, sliceCols, windowLen, seriesHasI
 import { BetaTag, compactUsd, compactNum } from '../kit';
 import { TierFlowSection, netTierCount } from '../TierFlowCards';
 import { baseChartOptions, compactTick, compactUsdTick, dualAxisOptions } from '../../lib/charts';
-import { useChartWindow } from '../../lib/chartWindow';
+import { useChartView } from '../../lib/chartWindow';
 import { holderSeries } from '../../lib/snapshots';
 import { MethodologyCard } from '../Disclaimer';
 import {
@@ -24,7 +24,7 @@ import {
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
 export default function CardWallDetailView({ data, activeTab }) {
-  const [timeframe] = useChartWindow();
+  const { range: timeframe, interval } = useChartView();
   const [expandedTier, setExpandedTier] = useState(null);
   const [tierTimeframe, setTierTimeframe] = useState('allTime');
   const [selectedSlab, setSelectedSlab] = useState(null);
@@ -48,7 +48,7 @@ export default function CardWallDetailView({ data, activeTab }) {
   const chartOptions = baseChartOptions();
 
   const hasSnaps = Array.isArray(dailySnapshots) && dailySnapshots.length > 0 && dailySnapshots[0].date;
-  const roiSnaps = windowSnapshots(dailySnapshots, timeframe).filter((s) =>
+  const roiSnaps = windowSnapshots(dailySnapshots, timeframe, interval).filter((s) =>
     Array.isArray(s.tiers) && s.tiers.some((t) => (t.yieldUsd || 0) > 0 || (t.roi || 0) > 0)
   );
   const histLabels = formatLabels(roiSnaps.map(s => s.date));
@@ -65,7 +65,7 @@ export default function CardWallDetailView({ data, activeTab }) {
 
   const zeros = [0, 0, 0, 0, 0, 0, 0];
   const rawRev = protocolRevenueChart(project);
-  const { labels: revDates, cols: revCols } = sliceCols(rawRev.labels, rawRev.cols, timeframe);
+  const { labels: revDates, cols: revCols } = sliceCols(rawRev.labels, rawRev.cols, timeframe, interval);
   const revData1 = revCols[0]?.data || zeros;
   const revData2 = revCols[1]?.data || zeros;
 
@@ -73,11 +73,11 @@ export default function CardWallDetailView({ data, activeTab }) {
   const burnPct = burnOfSupplyPct(project, realBurntTokens);
   const realBurntUnits = Math.max(Number(activation.dualBurn?.equivalentBrokersBurnt || 0), Number(ownership.permanentlyBurntUnits || 0), Number(ownership.burntNfts || 0));
   
-  const burn = burnSeries(project, timeframe);
+  const burn = burnSeries(project, timeframe, interval);
   const slicedBurnLabels = burn.labels;
   const slicedBurnData = burn.data;
 
-  const flywheel = burnRateSeries(project, timeframe);
+  const flywheel = burnRateSeries(project, timeframe, interval);
   const fwPrices = flywheel.prices;
   const fwBurn = flywheel.burn;
 

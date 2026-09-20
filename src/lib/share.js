@@ -715,7 +715,7 @@ function drawChartPanel(ctx, x, y, w, h, chart) {
   drawSpark(ctx, x + 4, y + 58, w - 8, h - 66, chart);
 }
 
-/** 1200×675 X landscape card. Drawn on canvas so Tailwind oklch cannot break copy. */
+/** 16:9 compact card, or 4:5 full-page when `page` is set (same as portfolio). */
 function drawShareCard({
   title = '',
   kicker = SITE_MARK,
@@ -724,9 +724,10 @@ function drawShareCard({
   rows = [],
   charts = [],
   window: windowLabel = '',
+  page = false,
 } = {}) {
-  const W = 1200;
-  const H = 675;
+  const W = page ? 1080 : 1200;
+  const H = page ? 1350 : 675;
   const S = 2;
   const pad = 24;
   const foot = 48;
@@ -843,10 +844,10 @@ function drawShareCard({
 }
 
 /** Compact project / board PNG sized for an X post. */
-export async function copyShareCard(payload) {
+export async function copyShareCard(payload, { page = false } = {}) {
   if (typeof window === 'undefined') return false;
   if (!payload) throw new Error('Nothing to copy');
-  const canvas = drawShareCard(payload);
+  const canvas = drawShareCard({ ...payload, page: page || payload.page });
   const blob = pngBlobFromCanvas(canvas);
   const copied = await writeClipboardPng(blob);
   if (!copied) downloadPng(blob, payload.filename || 'savi-card.png');

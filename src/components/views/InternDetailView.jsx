@@ -9,7 +9,7 @@ import { windowSnapshots, tierRoiDatasets, protocolRevenueChart, sliceCols, wind
 import { compactUsd, compactNum } from '../kit';
 import { TierFlowSection, netTierCount } from '../TierFlowCards';
 import { baseChartOptions, STREAM_COLORS } from '../../lib/charts';
-import { useChartWindow } from '../../lib/chartWindow';
+import { useChartView } from '../../lib/chartWindow';
 import { holderSeries } from '../../lib/snapshots';
 import { MethodologyCard } from '../Disclaimer';
 import { projectPath } from '../../lib/routes';
@@ -45,7 +45,7 @@ function dash(building, value, format = compactNum) {
 }
 
 export default function InternDetailView({ data, activeTab }) {
-  const [timeframe] = useChartWindow();
+  const { range: timeframe, interval } = useChartView();
   const [expandedTier, setExpandedTier] = useState(null);
   const [tierTimeframe, setTierTimeframe] = useState('allTime');
   const [volumeMultiplier, setVolumeMultiplier] = useState(1);
@@ -70,7 +70,7 @@ export default function InternDetailView({ data, activeTab }) {
   const circ = internCirculating(ownership);
   const chartOptions = baseChartOptions();
 
-  const roiSnaps = windowSnapshots(dailySnapshots, timeframe);
+  const roiSnaps = windowSnapshots(dailySnapshots, timeframe, interval);
   const histLabels = formatLabels(roiSnaps.map((s) => s.date));
   const histDatasets = tierRoiDatasets(roiSnaps, tiers, {
     floorCostUsd,
@@ -79,8 +79,8 @@ export default function InternDetailView({ data, activeTab }) {
 
   const revPeriod = windowPeriodLabel(timeframe);
   const rawRev = protocolRevenueChart(project);
-  const slicedRev = sliceCols(rawRev.labels, rawRev.cols, timeframe);
-  const slicedHolder = sliceCols(rawRev.labels, [holderRevenueCol(project, rawRev.rawLabels || rawRev.labels)], timeframe);
+  const slicedRev = sliceCols(rawRev.labels, rawRev.cols, timeframe, interval);
+  const slicedHolder = sliceCols(rawRev.labels, [holderRevenueCol(project, rawRev.rawLabels || rawRev.labels)], timeframe, interval);
 
   const realBurntTokens = Math.max(Number(activation.dualBurn?.totalBurnTokens || 0), Number(ownership.permanentlyBurntTokens || 0));
   const burnSplit = attributedStonkBurn(stonk, project);

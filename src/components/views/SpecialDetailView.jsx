@@ -14,7 +14,7 @@ import {
   fetchGeckoTokenHolders,
 } from '../../lib/oakmont';
 import { baseChartOptions, compactTick, compactUsdTick, dualAxisOptions } from '../../lib/charts';
-import { useChartWindow } from '../../lib/chartWindow';
+import { useChartView } from '../../lib/chartWindow';
 import { YieldUsdPricePanel, PaybackPanel, HolderRevenuePanel } from '../HistoryCharts';
 import { DisclaimerCopy } from '../Disclaimer';
 
@@ -23,7 +23,7 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarEleme
 const MARK = { green: '#00a804', violet: '#8b5cf6', sky: '#38bdf8', amber: '#f5b700', pink: '#f472b6', lime: '#e879f9' };
 
 export default function SpecialDetailView({ data, projectKey, activeTab }) {
-  const [timeframe] = useChartWindow();
+  const { range: timeframe, interval } = useChartView();
   const meta = PROJECTS.find((p) => p.key === projectKey);
   const project = data?.projects?.[projectKey];
   if (!project) {
@@ -50,15 +50,15 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
     ? (brokerYield > 0 ? brokerCost / brokerYield : null)
     : (perToken > 0 ? tokenUsd / perToken : null);
 
-  const snaps = windowSnapshots(dailySnapshots, timeframe);
+  const snaps = windowSnapshots(dailySnapshots, timeframe, interval);
   const histLabels = formatLabels(snaps.length ? snaps.map((s) => s.date) : (cashflow.dailyDates || []));
   const histRoi = snaps.length
     ? snaps.map((s) => s.roi || s.tiers?.[0]?.roi || 0)
     : [];
 
   const chartOpts = baseChartOptions();
-  const burn = burnSeries(project, timeframe);
-  const flywheel = burnRateSeries(project, timeframe);
+  const burn = burnSeries(project, timeframe, interval);
+  const flywheel = burnRateSeries(project, timeframe, interval);
   const holdersFull = holderSeries(ownership, dailySnapshots);
   const hN = windowLen(timeframe, holdersFull.labels.length);
   const holders = { labels: holdersFull.labels.slice(-hN), data: holdersFull.data.slice(-hN) };
@@ -70,7 +70,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
 
   const revPeriod = windowPeriodLabel(timeframe);
   const rawRev = protocolRevenueChart(project);
-  const { labels: revDates, cols: revCols } = sliceCols(rawRev.labels, rawRev.cols, timeframe);
+  const { labels: revDates, cols: revCols } = sliceCols(rawRev.labels, rawRev.cols, timeframe, interval);
 
   if (kind === 'vault') {
     return (
@@ -481,10 +481,10 @@ function VaultView({
   activeTab, fmt, num, tokenUsd, fdv, circulating, burnTokens, burnPct, wrapPct, poolVol,
   cashflow, tiers, vault, config,
 }) {
-  const [timeframe] = useChartWindow();
+  const { range: timeframe, interval } = useChartView();
   const revPeriod = windowPeriodLabel(timeframe);
   const rawRev = protocolRevenueChart({ cashflow });
-  const { labels: revDates, cols: revCols } = sliceCols(rawRev.labels, rawRev.cols, timeframe);
+  const { labels: revDates, cols: revCols } = sliceCols(rawRev.labels, rawRev.cols, timeframe, interval);
   const wrapHist = snaps.map((s) => s.wrapRatio || 0);
   const covHist = snaps.map((s) => (s.navCoverage || 0) * 100);
   const strikeHist = snaps.map((s) => s.tokenPriceUsd || 0);

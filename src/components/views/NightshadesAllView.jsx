@@ -2,16 +2,15 @@ import React, { useState } from 'react';
 import { Line, Doughnut } from 'react-chartjs-2';
 import { burnSeries, burnOfSupplyPct } from '../../lib/burn';
 import { dateKey, formatLabels } from '../../lib/dates';
-import { protocolFeeCols, protocolRevenueChart, seriesHasInk, windowPeriodLabel } from '../../lib/yieldHistory';
+import { seriesHasInk } from '../../lib/yieldHistory';
 import { compactUsd, compactNum } from '../kit';
-import { baseChartOptions, compactTick, compactUsdTick } from '../../lib/charts';
-import { useChartWindow } from '../../lib/chartWindow';
+import { baseChartOptions, compactTick } from '../../lib/charts';
+import { useChartView } from '../../lib/chartWindow';
 import {
     NIGHTSHADES_FACTION_META,
     FACTION_COLORS,
     overlayFactionMaps,
     seriesToDateMap,
-    factionDailyRevenue,
     factionLabel,
     factionList,
     formatNightClock,
@@ -240,7 +239,7 @@ function lpEthAxis() {
 
 function lpSlice(night, timeframe) {
   const points = nightLpPoints(night);
-  const n = timeframe === '7d' ? 7 : timeframe === '30d' ? 30 : points.length;
+  const n = timeframe === '7d' ? 7 : timeframe === '30d' ? 30 : timeframe === '90d' ? 90 : points.length;
   const sliced = points.slice(-Math.max(1, n));
   return {
     labels: formatLabels(sliced.map((r) => r.date)),
@@ -385,7 +384,7 @@ function NightHistory({ night }) {
 
 /** Incubator-wide Night card + history. Lives on the Night tab for All and each faction. */
 export function NightshadesNightSection({ night, faction }) {
-  const [timeframe] = useChartWindow();
+  const { range: timeframe } = useChartView();
   return (
     <section id="night" className="scroll-mt-32 space-y-6">
       <NightCard night={night} />
@@ -407,29 +406,17 @@ function t0RoiMap(slice) {
 }
 
 export default function NightshadesAllView({ project, setFaction }) {
-  const [timeframe] = useChartWindow();
+  const { range: timeframe, interval } = useChartView();
   const [expanded, setExpanded] = useState(null);
   const [yieldPeriod, setYieldPeriod] = useState('Y');
   const formatCurrency = compactUsd;
   const formatNumber = compactNum;
-  const revPeriod = windowPeriodLabel(timeframe);
   const chartOptions = baseChartOptions();
   const percentChartOptions = {
     ...chartOptions,
     scales: {
       ...chartOptions.scales,
       y: { min: 0, ticks: { color: '#cbd5e1', callback: (v) => `${compactTick(v)}%` }, grid: { color: '#1e2228', borderDash: [4, 4] } },
-    },
-  };
-  const usdChartOptions = {
-    ...chartOptions,
-    scales: {
-      ...chartOptions.scales,
-      y: {
-        ...chartOptions.scales.y,
-        beginAtZero: true,
-        ticks: { ...chartOptions.scales.y.ticks, callback: compactUsdTick },
-      },
     },
   };
   const countChartOptions = {
@@ -459,36 +446,18 @@ export default function NightshadesAllView({ project, setFaction }) {
   }));
   const night = project?.night;
 
-  const windowRev = (slice) => {
-    const chart = protocolRevenueChart(slice);
-    const fees = protocolFeeCols(chart.cols).filter((c) => c.key === 'amm' || c.key === 'dex');
-    const n = timeframe === '7d' ? 7 : timeframe === '30d' ? 30 : (chart.labels || []).length;
-    return fees.reduce((sum, c) => {
-      const data = (c.data || []).slice(-n);
-      return sum + data.reduce((s, v) => s + (Number(v) || 0), 0);
-    }, 0);
-  };
-
   const roiOverlay = overlayFactionMaps(
     Object.fromEntries(slices.map((f) => [f.id, t0RoiMap(f.slice)])),
-    { timeframe, fill: true },
-  );
-
-  const revOverlay = overlayFactionMaps(
-    Object.fromEntries(slices.map((f) => {
-      const series = factionDailyRevenue(f.slice);
-      return [f.id, seriesToDateMap(series.labels, series.data)];
-    })),
-    { timeframe },
+    { timeframe, interval, fill: true },
   );
 
   const burnOverlay = overlayFactionMaps(
     Object.fromEntries(slices.map((f) => {
-      const series = burnSeries(f.slice, timeframe);
+      const series = burnSeries(f.slice, timeframe, interval);
       const days = series.rawLabels || [];
       return [f.id, seriesToDateMap(days, series.data)];
     })),
-    { timeframe, fill: true },
+    { timeframe, interval, fill: true },
   );
 
   const burnPctOverlay = overlayFactionMaps(
@@ -497,14 +466,14 @@ export default function NightshadesAllView({ project, setFaction }) {
       const unit = Number(p?.config?.unitValue) || 1_000_000;
       const maxNft = Number(p?.ownership?.currentMaxSupply || p?.config?.maxSupply) || 3000;
       const maxToken = maxNft * unit;
-      const series = burnSeries(p, timeframe);
+      const series = burnSeries(p, timeframe, interval);
       const days = series.rawLabels || [];
       const pct = (series.data || []).map((burn) => (
         maxToken > 0 ? +Math.min(100, ((Number(burn) || 0) / maxToken) * 100).toFixed(2) : null
       ));
       return [f.id, seriesToDateMap(days, pct)];
     })),
-    { timeframe, fill: true },
+    { timeframe, interval, fill: true },
   );
 
   const actOverlay = overlayFactionMaps(
@@ -512,7 +481,7 @@ export default function NightshadesAllView({ project, setFaction }) {
       const hist = f.slice?.activation?.history || {};
       return [f.id, seriesToDateMap(hist.labels, hist.cumulative)];
     })),
-    { timeframe },
+    { timeframe, interval },
   );
 
   const nftOverlay = overlayFactionMaps(
@@ -524,7 +493,7 @@ export default function NightshadesAllView({ project, setFaction }) {
       if (nft.length && liveNft > 0 && nft[nft.length - 1] == null) nft[nft.length - 1] = liveNft;
       return [f.id, seriesToDateMap(snaps.map((s) => s.date), nft)];
     })),
-    { timeframe },
+    { timeframe, interval },
   );
 
   const tokOverlay = overlayFactionMaps(
@@ -540,7 +509,7 @@ export default function NightshadesAllView({ project, setFaction }) {
         snaps.map((s) => (s.tokenHolders == null ? null : Number(s.tokenHolders))),
       )];
     })),
-    { timeframe },
+    { timeframe, interval },
   );
 
   return (
@@ -700,33 +669,6 @@ export default function NightshadesAllView({ project, setFaction }) {
           datasets={roiOverlay.datasets}
           options={percentChartOptions}
         />
-        <div className="space-y-6 mt-6">
-          <h2 className="text-lg md:text-xl font-bold text-white">Faction protocol revenue</h2>
-          <p className="text-xs text-slate-400 -mt-4">Vault RewardPaid and Anvil AMM fees kept by each market. Civ-pad tax stays on StonkBrokers.</p>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {slices.map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => setFaction(f.id)}
-                className="text-left bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm transition hover:border-slate-500"
-              >
-                <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: f.color }} />
-                  {f.label} · {revPeriod}
-                </p>
-                <p className="text-2xl font-extrabold" style={{ color: f.color }}>{formatCurrency(windowRev(f.slice))}</p>
-              </button>
-            ))}
-          </div>
-          <Together
-            title="Daily protocol revenue"
-            note="One series per faction. Not stacked — Ghosts is not added into Knights."
-            labels={revOverlay.labels}
-            datasets={revOverlay.datasets}
-            options={usdChartOptions}
-          />
-        </div>
       </section>
 
       <NightshadesNightSection night={night} />
@@ -898,7 +840,6 @@ export default function NightshadesAllView({ project, setFaction }) {
       <MethodologyCard accent="text-indigo-400">
           <p><strong className="text-white">All is a comparison, not a rollup:</strong> Ghosts, Zombies, Knights, and Watchers stay four series on one axis. Totals are not added together except on the Night LP health chart&apos;s combined line. Open a faction for that market&apos;s tiers, simulator, and vault detail.</p>
           <p><strong className="text-white">Yield &amp; ROI:</strong> Cash-on-cash for a Shade is annualized vault RewardPaid ÷ (NFT floor USD + activation tokens at spot). Yield is the trailing 7-day RewardPaid sample, split by Anvil tier weight. Night vault WETH is loot for The Night and is never counted as StonkBrokers StonkBooster.</p>
-          <p><strong className="text-white">Revenue:</strong> Faction AMM / vault RewardPaid only. The Nightshades civ-pad launch tax is counted on StonkBrokers Partner Revenue Share.</p>
           <p><strong className="text-white">The Night</strong> is the daily VRF strike. Favored factions keep their pools; struck factions can lose 20% of that pair&apos;s WETH to the vault (tokens sold for WETH). Unlabeled millions under Struck are vault token inventory, not strike size. Pool WETH over time overwrites the same UTC day on each hourly run until the series grows.</p>
       </MethodologyCard>
     </div>

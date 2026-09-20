@@ -7,14 +7,14 @@ import {
 } from 'chart.js';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import OverviewView from './OverviewView';
-import { compactUsd, compactNum, WindowBar } from '../kit';
+import { compactUsd, compactNum, WindowBar, IntervalBar } from '../kit';
 import { CopyPageButton } from '../CopyControl';
 import { copyShareCard } from '../../lib/share';
 import { buildEcosystemShareCard } from '../../lib/projectShare';
 import { dateKey, formatLabels } from '../../lib/dates';
 import { burnSeries } from '../../lib/burn';
 import { cashflowRoiByDate, protocolFeeCols, protocolRevenueChart, seriesHasInk } from '../../lib/yieldHistory';
-import { useChartWindow } from '../../lib/chartWindow';
+import { useChartView } from '../../lib/chartWindow';
 import { baseChartOptions, compactTick, compactUsdTick, PROJECT_COLORS } from '../../lib/charts';
 import { ChartPanel, EmptyChart } from '../HistoryCharts';
 import { MethodologyCard } from '../Disclaimer';
@@ -54,7 +54,7 @@ export default function EcosystemView({ data, pending = false }) {
   const activeTab = ECO_TABS.some((t) => t.id === tabFromUrl) ? tabFromUrl : 'roi';
   const [expandedProject, setExpandedProject] = useState(null);
   const [yieldPeriod, setYieldPeriod] = useState('Y');
-  const [timeframe, setTimeframe] = useChartWindow();
+  const { range: timeframe, setRange, interval, setInterval } = useChartView();
 
   const onActiveId = useCallback((id) => {
     setSearchParams((prev) => {
@@ -147,6 +147,7 @@ export default function EcosystemView({ data, pending = false }) {
     if (tf === '1d') return Math.min(1, totalLen);
     if (tf === '7d' || tf === '1w') return Math.min(7, totalLen);
     if (tf === '30d' || tf === '1m') return Math.min(30, totalLen);
+    if (tf === '90d') return Math.min(90, totalLen);
     return totalLen;
   };
 
@@ -307,11 +308,12 @@ export default function EcosystemView({ data, pending = false }) {
           </button>
         ))}
         </div>
-        <WindowBar compact value={timeframe} onChange={setTimeframe} />
+        <WindowBar compact value={timeframe} onChange={setRange} />
+        <IntervalBar compact value={interval} onChange={setInterval} />
         <CopyPageButton
           idleLabel="Copy for X"
-          title="Copy a compact 16:9 image for X"
-          onCopy={() => copyShareCard(buildEcosystemShareCard(data, { timeframe }))}
+          title="Copy a full-page image of this topic for X"
+          onCopy={() => copyShareCard(buildEcosystemShareCard(data, { timeframe }), { page: true })}
         />
       </div>
 
@@ -564,7 +566,7 @@ export default function EcosystemView({ data, pending = false }) {
             for (const k of order) {
               const p = data.projects[k];
               const { maxToken } = burnCaps(p);
-              const series = burnSeries(p, timeframe);
+              const series = burnSeries(p, timeframe, interval);
               const days = series.rawLabels || [];
               tokenMaps[k] = seriesToMap(
                 days,

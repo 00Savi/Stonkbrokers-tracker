@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { copyChart } from '../lib/share';
+import { copyChart, copyElement } from '../lib/share';
 
 function CopyIcon({ ok }) {
   if (ok) {
@@ -95,8 +95,21 @@ export function CopyChartButton({ host, tight }) {
     <CopyControl
       overlay
       tight={tight}
-      title="Copy chart image"
+      idleLabel="Copy for X"
+      title="Copy this chart for X"
       onCopy={() => copyChart(host)}
+    />
+  );
+}
+
+export function CopyTableButton({ host, tight }) {
+  return (
+    <CopyControl
+      overlay
+      tight={tight}
+      idleLabel="Copy for X"
+      title="Copy this table for X"
+      onCopy={() => copyElement(host, { filename: 'savi-table.png' })}
     />
   );
 }

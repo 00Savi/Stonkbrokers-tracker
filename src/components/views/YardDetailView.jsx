@@ -9,7 +9,7 @@ import { windowSnapshots, tierRoiDatasets, protocolRevenueChart, sliceCols, wind
 import { compactUsd, compactNum } from '../kit';
 import { TierFlowSection, netTierCount } from '../TierFlowCards';
 import { baseChartOptions, compactTick, compactUsdTick, dualAxisOptions, STREAM_COLORS } from '../../lib/charts';
-import { useChartWindow } from '../../lib/chartWindow';
+import { useChartView } from '../../lib/chartWindow';
 import { holderSeries } from '../../lib/snapshots';
 import { MethodologyCard } from '../Disclaimer';
 import { YARD_WRAP, fetchYardWrap } from '../../lib/yardWrap';
@@ -56,7 +56,7 @@ function scanTokenLp(pairs, tokenCa, tokenPriceUsd) {
 }
 
 export default function YardDetailView({ data, activeTab }) {
-  const [timeframe] = useChartWindow();
+  const { range: timeframe, interval } = useChartView();
   const [expandedTier, setExpandedTier] = useState(null);
   const [tierTimeframe, setTierTimeframe] = useState('allTime');
   const [lpTableOpen, setLpTableOpen] = useState(true);
@@ -106,7 +106,7 @@ export default function YardDetailView({ data, activeTab }) {
 
   const hasSnaps = Array.isArray(dailySnapshots) && dailySnapshots.length > 0 && dailySnapshots[0].date;
 
-  const roiSnaps = windowSnapshots(dailySnapshots, timeframe);
+  const roiSnaps = windowSnapshots(dailySnapshots, timeframe, interval);
   const histLabels = formatLabels(roiSnaps.map(s => s.date));
   const histDatasets = tierRoiDatasets(roiSnaps, tiers, {
     floorCostUsd,
@@ -120,20 +120,21 @@ export default function YardDetailView({ data, activeTab }) {
     rawRev.labels,
     [{ ...(byKey.amm || { data: [] }), label: 'Vault distributions', color: STREAM_COLORS.amm }],
     timeframe,
+    interval,
   );
-  const slicedHolder = sliceCols(rawRev.labels, [holderRevenueCol(project, rawRev.rawLabels || rawRev.labels)], timeframe);
+  const slicedHolder = sliceCols(rawRev.labels, [holderRevenueCol(project, rawRev.rawLabels || rawRev.labels)], timeframe, interval);
 
   // 3. Burn Tracker Data (Cumulative Ratchet: prevents values from dropping)
   const realBurntTokens = Math.max(Number(activation.dualBurn?.totalBurnTokens || 0), Number(ownership.permanentlyBurntTokens || 0));
   const burnPct = burnOfSupplyPct(project, realBurntTokens);
   const realBurntUnits = Math.max(Number(activation.dualBurn?.equivalentBrokersBurnt || 0), Number(ownership.permanentlyBurntUnits || 0), Number(ownership.burntNfts || 0));
   
-  const burn = burnSeries(project, timeframe);
+  const burn = burnSeries(project, timeframe, interval);
   const slicedBurnLabels = burn.labels;
   const slicedBurnData = burn.data;
 
   // 4. Flywheel Chart
-  const flywheel = burnRateSeries(project, timeframe);
+  const flywheel = burnRateSeries(project, timeframe, interval);
   const fwPrices = flywheel.prices;
   const fwBurn = flywheel.burn;
 

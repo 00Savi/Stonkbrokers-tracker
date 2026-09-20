@@ -8,7 +8,7 @@
 // cannot shrink.
 
 import { usableSnapshots } from './snapshots';
-import { windowLen } from './yieldHistory';
+import { resampleSeries, windowLen } from './yieldHistory';
 import { dateKey, formatLabels, utcIso } from './dates';
 
 function asProject(source) {
@@ -261,7 +261,7 @@ export function splitBurnSeries(stonk, intern, timeframe = 'all') {
  * Daily intern vs broker $STONKBROKER burn, from the first intern activation.
  * Timeframe still windows the tail (weekly / monthly / all).
  */
-export function dailyAttributedBurnSeries(stonk, intern, timeframe = 'all') {
+export function dailyAttributedBurnSeries(stonk, intern, timeframe = 'all', interval = 'daily') {
   const startDay = firstInternActivationDay(intern);
   if (!startDay) return { startDay: '', labels: [], rawLabels: [], intern: [], brokers: [] };
 
@@ -286,24 +286,30 @@ export function dailyAttributedBurnSeries(stonk, intern, timeframe = 'all') {
   const brokersDaily = totalDaily.map((t, i) => Math.max(0, t - (internDaily[i] || 0)));
 
   const n = windowLen(timeframe, labels.length);
+  const labs = labels.slice(-n);
+  const internWin = internDaily.slice(-n);
+  const brokerWin = brokersDaily.slice(-n);
+  const internRes = resampleSeries(labs, internWin, interval, 'sum');
+  const brokerRes = resampleSeries(labs, brokerWin, interval, 'sum');
   return {
     startDay,
-    labels: formatLabels(labels.slice(-n)),
-    rawLabels: labels.slice(-n),
-    intern: internDaily.slice(-n),
-    brokers: brokersDaily.slice(-n),
+    labels: formatLabels(internRes.labels),
+    rawLabels: internRes.labels,
+    intern: internRes.data,
+    brokers: brokerRes.data,
   };
 }
 
 /** Labels and cumulative burn, windowed. Pass a project for full-life series. */
-export function burnSeries(source, timeframe = 'all') {
+export function burnSeries(source, timeframe = 'all', interval = 'daily') {
   const filled = burnPath(asProject(source));
   const n = windowLen(timeframe, filled.labels.length);
   const labels = filled.labels.slice(-n);
+  const resampled = resampleSeries(labels, filled.data.slice(-n), interval, 'last');
   return {
-    labels: formatLabels(labels),
-    rawLabels: labels,
-    data: filled.data.slice(-n),
+    labels: formatLabels(resampled.labels),
+    rawLabels: resampled.labels,
+    data: resampled.data,
   };
 }
 
@@ -311,7 +317,7 @@ export function burnSeries(source, timeframe = 'all') {
  * Daily burn rate — first difference of the filled cumulative series.
  * Missing fetch days are 0 (carry), not a cliff.
  */
-export function burnRateSeries(source, timeframe = 'all') {
+export function burnRateSeries(source, timeframe = 'all', interval = 'daily') {
   const project = asProject(source);
   const filled = burnPath(project);
   const n = windowLen(timeframe, filled.labels.length);
@@ -331,13 +337,13 @@ export function burnRateSeries(source, timeframe = 'all') {
       : Number(vals[i - 1]);
     return (Number(v) || 0) - (Number(prior) || 0);
   });
+  const burnRes = resampleSeries(labels, burn, interval, 'sum');
+  const pxRes = resampleSeries(labels, prices, interval, 'last');
   return {
-    labels: formatLabels(labels),
-    prices,
-    burn,
-    // Weekly / Monthly scale to the bars in view. ALL ignores launch-week
-    // mega burns (10M+) so later days stay readable.
-    burnAxisMax: timeframe === 'all' ? robustBurnAxisMax(burn) : undefined,
+    labels: formatLabels(burnRes.labels),
+    prices: pxRes.data,
+    burn: burnRes.data,
+    burnAxisMax: timeframe === 'all' && interval === 'daily' ? robustBurnAxisMax(burnRes.data) : undefined,
   };
 }
 
