@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { copyChart, copyElement } from '../lib/share';
 
 export function copySectionEl(el, id) {
-  if (!el) throw new Error('Nothing to copy');
-  const slug = id || el.id || 'section';
-  return copyElement(el, { filename: `savi-${slug}.png`, maxW: 1080 });
+  const node = el || (id ? document.getElementById(id) : null);
+  if (!node) throw new Error('Nothing to copy');
+  const slug = id || node.id || 'section';
+  return copyElement(node, { filename: `savi-${slug}.png`, maxW: 1080 });
 }
 
 function CopyIcon({ ok }) {
@@ -42,7 +43,8 @@ export function CopyControl({
     try {
       const copied = await onCopy();
       setState(copied ? 'copied' : 'saved');
-    } catch {
+    } catch (err) {
+      console.error('copy failed', err);
       setState('fail');
     }
     window.setTimeout(() => setState('idle'), 2500);

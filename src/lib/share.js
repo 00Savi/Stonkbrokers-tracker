@@ -46,13 +46,49 @@ function drawWatermarked(chartCanvas, { maxW = 0 } = {}) {
   return out;
 }
 
-function pngBlobFromCanvas(canvas) {
-  const dataUrl = canvas.toDataURL('image/png');
-  const comma = dataUrl.indexOf(',');
-  const bin = atob(dataUrl.slice(comma + 1));
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return new Blob([bytes], { type: 'image/png' });
+function scaleCanvas(src, scale) {
+  const out = document.createElement('canvas');
+  out.width = Math.max(1, Math.round(src.width * scale));
+  out.height = Math.max(1, Math.round(src.height * scale));
+  const ctx = out.getContext('2d');
+  ctx.fillStyle = '#08090b';
+  ctx.fillRect(0, 0, out.width, out.height);
+  ctx.drawImage(src, 0, 0, out.width, out.height);
+  return out;
+}
+
+function canvasToBlob(canvas) {
+  return new Promise((resolve, reject) => {
+    if (typeof canvas.toBlob === 'function') {
+      canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Could not encode PNG'))), 'image/png');
+      return;
+    }
+    try {
+      const dataUrl = canvas.toDataURL('image/png');
+      const comma = dataUrl.indexOf(',');
+      const bin = atob(dataUrl.slice(comma + 1));
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      resolve(new Blob([bytes], { type: 'image/png' }));
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+/** Cap bitmap size so toBlob does not throw on tall section snapshots. */
+const MAX_PNG_PIXELS = 16_000_000;
+
+async function pngBlobFromCanvas(canvas) {
+  let c = canvas;
+  const pixels = (c.width || 0) * (c.height || 0);
+  if (!pixels) throw new Error('No chart to copy');
+  if (pixels > MAX_PNG_PIXELS) c = scaleCanvas(c, Math.sqrt(MAX_PNG_PIXELS / pixels));
+  try {
+    return await canvasToBlob(c);
+  } catch {
+    return canvasToBlob(scaleCanvas(c, 0.5));
+  }
 }
 
 function downloadPng(blob, filename = 'savi-dashboard.png') {
@@ -85,12 +121,19 @@ async function writeClipboardPng(blob) {
 /** Copy the chart PNG. Returns true if the clipboard took it; otherwise the file is downloaded. */
 export async function copyChart(root) {
   if (typeof window === 'undefined') return false;
-  const chartCanvas = root?.querySelector?.('canvas');
-  if (!chartCanvas) throw new Error('No chart to copy');
-  const blob = pngBlobFromCanvas(drawWatermarked(chartCanvas));
-  const copied = await writeClipboardPng(blob);
-  if (!copied) downloadPng(blob);
-  return copied;
+  const chartCanvas = [...(root?.querySelectorAll?.('canvas') || [])]
+    .find((c) => (c.width || 0) > 8 && (c.height || 0) > 8);
+  if (!chartCanvas) {
+    return copyElement(root, { filename: 'savi-chart.png', maxW: 1080 });
+  }
+  try {
+    const blob = await pngBlobFromCanvas(drawWatermarked(chartCanvas));
+    const copied = await writeClipboardPng(blob);
+    if (!copied) downloadPng(blob);
+    return copied;
+  } catch {
+    return copyElement(root, { filename: 'savi-chart.png', maxW: 1080 });
+  }
 }
 
 const ADDR_RE = /0x[a-fA-F0-9]{6,}\.\.\.[a-fA-F0-9]{4}|0x[a-fA-F0-9]{40}/g;
@@ -118,9 +161,14 @@ const COLOR_PROPS = [
   'borderBottomColor',
   'borderLeftColor',
   'outlineColor',
+  'textDecorationColor',
+  'caretColor',
+  'columnRuleColor',
+  'accentColor',
   'fill',
   'stroke',
 ];
+const MODERN_COLOR = /oklch|oklab|lab\(|lch\(|color-mix|color\(/i;
 
 function toRgb(color) {
   if (!color || color === 'transparent' || color === 'rgba(0, 0, 0, 0)') return color;
@@ -136,17 +184,29 @@ function toRgb(color) {
 
 function flattenModernColors(root, view) {
   if (!root || root.nodeType !== 1) return;
-  const cs = view.getComputedStyle(root);
-  for (const prop of COLOR_PROPS) {
-    const v = cs[prop];
-    if (v && /oklch|oklab|lab\(|lch\(|color-mix/i.test(v)) {
-      root.style[prop] = toRgb(v);
+  if (root.hasAttribute?.('data-share-omit')) {
+    root.remove();
+    return;
+  }
+  let cs;
+  try {
+    cs = view.getComputedStyle(root);
+  } catch {
+    cs = null;
+  }
+  if (cs) {
+    for (const prop of COLOR_PROPS) {
+      const v = cs[prop];
+      if (v && v !== 'transparent') root.style[prop] = toRgb(v);
+    }
+    if (cs.backgroundImage && cs.backgroundImage !== 'none' && MODERN_COLOR.test(cs.backgroundImage)) {
+      root.style.backgroundImage = 'none';
+    }
+    if (cs.boxShadow && cs.boxShadow !== 'none' && MODERN_COLOR.test(cs.boxShadow)) {
+      root.style.boxShadow = 'none';
     }
   }
-  if (cs.boxShadow && /oklch|oklab|lab\(|lch\(|color-mix/i.test(cs.boxShadow)) {
-    root.style.boxShadow = 'none';
-  }
-  for (const child of root.children) flattenModernColors(child, view);
+  [...root.children].forEach((child) => flattenModernColors(child, view));
 }
 
 function isForeignImage(el) {
@@ -501,13 +561,13 @@ export async function copyPortfolioSnapshot(payload) {
   })));
   let canvas = drawPortfolioCard({ ...payload, assets });
   try {
-    const blob = pngBlobFromCanvas(canvas);
+    const blob = await pngBlobFromCanvas(canvas);
     const copied = await writeClipboardPng(blob);
     if (!copied) downloadPng(blob, 'savi-portfolio.png');
     return copied;
   } catch {
     canvas = drawPortfolioCard({ ...payload, assets: assets.map((a) => ({ ...a, img: null })) });
-    const blob = pngBlobFromCanvas(canvas);
+    const blob = await pngBlobFromCanvas(canvas);
     const copied = await writeClipboardPng(blob);
     if (!copied) downloadPng(blob, 'savi-portfolio.png');
     return copied;
@@ -848,25 +908,19 @@ export async function copyShareCard(payload, { page = false } = {}) {
   if (typeof window === 'undefined') return false;
   if (!payload) throw new Error('Nothing to copy');
   const canvas = drawShareCard({ ...payload, page: page || payload.page });
-  const blob = pngBlobFromCanvas(canvas);
+  const blob = await pngBlobFromCanvas(canvas);
   const copied = await writeClipboardPng(blob);
   if (!copied) downloadPng(blob, payload.filename || 'savi-card.png');
   return copied;
 }
 
-/** Full-page PNG of an element. Strips wallet addresses from the clone. */
-export async function copyElement(root, { filename = 'savi-dashboard.png', maxW = 0 } = {}) {
-  if (typeof window === 'undefined' || !root) return false;
-  const { default: html2canvas } = await import('html2canvas');
-  const tall = Math.max(root.scrollHeight || 0, root.offsetHeight || 0);
-  const wide = Math.max(root.scrollWidth || 0, root.clientWidth || 0, 960);
-  const shot = await html2canvas(root, {
+function snapshotOptions(root, { scale, wide, tall }) {
+  return {
     backgroundColor: '#08090b',
-    scale: tall > 2400 ? 1 : Math.min(2, window.devicePixelRatio || 1.5),
+    scale,
     width: wide,
-    height: tall,
     windowWidth: wide,
-    windowHeight: Math.max(tall, 720),
+    windowHeight: Math.min(Math.max(tall, 720), 8192),
     useCORS: true,
     allowTaint: false,
     logging: false,
@@ -886,9 +940,25 @@ export async function copyElement(root, { filename = 'savi-dashboard.png', maxW 
       flattenModernColors(target, clonedDoc.defaultView || window);
       scrubAddresses(target);
     },
-  });
+  };
+}
+
+/** Full-page PNG of an element. Strips wallet addresses from the clone. */
+export async function copyElement(root, { filename = 'savi-dashboard.png', maxW = 0 } = {}) {
+  if (typeof window === 'undefined' || !root) return false;
+  const { default: html2canvas } = await import('html2canvas-pro');
+  const tall = Math.max(root.scrollHeight || 0, root.offsetHeight || 0, root.clientHeight || 0);
+  const wide = Math.max(root.scrollWidth || 0, root.clientWidth || 0, 960);
+  const scale = tall > 2400 ? 1 : Math.min(2, window.devicePixelRatio || 1.5);
+  const opts = snapshotOptions(root, { scale, wide, tall });
+  let shot;
+  try {
+    shot = await html2canvas(root, opts);
+  } catch {
+    shot = await html2canvas(root, { ...opts, scale: 1, foreignObjectRendering: false });
+  }
   if (!shot?.width || !shot?.height) throw new Error('Empty snapshot');
-  const blob = pngBlobFromCanvas(drawWatermarked(shot, { maxW }));
+  const blob = await pngBlobFromCanvas(drawWatermarked(shot, { maxW }));
   const copied = await writeClipboardPng(blob);
   if (!copied) downloadPng(blob, filename);
   return copied;
