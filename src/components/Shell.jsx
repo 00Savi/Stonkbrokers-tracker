@@ -9,8 +9,8 @@ export { LAUNCHER_REF, SAVI_X };
 
 export const NAV_GROUPS = [
   { id: 'tools', label: 'Tools' },
-  { id: 'yield-tokens', label: 'Yield Tokens' },
   { id: 'yield-nfts', label: 'Yield NFTs' },
+  { id: 'yield-tokens', label: 'Yield Tokens' },
   { id: 'chain', label: 'Robinhood Chain' },
 ];
 
