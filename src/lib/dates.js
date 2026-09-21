@@ -27,6 +27,9 @@ export function parseDateLabel(label, now = new Date()) {
   let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (m) return { y: Number(m[1]), m: Number(m[2]), d: Number(m[3]) };
 
+  m = s.match(/^(\d{4})-(\d{1,2})$/);
+  if (m) return { y: Number(m[1]), m: Number(m[2]), d: 1, monthOnly: true };
+
   m = s.match(/^(\d{1,2})\D+(\d{1,2})\D+(\d{2,4})$/);
   if (m) {
     let y = Number(m[3]);
@@ -52,9 +55,15 @@ export function dateKey(label, now) {
   return p ? `${p.y}-${pad2(p.m)}-${pad2(p.d)}` : String(label || '');
 }
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
 export function chartLabel(label, withYear = false) {
   const p = parseDateLabel(label);
   if (!p) return String(label || '');
+  if (p.monthOnly) {
+    const mon = MONTHS[p.m - 1] || String(p.m);
+    return withYear ? `${mon} ${String(p.y).slice(2)}` : mon;
+  }
   return withYear ? `${p.m}/${p.d}/${String(p.y).slice(2)}` : `${p.m}/${p.d}`;
 }
 

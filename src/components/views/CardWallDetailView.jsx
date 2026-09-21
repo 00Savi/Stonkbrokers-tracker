@@ -5,10 +5,11 @@ import {
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import { burnSeries, burnRateSeries, burnOfSupplyPct } from '../../lib/burn';
 import { formatLabels } from '../../lib/dates';
-import { windowSnapshots, protocolRevenueChart, sliceCols, windowLen, seriesHasInk } from '../../lib/yieldHistory';
-import { BetaTag, compactUsd, compactNum } from '../kit';
+import { windowSnapshots, protocolRevenueChart, sliceCols, seriesHasInk, windowChart } from '../../lib/yieldHistory';
+import { BetaTag, compactUsd, compactNum, YieldPeriodToggle, scaleAnnualYield, yieldSuffix } from '../kit';
+import { ShareSection } from '../CopyControl';
 import { TierFlowSection, netTierCount } from '../TierFlowCards';
-import { baseChartOptions, compactTick, compactUsdTick, dualAxisOptions } from '../../lib/charts';
+import { baseChartOptions, compactTick, compactUsdTick, dualAxisOptions, activityChartOptions } from '../../lib/charts';
 import { useChartView } from '../../lib/chartWindow';
 import { holderSeries } from '../../lib/snapshots';
 import { MethodologyCard } from '../Disclaimer';
@@ -29,6 +30,7 @@ export default function CardWallDetailView({ data, activeTab }) {
   const [tierTimeframe, setTierTimeframe] = useState('allTime');
   const [selectedSlab, setSelectedSlab] = useState(null);
   const [volumeMultiplier, setVolumeMultiplier] = useState(1);
+  const [yieldPeriod, setYieldPeriod] = useState('Y');
 
   const project = data?.projects?.cardwall || data?.projects?.card;
   if (!project) return <div className="text-center text-slate-400 p-12">The Card Wall Data Loading...</div>;
@@ -95,18 +97,18 @@ export default function CardWallDetailView({ data, activeTab }) {
   });
 
   const holdersFull = holderSeries(ownership, dailySnapshots);
-  const ownN = windowLen(timeframe, holdersFull.labels.length);
-  const ownLabels = holdersFull.labels.slice(-ownN);
-  const ownData = holdersFull.data.slice(-ownN);
+  const holdersWin = windowChart(holdersFull.labels, [holdersFull.data], timeframe, interval, ['last']);
+  const ownLabels = holdersWin.labels;
+  const ownData = holdersWin.cols[0] || [];
   const wallHolders = Number(ownership.wallHolders) || Number(ownership.tokenHolders) || Number(ownership.erc20Holders) || Number(ownership.stonkHolders) || 0;
 
-  const actN = windowLen(timeframe, actLabels.length);
+  const actWin = windowChart(actLabels, [actCum, actDAct, actDDeact], timeframe, interval, ['last', 'sum', 'sum']);
 
   return (
     <div className="space-y-6 relative">
 
       {/* TAB 1: ROI BENCHMARKS */}
-      <section id="roi" className="scroll-mt-32">
+      <ShareSection id="roi" className="scroll-mt-32">
         <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6">
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
@@ -139,7 +141,12 @@ export default function CardWallDetailView({ data, activeTab }) {
                   <th className="pb-4 font-medium pl-2">Tier</th>
                   <th className="pb-4 font-medium">Activation Req.</th>
                   <th className="pb-4 font-medium">Current Total Cost</th>
-                  <th className="pb-4 font-medium">Expected Yield <span className="normal-case">(Annualized)</span></th>
+                  <th className="pb-4 font-medium">
+                    <div className="flex items-center gap-2">
+                      <span>Expected Yield</span>
+                      <YieldPeriodToggle value={yieldPeriod} onChange={setYieldPeriod} />
+                    </div>
+                  </th>
                   <th className="pb-4 font-medium text-right pr-4">Est. ROI (CoC)</th>
                 </tr>
               </thead>
@@ -178,7 +185,7 @@ export default function CardWallDetailView({ data, activeTab }) {
                           </div>
                         </td>
                         <td className="py-5">
-                          <span className="text-white font-bold text-base">{formatCurrency(simulatedYield)}</span> <span className="text-slate-500">/yr</span>
+                          <span className="text-white font-bold text-base">{formatCurrency(scaleAnnualYield(simulatedYield, yieldPeriod))}</span> <span className="text-slate-500">{yieldSuffix(yieldPeriod)}</span>
                         </td>
                         <td className="py-5 text-right pr-4">
                           <div className="flex items-center justify-end gap-3">
@@ -241,10 +248,10 @@ export default function CardWallDetailView({ data, activeTab }) {
             </table>
           </div>
         </div>
-      </section>
+      </ShareSection>
 
       {/* TAB 2: HISTORICAL YIELD */}
-      <section id="yield" className="scroll-mt-32">
+      <ShareSection id="yield" className="scroll-mt-32">
         <div className="bg-[#0e1013] border border-[#1e2228] p-4 md:p-6 rounded-2xl shadow-lg space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
@@ -277,10 +284,10 @@ export default function CardWallDetailView({ data, activeTab }) {
           <YieldUsdPricePanel snaps={roiSnaps} tiers={tiers} />
           <PaybackPanel snaps={roiSnaps} tiers={tiers} floorCostUsd={floorCostUsd} tokenPriceUsd={market.tokenPriceUsd} />
         </div>
-      </section>
+      </ShareSection>
 
       {/* TAB 3: REVENUE */}
-      <section id="revenue" className="scroll-mt-32">
+      <ShareSection id="revenue" className="scroll-mt-32">
         <div className="space-y-6">
           <p className="text-sm text-slate-400 leading-relaxed max-w-3xl">
             This page is the slab vault, not AMM fees. Each card is a real PSA 10 the protocol bought: <strong className="text-slate-300">total volume</strong> is landed cost of every slab ever recorded, <strong className="text-slate-300">on the wall</strong> is still in custody, and <strong className="text-slate-300">with members</strong> has already rained or sold. The chart is that landed cost by the day it was written to VaultLedger — green when it went to a member, amber when it was still sitting in the vault that day.
@@ -324,9 +331,9 @@ export default function CardWallDetailView({ data, activeTab }) {
             note="Landed cost delivered to members that day — holder revenue for the wall."
           />
         </div>
-      </section>
+      </ShareSection>
 
-      <section id="liquidity" className="scroll-mt-32">
+      <ShareSection id="liquidity" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-lg md:text-xl font-bold text-white">Liquidity</h2>
           <p className="text-xs text-slate-400">The wall itself is the inventory: slabs still in custody versus already rained to members.</p>
@@ -341,10 +348,10 @@ export default function CardWallDetailView({ data, activeTab }) {
             </div>
           </div>
         </div>
-      </section>
+      </ShareSection>
 
       {/* TAB 4: BURN TRACKER */}
-      <section id="burn" className="scroll-mt-32">
+      <ShareSection id="burn" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-lg md:text-xl font-bold text-white mb-6">Token Burn & Supply Deflation Tracker</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -392,15 +399,22 @@ export default function CardWallDetailView({ data, activeTab }) {
                     { type: 'bar', label: 'Daily Burn Velocity', data: fwBurn, backgroundColor: 'rgba(249, 115, 22, 0.8)', borderRadius: 4, yAxisID: 'y' }
                   ]
                 }} 
-                options={dualAxisOptions({ leftTick: compactTick, rightTick: compactUsdTick, rightColor: '#f5b700', leftMax: flywheel.burnAxisMax })} 
+                options={dualAxisOptions({
+                  leftTick: compactTick,
+                  rightTick: compactUsdTick,
+                  rightColor: '#f5b700',
+                  leftMax: flywheel.burnAxisMax,
+                  leftValues: flywheel.burn,
+                  rightValues: flywheel.prices,
+                })} 
               />
             </div>
           </div>
         </div>
-      </section>
+      </ShareSection>
 
       {/* TAB 5: ACTIVATION */}
-      <section id="activation" className="scroll-mt-32">
+      <ShareSection id="activation" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-lg md:text-xl font-bold text-white mb-6">Ecosystem Activation Metrics</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -440,14 +454,14 @@ export default function CardWallDetailView({ data, activeTab }) {
                 {hasActHist ? (
                 <Bar 
                   data={{
-                    labels: actLabels.slice(-actN),
+                    labels: actWin.labels,
                     datasets: [
-                      { type: 'line', label: 'Net Active Units', data: actCum.slice(-actN), borderColor: '#f5b700', backgroundColor: 'rgba(245, 183, 0, 0.05)', borderWidth: 3, fill: true, tension: 0.3, yAxisID: 'y' },
-                      { type: 'bar', label: 'Daily Activations', data: actDAct.slice(-actN), backgroundColor: '#00a804', borderRadius: 4, yAxisID: 'y1' },
-                      { type: 'bar', label: 'Daily Deactivations', data: actDDeact.slice(-actN), backgroundColor: '#f43f5e', borderRadius: 4, yAxisID: 'y1' }
+                      { type: 'line', label: 'Net Active Units', data: actWin.cols[0], borderColor: '#f5b700', tension: 0.3, yAxisID: 'y' },
+                      { type: 'bar', label: 'Daily Activations', data: actWin.cols[1], backgroundColor: '#00a804', borderRadius: 4, yAxisID: 'y1' },
+                      { type: 'bar', label: 'Daily Deactivations', data: actWin.cols[2], backgroundColor: '#f43f5e', borderRadius: 4, yAxisID: 'y1' }
                     ]
                   }} 
-                  options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#94a3b8' } } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { type: 'linear', position: 'left', grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y1: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, min: 0 } } }} 
+                  options={activityChartOptions(actWin.labels, actWin.cols[0], actWin.cols[1], actWin.cols[2])} 
                 />
                 ) : (
                   <EmptyChart>No activation history recorded</EmptyChart>
@@ -455,10 +469,10 @@ export default function CardWallDetailView({ data, activeTab }) {
              </div>
           </div>
         </div>
-      </section>
+      </ShareSection>
 
       {/* TAB 6: OWNERSHIP */}
-      <section id="ownership" className="scroll-mt-32">
+      <ShareSection id="ownership" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-lg md:text-xl font-bold text-white mb-6">Protocol Ownership & Distribution</h2>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -493,7 +507,7 @@ export default function CardWallDetailView({ data, activeTab }) {
             live={{ tokenHolders: wallHolders, nftHolders: ownership.nftHolders, ownershipRatio: ownership.ownershipRatio }}
           />
         </div>
-      </section>
+      </ShareSection>
 
       {/* SLAB DETAIL MODAL */}
       {selectedSlab && (

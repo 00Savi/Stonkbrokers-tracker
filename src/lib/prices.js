@@ -14,7 +14,7 @@
 // the OpenSea stats floor from the hourly job — recomputing those from token
 // price is what printed Coattail at 0.003 ETH and 2,500% ROI.
 
-import { NIGHTSHADES_FACTIONS, rollupNightshadesMarket } from './nightshades';
+import { NIGHTSHADES_FACTIONS, rollupNightshadesMarket, typicalNightshadesSeat } from './nightshades';
 
 const DEXSCREENER = 'https://api.dexscreener.com/latest/dex/tokens';
 
@@ -225,13 +225,13 @@ export function applyPrices(base, prices) {
       ...ns.market,
       ...rollupNightshadesMarket(factions, prices.ethPriceUsd),
     };
-    const allFloorUsd = (allMarket.nftFloorEth || 0) * (allMarket.ethPriceUsd || 0);
-    const allToken = allMarket.tokenPriceUsd || 0;
     const allTiers = (ns.tiers || []).map((t) => {
-      const cost = allFloorUsd + (Number(t.reqTokens) || 0) * allToken;
-      const annual = Number(t.trackedAnnualYieldUsd) || 0;
+      const seat = typicalNightshadesSeat(factions, t.tier);
+      const annual = seat.annual || 0;
+      const cost = seat.cost || 0;
       return {
         ...t,
+        trackedAnnualYieldUsd: annual,
         currentRoi: cost > 0 && annual > 0 ? +((annual / cost) * 100).toFixed(2) : 0,
       };
     });

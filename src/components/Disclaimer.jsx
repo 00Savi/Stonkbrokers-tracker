@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 /** One NFA body so landing, Markets, and project footers cannot drift. */
 export const NFA_TEXT =
@@ -51,15 +51,26 @@ export function DisclaimerCopy({ extra }) {
   );
 }
 
-export function MethodologyCard({ accent = 'text-blue-500', children }) {
+export function MethodologyCard({ accent = 'text-muted', children, defaultOpen = false }) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
-    <div data-share-omit className="bg-[#0e1013] rounded-xl p-5 md:p-6 border border-[#1e2228] shadow-lg mt-8">
-      <div className="flex items-center gap-2 mb-4">
-        <InfoIcon className={`w-5 h-5 ${accent}`} />
-        <h3 className="text-base md:text-lg font-bold text-white">Methodology & Disclaimer</h3>
+    <div data-share-omit className="card mt-8 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left sm:px-5"
+        aria-expanded={open}
+      >
+        <div className="flex items-center gap-2">
+          <InfoIcon className={`h-4 w-4 ${accent}`} />
+          <h3 className="eyebrow text-muted">Methodology</h3>
+        </div>
+        <span className="font-mono text-[11px] text-faint">{open ? 'Hide' : 'Show'}</span>
+      </button>
+      <div hidden={!open} className="border-t border-line px-4 pb-5 pt-4 sm:px-5">
+        <div className="mb-5 space-y-4 text-[13px] leading-relaxed text-muted">{children}</div>
+        <DisclaimerCopy />
       </div>
-      <div className="text-xs md:text-sm text-slate-300 mb-5 leading-relaxed space-y-4">{children}</div>
-      <DisclaimerCopy />
     </div>
   );
 }

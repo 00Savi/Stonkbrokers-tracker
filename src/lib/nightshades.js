@@ -21,6 +21,51 @@ export function factionList(ids) {
   return ids.map(factionLabel).join(' + ');
 }
 
+/** Floor USD + activation tokens at that faction's spot. */
+export function factionSeatCost(fp, tier) {
+  const t = tier || fp?.tiers?.[0];
+  if (!t) return 0;
+  if (Number(t.entryUsd) > 0) return Number(t.entryUsd);
+  const floorUsd = (Number(fp?.market?.nftFloorEth) || 0) * (Number(fp?.market?.ethPriceUsd) || 0);
+  return floorUsd + (Number(t.reqTokens) || 0) * (Number(fp?.market?.tokenPriceUsd) || 0);
+}
+
+/**
+ * One Nightshades seat, not four.
+ *
+ * All-view `tiers[].trackedAnnualYieldUsd` used to be the SUM of Ghosts +
+ * Zombies + Knights + Watchers at that Anvil rank, divided by one averaged
+ * floor. That is four wallets' payout against one cost. Weight by live
+ * actives so Watchers' richer Shade does not count as four Ghosts.
+ */
+export function typicalNightshadesSeat(factions = {}, tierId = 'T0') {
+  let yW = 0;
+  let cW = 0;
+  let w = 0;
+  for (const id of NIGHTSHADES_FACTIONS) {
+    const fp = factions[id];
+    if (!fp) continue;
+    const t = (fp.tiers || []).find((x) => x.tier === tierId)
+      || (tierId === 'T0' ? fp.tiers?.[0] : null);
+    if (!t) continue;
+    const active = Number(fp.activation?.activeCount);
+    const weight = active > 0 ? active : 1;
+    const cost = factionSeatCost(fp, t);
+    const annual = Number(t.trackedAnnualYieldUsd) || 0;
+    yW += annual * weight;
+    cW += cost * weight;
+    w += weight;
+  }
+  if (!(w > 0)) return { annual: 0, cost: 0, roi: 0 };
+  const annual = yW / w;
+  const cost = cW / w;
+  return {
+    annual,
+    cost,
+    roi: cost > 0 && annual > 0 ? (annual / cost) * 100 : 0,
+  };
+}
+
 /** Daily pool-WETH series for the Night LP health chart. Falls back to the live stamp. */
 export function nightLpPoints(night) {
   const hist = Array.isArray(night?.lpHistory) ? night.lpHistory.filter((r) => r && r.date) : [];
@@ -186,7 +231,6 @@ export function overlayFactionMaps(maps, { timeframe = 'all', interval = 'daily'
         backgroundColor: `${color}22`,
         borderWidth: 2,
         tension: 0.3,
-        pointRadius: 0,
         spanGaps: fill,
       };
     });
@@ -218,7 +262,6 @@ export function overlayFactionMaps(maps, { timeframe = 'all', interval = 'daily'
       backgroundColor: `${color}12`,
       borderWidth: 2,
       tension: 0.3,
-      pointRadius: 0,
       spanGaps: true,
       fill: false,
     };

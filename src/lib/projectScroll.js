@@ -4,8 +4,7 @@ import { tabsForProject } from './routes';
 
 /**
  * Scroll the active section into view, and keep `onActiveId` in sync as the
- * page is scrolled. Used by project pages (`/mancer/revenue`) and ecosystem
- * (`/ecosystem?tab=revenue`).
+ * page is scrolled. Used by project pages (`/mancer/revenue`).
  */
 export function useSectionScrollSpy({ sectionIds, activeId, onActiveId, ready }) {
   const skip = useRef(false);

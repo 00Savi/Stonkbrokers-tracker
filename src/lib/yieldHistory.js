@@ -1,4 +1,4 @@
-import { STREAM_COLORS, TIER_COLORS } from './charts';
+import { STREAM_COLORS, TIER_COLORS, barThickness } from './charts';
 import { dateKey, formatLabels, utcIso } from './dates';
 import { trailingSnapshots, usableSnapshots } from './snapshots';
 
@@ -69,6 +69,26 @@ export function windowSeries(labels, values, timeframe = 'all', interval = 'dail
   const labs = (labels || []).slice(-n);
   const vals = (values || []).slice(-n);
   return resampleSeries(labs, vals, interval, mode);
+}
+
+/**
+ * Range + interval for aligned series (activation, holders).
+ * `last` for levels, `sum` for daily flows.
+ */
+export function windowChart(labels, columns = [], timeframe = 'all', interval = 'daily', modes = []) {
+  const source = labels || [];
+  const n = windowLen(timeframe, source.length);
+  const labs = source.slice(-n);
+  const axis = resampleSeries(labs, labs, interval, 'last').labels;
+  const cols = (columns || []).map((col, i) => (
+    resampleSeries(labs, (col || []).slice(-n), interval, modes[i] || 'last').data
+  ));
+  return {
+    labels: formatLabels(axis),
+    rawLabels: axis,
+    cols,
+    points: axis.length,
+  };
 }
 
 /** Usable snapshots for the selected range, then optional week/month buckets. */
@@ -451,12 +471,14 @@ export function mixPercentCols(cols) {
 }
 
 export function barDatasets(cols, { stacked = false } = {}) {
+  const n = cols?.[0]?.data?.length || 0;
+  const thick = barThickness(n);
   return (cols || []).map((c) => ({
     label: c.label,
     data: c.data,
     backgroundColor: c.color,
-    borderRadius: 3,
-    maxBarThickness: stacked ? 36 : 22,
+    borderRadius: n <= 16 ? 3 : 1,
+    maxBarThickness: thick,
     skipNull: true,
     stack: stacked ? 'fees' : undefined,
   }));

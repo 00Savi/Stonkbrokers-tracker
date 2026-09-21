@@ -39,12 +39,14 @@ import { activationTokenCostUsd, tokenPriceAtTs } from '../src/lib/portfolioHist
 import { attributedStonkBurn, dailyAttributedBurnSeries, firstInternActivationDay } from '../src/lib/burn';
 import { navNftScanTargets } from '../src/lib/portfolioScan';
 import { windowLen } from '../src/lib/yieldHistory';
-import { CHART_WINDOWS, CHART_INTERVALS } from '../src/lib/chartWindow';
+import { CHART_WINDOWS, CHART_INTERVALS, DEFAULT_CHART_WINDOW, DEFAULT_CHART_INTERVAL } from '../src/lib/chartWindow';
+import { levelAxis } from '../src/lib/charts';
 import { buildTopicShareCard } from '../src/lib/projectShare';
 import { copySectionEl } from '../src/components/CopyControl';
 import { internIdsForBroker } from '../src/lib/interns';
 import { parseBrokerId } from '../src/lib/brokerScan';
 import { isProjectLive } from '../src/lib/routes';
+import { typicalNightshadesSeat } from '../src/lib/nightshades';
 
 const snapshot = JSON.parse(fs.readFileSync('public/data.json', 'utf8'));
 
@@ -484,6 +486,19 @@ for (const [name, View, props] of VIEWS) {
   } else {
     console.log('ok    chart range 7D/30D/90D/All and interval Daily/Weekly/Monthly');
   }
+  if (DEFAULT_CHART_WINDOW !== '30d' || DEFAULT_CHART_INTERVAL !== 'daily') {
+    failed++;
+    console.error(`FAIL  chart defaults ${DEFAULT_CHART_WINDOW}/${DEFAULT_CHART_INTERVAL}`);
+  } else {
+    console.log('ok    charts default to 30D daily');
+  }
+  const netAxis = levelAxis({}, [1800, 1840, 1900]);
+  if (netAxis.beginAtZero || !(netAxis.min > 1500) || !(netAxis.max < 2200)) {
+    failed++;
+    console.error(`FAIL  level axis still pinned at zero ${JSON.stringify(netAxis)}`);
+  } else {
+    console.log('ok    level series zoom to the move');
+  }
   const topic = buildTopicShareCard(snapshot, { projectKey: 'stonk', tab: 'burn', timeframe: 'all' });
   if (!topic?.page || !String(topic.title || '').includes('Burn')) {
     failed++;
@@ -505,11 +520,11 @@ for (const [name, View, props] of VIEWS) {
   if (tabHtml.includes('Copy for X')) {
     failed++;
     console.error('FAIL  Copy for X still on the tab bar');
-  } else if (!tabHtml.includes('Copy')) {
+  } else if (tabHtml.includes('Copy this heading and its charts for X')) {
     failed++;
-    console.error('FAIL  tab Copy button missing');
+    console.error('FAIL  tab bar Copy is still present');
   } else {
-    console.log('ok    tab Copy label is Copy, not Copy for X');
+    console.log('ok    tab bar has no heading Copy');
   }
   const stonkHtml = renderToString(
     <StaticRouter location="/stonkbrokers/revenue">
@@ -524,6 +539,23 @@ for (const [name, View, props] of VIEWS) {
   } else {
     console.log('ok    stonk heading sections ready for Copy all');
   }
+  const sectionCopies = (stonkHtml.match(/Copy section/g) || []).length;
+  if (sectionCopies < 7) {
+    failed++;
+    console.error(`FAIL  Copy section missing on headings (${sectionCopies})`);
+  } else {
+    console.log('ok    Copy section is on each heading');
+  }
+  const ns = snapshot.projects?.nightshades;
+  const factionY = Object.values(ns?.factions || {}).map((f) => Number(f?.tiers?.[0]?.trackedAnnualYieldUsd) || 0);
+  const maxFaction = Math.max(0, ...factionY);
+  const seat = typicalNightshadesSeat(ns?.factions);
+  if (seat.roi > 800 || (maxFaction > 0 && seat.annual > maxFaction * 1.05)) {
+    failed++;
+    console.error(`FAIL  nightshades All CoC still looks like four seats ${seat.annual} / ${seat.roi.toFixed(1)}%`);
+  } else {
+    console.log(`ok    nightshades typical Shade CoC ${seat.roi.toFixed(1)}% (not sum of four)`);
+  }
   const ecoHtml = renderToString(
     <StaticRouter location="/ecosystem">
       <EcosystemView data={snapshot} />
@@ -532,11 +564,20 @@ for (const [name, View, props] of VIEWS) {
   if (ecoHtml.includes('Copy for X')) {
     failed++;
     console.error('FAIL  ecosystem still says Copy for X');
-  } else if (!ecoHtml.includes('Copy')) {
+  } else if (!ecoHtml.includes('Copy section')) {
     failed++;
-    console.error('FAIL  ecosystem Copy missing');
+    console.error('FAIL  ecosystem Copy section missing');
   } else {
-    console.log('ok    ecosystem heading Copy is Copy');
+    console.log('ok    ecosystem heading Copy is Copy section');
+  }
+  if (ecoHtml.includes('Ecosystem Dominance') || ecoHtml.includes('Daily protocol revenue')) {
+    failed++;
+    console.error('FAIL  ecosystem still overlays incomparable series');
+  } else if (!ecoHtml.includes('own scale') || !ecoHtml.includes('Base-seat CoC')) {
+    failed++;
+    console.error('FAIL  ecosystem comparison board missing');
+  } else {
+    console.log('ok    ecosystem ranks and sparklines instead of overlays');
   }
 }
 

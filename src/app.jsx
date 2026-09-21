@@ -74,11 +74,11 @@ function ProjectPage({ data }) {
 
   return (
     <>
-      <div className="sticky top-[4.25rem] z-20 -mx-3 bg-[#08090b]/90 px-3 backdrop-blur sm:top-[4.75rem]">
+      <div className="sticky top-[var(--header-h,5.5rem)] z-20 -mx-3 bg-[#08090b] px-3">
         <TabBar data={data} />
         {key === 'nightshades' && <NightshadesFactionBar />}
       </div>
-      <div className="pt-5 pb-28" id="project-share">
+      <div className="pt-5 pb-10" id="project-share">
         {data ? (
           <View data={data} activeTab={activeTab} />
         ) : (
@@ -105,6 +105,9 @@ function ScrollToTop() {
 export default function App() {
   const { data, sources, pending } = useDashboard();
   const booting = sources.snapshot === 'loading';
+  const { pathname } = useLocation();
+  const first = pathname.split('/').filter(Boolean)[0];
+  const showFooter = !PROJECTS.some((p) => p.slug === first);
 
   if (sources.snapshot === 'error') {
     return (
@@ -121,7 +124,7 @@ export default function App() {
   }
 
   return (
-    <div className="flex min-h-full flex-col pb-28">
+    <div className={`flex min-h-full flex-col ${showFooter ? 'pb-28' : 'pb-8'}`}>
       <ScrollToTop />
       <TopNav live={sources.prices === 'ready'} sources={sources} data={data} pending={booting || pending('overlay')} />
       <ChartMobileSync />

@@ -5,6 +5,7 @@ import {
 } from 'chart.js';
 import { Scatter } from 'react-chartjs-2';
 import { NFT_PROJECTS, RANKING_PROJECTS } from '../../lib/routes';
+import { typicalNightshadesSeat } from '../../lib/nightshades';
 import { Card, Figure, Stat, SplitBar, Tag, BetaTag, Value, Skeleton, usd, num, pct } from '../kit';
 import { compactUsdTick, PROJECT_COLORS } from '../../lib/charts';
 
@@ -42,8 +43,9 @@ function tierRows(data) {
     const nft = !meta.kind || meta.kind === 'machines' || meta.kind === 'brokers' || meta.kind === 'factions';
 
     for (const t of p.tiers || []) {
-      const cost = t.entryUsd || (nft ? floorUsd + (t.reqTokens || 0) * tokenUsd : (t.reqTokens || 0) * tokenUsd);
-      const annual = t.trackedAnnualYieldUsd || 0;
+      const night = meta.kind === 'factions' ? typicalNightshadesSeat(p.factions, t.tier) : null;
+      const cost = night?.cost || t.entryUsd || (nft ? floorUsd + (t.reqTokens || 0) * tokenUsd : (t.reqTokens || 0) * tokenUsd);
+      const annual = night ? night.annual : (t.trackedAnnualYieldUsd || 0);
       rows.push({
         key: `${meta.key}-${t.tier}`,
         project: meta,
@@ -52,7 +54,7 @@ function tierRows(data) {
         reqTokens: t.reqTokens,
         cost,
         annual,
-        roi: cost > 0 && annual > 0 ? (annual / cost) * 100 : null,
+        roi: night ? (night.roi || null) : (cost > 0 && annual > 0 ? (annual / cost) * 100 : null),
         payback: annual > 0 ? cost / annual : null,
         underConstruction: !!p.underConstruction,
         requires: nft

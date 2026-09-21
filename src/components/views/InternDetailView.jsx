@@ -5,10 +5,11 @@ import {
 } from 'chart.js';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import { formatLabels } from '../../lib/dates';
-import { windowSnapshots, tierRoiDatasets, protocolRevenueChart, sliceCols, windowPeriodLabel, windowLen, seriesHasInk, holderRevenueCol } from '../../lib/yieldHistory';
-import { compactUsd, compactNum } from '../kit';
+import { windowSnapshots, tierRoiDatasets, protocolRevenueChart, sliceCols, windowPeriodLabel, seriesHasInk, holderRevenueCol, windowChart } from '../../lib/yieldHistory';
+import { compactUsd, compactNum, YieldPeriodToggle, scaleAnnualYield, yieldSuffix } from '../kit';
+import { ShareSection } from '../CopyControl';
 import { TierFlowSection, netTierCount } from '../TierFlowCards';
-import { baseChartOptions, STREAM_COLORS } from '../../lib/charts';
+import { baseChartOptions, STREAM_COLORS, activityChartOptions } from '../../lib/charts';
 import { useChartView } from '../../lib/chartWindow';
 import { holderSeries } from '../../lib/snapshots';
 import { MethodologyCard } from '../Disclaimer';
@@ -49,6 +50,7 @@ export default function InternDetailView({ data, activeTab }) {
   const [expandedTier, setExpandedTier] = useState(null);
   const [tierTimeframe, setTierTimeframe] = useState('allTime');
   const [volumeMultiplier, setVolumeMultiplier] = useState(1);
+  const [yieldPeriod, setYieldPeriod] = useState('Y');
 
   const project = data?.projects?.interns;
   const stonk = data?.projects?.stonk;
@@ -87,7 +89,7 @@ export default function InternDetailView({ data, activeTab }) {
 
   const actHistory = activation.history || {};
   const hasActHist = Array.isArray(actHistory.labels) && actHistory.labels.length > 0;
-  const actLabels = hasActHist ? formatLabels(actHistory.labels) : [];
+  const actLabels = hasActHist ? actHistory.labels : [];
   const actCum = hasActHist && actHistory.cumulative?.length ? actHistory.cumulative : [];
   const actDAct = hasActHist && actHistory.dailyActivations?.length ? actHistory.dailyActivations : [];
   const actDDeact = hasActHist && actHistory.dailyDeactivations?.length ? actHistory.dailyDeactivations : [];
@@ -98,14 +100,14 @@ export default function InternDetailView({ data, activeTab }) {
   });
 
   const holdersFull = holderSeries(ownership, dailySnapshots);
-  const ownN = windowLen(timeframe, holdersFull.labels.length);
-  const ownLabels = formatLabels(holdersFull.labels.slice(-ownN));
-  const ownData = holdersFull.data.slice(-ownN);
-  const actN = windowLen(timeframe, actLabels.length);
+  const holdersWin = windowChart(holdersFull.labels, [holdersFull.data], timeframe, interval, ['last']);
+  const ownLabels = holdersWin.labels;
+  const ownData = holdersWin.cols[0] || [];
+  const actWin = windowChart(actLabels, [actCum, actDAct, actDDeact], timeframe, interval, ['last', 'sum', 'sum']);
 
   return (
     <div className="space-y-6 relative">
-      <section id="roi" className="scroll-mt-32">
+      <ShareSection id="roi" className="scroll-mt-32">
         <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl space-y-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -187,7 +189,12 @@ export default function InternDetailView({ data, activeTab }) {
                     <th className="pb-4 font-medium pl-2">Tier</th>
                     <th className="pb-4 font-medium">Activation Req.</th>
                     <th className="pb-4 font-medium">Current Total Cost</th>
-                    <th className="pb-4 font-medium">Expected Yield <span className="normal-case">(Annualized)</span></th>
+                    <th className="pb-4 font-medium">
+                      <div className="flex items-center gap-2">
+                        <span>Expected Yield</span>
+                        <YieldPeriodToggle value={yieldPeriod} onChange={setYieldPeriod} />
+                      </div>
+                    </th>
                     <th className="pb-4 font-medium text-right pr-4">Est. ROI (CoC)</th>
                   </tr>
                 </thead>
@@ -219,7 +226,7 @@ export default function InternDetailView({ data, activeTab }) {
                             {building || !(simulatedYield > 0) ? (
                               <span className="text-slate-500 italic">TBD / BUILDING</span>
                             ) : (
-                              <><span className="text-white font-bold text-base">{formatCurrency(simulatedYield)}</span> <span className="text-slate-500">/yr</span></>
+                              <><span className="text-white font-bold text-base">{formatCurrency(scaleAnnualYield(simulatedYield, yieldPeriod))}</span> <span className="text-slate-500">{yieldSuffix(yieldPeriod)}</span></>
                             )}
                           </td>
                           <td className="py-5 text-right pr-4">
@@ -254,9 +261,9 @@ export default function InternDetailView({ data, activeTab }) {
             </div>
           </div>
         </div>
-      </section>
+      </ShareSection>
 
-      <section id="yield" className="scroll-mt-32">
+      <ShareSection id="yield" className="scroll-mt-32">
         <div className="bg-[#0e1013] border border-[#1e2228] p-4 md:p-6 rounded-2xl shadow-lg space-y-6">
           <h2 className="text-xl font-bold text-white">Historical Yield &amp; Payback Horizon</h2>
           <p className="text-xs md:text-sm text-slate-400">Intern Clock In payouts once the engine is live. Base pay from the parent broker is a separate slice and is not this chart.</p>
@@ -285,9 +292,9 @@ export default function InternDetailView({ data, activeTab }) {
           <YieldUsdPricePanel snaps={roiSnaps} tiers={tiers} />
           <PaybackPanel snaps={roiSnaps} tiers={tiers} floorCostUsd={floorCostUsd} tokenPriceUsd={stonkPx} />
         </div>
-      </section>
+      </ShareSection>
 
-      <section id="revenue" className="scroll-mt-32">
+      <ShareSection id="revenue" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-lg md:text-xl font-bold text-white">Intern desks</h2>
           <p className="text-xs text-slate-400">Fees from desks the interns run land in Intern Clock In. Clock In, Exchange, names, and lending CAs are not deployed yet.</p>
@@ -307,9 +314,9 @@ export default function InternDetailView({ data, activeTab }) {
             }}
           />
         </div>
-      </section>
+      </ShareSection>
 
-      <section id="activation" className="scroll-mt-32">
+      <ShareSection id="activation" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-lg md:text-xl font-bold text-white">Intern activation</h2>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -364,16 +371,16 @@ export default function InternDetailView({ data, activeTab }) {
             <p className="text-xs text-slate-400 mb-4">A sale clears intern activation the same way as a broker. Dormant interns cannot activate.</p>
             <div className="relative h-52 sm:h-64 md:h-80 w-full">
               {hasActHist ? (
-                <Bar data={{ labels: actLabels.slice(-actN), datasets: [{ type: 'line', label: 'Active units', data: actCum.slice(-actN), borderColor: ACCENT, backgroundColor: 'rgba(251, 191, 36, 0.05)', borderWidth: 3, fill: true, tension: 0.3, yAxisID: 'y' }, { type: 'bar', label: 'Daily Activations', data: actDAct.slice(-actN), backgroundColor: '#00a804', borderRadius: 4, yAxisID: 'y1' }, { type: 'bar', label: 'Daily Deactivations', data: actDDeact.slice(-actN), backgroundColor: '#f43f5e', borderRadius: 4, yAxisID: 'y1' }] }} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#94a3b8' } } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { type: 'linear', position: 'left', grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y1: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, min: 0 } } }} />
+                <Bar data={{ labels: actWin.labels, datasets: [{ type: 'line', label: 'Active units', data: actWin.cols[0], borderColor: ACCENT, tension: 0.3, yAxisID: 'y' }, { type: 'bar', label: 'Daily Activations', data: actWin.cols[1], backgroundColor: '#00a804', borderRadius: 4, yAxisID: 'y1' }, { type: 'bar', label: 'Daily Deactivations', data: actWin.cols[2], backgroundColor: '#f43f5e', borderRadius: 4, yAxisID: 'y1' }] }} options={activityChartOptions(actWin.labels, actWin.cols[0], actWin.cols[1], actWin.cols[2])} />
               ) : (
                 <EmptyChart>No intern activation history recorded</EmptyChart>
               )}
             </div>
           </div>
         </div>
-      </section>
+      </ShareSection>
 
-      <section id="ownership" className="scroll-mt-32">
+      <ShareSection id="ownership" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-lg md:text-xl font-bold text-white">Intern ownership</h2>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -402,7 +409,7 @@ export default function InternDetailView({ data, activeTab }) {
             live={{ tokenHolders: 0, nftHolders: ownership.nftHolders, ownershipRatio: ownership.ownershipRatio }}
           />
         </div>
-      </section>
+      </ShareSection>
 
       <MethodologyCard accent="text-amber-400">
         <p><strong className="text-white">What this is:</strong> Interns by StonkBrokers is the companion NFT to StonkBrokers, not a second broker seat. Paper at <a className="text-amber-300 underline" href={INTERNS_DOCS} target="_blank" rel="noreferrer">stonkbrokers.cash/docs/interns</a>. Holding an intern is not equity and is not a guaranteed share of revenue.</p>

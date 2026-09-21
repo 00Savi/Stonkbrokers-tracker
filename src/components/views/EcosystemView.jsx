@@ -1,48 +1,208 @@
-import React, { useCallback, useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { projectPath, PROJECTS, isProjectLive } from '../../lib/routes';
-import { useSectionScrollSpy } from '../../lib/projectScroll';
+import { projectPath, RANKING_PROJECTS, isProjectLive, PROJECTS } from '../../lib/routes';
 import {
-  Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, ArcElement, Filler
+  Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler
 } from 'chart.js';
-import { Line, Bar, Doughnut } from 'react-chartjs-2';
+import { Line } from 'react-chartjs-2';
 import OverviewView from './OverviewView';
-import { compactUsd, compactNum, WindowBar, IntervalBar } from '../kit';
+import {
+  compactUsd, compactNum, WindowBar, IntervalBar, YieldPeriodToggle,
+  scaleAnnualYield, yieldSuffix, yieldPeriodLabel, Card, Stat, Tag, KpiStrip,
+} from '../kit';
 import { dateKey, formatLabels } from '../../lib/dates';
 import { burnSeries } from '../../lib/burn';
-import { cashflowRoiByDate, protocolFeeCols, protocolRevenueChart, seriesHasInk } from '../../lib/yieldHistory';
+import { cashflowRoiByDate, protocolFeeCols, protocolRevenueChart, seriesHasInk, bucketKey, windowLen, windowPeriodLabel } from '../../lib/yieldHistory';
+import { typicalNightshadesSeat } from '../../lib/nightshades';
 import { useChartView } from '../../lib/chartWindow';
-import { baseChartOptions, compactTick, compactUsdTick, PROJECT_COLORS } from '../../lib/charts';
-import { ChartPanel, EmptyChart } from '../HistoryCharts';
+import { baseChartOptions, compactTick, compactUsdTick, PROJECT_COLORS, levelAxis } from '../../lib/charts';
+import { EmptyChart } from '../HistoryCharts';
 import { MethodologyCard } from '../Disclaimer';
-import { CopyPageButton, copySectionEl } from '../CopyControl';
+import { CopyControl, shareSlug, ShareSection } from '../CopyControl';
+import { copyElement } from '../../lib/share';
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
 const ECO_TABS = [
-  { id: 'roi', label: 'ROI Benchmarks' },
-  { id: 'historical', label: 'Historical Yield' },
-  { id: 'revenue', label: 'Revenue & LPs' },
-  { id: 'burn', label: 'Burn Tracker' },
+  { id: 'roi', label: 'ROI' },
+  { id: 'historical', label: 'Yield' },
+  { id: 'revenue', label: 'Revenue' },
+  { id: 'burn', label: 'Burn' },
   { id: 'activation', label: 'Activation' },
   { id: 'ownership', label: 'Ownership' },
-  { id: 'rankings', label: 'Rankings' },
+  { id: 'rankings', label: 'All tiers' },
 ];
 
-function EcoTogether({ title, note, labels, datasets, options, kind = 'line' }) {
-  const ink = (datasets || []).filter((d) => seriesHasInk(d.data));
+const FALLBACK_LOGO = {
+  stonk: 'Stonkbroker.png',
+  interns: 'Intern.svg',
+  mancer: 'logo.png',
+  tickeryard: 'Yardkeepers.png',
+  cardwall: 'wall.png',
+  index: 'Index.png',
+  oakmont: 'Oakmont.png',
+  nightshades: 'Knight.png',
+};
+
+function logoSrc(meta, project) {
+  const file = meta.logo || project?.config?.logo || FALLBACK_LOGO[meta.key] || 'Stonkbroker.png';
+  return file.startsWith('http') ? file : `/${file}`;
+}
+
+function lastInk(data) {
+  for (let i = (data || []).length - 1; i >= 0; i -= 1) {
+    const n = Number(data[i]);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+function sumInk(data) {
+  return (data || []).reduce((s, v) => s + (Number(v) || 0), 0);
+}
+
+/** Ranked bars — fair when every row is the same unit (%, USD in a window). */
+function RankBar({ rows, format = compactUsd, suffix = '' }) {
+  const max = Math.max(0, ...rows.map((r) => Number(r.value) || 0));
   return (
-    <ChartPanel title={title} note={note}>
-      {ink.length ? (
-        kind === 'bar' ? (
-          <Bar data={{ labels, datasets: ink }} options={options} />
-        ) : (
-          <Line data={{ labels, datasets: ink }} options={options} />
-        )
-      ) : (
-        <EmptyChart />
-      )}
-    </ChartPanel>
+    <div className="space-y-3">
+      {rows.map((r) => {
+        const v = Number(r.value) || 0;
+        const w = max > 0 ? Math.max(v > 0 ? 2 : 0, (v / max) * 100) : 0;
+        return (
+          <Link key={r.key} to={r.href} className="block">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="h-2 w-2 shrink-0 rounded-[2px]" style={{ backgroundColor: r.color }} />
+                <span className="truncate text-[13px] text-ink">{r.name}</span>
+              </span>
+              <span className="num shrink-0 text-[13px] text-ink">
+                {r.pending ? '—' : `${format(v)}${suffix}`}
+              </span>
+            </div>
+            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-panel-2">
+              <div className="h-full rounded-full" style={{ width: `${w}%`, backgroundColor: r.color }} />
+            </div>
+            {r.note ? <p className="mt-1 font-mono text-[11px] text-faint">{r.note}</p> : null}
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Period mix. One stacked bar, not eight lines. */
+function ShareBar({ parts, format = compactUsd }) {
+  const total = parts.reduce((s, p) => s + (Number(p.value) || 0), 0);
+  const live = parts.filter((p) => (Number(p.value) || 0) > 0);
+  if (!(total > 0) || !live.length) {
+    return <p className="text-[13px] text-muted">Nothing in this window.</p>;
+  }
+  return (
+    <div>
+      <div className="flex h-8 w-full gap-[2px] overflow-hidden">
+        {live.map((p, i) => {
+          const w = ((Number(p.value) || 0) / total) * 100;
+          return (
+            <div
+              key={p.key}
+              title={`${p.name}: ${format(p.value)} (${w.toFixed(1)}%)`}
+              className={i === 0 ? 'rounded-l-[4px]' : i === live.length - 1 ? 'rounded-r-[4px]' : ''}
+              style={{ width: `${w}%`, backgroundColor: p.color }}
+            />
+          );
+        })}
+      </div>
+      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
+        {live.map((p) => (
+          <span key={p.key} className="flex items-center gap-1.5 font-mono text-[11px] text-muted">
+            <span className="inline-block h-2 w-2 rounded-[2px]" style={{ backgroundColor: p.color }} />
+            {p.name}{' '}
+            <span className="text-ink">{format(p.value)}</span>
+            <span className="text-faint">{((Number(p.value) / total) * 100).toFixed(0)}%</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SparkCard({ name, href, color, labels, data, value, note, tick = compactTick }) {
+  const ref = useRef(null);
+  const has = seriesHasInk(data);
+  const opts = baseChartOptions(labels);
+  return (
+    <div ref={ref} className="card relative overflow-hidden">
+      <Link to={href} className="block p-4 pr-12 transition-colors hover:border-muted">
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="flex min-w-0 items-center gap-2 text-[13px] text-ink">
+            <span className="h-2 w-2 shrink-0 rounded-[2px]" style={{ backgroundColor: color }} />
+            <span className="truncate">{name}</span>
+          </p>
+          <p className="num shrink-0 text-[13px] text-ink">{value}</p>
+        </div>
+        {note ? <p className="mt-0.5 font-mono text-[11px] text-faint">{note}</p> : null}
+        <div className="relative mt-3 h-16">
+          {has ? (
+            <Line
+              data={{
+                labels,
+                datasets: [{
+                  data,
+                  borderColor: color,
+                  borderWidth: 1.5,
+                  tension: 0.3,
+                  pointRadius: 0,
+                  spanGaps: true,
+                }],
+              }}
+              options={{
+                ...opts,
+                plugins: { ...opts.plugins, legend: { display: false } },
+                scales: {
+                  x: { display: false },
+                  y: { display: false, ...levelAxis({ callback: tick }, data) },
+                },
+              }}
+            />
+          ) : (
+            <p className="flex h-full items-center text-[12px] text-faint">No series in this window</p>
+          )}
+        </div>
+      </Link>
+      <div className="absolute right-2 top-2 z-20">
+        <CopyControl
+          heading
+          tight
+          idleLabel="Copy"
+          title="Copy this chart for X"
+          onCopy={() => copyElement(ref.current, { filename: `savi-${shareSlug(name, 'spark')}.png` })}
+        />
+      </div>
+    </div>
+  );
+}
+
+function SparkGrid({ overlay, hrefFor, formatValue, tick, noteFor }) {
+  if (!overlay?.datasets?.length) {
+    return <p className="text-[13px] text-muted">No history in this window.</p>;
+  }
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {overlay.datasets.map((ds) => (
+        <SparkCard
+          key={ds.key || ds.label}
+          name={ds.label}
+          href={hrefFor(ds)}
+          color={ds.borderColor}
+          labels={overlay.labels}
+          data={ds.data}
+          value={formatValue(ds)}
+          note={noteFor ? noteFor(ds) : null}
+          tick={tick}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -53,22 +213,6 @@ export default function EcosystemView({ data, pending = false }) {
   const [expandedProject, setExpandedProject] = useState(null);
   const [yieldPeriod, setYieldPeriod] = useState('Y');
   const { range: timeframe, setRange, interval, setInterval } = useChartView();
-
-  const onActiveId = useCallback((id) => {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      if (id === 'roi') next.delete('tab');
-      else next.set('tab', id);
-      return next;
-    }, { replace: true });
-  }, [setSearchParams]);
-
-  useSectionScrollSpy({
-    sectionIds: ECO_TABS.map((t) => t.id),
-    activeId: activeTab,
-    onActiveId,
-    ready: !!(data && data.projects),
-  });
 
   const selectTab = (id) => {
     setSearchParams((prev) => {
@@ -81,73 +225,19 @@ export default function EcosystemView({ data, pending = false }) {
 
   if (!data || !data.projects) return <div className="text-center text-slate-400 p-12">Loading Ecosystem...</div>;
 
-  const formatCurrency = compactUsd;
-  const formatNumber = compactNum;
-
   const hidden = new Set(PROJECTS.filter((p) => !isProjectLive(p)).map((p) => p.key));
-  const order = ['stonk', 'interns', 'mancer', 'tickeryard', 'cardwall', 'index', 'printer', 'oakmont', 'coattail', 'nightshades'].filter(
-    (k) => !hidden.has(k)
-  );
-  const activationOrder = order.filter((k) => {
-    const kind = data.projects[k]?.config?.kind;
-    return kind !== 'cashflow' && kind !== 'vault';
-  });
-  const projectNames = { stonk: 'StonkBrokers', interns: 'Interns', mancer: 'Mancer', tickeryard: 'TickerYard', cardwall: 'The Card Wall', index: 'The Index', printer: 'RH Machines', oakmont: 'Oakmont', coattail: 'Coattail Brokers', nightshades: 'Nightshades' };
+  const board = RANKING_PROJECTS.filter((m) => data.projects[m.key] && !hidden.has(m.key));
+  const order = board.map((m) => m.key);
+  const activationBoard = board.filter((m) => m.kind !== 'cashflow' && m.kind !== 'vault');
+  const activationOrder = activationBoard.map((m) => m.key);
+  const projectNames = Object.fromEntries(board.map((m) => [m.key, m.name]));
   const projectColors = PROJECT_COLORS;
-  const projectLogos = { stonk: 'Stonkbroker.png', interns: 'Intern.svg', mancer: 'logo.png', tickeryard: 'Yardkeepers.png', cardwall: 'wall.png', index: 'Index.png', printer: 'Printer.png', oakmont: 'Oakmont.png', coattail: 'Coattail.svg', nightshades: 'Knight.png' };
-
-  const scaleYield = (annual) => {
-    if (yieldPeriod === 'D') return (annual || 0) / 365;
-    if (yieldPeriod === 'M') return (annual || 0) / 12;
-    return annual || 0;
-  };
-  const yieldPeriodLabel = yieldPeriod === 'D' ? 'Daily' : yieldPeriod === 'M' ? 'Monthly' : 'Annualized';
-  const yieldSuffix = yieldPeriod === 'D' ? '/day' : yieldPeriod === 'M' ? '/mo' : '/yr';
+  const period = windowPeriodLabel(timeframe);
+  const scaleYield = (annual) => scaleAnnualYield(annual, yieldPeriod);
+  const yieldLabel = yieldPeriodLabel(yieldPeriod);
+  const yieldUnit = yieldSuffix(yieldPeriod);
 
   const chartOptions = baseChartOptions();
-
-  const percentChartOptions = {
-    ...chartOptions,
-    scales: {
-      ...chartOptions.scales,
-      y: { min: 0, ticks: { color: '#cbd5e1', callback: (v) => `${compactTick(v)}%` }, grid: { color: '#1e2228', borderDash: [4, 4] } }
-    }
-  };
-
-  const usdChartOptions = {
-    ...chartOptions,
-    scales: {
-      ...chartOptions.scales,
-      y: {
-        ...chartOptions.scales.y,
-        beginAtZero: true,
-        ticks: { ...chartOptions.scales.y.ticks, callback: compactUsdTick },
-      },
-    },
-  };
-
-  const countChartOptions = {
-    ...chartOptions,
-    scales: {
-      ...chartOptions.scales,
-      y: {
-        ...chartOptions.scales.y,
-        beginAtZero: true,
-        ticks: { ...chartOptions.scales.y.ticks, callback: compactTick },
-      },
-    },
-  };
-
-  // =========================================================
-  // UNIVERSAL DATA ARRAYS & SAFE-PADDING ENGINES
-  // =========================================================
-  const getSliceCount = (tf, totalLen) => {
-    if (tf === '1d') return Math.min(1, totalLen);
-    if (tf === '7d' || tf === '1w') return Math.min(7, totalLen);
-    if (tf === '30d' || tf === '1m') return Math.min(30, totalLen);
-    if (tf === '90d') return Math.min(90, totalLen);
-    return totalLen;
-  };
 
   const overlayFromMaps = (maps, { keys = order, fill = false } = {}) => {
     const labelSet = new Set();
@@ -155,14 +245,26 @@ export default function EcosystemView({ data, pending = false }) {
       Object.keys(map || {}).forEach((d) => labelSet.add(dateKey(d)));
     }
     const raw = [...labelSet].filter(Boolean).sort();
-    const sliced = raw.slice(-getSliceCount(timeframe, raw.length));
+    const sliced = raw.slice(-windowLen(timeframe, raw.length));
+    let axis = sliced;
+    if (interval && interval !== 'daily') {
+      const seen = new Set();
+      axis = [];
+      for (const d of sliced) {
+        const key = bucketKey(d, interval);
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        axis.push(key);
+      }
+    }
     const datasets = keys.map((k) => {
       const map = maps[k] || {};
       let started = false;
       let last = null;
-      const dataPts = sliced.map((d) => {
-        const n = Number(map[d]);
-        const val = Number.isFinite(n) ? n : null;
+      const dataPts = axis.map((key) => {
+        const days = interval === 'daily' ? [key] : sliced.filter((d) => bucketKey(d, interval) === key);
+        const nums = days.map((d) => Number(map[d])).filter((n) => Number.isFinite(n));
+        const val = nums.length ? nums[nums.length - 1] : null;
         if (!fill) return val;
         if (!started) {
           if (val == null || val === 0) return null;
@@ -175,24 +277,24 @@ export default function EcosystemView({ data, pending = false }) {
         return val;
       });
       return {
+        key: k,
         label: projectNames[k],
         data: dataPts,
         borderColor: projectColors[k],
         backgroundColor: `${projectColors[k]}12`,
         borderWidth: 2,
         tension: 0.3,
-        pointRadius: 0,
         spanGaps: true,
         fill: false,
       };
     }).filter((ds) => seriesHasInk(ds.data));
-    return { labels: formatLabels(sliced), datasets };
+    return { labels: formatLabels(axis), datasets };
   };
 
-  const seriesToMap = (labels, data) => {
+  const seriesToMap = (labels, dataPts) => {
     const map = {};
     (labels || []).forEach((lab, i) => {
-      map[dateKey(lab)] = data?.[i];
+      map[dateKey(lab)] = dataPts?.[i];
     });
     return map;
   };
@@ -228,17 +330,14 @@ export default function EcosystemView({ data, pending = false }) {
     return { tokenPct, nftPct, maxToken, burntTok, tokenOnly };
   };
 
-  // =========================================================
-  // REVENUE — per-project series (do not force everyone onto Stonk's dates)
-  // =========================================================
   const projectRevenueSeries = (p) => {
     const chart = protocolRevenueChart(p);
     if (chart.labels?.length) {
       const fees = protocolFeeCols(chart.cols);
-      const data = chart.labels.map((_, i) =>
+      const dataPts = chart.labels.map((_, i) =>
         fees.reduce((s, c) => s + (Number(c.data?.[i]) || 0), 0)
       );
-      if (data.some((v) => v > 0)) return { labels: chart.labels, data, source: 'protocol' };
+      if (dataPts.some((v) => v > 0)) return { labels: chart.labels, data: dataPts, source: 'protocol' };
     }
     const snaps = Array.isArray(p?.dailySnapshots) ? p.dailySnapshots : [];
     if (snaps.some((s) => Number(s.annualYield) > 0)) {
@@ -251,198 +350,306 @@ export default function EcosystemView({ data, pending = false }) {
     return { labels: [], data: [], source: null };
   };
 
-  const getProjectRev = (projKey, timeframe) => {
+  const getProjectRev = (projKey) => {
     const p = data.projects[projKey];
     if (!p) return 0;
     const series = projectRevenueSeries(p);
     if (series.data.length) {
-      const n = getSliceCount(timeframe, series.data.length);
+      const n = windowLen(timeframe, series.data.length);
       return series.data.slice(-n).reduce((s, v) => s + (Number(v) || 0), 0);
     }
     const cf = p.cashflow || {};
-    if (timeframe === '1d') return Number(cf.revenue24h || cf.fees24h) || 0;
     if (timeframe === '7d') return Number(cf.revenue7d || cf.holders7d || cf.fees7d) || 0;
     if (timeframe === '30d') return Number(cf.revenue30d || cf.holders30d || cf.fees30d) || 0;
     return Number(cf.revenueAllTime || cf.feesAllTime || cf.revenueAnnualized) || 0;
   };
 
-  const getHistChartData = () => {
-    const roiMaps = {};
-    for (const k of order) {
-      const p = data.projects[k];
-      const t0 = p?.tiers?.[0];
-      const map = {};
-      for (const [d, v] of Object.entries(cashflowRoiByDate(p))) {
-        if (Number.isFinite(Number(v))) map[dateKey(d)] = Number(v);
-      }
-      for (const s of p?.dailySnapshots || []) {
-        const row = s.tiers?.find((st) => st.tier === (t0?.tier || 'T0'));
-        const roi = row?.roi != null ? Number(row.roi) : (s.roi != null ? Number(s.roi) : null);
-        if (Number.isFinite(roi)) map[dateKey(s.date)] = roi;
-      }
-      roiMaps[k] = map;
+  const roiMaps = {};
+  for (const k of order) {
+    const p = data.projects[k];
+    const t0 = p?.tiers?.[0];
+    const map = {};
+    for (const [d, v] of Object.entries(cashflowRoiByDate(p))) {
+      if (Number.isFinite(Number(v))) map[dateKey(d)] = Number(v);
     }
-    return overlayFromMaps(roiMaps, { fill: true });
-  };
+    for (const s of p?.dailySnapshots || []) {
+      const row = s.tiers?.find((st) => st.tier === (t0?.tier || 'T0'));
+      const roi = row?.roi != null ? Number(row.roi) : (s.roi != null ? Number(s.roi) : null);
+      if (Number.isFinite(roi)) map[dateKey(s.date)] = roi;
+    }
+    roiMaps[k] = map;
+  }
+  const hist = overlayFromMaps(roiMaps, { fill: true });
+
+  const revMaps = {};
+  for (const k of order) {
+    const series = projectRevenueSeries(data.projects[k]);
+    revMaps[k] = seriesToMap(series.labels, series.data);
+  }
+  const revOverlay = overlayFromMaps(revMaps);
+
+  const tokenMaps = {};
+  const nftMaps = {};
+  const nftKeys = [];
+  for (const k of order) {
+    const p = data.projects[k];
+    const { maxToken } = burnCaps(p);
+    const series = burnSeries(p, timeframe, interval);
+    const days = series.rawLabels || [];
+    tokenMaps[k] = seriesToMap(
+      days,
+      (series.data || []).map((burn) => (
+        maxToken > 0 ? +Math.min(100, ((Number(burn) || 0) / maxToken) * 100).toFixed(2) : null
+      )),
+    );
+    if (burnCaps(p).nftPct == null) continue;
+    nftKeys.push(k);
+    const maxNft = Number(p?.ownership?.currentMaxSupply || p?.config?.maxSupply || 0);
+    const unit = Number(p?.config?.unitValue) || 0;
+    nftMaps[k] = seriesToMap(
+      days,
+      (series.data || []).map((burn) => {
+        if (!(maxNft > 0) || !(unit > 0)) return null;
+        return +Math.min(100, (((Number(burn) || 0) / unit) / maxNft) * 100).toFixed(2);
+      }),
+    );
+  }
+  const tokenBurn = overlayFromMaps(tokenMaps, { fill: true });
+  const nftBurn = overlayFromMaps(nftMaps, { keys: nftKeys, fill: true });
+
+  const actMaps = {};
+  for (const k of activationOrder) {
+    const histAct = data.projects[k]?.activation?.history || {};
+    actMaps[k] = seriesToMap(histAct.labels, histAct.cumulative);
+  }
+  const actOverlay = overlayFromMaps(actMaps, { keys: activationOrder });
+
+  const nftHolderMaps = {};
+  const concMaps = {};
+  for (const k of order) {
+    const p = data.projects[k];
+    const snaps = p?.dailySnapshots || [];
+    const nft = snaps.map((s) => (s.nftHolders == null ? null : Number(s.nftHolders)));
+    const liveNft = Number(p?.ownership?.nftHolders) || 0;
+    if (nft.length && liveNft > 0 && nft[nft.length - 1] == null) nft[nft.length - 1] = liveNft;
+    nftHolderMaps[k] = seriesToMap(snaps.map((s) => s.date), nft);
+    concMaps[k] = seriesToMap(
+      snaps.map((s) => s.date),
+      snaps.map((s) => (s.ownershipRatio == null ? null : Number(s.ownershipRatio))),
+    );
+  }
+  const nftHolders = overlayFromMaps(nftHolderMaps);
+  const concOverlay = overlayFromMaps(concMaps);
+
+  const roiRows = board.map((meta) => {
+    const p = data.projects[meta.key];
+    const t0 = p?.tiers?.[0];
+    const night = (meta.key === 'nightshades' || p?.config?.kind === 'factions')
+      ? typicalNightshadesSeat(p?.factions, t0?.tier || 'T0')
+      : null;
+    const floorCost = (p?.market?.nftFloorEth || 0) * (p?.market?.ethPriceUsd || 0);
+    const actCost = (t0?.reqTokens || 0) * (p?.market?.tokenPriceUsd || 0);
+    const totalCost = night?.cost || (t0?.entryUsd > 0 ? t0.entryUsd : floorCost + actCost);
+    const annual = night ? night.annual : (Number(t0?.trackedAnnualYieldUsd) || 0);
+    const roi = night ? night.roi : (totalCost > 0 && annual > 0 ? (annual / totalCost) * 100 : 0);
+    return { meta, p, t0, floorCost, actCost, totalCost, annual, roi, typicalNight: !!night };
+  }).sort((a, b) => (b.roi || 0) - (a.roi || 0));
+
+  const revRows = board.map((meta) => ({
+    key: meta.key,
+    name: meta.name,
+    color: projectColors[meta.key],
+    value: getProjectRev(meta.key),
+    href: projectPath(meta.key, meta.key === 'nightshades' ? 'night' : 'revenue'),
+  })).sort((a, b) => b.value - a.value);
+  const revTotal = revRows.reduce((s, r) => s + r.value, 0);
+
+  const burnRows = board.map((meta) => {
+    const caps = burnCaps(data.projects[meta.key]);
+    return {
+      key: meta.key,
+      name: meta.name,
+      color: projectColors[meta.key],
+      value: caps.tokenPct,
+      href: meta.key === 'interns' ? projectPath(meta.key, 'activation') : projectPath(meta.key, 'burn'),
+      note: caps.nftPct == null ? 'Token supply' : `NFT ${caps.nftPct.toFixed(2)}%`,
+    };
+  }).sort((a, b) => b.value - a.value);
+
+  const actRows = activationBoard.map((meta) => {
+    const p = data.projects[meta.key];
+    const active = Number(p?.activation?.activeCount) || 0;
+    const pctAct = Number(p?.activation?.percentActivated) || 0;
+    return {
+      key: meta.key,
+      name: meta.name,
+      color: projectColors[meta.key],
+      value: pctAct,
+      href: projectPath(meta.key, 'activation'),
+      note: `${compactNum(active)} active`,
+    };
+  }).sort((a, b) => b.value - a.value);
+
+  const ownRows = board.map((meta) => {
+    const p = data.projects[meta.key];
+    const conc = Number(p?.ownership?.ownershipRatio);
+    return {
+      key: meta.key,
+      name: meta.name,
+      color: projectColors[meta.key],
+      value: Number.isFinite(conc) ? conc : 0,
+      href: projectPath(meta.key, 'ownership'),
+      note: `NFT ${compactNum(p?.ownership?.nftHolders || 0)} · token ${compactNum(p?.ownership?.tokenHolders || p?.ownership?.stonkHolders || p?.ownership?.erc20Holders || 0)}`,
+    };
+  }).sort((a, b) => b.value - a.value);
+
+  const bestRoi = roiRows.find((r) => r.roi > 0);
+  const hrefFor = (tab) => (ds) => projectPath(ds.key, tab);
 
   return (
-    <div className="space-y-6 pt-4 relative">
-      
-      {/* ECOSYSTEM TAB NAVIGATION */}
-      <div className="sticky top-[4.25rem] z-20 -mx-1 mb-6 flex w-full items-center gap-2 overflow-x-auto bg-[#08090b]/90 px-1 py-2 backdrop-blur sm:top-[4.75rem]" data-share-omit>
-        <div className="flex min-w-0 flex-1 gap-2">
-        {ECO_TABS.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => selectTab(tab.id)}
-            className={`shrink-0 px-3 py-2 rounded-lg font-semibold transition text-xs md:text-sm ${
-              activeTab === tab.id
-                ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25'
-                : 'bg-transparent border border-[#1e2228] hover:bg-[#0e1013] text-slate-300'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-        </div>
-        <CopyPageButton
-          idleLabel="Copy"
-          title="Copy this heading and its charts for X"
-          onCopy={() => copySectionEl(document.getElementById(activeTab), activeTab)}
-        />
-        <WindowBar compact value={timeframe} onChange={setRange} />
-        <IntervalBar compact value={interval} onChange={setInterval} />
-      </div>
-
-      {/* ========================================================= */}
-      {/* TAB 1: ROI BENCHMARKS */}
-      {/* ========================================================= */}
-      <section id="roi" className="scroll-mt-32">
-        <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl">
-          <div className="flex justify-between items-start mb-6 gap-4">
-            <div>
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <svg className="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z"></path></svg>
-                Global Yield ROI Benchmarks
-              </h3>
-              <p className="text-xs text-slate-400 mt-1">Last automated sync: Just now</p>
+    <div className="relative space-y-6 pt-4">
+      <div className="sticky top-[var(--header-h,5.5rem)] z-20 -mx-3 bg-[#08090b] px-3" data-share-omit>
+        <div className="-mx-1 flex flex-col gap-2 overflow-x-auto border-b border-line px-1 pb-3 pt-4 sm:mx-0 sm:flex-row sm:items-center sm:gap-2 sm:px-0">
+          <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {ECO_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => selectTab(tab.id)}
+                className={`shrink-0 whitespace-nowrap rounded-lg px-2.5 py-2 text-[12px] transition-colors sm:px-3 sm:py-1.5 sm:text-[13px] ${
+                  activeTab === tab.id ? 'bg-panel-2 text-ink' : 'text-muted hover:text-ink'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex shrink-0 items-center justify-end gap-2">
+            <div className="flex items-center gap-1">
+              <WindowBar compact value={timeframe} onChange={setRange} />
+              <IntervalBar compact value={interval} onChange={setInterval} />
             </div>
           </div>
+        </div>
+      </div>
 
-          <div className="overflow-x-auto -mx-1 sm:mx-0">
-            <table className="w-full text-left border-collapse">
+      {activeTab === 'roi' && (
+      <ShareSection id="roi" className="space-y-4">
+        <Card
+          eyebrow="Base-seat CoC"
+          sub="Each project’s cheapest live seat, ranked. This is not one combined yield — cost basis and payouts differ, so the table is a comparison, not a rollup."
+        >
+          <KpiStrip>
+            <Stat
+              label="Best T0 CoC"
+              value={bestRoi ? `${bestRoi.roi.toFixed(1)}%` : '—'}
+              tone="accent"
+              note={bestRoi?.meta.name}
+            />
+            <Stat label="Projects" value={String(board.length)} />
+            <Stat
+              label={`${period} protocol rev`}
+              value={compactUsd(revTotal)}
+              note="Kept fees only"
+            />
+          </KpiStrip>
+        </Card>
+
+        <Card eyebrow="Cash-on-cash" sub="T0 expected yield ÷ (floor + activation) at last sync.">
+          <RankBar
+            rows={roiRows.map((r) => ({
+              key: r.meta.key,
+              name: r.meta.name,
+              color: projectColors[r.meta.key],
+              value: r.roi,
+              href: projectPath(r.meta.key, 'roi'),
+              pending: r.p?.underConstruction,
+            }))}
+            format={(v) => `${Number(v).toFixed(1)}%`}
+          />
+        </Card>
+
+        <Card flush eyebrow="T0 seats" corner={<YieldPeriodToggle value={yieldPeriod} onChange={setYieldPeriod} />}>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-left">
               <thead>
-                <tr className="border-b border-[#1e2228] text-slate-500 text-xs uppercase tracking-wider">
-                  <th className="pb-4 font-medium pl-2">Project</th>
-                  <th className="pb-4 font-medium">Base Tier (T0) Req.</th>
-                  <th className="pb-4 font-medium">Total Entry Cost</th>
-                  <th className="pb-4 font-medium">
-                    <div className="flex items-center gap-2">
-                      <span>Expected Yield <span className="normal-case">({yieldPeriodLabel})</span></span>
-                      <div className="flex bg-[#08090b] rounded-md p-0.5 border border-[#1e2228] normal-case">
-                        {['D', 'M', 'Y'].map((p) => (
-                          <button
-                            key={p}
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); setYieldPeriod(p); }}
-                            className={`px-2 py-0.5 text-[10px] font-bold rounded ${
-                              yieldPeriod === p ? 'bg-[#1e2228] text-white' : 'text-slate-400 hover:text-white'
-                            }`}
-                          >
-                            {p}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </th>
-                  <th className="pb-4 font-medium text-right pr-4">Est. ROI (CoC)</th>
+                <tr className="eyebrow border-b border-line text-faint">
+                  <th className="px-5 py-3 font-normal">Project</th>
+                  <th className="px-3 py-3 font-normal">Seat</th>
+                  <th className="px-3 py-3 font-normal">Cost</th>
+                  <th className="px-3 py-3 font-normal">Yield {yieldLabel !== 'Annualized' ? `(${yieldLabel})` : ''}</th>
+                  <th className="px-5 py-3 text-right font-normal">CoC</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#1e2228]/50 text-sm">
-                {order.map(k => {
-                  const p = data.projects[k];
-                  if (!p) return null;
-                  
-                  const t0 = p.tiers?.[0];
-                  const floorCost = (p.market?.nftFloorEth || 0) * (p.market?.ethPriceUsd || 0);
-                  const actCost = (t0?.reqTokens || 0) * (p.market?.tokenPriceUsd || 0);
-                  const totalCost = floorCost + actCost;
-                  const roi = totalCost > 0 && t0 ? ((t0.trackedAnnualYieldUsd || 0) / totalCost) * 100 : 0;
-                  const isExpanded = expandedProject === k;
-
+              <tbody>
+                {roiRows.map(({ meta, p, t0, actCost, totalCost, annual, roi, typicalNight }) => {
+                  const isExpanded = expandedProject === meta.key;
+                  const leader = bestRoi?.meta.key === meta.key && roi > 0;
                   return (
-                    <React.Fragment key={k}>
-                      <tr 
-                        onClick={() => setExpandedProject(isExpanded ? null : k)}
-                        className="hover:bg-[#1e2228]/20 transition cursor-pointer group"
+                    <React.Fragment key={meta.key}>
+                      <tr
+                        onClick={() => setExpandedProject(isExpanded ? null : meta.key)}
+                        className="cursor-pointer border-b border-line-soft transition-colors hover:bg-panel-2"
                       >
-                        <td className="py-5 pl-2">
-                          <div className="flex items-center gap-3">
-                            <Link
-                              to={projectPath(k, 'roi')}
-                              onClick={(e) => e.stopPropagation()}
-                              className="flex items-center gap-3 rounded-md hover:opacity-90"
-                            >
-                              <img src={`/${projectLogos[k]}`} alt={projectNames[k]} className="w-8 h-8 rounded-md border border-[#1e2228] object-cover bg-[#08090b]" />
-                              <span className="font-bold text-white underline-offset-2 hover:underline">{projectNames[k]}</span>
-                            </Link>
+                        <td className="px-5 py-3">
+                          <Link
+                            to={projectPath(meta.key, 'roi')}
+                            onClick={(e) => e.stopPropagation()}
+                            className="flex items-center gap-3"
+                          >
+                            <img src={logoSrc(meta, p)} alt="" className="h-8 w-8 rounded-md border border-line object-cover bg-panel" />
+                            <span className="text-[13px] text-ink underline-offset-2 hover:underline">{meta.name}</span>
+                            {leader && <Tag tone="good">best</Tag>}
+                            {p?.underConstruction && <Tag tone="warn">pre-launch</Tag>}
+                          </Link>
+                        </td>
+                        <td className="px-3 py-3">
+                          <div className="text-[13px] text-ink">{t0?.name || '—'}</div>
+                          <div className="font-mono text-[11px] text-faint">{compactNum(t0?.reqTokens || 0)} {p?.config?.ticker || meta.ticker}</div>
+                        </td>
+                        <td className="px-3 py-3">
+                          <div className="num text-[13px] text-ink">{compactUsd(totalCost)}</div>
+                          <div className="font-mono text-[11px] text-faint">
+                            {typicalNight ? 'Typical Shade · 4 factions' : `Floor + ${compactUsd(actCost)}`}
                           </div>
                         </td>
-                        <td className="py-5">
-                          <div className="font-bold text-white">{t0?.name || 'TBD'}</div>
-                          <div className="text-xs text-slate-500 mt-0.5">{formatNumber(t0?.reqTokens || 0)} {p.config?.ticker}</div>
-                        </td>
-                        <td className="py-5">
-                          <div className="font-bold text-white">{formatCurrency(totalCost)}</div>
-                          <div className="text-xs text-slate-500 mt-0.5">Floor + {formatCurrency(actCost)} Act.</div>
-                        </td>
-                        <td className="py-5">
-                          {p.underConstruction ? (
-                            <span className="text-slate-500 italic text-sm">Initializing...</span>
+                        <td className="num px-3 py-3 text-[13px] text-ink">
+                          {p?.underConstruction ? (
+                            <span className="text-faint">TBD</span>
                           ) : (
-                            <><span className="text-white font-bold text-base">{formatCurrency(scaleYield(t0?.trackedAnnualYieldUsd || 0))}</span> <span className="text-slate-500">{yieldSuffix}</span></>
+                            <>{compactUsd(scaleYield(annual))} <span className="font-mono text-[11px] text-muted">{yieldUnit}</span></>
                           )}
                         </td>
-                        <td className="py-5 text-right pr-4">
-                          <div className="flex items-center justify-end gap-3">
-                            {p.underConstruction ? (
-                              <span className="bg-amber-900/20 text-amber-400 border border-amber-800/50 px-2.5 py-1 rounded text-sm font-bold shadow-sm">TBD / BUILDING</span>
-                            ) : (
-                              <span className="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-2.5 py-1 rounded text-sm font-bold shadow-sm">{roi.toFixed(2)}%</span>
-                            )}
-                            <svg className={`w-4 h-4 text-slate-500 transition-transform duration-200 group-hover:text-white ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-                          </div>
+                        <td className="px-5 py-3 text-right">
+                          <span className={`num text-[13px] ${roi > 0 ? 'text-accent' : 'text-faint'}`}>
+                            {p?.underConstruction || !(roi > 0) ? '—' : `${roi.toFixed(1)}%`}
+                          </span>
                         </td>
                       </tr>
-                      {isExpanded && !p.underConstruction && (
-                        <tr className="bg-[#08090b]/40 border-b border-[#1e2228]/50">
-                          <td colSpan="5" className="p-4 md:p-6">
-                            <div className="flex justify-between items-center mb-3">
-                              <h4 className="text-sm font-bold text-slate-300">
-                                {t0?.rainWeight
-                                  ? 'VaultLedger rain (annualized)'
-                                  : 'Trailing 7-day realized yield'} ({t0?.name})
-                              </h4>
-                              <span className="text-xs text-slate-500">Based on On-Chain Distributions</span>
-                            </div>
-                            <div className="relative h-32 md:h-40 w-full">
+                      {isExpanded && !p?.underConstruction && (
+                        <tr className="border-b border-line-soft bg-panel-2/40">
+                          <td colSpan="5" className="px-5 py-4">
+                            <p className="mb-2 text-[13px] text-muted">
+                              {t0?.rainWeight ? 'VaultLedger rain (annualized)' : 'Trailing 7-day realized yield'} · {t0?.name}
+                            </p>
+                            <div className="relative h-32 w-full">
                               {seriesHasInk(t0?.dailyYields) ? (
-                                <Line 
-                                  data={{ 
-                                    labels: formatLabels(t0?.dailyDates || []), 
-                                    datasets: [{ 
-                                      label: 'Daily Yield (USD)', 
-                                      data: t0.dailyYields, 
-                                      borderColor: projectColors[k], 
-                                      backgroundColor: `${projectColors[k]}15`, 
-                                      borderWidth: 2, fill: true, tension: 0.4, pointRadius: 0 
-                                    }] 
-                                  }} 
-                                  options={chartOptions} 
+                                <Line
+                                  data={{
+                                    labels: formatLabels(t0?.dailyDates || []),
+                                    datasets: [{
+                                      label: 'Daily yield (USD)',
+                                      data: t0.dailyYields,
+                                      borderColor: projectColors[meta.key],
+                                      borderWidth: 2,
+                                      tension: 0.3,
+                                      pointRadius: 0,
+                                    }],
+                                  }}
+                                  options={{ ...chartOptions, plugins: { ...chartOptions.plugins, legend: { display: false } } }}
                                 />
                               ) : (
-                                <EmptyChart>No daily yield recorded for this tier</EmptyChart>
+                                <EmptyChart>No daily yield recorded for this seat</EmptyChart>
                               )}
                             </div>
                           </td>
@@ -454,334 +661,147 @@ export default function EcosystemView({ data, pending = false }) {
               </tbody>
             </table>
           </div>
-        </div>
-      </section>
+        </Card>
+      </ShareSection>
+      )}
 
-      {/* ========================================================= */}
-      {/* TAB 2: HISTORICAL YIELD (No more sea of zeros!) */}
-      {/* ========================================================= */}
-      <section id="historical" className="scroll-mt-32">
-        <div className="space-y-4">
-          {(() => {
-            const hist = getHistChartData();
-            return (
-              <EcoTogether
-                title="Historical protocol ROI"
-                note="Live projects on one axis. T0 CoC from snapshots. Daily cash-flow projects can backfill from holders rev; Oakmont’s indexer is monthly, so those buckets stay off this chart."
-                labels={hist.labels}
-                datasets={hist.datasets}
-                options={percentChartOptions}
-              />
-            );
-          })()}
-        </div>
-      </section>
+      {activeTab === 'historical' && (
+      <ShareSection id="historical" className="space-y-4">
+        <p className="max-w-2xl text-[13px] leading-relaxed text-muted">
+          T0 CoC over time. One sparkline per project, on its own scale — overlaying them hid every tape except the largest.
+        </p>
+        <SparkGrid
+          overlay={hist}
+          hrefFor={hrefFor('historical')}
+          tick={(v) => `${compactTick(v)}%`}
+          formatValue={(ds) => {
+            const v = lastInk(ds.data);
+            return v == null ? '—' : `${v.toFixed(1)}%`;
+          }}
+        />
+      </ShareSection>
+      )}
 
-      {/* ========================================================= */}
-      {/* TAB 3: REVENUE & LPS */}
-      {/* ========================================================= */}
-      <section id="revenue" className="scroll-mt-32">
-        <div className="space-y-6">
-          <div className="flex justify-between items-center mb-2">
-            <h2 className="text-lg md:text-xl font-bold text-white">Ecosystem Revenue Streams</h2>
+      {activeTab === 'revenue' && (
+      <ShareSection id="revenue" className="space-y-4">
+        <Card
+          eyebrow={`${period} protocol revenue`}
+          sub="Fees the protocol charged or kept in this window. Stonk dwarfs the rest in dollars, so the mix is a share bar — daily shape is each project’s own sparkline."
+        >
+          <FigureStrip total={revTotal} leader={revRows[0]} />
+          <div className="mt-5">
+            <ShareBar parts={revRows} />
           </div>
+        </Card>
+        <Card eyebrow="Ranked" sub={`${period} totals, same unit (USD).`}>
+          <RankBar rows={revRows} />
+        </Card>
+        <SparkGrid
+          overlay={revOverlay}
+          hrefFor={(ds) => projectPath(ds.key, ds.key === 'nightshades' ? 'night' : 'revenue')}
+          tick={compactUsdTick}
+          formatValue={(ds) => compactUsd(sumInk(ds.data))}
+          noteFor={() => `${period} in view`}
+        />
+      </ShareSection>
+      )}
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {order.map(k => (
-              <Link
-                key={k}
-                to={projectPath(k, k === 'nightshades' ? 'night' : 'revenue')}
-                className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm transition hover:border-slate-500 hover:bg-[#101318]"
-              >
-                <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full" style={{backgroundColor: projectColors[k]}}></span>
-                  {projectNames[k]} Revenue
-                </p>
-                <p className="text-2xl font-extrabold" style={{color: projectColors[k]}}>
-                  {formatCurrency(getProjectRev(k, timeframe))}
-                </p>
-              </Link>
-            ))}
-          </div>
+      {activeTab === 'burn' && (
+      <ShareSection id="burn" className="space-y-4">
+        <Card
+          eyebrow="Share of own supply burnt"
+          sub="Normalized to each token’s cap, so a 3k collection is comparable to a million-supply ERC-20. Raw token counts are not."
+        >
+          <RankBar rows={burnRows} format={(v) => `${Number(v).toFixed(2)}%`} />
+        </Card>
+        <SparkGrid
+          overlay={tokenBurn}
+          hrefFor={(ds) => ds.key === 'interns' ? projectPath(ds.key, 'activation') : projectPath(ds.key, 'burn')}
+          tick={(v) => `${compactTick(v)}%`}
+          formatValue={(ds) => {
+            const v = lastInk(ds.data);
+            return v == null ? '—' : `${v.toFixed(2)}%`;
+          }}
+        />
+        {nftBurn.datasets.length ? (
+          <>
+            <p className="max-w-2xl text-[13px] leading-relaxed text-muted">
+              Equivalent NFT supply removed — percent of that collection, not stacked units.
+            </p>
+            <SparkGrid
+              overlay={nftBurn}
+              hrefFor={hrefFor('burn')}
+              tick={(v) => `${compactTick(v)}%`}
+              formatValue={(ds) => {
+                const v = lastInk(ds.data);
+                return v == null ? '—' : `${v.toFixed(2)}%`;
+              }}
+            />
+          </>
+        ) : null}
+      </ShareSection>
+      )}
 
-          {(() => {
-            const maps = {};
-            for (const k of order) {
-              const series = projectRevenueSeries(data.projects[k]);
-              maps[k] = seriesToMap(series.labels, series.data);
-            }
-            const overlay = overlayFromMaps(maps);
-            return (
-              <EcoTogether
-                title="Daily protocol revenue"
-                note="Protocol-charged or kept rev only — AMM, Clock-In locker fees, snipe / curve tax, Smart LP skim. Bonding swap volume is excluded."
-                labels={overlay.labels}
-                datasets={overlay.datasets}
-                options={usdChartOptions}
-              />
-            );
-          })()}
-        </div>
-      </section>
+      {activeTab === 'activation' && (
+      <ShareSection id="activation" className="space-y-4">
+        <Card
+          eyebrow="% of own collection earning"
+          sub="A doughnut of raw active units called Stonk ‘dominant’ because the collection is larger. The fair rank is percent activated on each supply."
+        >
+          <RankBar rows={actRows} format={(v) => `${Number(v).toFixed(1)}%`} />
+        </Card>
+        <SparkGrid
+          overlay={actOverlay}
+          hrefFor={hrefFor('activation')}
+          formatValue={(ds) => compactNum(lastInk(ds.data) || 0)}
+          noteFor={() => 'Net active · own scale'}
+        />
+      </ShareSection>
+      )}
 
-      {/* ========================================================= */}
-      {/* TAB 4: BURN TRACKER (Calculated w/ dynamic max supply) */}
-      {/* ========================================================= */}
-      <section id="burn" className="scroll-mt-32">
-        <div className="space-y-6">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {order.map(k => {
-              const p = data.projects[k];
-              const { tokenPct, nftPct } = burnCaps(p);
+      {activeTab === 'ownership' && (
+      <ShareSection id="ownership" className="space-y-4">
+        <Card
+          eyebrow="Concentration"
+          sub="Unique NFT wallets ÷ circulating supply. Holder headcount is not comparable across collections of different size, so it sits as a note, not the axis."
+        >
+          <RankBar rows={ownRows} format={(v) => `${Number(v).toFixed(2)}%`} />
+        </Card>
+        <SparkGrid
+          overlay={concOverlay.datasets.length ? concOverlay : nftHolders}
+          hrefFor={hrefFor('ownership')}
+          tick={concOverlay.datasets.length ? (v) => `${compactTick(v)}%` : compactTick}
+          formatValue={(ds) => {
+            const v = lastInk(ds.data);
+            if (v == null) return '—';
+            return concOverlay.datasets.length ? `${v.toFixed(2)}%` : compactNum(v);
+          }}
+        />
+      </ShareSection>
+      )}
 
-              return (
-                <Link
-                  key={k}
-                  to={k === 'interns' ? projectPath(k, 'activation') : projectPath(k, 'burn')}
-                  className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-4 shadow-sm transition hover:border-slate-500 hover:bg-[#101318]"
-                >
-                  <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full" style={{backgroundColor: projectColors[k]}}></span>
-                    {projectNames[k]} Deflation
-                  </p>
-                  <div className="flex justify-between items-end mb-1">
-                    <span className="text-xs text-slate-400">Token Burn</span>
-                    <span className="text-emerald-400 font-bold">{tokenPct.toFixed(2)}%</span>
-                  </div>
-                  <div className="flex justify-between items-end">
-                    <span className="text-xs text-slate-400">NFT Burn</span>
-                    <span className="text-blue-400 font-bold">{nftPct == null ? '—' : `${nftPct.toFixed(2)}%`}</span>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-
-          {(() => {
-            const tokenMaps = {};
-            const nftMaps = {};
-            const nftKeys = [];
-            for (const k of order) {
-              const p = data.projects[k];
-              const { maxToken } = burnCaps(p);
-              const series = burnSeries(p, timeframe, interval);
-              const days = series.rawLabels || [];
-              tokenMaps[k] = seriesToMap(
-                days,
-                (series.data || []).map((burn) => (
-                  maxToken > 0 ? +Math.min(100, ((Number(burn) || 0) / maxToken) * 100).toFixed(2) : null
-                )),
-              );
-              if (burnCaps(p).nftPct == null) continue;
-              nftKeys.push(k);
-              const maxNft = Number(p?.ownership?.currentMaxSupply || p?.config?.maxSupply || 0);
-              const unit = Number(p?.config?.unitValue) || 0;
-              nftMaps[k] = seriesToMap(
-                days,
-                (series.data || []).map((burn) => {
-                  if (!(maxNft > 0) || !(unit > 0)) return null;
-                  return +Math.min(100, (((Number(burn) || 0) / unit) / maxNft) * 100).toFixed(2);
-                }),
-              );
-            }
-            const token = overlayFromMaps(tokenMaps, { fill: true });
-            const nft = overlayFromMaps(nftMaps, { keys: nftKeys, fill: true });
-            return (
-              <>
-                <EcoTogether
-                  title="Cumulative token supply burnt (%)"
-                  note="From each token’s first mint, folded from Transfer history. Quiet days carry the last cumulative burn — a burn cannot reset."
-                  labels={token.labels}
-                  datasets={token.datasets}
-                  options={percentChartOptions}
-                />
-                <EcoTogether
-                  title="Equivalent NFT supply removed (%)"
-                  note="Units removed vs max NFT supply, same full-life series as the token burn chart."
-                  labels={nft.labels}
-                  datasets={nft.datasets}
-                  options={percentChartOptions}
-                />
-              </>
-            );
-          })()}
-        </div>
-      </section>
-
-      {/* ========================================================= */}
-      {/* TAB 5: ACTIVATION (Restored to elegant 0-curve starts) */}
-      {/* ========================================================= */}
-      <section id="activation" className="scroll-mt-32">
-        <div className="space-y-6">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {activationOrder.map(k => {
-              const p = data.projects[k];
-              const actCount = p?.activation?.activeCount || 0;
-              const pct = p?.activation?.percentActivated || 0;
-              return (
-                <Link
-                  key={k}
-                  to={projectPath(k, 'activation')}
-                  className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm transition hover:border-slate-500 hover:bg-[#101318]"
-                >
-                  <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full" style={{backgroundColor: projectColors[k]}}></span>
-                    {projectNames[k]} Active
-                  </p>
-                  <p className="text-2xl font-extrabold text-white">{formatNumber(actCount)}</p>
-                  <p className="text-xs text-slate-500 mt-1">{pct.toFixed(1)}% of Supply</p>
-                </Link>
-              );
-            })}
-          </div>
-
-          <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-4 md:p-6">
-            <h3 className="text-sm font-bold text-white mb-6">Ecosystem Dominance (Share of Total Active Units)</h3>
-            <div className="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-16">
-              <div className="relative h-64 md:h-72 w-full md:w-1/2 flex items-center justify-center">
-                <Doughnut 
-                  data={{ 
-                    labels: activationOrder.map(k => projectNames[k]), 
-                    datasets: [{ 
-                      data: activationOrder.map(k => data.projects[k]?.activation?.activeCount || 0), 
-                      backgroundColor: activationOrder.map(k => projectColors[k]), 
-                      borderWidth: 0 
-                    }] 
-                  }} 
-                  options={{ responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { display: false } } }} 
-                />
-              </div>
-              <div className="w-full md:w-1/2 flex flex-col gap-3">
-                {activationOrder.map(k => (
-                  <Link
-                    key={k}
-                    to={projectPath(k, 'activation')}
-                    className="flex justify-between items-center bg-[#08090b] p-3 rounded-lg border border-[#1e2228] transition hover:border-slate-500"
-                  >
-                    <div className="flex items-center gap-3"><div className="w-3 h-3 rounded-md" style={{backgroundColor: projectColors[k]}}></div><span className="text-sm font-bold text-slate-300">{projectNames[k]}</span></div>
-                    <span className="text-white font-bold tracking-wide">{formatNumber(data.projects[k]?.activation?.activeCount || 0)}</span>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {(() => {
-            const maps = {};
-            for (const k of activationOrder) {
-              const hist = data.projects[k]?.activation?.history || {};
-              maps[k] = seriesToMap(hist.labels, hist.cumulative);
-            }
-            const overlay = overlayFromMaps(maps, { keys: activationOrder });
-            return (
-              <EcoTogether
-                title="Net active units"
-                note="From each project’s recorded activation history. Missing days stay blank."
-                labels={overlay.labels}
-                datasets={overlay.datasets}
-                options={countChartOptions}
-              />
-            );
-          })()}
-        </div>
-      </section>
-
-      {/* ========================================================= */}
-      {/* TAB 6: OWNERSHIP (Anomaly filtered to prevent RPC crashes) */}
-      {/* ========================================================= */}
-      <section id="ownership" className="scroll-mt-32">
-        <div className="space-y-6">
-          
-          <div className="flex justify-between items-center mb-2">
-            <h2 className="text-lg md:text-xl font-bold text-white">Ecosystem Holder Distribution</h2>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            {order.map(k => {
-              const p = data.projects[k];
-              const nfts = Number(p?.ownership?.nftHolders) || 0;
-              
-              // Filter out 0 reads if RPC fails
-              let tokens = Number(p?.ownership?.tokenHolders) || Number(p?.ownership?.stonkHolders) || Number(p?.ownership?.erc20Holders) || 0;
-
-              return (
-                <Link
-                  key={k}
-                  to={projectPath(k, 'ownership')}
-                  className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-4 shadow-sm transition hover:border-slate-500 hover:bg-[#101318]"
-                >
-                  <div className="flex items-center gap-2 mb-3">
-                     <span className="w-2 h-2 rounded-full" style={{backgroundColor: projectColors[k]}}></span>
-                     <span className="font-bold text-white text-sm">{projectNames[k]}</span>
-                  </div>
-                  <div className="flex justify-between items-end mb-1">
-                    <span className="text-[10px] text-slate-400 uppercase">NFT Holders</span>
-                    <span className="text-white font-bold">{formatNumber(nfts)}</span>
-                  </div>
-                  <div className="flex justify-between items-end">
-                    <span className="text-[10px] text-slate-400 uppercase">Token Holders</span>
-                    <span className="text-white font-bold">{formatNumber(tokens)}</span>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-
-          {(() => {
-            const nftMaps = {};
-            const tokMaps = {};
-            for (const k of order) {
-              const p = data.projects[k];
-              const snaps = p?.dailySnapshots || [];
-              const nft = snaps.map((s) => (s.nftHolders == null ? null : Number(s.nftHolders)));
-              const liveNft = Number(p?.ownership?.nftHolders) || 0;
-              if (nft.length && liveNft > 0 && nft[nft.length - 1] == null) nft[nft.length - 1] = liveNft;
-              nftMaps[k] = seriesToMap(snaps.map((s) => s.date), nft);
-
-              const hist = p?.ownership?.historicalGrowth || {};
-              if (Array.isArray(hist.labels) && hist.labels.length) {
-                tokMaps[k] = seriesToMap(hist.labels, hist.data);
-              } else {
-                tokMaps[k] = seriesToMap(
-                  snaps.map((s) => s.date),
-                  snaps.map((s) => (s.tokenHolders == null ? null : Number(s.tokenHolders))),
-                );
-              }
-            }
-            const nft = overlayFromMaps(nftMaps);
-            const tok = overlayFromMaps(tokMaps);
-            return (
-              <>
-                <EcoTogether
-                  title="NFT holders"
-                  note="Snapshot nftHolders when present; otherwise the live count as the latest point."
-                  labels={nft.labels}
-                  datasets={nft.datasets}
-                  options={countChartOptions}
-                />
-                <EcoTogether
-                  title="Token holders"
-                  note="hourly historicalGrowth when it exists; else snapshot tokenHolders."
-                  labels={tok.labels}
-                  datasets={tok.datasets}
-                  options={countChartOptions}
-                />
-              </>
-            );
-          })()}
-        </div>
-      </section>
-
-      <section id="rankings" className="scroll-mt-32">
+      {activeTab === 'rankings' && (
+      <ShareSection id="rankings">
         <OverviewView data={data} pending={pending} compact />
-      </section>
+      </ShareSection>
+      )}
 
       <MethodologyCard>
-          <p><strong className="text-white">What this board aggregates:</strong> Each project is fetched on its own contracts. Holder and activation counts come from gg-index (Transfer folds vs totalSupply). Prices are DexScreener Robinhood-chain pools. Yields are trailing samples annualized — not one shared oracle and not a forecast.</p>
-          <p><strong className="text-white">Revenue:</strong> Protocol-kept fees only. StonkBrokers StonkBooster is the mix on that project page (Clock In, AMM, Partner Revenue Share, Smart LP). Nightshades Night vault WETH is not copied here. Bonding volume is notional.</p>
-          <p><strong className="text-white">Rankings:</strong> Cost repriced on each load. Yield is the same trailing sample as the project ROI tab. Cross-project APY is not comparable 1:1 because cost basis and payout mechanics differ.</p>
+        <p><strong className="text-white">What this board is for:</strong> Compare projects. It does not add them into one protocol. Each series is fetched on its own contracts. Overlaying raw units or dollars on one axis hid every tape except the largest, so ranks use a shared unit (CoC %, burn % of own cap, % activated) and history is a sparkline per project on its own scale.</p>
+        <p><strong className="text-white">Revenue:</strong> Protocol-kept fees only. StonkBrokers StonkBooster is the mix on that project page. Nightshades Night vault WETH is not copied here. Bonding volume is notional.</p>
+        <p><strong className="text-white">All tiers:</strong> Cost repriced on each load. Yield is the same trailing sample as the project ROI tab. Cross-project APY is not comparable 1:1 because cost basis and payout mechanics differ.</p>
       </MethodologyCard>
-
     </div>
+  );
+}
+
+function FigureStrip({ total, leader }) {
+  const share = total > 0 && leader ? (leader.value / total) * 100 : 0;
+  return (
+    <KpiStrip>
+      <Stat label="Window total" value={compactUsd(total)} />
+      <Stat label="Leader" value={leader?.name || '—'} note={leader ? compactUsd(leader.value) : null} />
+      <Stat label="Leader share" value={total > 0 ? `${share.toFixed(0)}%` : '—'} />
+    </KpiStrip>
   );
 }

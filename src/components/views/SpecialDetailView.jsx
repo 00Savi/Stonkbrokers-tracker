@@ -6,9 +6,10 @@ import { Line, Bar } from 'react-chartjs-2';
 import { burnSeries, burnRateSeries, burnOfSupplyPct } from '../../lib/burn';
 import { holderSeries } from '../../lib/snapshots';
 import { formatLabels } from '../../lib/dates';
-import { windowSnapshots, protocolRevenueChart, sliceCols, windowPeriodLabel, windowLen } from '../../lib/yieldHistory';
+import { windowSnapshots, protocolRevenueChart, sliceCols, windowPeriodLabel, windowChart } from '../../lib/yieldHistory';
 import { PROJECTS } from '../../lib/routes';
-import { BetaTag, compactUsd, compactNum } from '../kit';
+import { BetaTag, compactUsd, compactNum, YieldPeriodToggle, scaleAnnualYield, yieldSuffix } from '../kit';
+import { ShareSection } from '../CopyControl';
 import {
   OAKMONT_ACTIONS, OAKMONT_BASKET, OAKMONT_DOCS, OAKMONT_DAPP, OAKMONT_SITE, OAKMONT_FEES,
   fetchGeckoTokenHolders,
@@ -24,6 +25,7 @@ const MARK = { green: '#00a804', violet: '#8b5cf6', sky: '#38bdf8', amber: '#f5b
 
 export default function SpecialDetailView({ data, projectKey, activeTab }) {
   const { range: timeframe, interval } = useChartView();
+  const [yieldPeriod, setYieldPeriod] = useState('Y');
   const meta = PROJECTS.find((p) => p.key === projectKey);
   const project = data?.projects?.[projectKey];
   if (!project) {
@@ -60,8 +62,8 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
   const burn = burnSeries(project, timeframe, interval);
   const flywheel = burnRateSeries(project, timeframe, interval);
   const holdersFull = holderSeries(ownership, dailySnapshots);
-  const hN = windowLen(timeframe, holdersFull.labels.length);
-  const holders = { labels: holdersFull.labels.slice(-hN), data: holdersFull.data.slice(-hN) };
+  const holdersWin = windowChart(holdersFull.labels, [holdersFull.data], timeframe, interval, ['last']);
+  const holders = { labels: holdersWin.labels, data: holdersWin.cols[0] || [] };
 
   const burnTokens = activation.dualBurn?.totalBurnTokens || ownership.permanentlyBurntTokens || 0;
   const burnPct = burnOfSupplyPct(project, burnTokens);
@@ -103,7 +105,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
 
   return (
     <div className="space-y-6 relative">
-      <section id="roi" className="scroll-mt-32">
+      <ShareSection id="roi" className="scroll-mt-32">
         <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl">
           <h3 className="mb-2 flex items-center gap-2 text-lg font-bold text-white">
             {meta?.name} cash-on-cash
@@ -140,7 +142,12 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
                 <tr className="border-b border-[#1e2228] text-slate-500 text-xs uppercase">
                   <th className="pb-3">Unit</th>
                   <th className="pb-3">Cost to enter</th>
-                  <th className="pb-3">Expected yield</th>
+                  <th className="pb-3">
+                    <div className="flex items-center gap-2">
+                      <span>Expected yield</span>
+                      <YieldPeriodToggle value={yieldPeriod} onChange={setYieldPeriod} />
+                    </div>
+                  </th>
                   <th className="pb-3 text-right">Est. ROI</th>
                 </tr>
               </thead>
@@ -160,7 +167,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
                         <div className="text-xs text-slate-500">{num(t.reqTokens)} ${ticker}</div>
                       </td>
                       <td className="py-4 text-white font-bold">{fmt(cost)}</td>
-                      <td className="py-4 text-white font-bold">{y > 0 ? `${fmt(y)} /yr` : '—'}</td>
+                      <td className="py-4 text-white font-bold">{y > 0 ? `${fmt(scaleAnnualYield(y, yieldPeriod))} ${yieldSuffix(yieldPeriod)}` : '—'}</td>
                       <td className="py-4 text-right">
                         <span className="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-2.5 py-1 rounded text-sm font-bold">
                           {y > 0 ? `${r.toFixed(2)}%` : '—'}
@@ -173,9 +180,9 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
             </table>
           </div>
         </div>
-      </section>
+      </ShareSection>
 
-      <section id="yield" className="scroll-mt-32">
+      <ShareSection id="yield" className="scroll-mt-32">
         <div className="bg-[#0e1013] border border-[#1e2228] p-6 rounded-2xl space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <h2 className="text-xl font-bold text-white">Historical yield & payback</h2>
@@ -205,9 +212,9 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
             </>
           )}
         </div>
-      </section>
+      </ShareSection>
 
-      <section id="revenue" className="scroll-mt-32">
+      <ShareSection id="revenue" className="scroll-mt-32">
         <div className="space-y-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <h2 className="text-xl font-bold text-white">Protocol revenue</h2>
@@ -254,9 +261,9 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
             note="Revenue that reached token / NFT holders. Protocol-kept fees stay in the chart above."
           />
         </div>
-      </section>
+      </ShareSection>
 
-      <section id="liquidity" className="scroll-mt-32">
+      <ShareSection id="liquidity" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-xl font-bold text-white">Liquidity</h2>
           {lockedLp?.pools?.length > 0 ? (
@@ -279,9 +286,9 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
             <p className="text-sm text-slate-500">No tracked pools for this project yet.</p>
           )}
         </div>
-      </section>
+      </ShareSection>
 
-      <section id="burn" className="scroll-mt-32">
+      <ShareSection id="burn" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-xl font-bold text-white">Supply deflation</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -346,7 +353,14 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
                       { type: 'bar', label: 'Daily burn', data: flywheel.burn, backgroundColor: 'rgba(249, 115, 22, 0.8)', borderRadius: 4, yAxisID: 'y' },
                     ],
                   }}
-                  options={dualAxisOptions({ leftTick: compactTick, rightTick: compactUsdTick, rightColor: '#00a804', leftMax: flywheel.burnAxisMax })}
+                  options={dualAxisOptions({
+                    leftTick: compactTick,
+                    rightTick: compactUsdTick,
+                    rightColor: '#00a804',
+                    leftMax: flywheel.burnAxisMax,
+                    leftValues: flywheel.burn,
+                    rightValues: flywheel.prices,
+                  })}
                 />
               ) : (
                 <div className="h-full flex items-center justify-center text-sm text-slate-500">No burn history recorded yet</div>
@@ -354,9 +368,9 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
             </div>
           </div>
         </div>
-      </section>
+      </ShareSection>
 
-      <section id="activation" className="scroll-mt-32">
+      <ShareSection id="activation" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-xl font-bold text-white">
             {kind === 'cashflow' ? 'Eligible wallets' : kind === 'brokers' ? 'Active Brokers' : 'Inked machines'}
@@ -385,9 +399,9 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
             </p>
           )}
         </div>
-      </section>
+      </ShareSection>
 
-      <section id="ownership" className="scroll-mt-32">
+      <ShareSection id="ownership" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-xl font-bold text-white">Ownership</h2>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -446,7 +460,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
             </div>
           </div>
         </div>
-      </section>
+      </ShareSection>
 
       <div data-share-omit className="bg-[#0e1013] rounded-xl p-5 border border-[#1e2228] mt-8">
         <h3 className="text-base font-bold text-white mb-3">Methodology &amp; Disclaimer</h3>
@@ -482,6 +496,7 @@ function VaultView({
   cashflow, tiers, vault, config,
 }) {
   const { range: timeframe, interval } = useChartView();
+  const [yieldPeriod, setYieldPeriod] = useState('Y');
   const revPeriod = windowPeriodLabel(timeframe);
   const rawRev = protocolRevenueChart({ cashflow });
   const { labels: revDates, cols: revCols } = sliceCols(rawRev.labels, rawRev.cols, timeframe, interval);
@@ -519,7 +534,7 @@ function VaultView({
 
   return (
     <div className="space-y-6 relative">
-      <section id="roi" className="scroll-mt-32">
+      <ShareSection id="roi" title="Protocol" className="scroll-mt-32">
         <div className="space-y-6">
           <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl">
             <h3 className="mb-2 flex items-center gap-2 text-lg font-bold text-white">
@@ -549,7 +564,12 @@ function VaultView({
                   <tr className="border-b border-[#1e2228] text-slate-500 text-xs uppercase">
                     <th className="pb-3">Holder</th>
                     <th className="pb-3">Spot</th>
-                    <th className="pb-3">Fee accretion / token /yr</th>
+                    <th className="pb-3">
+                      <div className="flex items-center gap-2">
+                        <span>Fee accretion / token</span>
+                        <YieldPeriodToggle value={yieldPeriod} onChange={setYieldPeriod} />
+                      </div>
+                    </th>
                     <th className="pb-3 text-right">Fee CoC</th>
                     <th className="pb-3 text-right">Claim APY</th>
                   </tr>
@@ -563,7 +583,7 @@ function VaultView({
                       <tr key={t.tier}>
                         <td className="py-3 font-bold text-white">{t.name}</td>
                         <td className="py-3 text-white font-bold">{fmt(cost)}</td>
-                        <td className="py-3 text-white font-bold">{y > 0 ? `${fmt(y)}` : '—'}</td>
+                        <td className="py-3 text-white font-bold">{y > 0 ? `${fmt(scaleAnnualYield(y, yieldPeriod))} ${yieldSuffix(yieldPeriod)}` : '—'}</td>
                         <td className="py-3 text-right">
                           <span className="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-2.5 py-1 rounded text-sm font-bold">
                             {y > 0 ? `${r.toFixed(2)}%` : '—'}
@@ -614,9 +634,9 @@ function VaultView({
             </div>
           </div>
         </div>
-      </section>
+      </ShareSection>
 
-      <section id="yield" className="scroll-mt-32">
+      <ShareSection id="yield" title="Markets" className="scroll-mt-32">
         <div className="bg-[#0e1013] border border-[#1e2228] p-6 rounded-2xl space-y-6">
           <h2 className="text-xl font-bold text-white">Markets</h2>
           <p className="text-xs text-slate-400">
@@ -690,9 +710,9 @@ function VaultView({
             </div>
           </div>
         </div>
-      </section>
+      </ShareSection>
 
-      <section id="revenue" className="scroll-mt-32">
+      <ShareSection id="revenue" className="scroll-mt-32">
         <div className="space-y-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <h2 className="text-xl font-bold text-white">Fees & liquidity</h2>
@@ -752,9 +772,9 @@ function VaultView({
             </table>
           </div>
         </div>
-      </section>
+      </ShareSection>
 
-      <section id="liquidity" className="scroll-mt-32">
+      <ShareSection id="liquidity" title="LP" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-xl font-bold text-white">LP</h2>
           {lockedLp?.pools?.length > 0 ? (
@@ -785,9 +805,9 @@ function VaultView({
             <p className="text-sm text-slate-500">No tracked pools for this vault yet.</p>
           )}
         </div>
-      </section>
+      </ShareSection>
 
-      <section id="burn" className="scroll-mt-32">
+      <ShareSection id="burn" title="Supply" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-xl font-bold text-white">Supply</h2>
           <p className="text-xs text-slate-400">
@@ -801,9 +821,9 @@ function VaultView({
             <Panel label="$RESERVE FDV" value={fmt(market.reserveFdvUsd)} />
           </div>
         </div>
-      </section>
+      </ShareSection>
 
-      <section id="activation" className="scroll-mt-32">
+      <ShareSection id="activation" title="Wrap" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-xl font-bold text-white">Wrap</h2>
           <p className="text-xs text-slate-400">
@@ -816,9 +836,9 @@ function VaultView({
             <Panel label="Wrap proxy" value={`${(wrapPct * 100).toFixed(1)}%`} color={MARK.violet} />
           </div>
         </div>
-      </section>
+      </ShareSection>
 
-      <section id="ownership" className="scroll-mt-32">
+      <ShareSection id="ownership" title="Holders" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-xl font-bold text-white">Holders</h2>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -854,7 +874,7 @@ function VaultView({
             </div>
           )}
         </div>
-      </section>
+      </ShareSection>
 
       <div data-share-omit className="bg-[#0e1013] rounded-xl p-5 border border-[#1e2228] mt-8">
         <h3 className="text-base font-bold text-white mb-3">Methodology &amp; Disclaimer</h3>

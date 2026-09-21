@@ -26,23 +26,31 @@ import {
   usdStackOptions,
   PAIR_COLORS,
   STREAM_COLORS,
+  barThickness,
+  levelAxis,
 } from '../lib/charts';
 
 export function EmptyChart({ children = 'No series recorded yet' }) {
   return (
-    <div className="h-full flex items-center justify-center text-sm text-slate-500 text-center px-4">
+    <div className="h-full flex items-center justify-center text-sm text-muted text-center px-4">
       {children}
     </div>
   );
 }
 
-export function ChartPanel({ title, note, children, className = '' }) {
+export function ChartPanel({ title, note, children, className = '', tall = false }) {
   return (
-    <div className={`bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 ${className}`}>
-      {title ? <h3 className="text-sm font-bold text-white mb-1">{title}</h3> : null}
-      {note ? <p className="text-xs text-slate-400 mb-4">{note}</p> : null}
-      <div className="relative h-52 sm:h-64 md:h-80 w-full">{children}</div>
-    </div>
+    <section className={`card ${className}`}>
+      {(title || note) ? (
+        <header className="px-4 pt-4 sm:px-5 sm:pt-5">
+          {title ? <h3 className="eyebrow text-muted">{title}</h3> : null}
+          {note ? <p className="mt-1.5 max-w-3xl text-[13px] leading-relaxed text-muted">{note}</p> : null}
+        </header>
+      ) : null}
+      <div className={`relative w-full px-4 pb-4 sm:px-5 sm:pb-5 ${tall ? 'h-72 sm:h-[28rem]' : 'h-52 sm:h-64 md:h-80'}`}>
+        {children}
+      </div>
+    </section>
   );
 }
 
@@ -59,7 +67,16 @@ export function YieldUsdPricePanel({ snaps, tiers, chartOptions }) {
       {has ? (
         <Line
           data={{ labels: formatLabels(snaps.map((s) => s.date)), datasets: [...yieldSets, price] }}
-          options={dualAxisOptions({ leftTick: compactUsdTick, rightTick: compactUsdTick, rightColor: '#94a3b8' })}
+          options={dualAxisOptions({
+            leftTick: compactUsdTick,
+            rightTick: compactUsdTick,
+            rightColor: '#94a3b8',
+            labels: snaps.map((s) => s.date),
+            leftKind: 'level',
+            rightKind: 'level',
+            leftValues: yieldSets.flatMap((d) => d.data),
+            rightValues: price.data,
+          })}
         />
       ) : (
         <EmptyChart />
@@ -77,7 +94,7 @@ export function PaybackPanel({ snaps, tiers, floorCostUsd, tokenPriceUsd }) {
       note="Entry cost ÷ annualized yield on each snapshot. Lower is faster."
     >
       {has ? (
-        <Line data={{ labels: formatLabels(snaps.map((s) => s.date)), datasets: sets }} options={baseChartOptions()} />
+        <Line data={{ labels: formatLabels(snaps.map((s) => s.date)), datasets: sets }} options={baseChartOptions(snaps.map((s) => s.date))} />
       ) : (
         <EmptyChart />
       )}
@@ -101,11 +118,11 @@ export function HolderRevenuePanel({ labels, data, note, title }) {
               data,
               backgroundColor: STREAM_COLORS.holdersRev,
               borderRadius: 3,
-              maxBarThickness: 28,
+              maxBarThickness: barThickness((data || []).length),
               skipNull: true,
             }],
           }}
-          options={usdStackOptions()}
+          options={usdStackOptions(labels)}
         />
       ) : (
         <EmptyChart>No holder-revenue days in this window</EmptyChart>
@@ -127,18 +144,19 @@ export function ProtocolFeeVolumePanels({ labels, cols, kind, holder, note, titl
   return (
     <>
       <ChartPanel
+        tall
         title={title || "Protocol revenue (USD)"}
         note={note || "Money the protocol charged or kept: AMM, Clock-In locker fees, V2 snipe / curve tax, Partner Revenue Share, and Smart LP skim. Clock-In bars are Safety Deposit locker fees (then 90% community / 10% protocol). Nightshades 99% anti-snipe stays in the curve and is not this stack. Bonding swap volume is not revenue and is not plotted here."}
       >
         {fees.length ? (
-          <Bar data={{ labels, datasets: barDatasets(fees, { stacked: true }) }} options={usdStackOptions()} />
+          <Bar data={{ labels, datasets: barDatasets(fees, { stacked: true }) }} options={usdStackOptions(labels)} />
         ) : (
           <EmptyChart>No revenue days in this window</EmptyChart>
         )}
       </ChartPanel>
       {mix.length > 1 ? (
         <ChartPanel title={mixTitle || "Revenue mix (100%)"} note="Share of protocol revenue that day. Days with no rev are blank. Swap volume is excluded.">
-          <Bar data={{ labels, datasets: barDatasets(mix, { stacked: true }) }} options={percentStackOptions()} />
+          <Bar data={{ labels, datasets: barDatasets(mix, { stacked: true }) }} options={percentStackOptions(labels)} />
         </ChartPanel>
       ) : null}
       {holderPanel}
@@ -166,12 +184,17 @@ export function SmartLpChartPanels({ snaps, smartLp, vaults }) {
                 data: hist.tvl,
                 borderColor: '#fbbf24',
                 backgroundColor: 'rgba(251,191,36,0.12)',
-                fill: true,
+                fill: false,
                 tension: 0.3,
                 spanGaps: true,
               }],
             }}
-            options={dualAxisOptions({ leftTick: compactUsdTick })}
+            options={dualAxisOptions({
+              leftTick: compactUsdTick,
+              labels: hist.labels,
+              leftKind: 'level',
+              leftValues: hist.tvl,
+            })}
           />
         ) : (
           <EmptyChart />
@@ -183,12 +206,12 @@ export function SmartLpChartPanels({ snaps, smartLp, vaults }) {
             data={{
               labels: hist.labels,
               datasets: [
-                { label: 'Full Range', data: hist.fr, backgroundColor: '#00a804', stack: 'm', maxBarThickness: 28 },
-                { label: 'Balanced Band', data: hist.bb, backgroundColor: '#fbbf24', stack: 'm', maxBarThickness: 28 },
-                { label: 'Ask', data: hist.ask, backgroundColor: '#38bdf8', stack: 'm', maxBarThickness: 28 },
+                { label: 'Full Range', data: hist.fr, backgroundColor: '#00a804', stack: 'm', maxBarThickness: barThickness(hist.labels.length) },
+                { label: 'Balanced Band', data: hist.bb, backgroundColor: '#fbbf24', stack: 'm', maxBarThickness: barThickness(hist.labels.length) },
+                { label: 'Ask', data: hist.ask, backgroundColor: '#38bdf8', stack: 'm', maxBarThickness: barThickness(hist.labels.length) },
               ],
             }}
-            options={usdStackOptions()}
+            options={usdStackOptions(hist.labels)}
           />
         </ChartPanel>
       ) : null}
@@ -198,11 +221,11 @@ export function SmartLpChartPanels({ snaps, smartLp, vaults }) {
             data={{
               labels: hist.labels,
               datasets: [
-                { label: 'Depositor fees', data: hist.gross, backgroundColor: '#fbbf24', maxBarThickness: 22, skipNull: true },
-                { label: 'Smart LP Protocol Revenue', data: hist.skim, backgroundColor: '#38bdf8', maxBarThickness: 22, skipNull: true },
+                { label: 'Depositor fees', data: hist.gross, backgroundColor: '#fbbf24', maxBarThickness: barThickness(hist.labels.length), skipNull: true },
+                { label: 'Smart LP Protocol Revenue', data: hist.skim, backgroundColor: '#38bdf8', maxBarThickness: barThickness(hist.labels.length), skipNull: true },
               ],
             }}
-            options={usdStackOptions()}
+            options={usdStackOptions(hist.labels)}
           />
         </ChartPanel>
       ) : null}
@@ -262,9 +285,9 @@ export function BlackHoleChartPanels({ snaps, lockedLp, ticker = 'STONK' }) {
                 {
                   label: `${ticker} locked`,
                   data: hist.stonk,
-                  borderColor: '#fb923c',
-                  backgroundColor: 'rgba(251,146,60,0.12)',
-                  fill: true,
+                  borderColor: '#8b5cf6',
+                  backgroundColor: 'rgba(139,92,246,0.12)',
+                  fill: false,
                   tension: 0.3,
                   spanGaps: true,
                   yAxisID: 'y',
@@ -281,7 +304,16 @@ export function BlackHoleChartPanels({ snaps, lockedLp, ticker = 'STONK' }) {
                 },
               ],
             }}
-            options={dualAxisOptions({ leftTick: compactTick, rightTick: compactUsdTick, rightColor: '#94a3b8' })}
+            options={dualAxisOptions({
+              leftTick: compactTick,
+              rightTick: compactUsdTick,
+              rightColor: '#94a3b8',
+              labels: hist.labels,
+              leftKind: 'level',
+              rightKind: 'level',
+              leftValues: hist.stonk,
+              rightValues: hist.usd,
+            })}
           />
         ) : (
           <EmptyChart />
@@ -294,19 +326,22 @@ export function BlackHoleChartPanels({ snaps, lockedLp, ticker = 'STONK' }) {
 export function ActivationStackPanel({ snaps, tiers, breakdown }) {
   const sets = tierActiveDatasets(snaps, tiers, breakdown);
   const has = seriesHasInk(sets.flatMap((d) => d.data));
+  const labels = formatLabels(snaps.map((s) => s.date));
+  const thick = barThickness(labels.length);
+  const stacked = {
+    ...baseChartOptions(labels),
+    scales: {
+      ...baseChartOptions(labels).scales,
+      x: { ...baseChartOptions(labels).scales.x, stacked: true },
+      y: { ...baseChartOptions(labels).scales.y, stacked: true, beginAtZero: true },
+    },
+  };
   return (
     <ChartPanel title="Active units by tier" note="Stacked from daily snapshots. Older days stay empty until a run records the breakdown.">
       {has ? (
         <Bar
-          data={{ labels: formatLabels(snaps.map((s) => s.date)), datasets: sets }}
-          options={{
-            ...baseChartOptions(),
-            scales: {
-              ...baseChartOptions().scales,
-              x: { ...baseChartOptions().scales.x, stacked: true },
-              y: { ...baseChartOptions().scales.y, stacked: true, beginAtZero: true },
-            },
-          }}
+          data={{ labels, datasets: sets.map((d) => ({ ...d, maxBarThickness: thick })) }}
+          options={stacked}
         />
       ) : (
         <EmptyChart>Tier mix history starts after the next snapshot write</EmptyChart>
@@ -331,7 +366,16 @@ export function OwnershipHistoryPanels({ snaps, live }) {
                 { label: 'Token holders', data: hist.token, borderColor: '#00a804', tension: 0.3, spanGaps: true, yAxisID: 'y1' },
               ],
             }}
-            options={dualAxisOptions({ leftTick: compactTick, rightTick: compactTick, rightColor: '#00a804' })}
+            options={dualAxisOptions({
+              leftTick: compactTick,
+              rightTick: compactTick,
+              rightColor: '#00a804',
+              labels: hist.labels,
+              leftKind: 'level',
+              rightKind: 'level',
+              leftValues: hist.nft,
+              rightValues: hist.token,
+            })}
           />
         ) : (
           <EmptyChart />
@@ -347,16 +391,22 @@ export function OwnershipHistoryPanels({ snaps, live }) {
                 data: hist.concentration,
                 borderColor: '#14b8a6',
                 backgroundColor: 'rgba(20,184,166,0.1)',
-                fill: true,
+                fill: false,
                 tension: 0.3,
                 spanGaps: true,
               }],
             }}
             options={{
-              ...baseChartOptions(),
+              ...baseChartOptions(hist.labels),
               scales: {
-                ...baseChartOptions().scales,
-                y: { ...baseChartOptions().scales.y, ticks: { color: '#94a3b8', callback: (v) => `${compactTick(v)}%` } },
+                ...baseChartOptions(hist.labels).scales,
+                y: {
+                  ...baseChartOptions(hist.labels).scales.y,
+                  ...levelAxis(
+                    { color: '#94a3b8', callback: (v) => `${compactTick(v)}%` },
+                    hist.concentration,
+                  ),
+                },
               },
             }}
           />

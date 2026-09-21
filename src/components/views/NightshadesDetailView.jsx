@@ -6,10 +6,11 @@ import {
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import { burnSeries, burnRateSeries, burnOfSupplyPct } from '../../lib/burn';
 import { formatLabels } from '../../lib/dates';
-import { windowSnapshots, tierRoiDatasets, windowLen, seriesHasInk } from '../../lib/yieldHistory';
-import { compactUsd, compactNum } from '../kit';
+import { windowSnapshots, tierRoiDatasets, seriesHasInk, windowChart } from '../../lib/yieldHistory';
+import { compactUsd, compactNum, YieldPeriodToggle, scaleAnnualYield, yieldSuffix } from '../kit';
+import { ShareSection } from '../CopyControl';
 import { TierFlowSection, netTierCount } from '../TierFlowCards';
-import { baseChartOptions, compactTick, compactUsdTick, dualAxisOptions } from '../../lib/charts';
+import { baseChartOptions, compactTick, compactUsdTick, dualAxisOptions, activityChartOptions } from '../../lib/charts';
 import { useChartView } from '../../lib/chartWindow';
 import { holderSeries } from '../../lib/snapshots';
 import { NIGHTSHADES_FACTION_META } from '../../lib/nightshades';
@@ -83,6 +84,7 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
   const [expandedTier, setExpandedTier] = useState(null);
   const [tierTimeframe, setTierTimeframe] = useState('allTime');
   const [volumeMultiplier, setVolumeMultiplier] = useState(1);
+  const [yieldPeriod, setYieldPeriod] = useState('Y');
 
   const slice = project.factions?.[faction];
   if (!slice) return <div className="text-center text-slate-400 p-12">Nightshades Data Loading...</div>;
@@ -111,7 +113,7 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
 
   const actHistory = activation.history || {};
   const hasActHist = Array.isArray(actHistory.labels) && actHistory.labels.length > 0;
-  const actLabels = hasActHist ? formatLabels(actHistory.labels) : [];
+  const actLabels = hasActHist ? actHistory.labels : [];
   const actCum = hasActHist && actHistory.cumulative?.length ? actHistory.cumulative : [];
   const actDAct = hasActHist && actHistory.dailyActivations?.length ? actHistory.dailyActivations : [];
   const actDDeact = hasActHist && actHistory.dailyDeactivations?.length ? actHistory.dailyDeactivations : [];
@@ -123,17 +125,17 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
   });
 
   const holdersFull = holderSeries(ownership, dailySnapshots);
-  const ownN = windowLen(timeframe, holdersFull.labels.length);
-  const ownLabels = formatLabels(holdersFull.labels.slice(-ownN));
-  const ownData = holdersFull.data.slice(-ownN);
+  const holdersWin = windowChart(holdersFull.labels, [holdersFull.data], timeframe, interval, ['last']);
+  const ownLabels = holdersWin.labels;
+  const ownData = holdersWin.cols[0] || [];
   const tokenHolders = Number(ownership.tokenHolders) || Number(ownership.stonkHolders) || Number(ownership.erc20Holders) || 0;
-  const actN = windowLen(timeframe, actLabels.length);
+  const actWin = windowChart(actLabels, [actCum, actDAct, actDDeact], timeframe, interval, ['last', 'sum', 'sum']);
 
   void activeTab;
 
   return (
     <div className="space-y-6 relative">
-      <section id="roi" className="scroll-mt-32">
+      <ShareSection id="roi" className="scroll-mt-32">
         <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6">
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
@@ -169,7 +171,12 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
                   <th className="pb-4 font-medium pl-2">Tier</th>
                   <th className="pb-4 font-medium">Activation Req.</th>
                   <th className="pb-4 font-medium">Current Total Cost</th>
-                  <th className="pb-4 font-medium">Expected Yield <span className="normal-case">(Annualized)</span></th>
+                  <th className="pb-4 font-medium">
+                    <div className="flex items-center gap-2">
+                      <span>Expected Yield</span>
+                      <YieldPeriodToggle value={yieldPeriod} onChange={setYieldPeriod} />
+                    </div>
+                  </th>
                   <th className="pb-4 font-medium text-right pr-4">Est. ROI (CoC)</th>
                 </tr>
               </thead>
@@ -199,7 +206,7 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
                           <div className="text-xs text-slate-500 mt-0.5">Floor + {formatCurrency(actCost)} Act.</div>
                         </td>
                         <td className="py-5">
-                          <span className="text-white font-bold text-base">{formatCurrency(simulatedYield)}</span> <span className="text-slate-500">/yr</span>
+                          <span className="text-white font-bold text-base">{formatCurrency(scaleAnnualYield(simulatedYield, yieldPeriod))}</span> <span className="text-slate-500">{yieldSuffix(yieldPeriod)}</span>
                         </td>
                         <td className="py-5 text-right pr-4">
                           <div className="flex items-center justify-end gap-3">
@@ -238,9 +245,9 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
             </table>
           </div>
         </div>
-      </section>
+      </ShareSection>
 
-      <section id="yield" className="scroll-mt-32">
+      <ShareSection id="yield" className="scroll-mt-32">
         <div className="bg-[#0e1013] border border-[#1e2228] p-4 md:p-6 rounded-2xl shadow-lg space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
@@ -271,11 +278,11 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
           <YieldUsdPricePanel snaps={roiSnaps} tiers={tiers} />
           <PaybackPanel snaps={roiSnaps} tiers={tiers} floorCostUsd={floorCostUsd} tokenPriceUsd={market.tokenPriceUsd} />
         </div>
-      </section>
+      </ShareSection>
 
       <NightshadesNightSection night={project.night} faction={faction} />
 
-      <section id="burn" className="scroll-mt-32">
+      <ShareSection id="burn" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-lg md:text-xl font-bold text-white mb-6">Token Burn & Supply Deflation Tracker</h2>
 
@@ -326,14 +333,21 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
                     { type: 'bar', label: 'Daily Burn Velocity', data: flywheel.burn, backgroundColor: 'rgba(249, 115, 22, 0.8)', borderRadius: 4, yAxisID: 'y' }
                   ]
                 }}
-                options={dualAxisOptions({ leftTick: compactTick, rightTick: compactUsdTick, rightColor: ACCENT, leftMax: flywheel.burnAxisMax })}
+                options={dualAxisOptions({
+                  leftTick: compactTick,
+                  rightTick: compactUsdTick,
+                  rightColor: ACCENT,
+                  leftMax: flywheel.burnAxisMax,
+                  leftValues: flywheel.burn,
+                  rightValues: flywheel.prices,
+                })}
               />
             </div>
           </div>
         </div>
-      </section>
+      </ShareSection>
 
-      <section id="activation" className="scroll-mt-32">
+      <ShareSection id="activation" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-lg md:text-xl font-bold text-white mb-6">Ecosystem Activation Metrics</h2>
 
@@ -375,14 +389,14 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
                 {hasActHist ? (
                 <Bar
                   data={{
-                    labels: actLabels.slice(-actN),
+                    labels: actWin.labels,
                     datasets: [
-                      { type: 'line', label: 'Active units', data: actCum.slice(-actN), borderColor: ACCENT, backgroundColor: 'rgba(129, 140, 248, 0.05)', borderWidth: 3, fill: true, tension: 0.3, yAxisID: 'y' },
-                      { type: 'bar', label: 'Daily Activations', data: actDAct.slice(-actN), backgroundColor: '#00a804', borderRadius: 4, yAxisID: 'y1' },
-                      { type: 'bar', label: 'Daily Deactivations', data: actDDeact.slice(-actN), backgroundColor: '#f43f5e', borderRadius: 4, yAxisID: 'y1' }
+                      { type: 'line', label: 'Active units', data: actWin.cols[0], borderColor: ACCENT, tension: 0.3, yAxisID: 'y' },
+                      { type: 'bar', label: 'Daily Activations', data: actWin.cols[1], backgroundColor: '#00a804', borderRadius: 4, yAxisID: 'y1' },
+                      { type: 'bar', label: 'Daily Deactivations', data: actWin.cols[2], backgroundColor: '#f43f5e', borderRadius: 4, yAxisID: 'y1' }
                     ]
                   }}
-                  options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#94a3b8' } } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { type: 'linear', position: 'left', grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y1: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, min: 0 } } }}
+                  options={activityChartOptions(actWin.labels, actWin.cols[0], actWin.cols[1], actWin.cols[2])}
                 />
                 ) : (
                   <EmptyChart>No activation history recorded</EmptyChart>
@@ -390,9 +404,9 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
              </div>
           </div>
         </div>
-      </section>
+      </ShareSection>
 
-      <section id="ownership" className="scroll-mt-32">
+      <ShareSection id="ownership" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-lg md:text-xl font-bold text-white mb-6">Protocol Ownership & Distribution</h2>
 
@@ -428,7 +442,7 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
             live={{ tokenHolders, nftHolders: ownership.nftHolders, ownershipRatio: ownership.ownershipRatio }}
           />
         </div>
-      </section>
+      </ShareSection>
 
       <MethodologyCard accent="text-indigo-400">
           <p><strong className="text-white">Four Anvil markets, one incubator:</strong> Ghosts, Zombies, Knights, and Watchers each have 3,000 NFTs, one faction token, and a SoftStakingVault. The All tab compares the four on one axis. This page is one market.</p>

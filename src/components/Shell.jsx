@@ -3,7 +3,6 @@ import { NavLink, useLocation, useNavigate, useParams, useSearchParams } from 'r
 import { PROJECTS, isProjectLive, tabsForProject } from '../lib/routes';
 import { LAUNCHER_REF, SAVI_X } from '../lib/share';
 import { Value, price, usd, eth, BetaTag, WindowBar, IntervalBar } from './kit';
-import { CopyPageButton, copySectionEl } from './CopyControl';
 import { useChartView } from '../lib/chartWindow';
 
 export { LAUNCHER_REF, SAVI_X };
@@ -115,8 +114,24 @@ export function TopNav({ live, sources, data, pending }) {
     setOpen(false);
   }, [pathname]);
 
+  const headerRef = useRef(null);
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return undefined;
+    const sync = () => {
+      document.documentElement.style.setProperty('--header-h', `${el.offsetHeight}px`);
+    };
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      document.documentElement.style.removeProperty('--header-h');
+    };
+  }, []);
+
   return (
-    <div className="sticky top-0 z-30 px-2 pt-2 sm:px-4 sm:pt-4">
+    <div ref={headerRef} className="sticky top-0 z-30 bg-[#08090b] px-2 pt-2 sm:px-4 sm:pt-4">
       <nav className="mx-auto flex max-w-[1500px] items-center gap-2 rounded-2xl border border-line bg-panel/95 px-2 py-2 backdrop-blur-xl sm:gap-3 sm:rounded-full sm:px-4 sm:py-2.5">
         <div className="relative min-w-0 flex-1" ref={menuRef}>
           <button
@@ -221,7 +236,7 @@ export function TopNav({ live, sources, data, pending }) {
               </div>
             </div>
             )}
-            {!isHome && project?.kind !== 'token' && project?.kind !== 'cashflow' && project?.kind !== 'vault' && (
+            {project && project.kind !== 'token' && project.kind !== 'cashflow' && project.kind !== 'vault' && (
               <div className="text-right">
                 <div className="text-[9px] uppercase tracking-wider text-faint">Floor</div>
                 <div className="text-[12px] text-ink">
@@ -268,13 +283,23 @@ export function TopNav({ live, sources, data, pending }) {
 }
 
 /** Project tab bar. Every tab is a real link, so each is refresh-safe. */
-export function TabBar({ data: _data }) {
-  const { project, tab } = useParams();
+export function TabBar({ data }) {
+  const { project } = useParams();
   const [searchParams] = useSearchParams();
   const { range: timeframe, setRange, interval, setInterval } = useChartView();
   const meta = PROJECTS.find((p) => p.slug === project);
   const tabs = tabsForProject(meta);
   const keep = searchParams.toString();
+  const ledger = data?.lastUpdated
+    ? new Date(data.lastUpdated).toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        timeZone: 'UTC',
+        timeZoneName: 'short',
+      })
+    : null;
   return (
     <div className="-mx-1 flex flex-col gap-2 overflow-x-auto border-b border-line px-1 pb-3 pt-4 sm:mx-0 sm:flex-row sm:items-center sm:gap-2 sm:px-0">
       <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -293,13 +318,15 @@ export function TabBar({ data: _data }) {
         ))}
       </div>
       <div className="flex shrink-0 items-center justify-end gap-2">
-        <CopyPageButton
-          idleLabel="Copy"
-          title="Copy this heading and its charts for X"
-          onCopy={() => copySectionEl(document.getElementById(tab), tab)}
-        />
-        <WindowBar compact value={timeframe} onChange={setRange} />
-        <IntervalBar compact value={interval} onChange={setInterval} />
+        <div className="flex items-center gap-1">
+          <WindowBar compact value={timeframe} onChange={setRange} />
+          <IntervalBar compact value={interval} onChange={setInterval} />
+        </div>
+        {ledger && (
+          <span className="hidden font-mono text-[10px] text-faint xl:inline" title="Last ledger sync">
+            Ledger {ledger}
+          </span>
+        )}
         {meta?.beta && (
           <span className="ml-2 hidden sm:block">
             <BetaTag />
@@ -319,6 +346,8 @@ export function TabBar({ data: _data }) {
  */
 export function SiteFooter() {
   const { pathname } = useLocation();
+  const first = pathname.split('/').filter(Boolean)[0];
+  if (PROJECTS.some((p) => p.slug === first)) return null;
 
   return (
     <footer className="fixed inset-x-0 bottom-0 z-30 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-4 sm:pb-3">

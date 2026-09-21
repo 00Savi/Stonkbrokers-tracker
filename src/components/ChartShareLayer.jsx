@@ -1,44 +1,57 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
-import { CopyChartButton, CopyTableButton, CopySectionButton } from './CopyControl';
+import { CopyChartButton, CopyTableButton } from './CopyControl';
+
+function hasHeadingCopy(el) {
+  return !!(el && el.querySelector('[data-heading-copy]'));
+}
+
+function pickHost(el) {
+  if (!el) return null;
+  const card = el.closest('.card');
+  if (card) return card;
+  const panel = el.closest('.rounded-xl, .rounded-2xl');
+  if (panel) return panel;
+  return el.closest('.overflow-x-auto') || el.parentElement;
+}
 
 function prepareHost(el) {
   if (!el) return null;
   if (getComputedStyle(el).position === 'static') el.classList.add('relative');
+  el.classList.add('group');
   return el;
 }
 
 function collectChartHosts() {
-  const canvases = [...document.querySelectorAll('main canvas, #project-share canvas, #ecosystem-share canvas')];
   const hosts = [];
   const seen = new Set();
+
+  const take = (start, kind) => {
+    if (!start || start.closest('[data-share-omit]')) return;
+    const host = pickHost(start);
+    if (!host || seen.has(host) || host.closest('[data-share-omit]')) return;
+    if (hasHeadingCopy(host)) return;
+    const card = start.closest('.card');
+    if (card && card !== host && hasHeadingCopy(card)) return;
+    const w = host.clientWidth || 0;
+    const h = host.clientHeight || 0;
+    if (w < 80 || h < 40) return;
+    seen.add(host);
+    prepareHost(host);
+    hosts.push({ el: host, tight: h < 140, kind });
+  };
+
+  const canvases = [...document.querySelectorAll('main canvas, #project-share canvas, #ecosystem-share canvas')];
   for (const canvas of canvases) {
-    const host = canvas.parentElement;
-    if (!host || seen.has(host) || host.closest('[data-share-omit]')) continue;
     const w = canvas.clientWidth || canvas.width;
     const h = canvas.clientHeight || canvas.height;
     if (w < 40 || h < 40) continue;
-    seen.add(host);
-    prepareHost(host);
-    hosts.push({ el: host, tight: h < 160, kind: 'chart' });
+    take(canvas, 'chart');
   }
   const tables = [...document.querySelectorAll('main table, #project-share table, #ecosystem-share table')];
   for (const table of tables) {
-    const host = table.closest('.overflow-x-auto') || table.parentElement;
-    if (!host || seen.has(host) || host.closest('[data-share-omit]')) continue;
-    if ((host.clientWidth || 0) < 80 || (host.clientHeight || 0) < 40) continue;
-    seen.add(host);
-    prepareHost(host);
-    hosts.push({ el: host, tight: (host.clientHeight || 0) < 160, kind: 'table' });
-  }
-  const sections = [...document.querySelectorAll('main section[id], #project-share section[id], #ecosystem-share section[id]')];
-  for (const section of sections) {
-    if (seen.has(section) || section.closest('[data-share-omit]')) continue;
-    if ((section.clientHeight || 0) < 80) continue;
-    seen.add(section);
-    prepareHost(section);
-    hosts.push({ el: section, tight: false, kind: 'section' });
+    take(table, 'table');
   }
   return hosts;
 }
@@ -48,7 +61,7 @@ function sameHosts(a, b) {
   return a.every((item, i) => item.el === b[i].el && item.tight === b[i].tight && item.kind === b[i].kind);
 }
 
-/** Overlay Copy on each chart, table, and topic section. */
+/** Overlay copy on panels that do not already have a heading Copy. */
 export default function ChartShareLayer() {
   const location = useLocation();
   const [hosts, setHosts] = useState([]);
@@ -80,11 +93,9 @@ export default function ChartShareLayer() {
       {hosts.map(({ el, tight, kind }, i) => (
         <React.Fragment key={`share-${kind}-${i}`}>
           {createPortal(
-            kind === 'section'
-              ? <CopySectionButton host={el} />
-              : kind === 'table'
-                ? <CopyTableButton host={el} tight={tight} />
-                : <CopyChartButton host={el} tight={tight} />,
+            kind === 'table'
+              ? <CopyTableButton host={el} tight={tight} />
+              : <CopyChartButton host={el} tight={tight} />,
             el
           )}
         </React.Fragment>

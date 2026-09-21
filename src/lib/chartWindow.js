@@ -16,7 +16,7 @@ export const CHART_INTERVALS = [
   { id: 'monthly', label: 'Monthly' },
 ];
 
-export const DEFAULT_CHART_WINDOW = 'all';
+export const DEFAULT_CHART_WINDOW = '30d';
 export const DEFAULT_CHART_INTERVAL = 'daily';
 
 export function parseChartWindow(value) {

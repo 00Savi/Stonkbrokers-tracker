@@ -73,7 +73,7 @@ export function Card({ eyebrow, sub, corner, children, flush = false, className 
         <header className="flex items-start justify-between gap-3 px-4 pb-4 pt-4 sm:px-5 sm:pt-5">
           <div>
             {eyebrow && <h2 className="eyebrow text-muted">{eyebrow}</h2>}
-            {sub && <p className="mt-1 font-mono text-[11px] leading-relaxed text-faint">{sub}</p>}
+            {sub && <p className="mt-1.5 max-w-2xl text-[13px] leading-relaxed text-muted">{sub}</p>}
           </div>
           {corner}
         </header>
@@ -118,6 +118,20 @@ export function Stat({ label, value, tone = 'ink', pending = false, ch = 6, note
       </div>
     </div>
   );
+}
+
+/** Dense row of Stat figures under a hero, or as a heading KPI strip. */
+export function KpiStrip({ children, className = '' }) {
+  const n = React.Children.count(children);
+  const cols =
+    n <= 2
+      ? 'grid-cols-2'
+      : n === 3
+        ? 'grid-cols-2 sm:grid-cols-3'
+        : n === 5
+          ? 'grid-cols-2 sm:grid-cols-3 xl:grid-cols-5'
+          : 'grid-cols-2 lg:grid-cols-4';
+  return <div className={`grid gap-x-6 gap-y-4 ${cols} ${className}`}>{children}</div>;
 }
 
 /**
@@ -264,28 +278,32 @@ export const CHART_INTERVALS = [
   { id: 'monthly', label: 'Monthly' },
 ];
 
-/** Range or interval control. Sticky chrome uses `compact`. */
+/** Range or interval control. Sticky chrome uses a small select, not a pill group. */
 export function WindowBar({ value, onChange, windows = YIELD_WINDOWS, compact = false, label = 'Chart range' }) {
   return (
-    <div
-      className={`flex shrink-0 rounded-lg border border-[#1e2228] bg-[#0e1013] p-1 ${compact ? '' : ''}`}
-      role="group"
-      aria-label={label}
-    >
-      {windows.map((w) => (
-        <button
-          key={w.id}
-          type="button"
-          onClick={() => onChange(w.id)}
-          className={`rounded-md font-bold transition ${
-            compact ? 'px-2.5 py-1 text-[11px] sm:px-3.5 sm:py-1.5 sm:text-xs' : 'px-4 py-1.5 text-xs'
-          } ${
-            value === w.id ? 'bg-[#1e2228] text-white shadow-sm' : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          {w.label}
-        </button>
-      ))}
+    <div className="relative shrink-0">
+      <select
+        aria-label={label}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={`appearance-none rounded-md border border-line bg-panel font-medium text-ink [color-scheme:dark] hover:border-muted focus:border-muted focus:outline-none ${
+          compact ? 'h-8 py-0 pl-2 pr-6 text-[11px] sm:text-xs' : 'h-9 py-0 pl-2.5 pr-7 text-xs'
+        }`}
+      >
+        {windows.map((w) => (
+          <option key={w.id} value={w.id}>
+            {w.label}
+          </option>
+        ))}
+      </select>
+      <svg
+        className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 text-faint"
+        viewBox="0 0 12 12"
+        fill="none"
+        aria-hidden="true"
+      >
+        <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
     </div>
   );
 }
@@ -299,5 +317,47 @@ export function IntervalBar({ value, onChange, compact = false }) {
       compact={compact}
       label="Chart interval"
     />
+  );
+}
+
+export function scaleAnnualYield(annual, period) {
+  const n = Number(annual) || 0;
+  if (period === 'D') return n / 365;
+  if (period === 'W') return n / 52;
+  return n;
+}
+
+export function yieldSuffix(period) {
+  if (period === 'D') return '/day';
+  if (period === 'W') return '/wk';
+  return '/yr';
+}
+
+export function yieldPeriodLabel(period) {
+  if (period === 'D') return 'Daily';
+  if (period === 'W') return 'Weekly';
+  return 'Annualized';
+}
+
+/** Compact D / W / Y control that sits next to a Yield column heading. */
+export function YieldPeriodToggle({ value, onChange, className = '' }) {
+  return (
+    <div
+      className={`inline-flex rounded-md border border-line bg-panel p-0.5 ${className}`}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {['D', 'W', 'Y'].map((p) => (
+        <button
+          key={p}
+          type="button"
+          onClick={() => onChange(p)}
+          className={`min-w-[1.5rem] rounded px-1.5 py-0.5 font-mono text-[10px] ${
+            value === p ? 'bg-panel-2 text-ink' : 'text-muted hover:text-ink'
+          }`}
+        >
+          {p}
+        </button>
+      ))}
+    </div>
   );
 }

@@ -3116,6 +3116,21 @@ function nsSumTail(arrays) {
   return out;
 }
 
+function nsMeanTail(arrays) {
+  const n = Math.max(0, ...arrays.map((a) => (Array.isArray(a) ? a.length : 0)));
+  const out = Array(n).fill(0);
+  const cnt = Array(n).fill(0);
+  for (const a of arrays) {
+    if (!Array.isArray(a)) continue;
+    const pad = n - a.length;
+    for (let i = 0; i < a.length; i++) {
+      out[i + pad] += Number(a[i]) || 0;
+      cnt[i + pad] += 1;
+    }
+  }
+  return out.map((v, i) => (cnt[i] ? v / cnt[i] : 0));
+}
+
 function nsMergeDated(seriesList) {
   const map = new Map();
   for (const s of seriesList) {
@@ -3236,12 +3251,20 @@ function rollupNightshades(slices, markets, prev) {
 
   const template = list.find((p) => Array.isArray(p.tiers) && p.tiers.length)?.tiers || [];
   const mappedTiers = template.map((t) => {
-    const peers = list.map((p) => (p.tiers || []).find((x) => x.tier === t.tier)).filter(Boolean);
+    const peers = list.map((p) => {
+      const x = (p.tiers || []).find((row) => row.tier === t.tier);
+      if (!x) return null;
+      const y = Number(x.trackedAnnualYieldUsd) || 0;
+      const active = Number(p.activation?.activeCount) || 0;
+      return { x, y, w: active > 0 ? active : 1 };
+    }).filter(Boolean);
+    const wSum = peers.reduce((s, p) => s + p.w, 0) || 1;
+    const yieldMean = peers.reduce((s, p) => s + p.y * p.w, 0) / wSum;
     return {
       ...t,
-      trackedAnnualYieldUsd: peers.reduce((s, x) => s + (Number(x.trackedAnnualYieldUsd) || 0), 0),
-      dailyDates: peers.find((x) => x.dailyDates?.length)?.dailyDates || t.dailyDates || [],
-      dailyYields: nsSumTail(peers.map((x) => x.dailyYields)),
+      trackedAnnualYieldUsd: yieldMean,
+      dailyDates: peers.find((p) => p.x.dailyDates?.length)?.x.dailyDates || t.dailyDates || [],
+      dailyYields: nsMeanTail(peers.map((p) => p.x.dailyYields)),
     };
   });
 

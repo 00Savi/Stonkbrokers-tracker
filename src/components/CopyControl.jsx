@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { copyChart, copyElement } from '../lib/share';
 
 export function copySectionEl(el, id) {
@@ -6,6 +6,54 @@ export function copySectionEl(el, id) {
   if (!node) throw new Error('Nothing to copy');
   const slug = id || node.id || 'section';
   return copyElement(node, { filename: `savi-${slug}.png`, maxW: 1080 });
+}
+
+export function shareSlug(label, fallback = 'card') {
+  const slug = String(label || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return slug || fallback;
+}
+
+const SECTION_COPY_LABEL = {
+  roi: 'ROI',
+  yield: 'Yield',
+  historical: 'Yield',
+  revenue: 'Revenue',
+  night: 'Night',
+  liquidity: 'Liquidity',
+  burn: 'Burn',
+  activation: 'Activation',
+  ownership: 'Ownership',
+  rankings: 'All tiers',
+  wrap: 'Wrap',
+  holders: 'Holders',
+};
+
+/**
+ * One heading row with Copy section. Copies every chart and table in this
+ * tab (all revenue charts, all burn tables, etc.), not a single card.
+ */
+export function ShareSection({ id, title, className = '', children }) {
+  const ref = useRef(null);
+  const label = title || SECTION_COPY_LABEL[id] || String(id || 'Section');
+  return (
+    <section id={id} ref={ref} className={className}>
+      <div className="mb-3 flex items-center justify-between gap-3" data-share-omit>
+        <h2 className="eyebrow text-muted">{label}</h2>
+        <CopyControl
+          alwaysLabel
+          heading
+          idleLabel="Copy section"
+          title={`Copy all ${label} charts and tables for X`}
+          className="bg-[#08090b]"
+          onCopy={() => copySectionEl(ref.current, id)}
+        />
+      </div>
+      {children}
+    </section>
+  );
 }
 
 function CopyIcon({ ok }) {
@@ -32,6 +80,7 @@ export function CopyControl({
   alwaysLabel = false,
   className = '',
   overlay = false,
+  heading = false,
 }) {
   const [state, setState] = useState('idle');
 
@@ -58,22 +107,28 @@ export function CopyControl({
     idleLabel;
   const ok = state === 'copied' || state === 'saved';
 
+  const iconOnly = (overlay || tight) && !alwaysLabel;
   const button = (
     <button
       type="button"
       onClick={handleClick}
       disabled={state === 'busy'}
       data-share-omit
+      data-heading-copy={heading ? '' : undefined}
       title={title}
-      aria-label={title}
-      className={`inline-flex min-h-8 items-center gap-1 rounded-md border px-1.5 py-1 font-mono text-[10px] disabled:opacity-60 sm:px-2 ${
+      aria-label={label}
+      className={`inline-flex items-center justify-center gap-1 rounded-md border font-mono text-[10px] disabled:opacity-60 ${
+        iconOnly ? 'h-7 w-7' : 'min-h-8 px-1.5 py-1 sm:px-2'
+      } ${
         ok
           ? 'border-emerald-700/60 bg-emerald-950/80 text-emerald-300'
           : 'border-line bg-panel/90 text-muted hover:text-ink'
       } ${className}`}
     >
       <CopyIcon ok={ok} />
-      <span className={alwaysLabel ? '' : tight ? 'hidden' : 'hidden sm:inline'}>{label}</span>
+      {iconOnly ? null : (
+        <span className={alwaysLabel ? '' : 'hidden sm:inline'}>{label}</span>
+      )}
     </button>
   );
 
@@ -82,8 +137,8 @@ export function CopyControl({
   return (
     <div
       data-share-omit
-      className={`pointer-events-none absolute z-20 flex flex-col items-end ${
-        tight ? 'right-1 top-1' : 'right-1 top-1 sm:right-2 sm:top-2'
+      className={`pointer-events-none absolute z-30 flex flex-col items-end ${
+        tight ? 'right-2 top-2' : 'right-3 top-3'
       }`}
     >
       <div className="pointer-events-auto">{button}</div>

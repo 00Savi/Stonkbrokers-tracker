@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { Line, Doughnut } from 'react-chartjs-2';
 import { burnSeries, burnOfSupplyPct } from '../../lib/burn';
 import { dateKey, formatLabels } from '../../lib/dates';
-import { seriesHasInk } from '../../lib/yieldHistory';
-import { compactUsd, compactNum } from '../kit';
+import { seriesHasInk, bucketKey } from '../../lib/yieldHistory';
+import { compactUsd, compactNum, YieldPeriodToggle, scaleAnnualYield, yieldSuffix, yieldPeriodLabel } from '../kit';
+import { ShareSection } from '../CopyControl';
 import { baseChartOptions, compactTick } from '../../lib/charts';
 import { useChartView } from '../../lib/chartWindow';
 import {
@@ -237,18 +238,33 @@ function lpEthAxis() {
   };
 }
 
-function lpSlice(night, timeframe) {
+function lpSlice(night, timeframe, interval = 'daily') {
   const points = nightLpPoints(night);
   const n = timeframe === '7d' ? 7 : timeframe === '30d' ? 30 : timeframe === '90d' ? 90 : points.length;
   const sliced = points.slice(-Math.max(1, n));
+  if (!interval || interval === 'daily') {
+    return {
+      labels: formatLabels(sliced.map((r) => r.date)),
+      sliced,
+    };
+  }
+  const order = [];
+  const buckets = new Map();
+  for (const r of sliced) {
+    const key = bucketKey(r.date, interval);
+    if (!key) continue;
+    if (!buckets.has(key)) order.push(key);
+    buckets.set(key, r);
+  }
+  const bucketed = order.map((key) => ({ ...buckets.get(key), date: key }));
   return {
-    labels: formatLabels(sliced.map((r) => r.date)),
-    sliced,
+    labels: formatLabels(bucketed.map((r) => r.date)),
+    sliced: bucketed,
   };
 }
 
-function NightLiquidity({ night, timeframe, faction }) {
-  const { labels, sliced } = lpSlice(night, timeframe);
+function NightLiquidity({ night, timeframe, interval, faction }) {
+  const { labels, sliced } = lpSlice(night, timeframe, interval);
   const ethAxis = lpEthAxis();
   const dots = sliced.length < 8 ? 3 : 0;
   const meta = NIGHTSHADES_FACTION_META.find((f) => f.id === faction);
@@ -384,13 +400,13 @@ function NightHistory({ night }) {
 
 /** Incubator-wide Night card + history. Lives on the Night tab for All and each faction. */
 export function NightshadesNightSection({ night, faction }) {
-  const { range: timeframe } = useChartView();
+  const { range: timeframe, interval } = useChartView();
   return (
-    <section id="night" className="scroll-mt-32 space-y-6">
+    <ShareSection id="night" className="scroll-mt-32 space-y-6">
       <NightCard night={night} />
-      <NightLiquidity night={night} timeframe={timeframe} faction={faction} />
+      <NightLiquidity night={night} timeframe={timeframe} interval={interval} faction={faction} />
       <NightHistory night={night} />
-    </section>
+    </ShareSection>
   );
 }
 
@@ -425,19 +441,16 @@ export default function NightshadesAllView({ project, setFaction }) {
       ...chartOptions.scales,
       y: {
         ...chartOptions.scales.y,
-        beginAtZero: true,
+        beginAtZero: false,
+        grace: '18%',
         ticks: { ...chartOptions.scales.y.ticks, callback: compactTick },
       },
     },
   };
 
-  const scaleYield = (annual) => {
-    if (yieldPeriod === 'D') return (annual || 0) / 365;
-    if (yieldPeriod === 'M') return (annual || 0) / 12;
-    return annual || 0;
-  };
-  const yieldPeriodLabel = yieldPeriod === 'D' ? 'Daily' : yieldPeriod === 'M' ? 'Monthly' : 'Annualized';
-  const yieldSuffix = yieldPeriod === 'D' ? '/day' : yieldPeriod === 'M' ? '/mo' : '/yr';
+  const scaleYield = (annual) => scaleAnnualYield(annual, yieldPeriod);
+  const yieldLabel = yieldPeriodLabel(yieldPeriod);
+  const yieldUnit = yieldSuffix(yieldPeriod);
 
   const slices = NIGHTSHADES_FACTION_META.map((f) => ({
     ...f,
@@ -537,7 +550,7 @@ export default function NightshadesAllView({ project, setFaction }) {
         })}
       </div>
 
-      <section id="roi" className="scroll-mt-32">
+      <ShareSection id="roi" className="scroll-mt-32">
         <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl">
           <div className="flex justify-between items-start mb-6 gap-4">
             <div>
@@ -556,21 +569,8 @@ export default function NightshadesAllView({ project, setFaction }) {
                   <th className="pb-4 font-medium">Total Entry Cost</th>
                   <th className="pb-4 font-medium">
                     <div className="flex items-center gap-2">
-                      <span>Expected Yield <span className="normal-case">({yieldPeriodLabel})</span></span>
-                      <div className="flex bg-[#08090b] rounded-md p-0.5 border border-[#1e2228] normal-case">
-                        {['D', 'M', 'Y'].map((p) => (
-                          <button
-                            key={p}
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); setYieldPeriod(p); }}
-                            className={`px-2 py-0.5 text-[10px] font-bold rounded ${
-                              yieldPeriod === p ? 'bg-[#1e2228] text-white' : 'text-slate-400 hover:text-white'
-                            }`}
-                          >
-                            {p}
-                          </button>
-                        ))}
-                      </div>
+                      <span>Expected Yield <span className="normal-case">({yieldLabel})</span></span>
+                      <YieldPeriodToggle value={yieldPeriod} onChange={setYieldPeriod} />
                     </div>
                   </th>
                   <th className="pb-4 font-medium text-right pr-4">Est. ROI (CoC)</th>
@@ -612,7 +612,7 @@ export default function NightshadesAllView({ project, setFaction }) {
                         <td className="py-5">
                           <span className="text-white font-bold text-base">{formatCurrency(scaleYield(t0?.trackedAnnualYieldUsd || 0))}</span>
                           {' '}
-                          <span className="text-slate-500">{yieldSuffix}</span>
+                          <span className="text-slate-500">{yieldUnit}</span>
                         </td>
                         <td className="py-5 text-right pr-4">
                           <div className="flex items-center justify-end gap-3">
@@ -659,9 +659,9 @@ export default function NightshadesAllView({ project, setFaction }) {
             </table>
           </div>
         </div>
-      </section>
+      </ShareSection>
 
-      <section id="yield" className="scroll-mt-32">
+      <ShareSection id="yield" className="scroll-mt-32">
         <Together
           title="T0 CoC ROI by faction"
           note="Shade-tier cash-on-cash from each market’s snapshots. Lines are separate — All does not average or sum ROI."
@@ -669,11 +669,11 @@ export default function NightshadesAllView({ project, setFaction }) {
           datasets={roiOverlay.datasets}
           options={percentChartOptions}
         />
-      </section>
+      </ShareSection>
 
       <NightshadesNightSection night={night} />
 
-      <section id="burn" className="scroll-mt-32">
+      <ShareSection id="burn" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-lg md:text-xl font-bold text-white">Token burn by faction</h2>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -721,9 +721,9 @@ export default function NightshadesAllView({ project, setFaction }) {
             options={percentChartOptions}
           />
         </div>
-      </section>
+      </ShareSection>
 
-      <section id="activation" className="scroll-mt-32">
+      <ShareSection id="activation" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-lg md:text-xl font-bold text-white">Activation by faction</h2>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -788,9 +788,9 @@ export default function NightshadesAllView({ project, setFaction }) {
             options={countChartOptions}
           />
         </div>
-      </section>
+      </ShareSection>
 
-      <section id="ownership" className="scroll-mt-32">
+      <ShareSection id="ownership" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-lg md:text-xl font-bold text-white">Holders by faction</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -835,7 +835,7 @@ export default function NightshadesAllView({ project, setFaction }) {
             options={countChartOptions}
           />
         </div>
-      </section>
+      </ShareSection>
 
       <MethodologyCard accent="text-indigo-400">
           <p><strong className="text-white">All is a comparison, not a rollup:</strong> Ghosts, Zombies, Knights, and Watchers stay four series on one axis. Totals are not added together except on the Night LP health chart&apos;s combined line. Open a faction for that market&apos;s tiers, simulator, and vault detail.</p>

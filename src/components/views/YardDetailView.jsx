@@ -5,10 +5,11 @@ import {
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import { burnSeries, burnRateSeries, burnOfSupplyPct } from '../../lib/burn';
 import { formatLabels } from '../../lib/dates';
-import { windowSnapshots, tierRoiDatasets, protocolRevenueChart, sliceCols, windowPeriodLabel, windowLen, seriesHasInk, holderRevenueCol } from '../../lib/yieldHistory';
-import { compactUsd, compactNum } from '../kit';
+import { windowSnapshots, tierRoiDatasets, protocolRevenueChart, sliceCols, windowPeriodLabel, seriesHasInk, holderRevenueCol, windowChart } from '../../lib/yieldHistory';
+import { compactUsd, compactNum, YieldPeriodToggle, scaleAnnualYield, yieldSuffix } from '../kit';
+import { ShareSection } from '../CopyControl';
 import { TierFlowSection, netTierCount } from '../TierFlowCards';
-import { baseChartOptions, compactTick, compactUsdTick, dualAxisOptions, STREAM_COLORS } from '../../lib/charts';
+import { baseChartOptions, compactTick, compactUsdTick, dualAxisOptions, STREAM_COLORS, activityChartOptions } from '../../lib/charts';
 import { useChartView } from '../../lib/chartWindow';
 import { holderSeries } from '../../lib/snapshots';
 import { MethodologyCard } from '../Disclaimer';
@@ -59,10 +60,11 @@ export default function YardDetailView({ data, activeTab }) {
   const { range: timeframe, interval } = useChartView();
   const [expandedTier, setExpandedTier] = useState(null);
   const [tierTimeframe, setTierTimeframe] = useState('allTime');
-  const [lpTableOpen, setLpTableOpen] = useState(true);
+  const [lpTableOpen, setLpTableOpen] = useState(false);
   const [volumeMultiplier, setVolumeMultiplier] = useState(1);
   const [liveLp, setLiveLp] = useState(null);
   const [wrap, setWrap] = useState(null);
+  const [yieldPeriod, setYieldPeriod] = useState('Y');
 
   const project = data?.projects?.tickeryard || data?.projects?.yard;
   const lockedLpSnap = project?.lockedLp || null;
@@ -153,18 +155,18 @@ export default function YardDetailView({ data, activeTab }) {
   }); 
 
   const holdersFull = holderSeries(ownership, dailySnapshots);
-  const ownN = windowLen(timeframe, holdersFull.labels.length);
-  const ownLabels = holdersFull.labels.slice(-ownN);
-  const ownData = holdersFull.data.slice(-ownN);
+  const holdersWin = windowChart(holdersFull.labels, [holdersFull.data], timeframe, interval, ['last']);
+  const ownLabels = holdersWin.labels;
+  const ownData = holdersWin.cols[0] || [];
   const yardHolders = Number(ownership.yardHolders) || Number(ownership.tokenHolders) || Number(ownership.stonkHolders) || Number(ownership.erc20Holders) || 0;
 
-  const actN = windowLen(timeframe, actLabels.length);
+  const actWin = windowChart(actLabels, [actCum, actDAct, actDDeact], timeframe, interval, ['last', 'sum', 'sum']);
 
   return (
     <div className="space-y-6 relative">
       
       {/* ==================== TAB 1: ROI BENCHMARKS ==================== */}
-      <section id="roi" className="scroll-mt-32">
+      <ShareSection id="roi" className="scroll-mt-32">
         <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6">
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
@@ -195,7 +197,12 @@ export default function YardDetailView({ data, activeTab }) {
                   <th className="pb-4 font-medium pl-2">Tier</th>
                   <th className="pb-4 font-medium">Activation Req.</th>
                   <th className="pb-4 font-medium">Current Total Cost</th>
-                  <th className="pb-4 font-medium">Expected Yield <span className="normal-case">(Annualized)</span></th>
+                  <th className="pb-4 font-medium">
+                    <div className="flex items-center gap-2">
+                      <span>Expected Yield</span>
+                      <YieldPeriodToggle value={yieldPeriod} onChange={setYieldPeriod} />
+                    </div>
+                  </th>
                   <th className="pb-4 font-medium text-right pr-4">Est. ROI (CoC)</th>
                 </tr>
               </thead>
@@ -225,7 +232,7 @@ export default function YardDetailView({ data, activeTab }) {
                           <div className="text-xs text-slate-500 mt-0.5">Floor + {formatCurrency(actCost)} Act.</div>
                         </td>
                         <td className="py-5">
-                          <span className="text-white font-bold text-base">{formatCurrency(simulatedYield)}</span> <span className="text-slate-500">/yr</span>
+                          <span className="text-white font-bold text-base">{formatCurrency(scaleAnnualYield(simulatedYield, yieldPeriod))}</span> <span className="text-slate-500">{yieldSuffix(yieldPeriod)}</span>
                         </td>
                         <td className="py-5 text-right pr-4">
                           <div className="flex items-center justify-end gap-3">
@@ -264,10 +271,10 @@ export default function YardDetailView({ data, activeTab }) {
             </table>
           </div>
         </div>
-      </section>
+      </ShareSection>
 
       {/* ==================== TAB 2: HISTORICAL YIELD ==================== */}
-      <section id="yield" className="scroll-mt-32">
+      <ShareSection id="yield" className="scroll-mt-32">
         <div className="bg-[#0e1013] border border-[#1e2228] p-4 md:p-6 rounded-2xl shadow-lg space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
@@ -298,10 +305,10 @@ export default function YardDetailView({ data, activeTab }) {
           <YieldUsdPricePanel snaps={roiSnaps} tiers={tiers} />
           <PaybackPanel snaps={roiSnaps} tiers={tiers} floorCostUsd={floorCostUsd} tokenPriceUsd={market.tokenPriceUsd} />
         </div>
-      </section>
+      </ShareSection>
 
       {/* ==================== TAB 3: VAULT DISTRIBUTIONS ==================== */}
-      <section id="revenue" className="scroll-mt-32">
+      <ShareSection id="revenue" title="Distributions" className="scroll-mt-32">
         <div className="space-y-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div>
@@ -353,9 +360,9 @@ export default function YardDetailView({ data, activeTab }) {
             }}
           />
         </div>
-      </section>
+      </ShareSection>
 
-      <section id="liquidity" className="scroll-mt-32">
+      <ShareSection id="liquidity" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-lg md:text-xl font-bold text-white">Liquidity</h2>
           <p className="text-xs text-slate-400">Locked pool reserves scanned from partner, meme, and launchpad pairs.</p>
@@ -390,12 +397,12 @@ export default function YardDetailView({ data, activeTab }) {
             <p className="text-sm text-slate-500">No locked LP scanned for this project yet.</p>
           )}
         </div>
-      </section>
+      </ShareSection>
 
       {/* ========================================================================= */}
       {/* TAB 4: BURN TRACKER (Ratchet-secured cumulative burn chart) */}
       {/* ========================================================================= */}
-      <section id="burn" className="scroll-mt-32">
+      <ShareSection id="burn" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-lg md:text-xl font-bold text-white mb-6">Token Burn & Supply Deflation Tracker</h2>
           
@@ -444,17 +451,24 @@ export default function YardDetailView({ data, activeTab }) {
                     { type: 'bar', label: 'Daily Burn Velocity', data: fwBurn, backgroundColor: 'rgba(249, 115, 22, 0.8)', borderRadius: 4, yAxisID: 'y' }
                   ]
                 }} 
-                options={dualAxisOptions({ leftTick: compactTick, rightTick: compactUsdTick, rightColor: '#38bdf8', leftMax: flywheel.burnAxisMax })} 
+                options={dualAxisOptions({
+                  leftTick: compactTick,
+                  rightTick: compactUsdTick,
+                  rightColor: '#38bdf8',
+                  leftMax: flywheel.burnAxisMax,
+                  leftValues: flywheel.burn,
+                  rightValues: flywheel.prices,
+                })} 
               />
             </div>
           </div>
         </div>
-      </section>
+      </ShareSection>
 
       {/* ========================================================================= */}
       {/* TAB 5: ACTIVATION */}
       {/* ========================================================================= */}
-      <section id="activation" className="scroll-mt-32">
+      <ShareSection id="activation" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-lg md:text-xl font-bold text-white mb-6">Ecosystem Activation Metrics</h2>
           
@@ -495,14 +509,14 @@ export default function YardDetailView({ data, activeTab }) {
                 {hasActHist ? (
                 <Bar 
                   data={{
-                    labels: actLabels.slice(-actN),
+                    labels: actWin.labels,
                     datasets: [
-                      { type: 'line', label: 'Net Active Units', data: actCum.slice(-actN), borderColor: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.05)', borderWidth: 3, fill: true, tension: 0.3, yAxisID: 'y' },
-                      { type: 'bar', label: 'Daily Activations', data: actDAct.slice(-actN), backgroundColor: '#00a804', borderRadius: 4, yAxisID: 'y1' },
-                      { type: 'bar', label: 'Daily Deactivations', data: actDDeact.slice(-actN), backgroundColor: '#f43f5e', borderRadius: 4, yAxisID: 'y1' }
+                      { type: 'line', label: 'Net Active Units', data: actWin.cols[0], borderColor: '#38bdf8', tension: 0.3, yAxisID: 'y' },
+                      { type: 'bar', label: 'Daily Activations', data: actWin.cols[1], backgroundColor: '#00a804', borderRadius: 4, yAxisID: 'y1' },
+                      { type: 'bar', label: 'Daily Deactivations', data: actWin.cols[2], backgroundColor: '#f43f5e', borderRadius: 4, yAxisID: 'y1' }
                     ]
                   }} 
-                  options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#94a3b8' } } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { type: 'linear', position: 'left', grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y1: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, min: 0 } } }} 
+                  options={activityChartOptions(actWin.labels, actWin.cols[0], actWin.cols[1], actWin.cols[2])} 
                 />
                 ) : (
                   <EmptyChart>No activation history recorded</EmptyChart>
@@ -510,12 +524,12 @@ export default function YardDetailView({ data, activeTab }) {
              </div>
           </div>
         </div>
-      </section>
+      </ShareSection>
 
       {/* ========================================================================= */}
       {/* TAB 6: OWNERSHIP */}
       {/* ========================================================================= */}
-      <section id="ownership" className="scroll-mt-32">
+      <ShareSection id="ownership" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-lg md:text-xl font-bold text-white mb-6">Protocol Ownership & Distribution</h2>
           
@@ -551,7 +565,7 @@ export default function YardDetailView({ data, activeTab }) {
             live={{ tokenHolders: yardHolders, nftHolders: ownership.nftHolders, ownershipRatio: ownership.ownershipRatio }}
           />
         </div>
-      </section>
+      </ShareSection>
 
       <MethodologyCard accent="text-cyan-500">
           <p><strong className="text-white">Yield &amp; ROI:</strong> TickerYard is a SoftStakingVault, not the StonkBrokers T4 oracle. Cash-on-cash is annualized vault yield ÷ (NFT floor USD + activation tokens at DexScreener spot), split by Anvil tier weight (1.00×–3.33×). Live yield is a trailing sample, not a promised APY. Keeper jobs described in the TickerYard whitepaper are extra work for enrolled T4 operators and are not in these CoC numbers.</p>
