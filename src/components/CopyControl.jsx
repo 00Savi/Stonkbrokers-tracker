@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
 import { copyChart, copyElement } from '../lib/share';
 
+export function copySectionEl(el, id) {
+  if (!el) throw new Error('Nothing to copy');
+  const slug = id || el.id || 'section';
+  return copyElement(el, { filename: `savi-${slug}.png`, maxW: 1080 });
+}
+
 function CopyIcon({ ok }) {
   if (ok) {
     return (
@@ -22,6 +28,7 @@ export function CopyControl({
   idleLabel = 'Copy',
   title = 'Copy image',
   tight = false,
+  alwaysLabel = false,
   className = '',
   overlay = false,
 }) {
@@ -64,7 +71,7 @@ export function CopyControl({
       } ${className}`}
     >
       <CopyIcon ok={ok} />
-      <span className={tight ? 'hidden' : 'hidden sm:inline'}>{label}</span>
+      <span className={alwaysLabel ? '' : tight ? 'hidden' : 'hidden sm:inline'}>{label}</span>
     </button>
   );
 
@@ -95,7 +102,7 @@ export function CopyChartButton({ host, tight }) {
     <CopyControl
       overlay
       tight={tight}
-      idleLabel="Copy for X"
+      idleLabel="Copy"
       title="Copy this chart for X"
       onCopy={() => copyChart(host)}
     />
@@ -107,17 +114,31 @@ export function CopyTableButton({ host, tight }) {
     <CopyControl
       overlay
       tight={tight}
-      idleLabel="Copy for X"
+      idleLabel="Copy"
       title="Copy this table for X"
       onCopy={() => copyElement(host, { filename: 'savi-table.png' })}
     />
   );
 }
 
+export function CopySectionButton({ host }) {
+  const id = host?.id || 'section';
+  return (
+    <CopyControl
+      overlay
+      alwaysLabel
+      idleLabel="Copy all"
+      title="Copy this whole section for X"
+      className="bg-[#08090b]"
+      onCopy={() => copySectionEl(host, id)}
+    />
+  );
+}
+
 export function CopyPageButton({
   onCopy,
-  idleLabel = 'Copy for X',
-  title = 'Copy a compact image for X',
+  idleLabel = 'Copy',
+  title = 'Copy image for X',
 }) {
   return (
     <CopyControl

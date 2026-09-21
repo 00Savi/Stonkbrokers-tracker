@@ -8,9 +8,6 @@ import {
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import OverviewView from './OverviewView';
 import { compactUsd, compactNum, WindowBar, IntervalBar } from '../kit';
-import { CopyPageButton } from '../CopyControl';
-import { copyShareCard } from '../../lib/share';
-import { buildEcosystemShareCard } from '../../lib/projectShare';
 import { dateKey, formatLabels } from '../../lib/dates';
 import { burnSeries } from '../../lib/burn';
 import { cashflowRoiByDate, protocolFeeCols, protocolRevenueChart, seriesHasInk } from '../../lib/yieldHistory';
@@ -18,6 +15,7 @@ import { useChartView } from '../../lib/chartWindow';
 import { baseChartOptions, compactTick, compactUsdTick, PROJECT_COLORS } from '../../lib/charts';
 import { ChartPanel, EmptyChart } from '../HistoryCharts';
 import { MethodologyCard } from '../Disclaimer';
+import { CopyPageButton, copySectionEl } from '../CopyControl';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
@@ -308,13 +306,13 @@ export default function EcosystemView({ data, pending = false }) {
           </button>
         ))}
         </div>
+        <CopyPageButton
+          idleLabel="Copy"
+          title="Copy this heading and its charts for X"
+          onCopy={() => copySectionEl(document.getElementById(activeTab), activeTab)}
+        />
         <WindowBar compact value={timeframe} onChange={setRange} />
         <IntervalBar compact value={interval} onChange={setInterval} />
-        <CopyPageButton
-          idleLabel="Copy for X"
-          title="Copy a full-page image of this topic for X"
-          onCopy={() => copyShareCard(buildEcosystemShareCard(data, { timeframe }), { page: true })}
-        />
       </div>
 
       {/* ========================================================= */}

@@ -1,11 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { PROJECTS, isProjectLive, tabsForProject } from '../lib/routes';
-import { copyShareCard, LAUNCHER_REF, SAVI_X } from '../lib/share';
+import { LAUNCHER_REF, SAVI_X } from '../lib/share';
 import { Value, price, usd, eth, BetaTag, WindowBar, IntervalBar } from './kit';
-import { CopyPageButton } from './CopyControl';
+import { CopyPageButton, copySectionEl } from './CopyControl';
 import { useChartView } from '../lib/chartWindow';
-import { buildTopicShareCard } from '../lib/projectShare';
 
 export { LAUNCHER_REF, SAVI_X };
 
@@ -267,7 +266,7 @@ export function TopNav({ live, sources, data, pending }) {
 }
 
 /** Project tab bar. Every tab is a real link, so each is refresh-safe. */
-export function TabBar({ data }) {
+export function TabBar({ data: _data }) {
   const { project, tab } = useParams();
   const [searchParams] = useSearchParams();
   const { range: timeframe, setRange, interval, setInterval } = useChartView();
@@ -293,19 +292,9 @@ export function TabBar({ data }) {
       </div>
       <div className="flex shrink-0 items-center justify-end gap-2">
         <CopyPageButton
-          idleLabel="Copy for X"
-          title="Copy a full-page image of this tab for X"
-          onCopy={() => {
-            const payload = buildTopicShareCard(data, {
-              projectKey: meta?.key,
-              faction: searchParams.get('faction'),
-              timeframe,
-              interval,
-              tab,
-            });
-            if (!payload) throw new Error('Nothing to copy');
-            return copyShareCard(payload, { page: true });
-          }}
+          idleLabel="Copy"
+          title="Copy this heading and its charts for X"
+          onCopy={() => copySectionEl(document.getElementById(tab), tab)}
         />
         <WindowBar compact value={timeframe} onChange={setRange} />
         <IntervalBar compact value={interval} onChange={setInterval} />

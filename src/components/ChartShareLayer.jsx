@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
-import { CopyChartButton, CopyTableButton } from './CopyControl';
+import { CopyChartButton, CopyTableButton, CopySectionButton } from './CopyControl';
 
 function prepareHost(el) {
   if (!el) return null;
@@ -32,6 +32,14 @@ function collectChartHosts() {
     prepareHost(host);
     hosts.push({ el: host, tight: (host.clientHeight || 0) < 160, kind: 'table' });
   }
+  const sections = [...document.querySelectorAll('main section[id], #project-share section[id], #ecosystem-share section[id]')];
+  for (const section of sections) {
+    if (seen.has(section) || section.closest('[data-share-omit]')) continue;
+    if ((section.clientHeight || 0) < 80) continue;
+    seen.add(section);
+    prepareHost(section);
+    hosts.push({ el: section, tight: false, kind: 'section' });
+  }
   return hosts;
 }
 
@@ -40,7 +48,7 @@ function sameHosts(a, b) {
   return a.every((item, i) => item.el === b[i].el && item.tight === b[i].tight && item.kind === b[i].kind);
 }
 
-/** Overlay copy controls on Chart.js canvases. Project/board share is a designed X card. */
+/** Overlay Copy on each chart, table, and topic section. */
 export default function ChartShareLayer() {
   const location = useLocation();
   const [hosts, setHosts] = useState([]);
@@ -72,9 +80,11 @@ export default function ChartShareLayer() {
       {hosts.map(({ el, tight, kind }, i) => (
         <React.Fragment key={`share-${kind}-${i}`}>
           {createPortal(
-            kind === 'table'
-              ? <CopyTableButton host={el} tight={tight} />
-              : <CopyChartButton host={el} tight={tight} />,
+            kind === 'section'
+              ? <CopySectionButton host={el} />
+              : kind === 'table'
+                ? <CopyTableButton host={el} tight={tight} />
+                : <CopyChartButton host={el} tight={tight} />,
             el
           )}
         </React.Fragment>

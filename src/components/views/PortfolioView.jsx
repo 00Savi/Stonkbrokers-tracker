@@ -726,7 +726,7 @@ export default function PortfolioView({ data }) {
     copyState === 'copied' ? 'Copied — paste into X' :
     copyState === 'saved' ? 'PNG saved' :
     copyState === 'fail' ? 'Copy failed' :
-    'Copy for X';
+    'Copy';
 
   const copyOk = copyState === 'copied' || copyState === 'saved';
 

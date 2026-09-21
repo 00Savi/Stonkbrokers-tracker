@@ -11,14 +11,14 @@ export const LAUNCHER_REF = 'https://stonkbrokers.io/safe-launch?ref=SAVI';
 const SITE_MARK = 'savicrypto.xyz';
 const FOLLOW_MARK = `Follow ${SAVI_X_HANDLE}`;
 
-function drawWatermarked(chartCanvas) {
+function drawWatermarked(chartCanvas, { maxW = 0 } = {}) {
   const srcW = chartCanvas.width;
   const srcH = chartCanvas.height;
   if (!srcW || !srcH) throw new Error('No chart to copy');
 
   const padX = 28;
   const foot = 52;
-  const w = Math.max(1100, srcW);
+  const w = maxW > 0 ? Math.min(maxW, srcW) : Math.max(1100, srcW);
   const scale = w / srcW;
   const h = srcH * scale;
 
@@ -855,7 +855,7 @@ export async function copyShareCard(payload, { page = false } = {}) {
 }
 
 /** Full-page PNG of an element. Strips wallet addresses from the clone. */
-export async function copyElement(root, { filename = 'savi-dashboard.png' } = {}) {
+export async function copyElement(root, { filename = 'savi-dashboard.png', maxW = 0 } = {}) {
   if (typeof window === 'undefined' || !root) return false;
   const { default: html2canvas } = await import('html2canvas');
   const tall = Math.max(root.scrollHeight || 0, root.offsetHeight || 0);
@@ -864,7 +864,9 @@ export async function copyElement(root, { filename = 'savi-dashboard.png' } = {}
     backgroundColor: '#08090b',
     scale: tall > 2400 ? 1 : Math.min(2, window.devicePixelRatio || 1.5),
     width: wide,
+    height: tall,
     windowWidth: wide,
+    windowHeight: Math.max(tall, 720),
     useCORS: true,
     allowTaint: false,
     logging: false,
@@ -876,12 +878,17 @@ export async function copyElement(root, { filename = 'savi-dashboard.png' } = {}
     },
     onclone: (clonedDoc, clonedEl) => {
       const target = clonedEl || clonedDoc.body;
+      if (clonedEl?.style) {
+        clonedEl.style.overflow = 'visible';
+        clonedEl.style.height = 'auto';
+        clonedEl.style.maxHeight = 'none';
+      }
       flattenModernColors(target, clonedDoc.defaultView || window);
       scrubAddresses(target);
     },
   });
   if (!shot?.width || !shot?.height) throw new Error('Empty snapshot');
-  const blob = pngBlobFromCanvas(drawWatermarked(shot));
+  const blob = pngBlobFromCanvas(drawWatermarked(shot, { maxW }));
   const copied = await writeClipboardPng(blob);
   if (!copied) downloadPng(blob, filename);
   return copied;

@@ -40,6 +40,7 @@ import { navNftScanTargets } from '../src/lib/portfolioScan';
 import { windowLen } from '../src/lib/yieldHistory';
 import { CHART_WINDOWS, CHART_INTERVALS } from '../src/lib/chartWindow';
 import { buildTopicShareCard } from '../src/lib/projectShare';
+import { copySectionEl } from '../src/components/CopyControl';
 import { isProjectLive } from '../src/lib/routes';
 
 const snapshot = JSON.parse(fs.readFileSync('public/data.json', 'utf8'));
@@ -483,6 +484,53 @@ for (const [name, View, props] of VIEWS) {
     console.error(`FAIL  topic share card ${topic?.title}`);
   } else {
     console.log(`ok    topic share card ${topic.title}`);
+  }
+  if (typeof copySectionEl !== 'function') {
+    failed++;
+    console.error('FAIL  heading copy helper missing');
+  } else {
+    console.log('ok    heading copy snapshots the live section');
+  }
+  const tabHtml = renderToString(
+    <StaticRouter location="/stonkbrokers/revenue">
+      <App />
+    </StaticRouter>
+  );
+  if (tabHtml.includes('Copy for X')) {
+    failed++;
+    console.error('FAIL  Copy for X still on the tab bar');
+  } else if (!tabHtml.includes('Copy')) {
+    failed++;
+    console.error('FAIL  tab Copy button missing');
+  } else {
+    console.log('ok    tab Copy label is Copy, not Copy for X');
+  }
+  const stonkHtml = renderToString(
+    <StaticRouter location="/stonkbrokers/revenue">
+      <StonkDetailView data={snapshot} activeTab="revenue" />
+    </StaticRouter>
+  );
+  const missing = ['roi', 'yield', 'revenue', 'liquidity', 'burn', 'activation', 'ownership']
+    .filter((id) => !stonkHtml.includes(`id="${id}"`));
+  if (missing.length) {
+    failed++;
+    console.error(`FAIL  stonk heading sections missing ${missing.join(',')}`);
+  } else {
+    console.log('ok    stonk heading sections ready for Copy all');
+  }
+  const ecoHtml = renderToString(
+    <StaticRouter location="/ecosystem">
+      <EcosystemView data={snapshot} />
+    </StaticRouter>
+  );
+  if (ecoHtml.includes('Copy for X')) {
+    failed++;
+    console.error('FAIL  ecosystem still says Copy for X');
+  } else if (!ecoHtml.includes('Copy')) {
+    failed++;
+    console.error('FAIL  ecosystem Copy missing');
+  } else {
+    console.log('ok    ecosystem heading Copy is Copy');
   }
 }
 
