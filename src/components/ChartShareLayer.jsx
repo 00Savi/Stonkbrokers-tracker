@@ -73,7 +73,7 @@ export default function ChartShareLayer() {
     };
   }, [location.pathname, location.search]);
 
-  if (location.pathname === '/portfolio') return null;
+  if (location.pathname === '/portfolio' || location.pathname === '/broker') return null;
 
   return (
     <>

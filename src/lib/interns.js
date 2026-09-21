@@ -44,6 +44,18 @@ export function internParentBroker(tokenId) {
   return n <= 4444 ? n : n - 4444;
 }
 
+const BROKERS = INTERNS_MAX_SUPPLY / INTERNS_PER_BROKER;
+
+/** Sigma #N and Divergent #N+4444 for a parent broker. */
+export function internIdsForBroker(brokerId) {
+  const n = Number(brokerId);
+  if (!Number.isInteger(n) || n < 1 || n > BROKERS) return [];
+  return [
+    { id: n, klass: 'sigma', label: 'V1 Sigma' },
+    { id: n + BROKERS, klass: 'divergent', label: 'V2 Divergent' },
+  ];
+}
+
 export function internContractsReady(config = {}) {
   return !!(config.nftCa && config.activationCa);
 }

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { PROJECTS, projectPath } from '../../lib/routes';
+import { parseBrokerId } from '../../lib/brokerScan';
 import { NfaBanner } from '../Disclaimer';
 import { BetaTag } from '../kit';
 
@@ -29,7 +30,9 @@ const FALLBACK_LOGO = {
 export default function HomeView({ data }) {
   const navigate = useNavigate();
   const [wallet, setWallet] = useState('');
+  const [brokerId, setBrokerId] = useState('');
   const [error, setError] = useState('');
+  const [brokerError, setBrokerError] = useState('');
 
   const goScan = (event) => {
     event.preventDefault();
@@ -40,6 +43,17 @@ export default function HomeView({ data }) {
     }
     setError('');
     navigate(`/portfolio?w=${encodeURIComponent(wallets.join(','))}`);
+  };
+
+  const goBroker = (event) => {
+    event.preventDefault();
+    const id = parseBrokerId(brokerId);
+    if (!id) {
+      setBrokerError('Enter a broker ID from 1 to 4444.');
+      return;
+    }
+    setBrokerError('');
+    navigate(`/broker?id=${id}`);
   };
 
   const updated = data?.lastUpdated
@@ -97,9 +111,56 @@ export default function HomeView({ data }) {
             Comma-separated wallets are fine. You can also skip the scan and pick a card below.
           </p>
         )}
+
+        <form onSubmit={goBroker} className="mt-4 flex max-w-2xl flex-col gap-3 sm:flex-row">
+          <label className="sr-only" htmlFor="home-broker">
+            Broker ID
+          </label>
+          <input
+            id="home-broker"
+            type="text"
+            inputMode="numeric"
+            value={brokerId}
+            onChange={(e) => {
+              setBrokerId(e.target.value);
+              if (brokerError) setBrokerError('');
+            }}
+            placeholder="Broker ID (1–4444)"
+            autoComplete="off"
+            className="flex-1 rounded-xl border border-line bg-panel px-4 py-3 text-[14px] text-ink placeholder:text-faint focus:border-accent focus:outline-none"
+          />
+          <button
+            type="submit"
+            className="rounded-xl border border-line px-5 py-3 text-[13px] font-semibold text-ink transition-colors hover:bg-panel-2 sm:shrink-0"
+          >
+            Scan broker
+          </button>
+        </form>
+        {brokerError ? (
+          <p className="mt-2 font-mono text-[12px] text-danger">{brokerError}</p>
+        ) : (
+          <p className="mt-2 font-mono text-[11px] text-faint">
+            Looks up that broker&apos;s TBA wallet and whether its interns have been minted.
+          </p>
+        )}
       </header>
 
-      <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <Link
+          to="/broker"
+          className="card group flex flex-col p-5 transition-colors hover:bg-panel-2 sm:p-6"
+        >
+          <p className="eyebrow text-[#60a5fa]">Broker</p>
+          <h2 className="mt-3 text-[20px] font-semibold tracking-tight text-ink">
+            One ID, its wallet.
+          </h2>
+          <p className="mt-2 flex-1 text-[13px] leading-relaxed text-muted">
+            TBA holdings plus whether Sigma and Divergent interns are minted or still dormant.
+          </p>
+          <span className="mt-5 text-[13px] font-medium text-ink">
+            Open broker scan <span className="text-muted transition-colors group-hover:text-ink">→</span>
+          </span>
+        </Link>
         <Link
           to="/portfolio"
           className="card group flex flex-col p-5 transition-colors hover:bg-panel-2 sm:p-6"

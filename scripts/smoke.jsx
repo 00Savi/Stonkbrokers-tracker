@@ -22,6 +22,7 @@ import HomeView from '../src/components/views/HomeView';
 import OverviewView from '../src/components/views/OverviewView';
 import EcosystemView from '../src/components/views/EcosystemView';
 import PortfolioView from '../src/components/views/PortfolioView';
+import BrokerScanView from '../src/components/views/BrokerScanView';
 import MemesTokensView from '../src/components/views/MemesTokensView';
 import StonkDetailView from '../src/components/views/StonkDetailView';
 import InternDetailView from '../src/components/views/InternDetailView';
@@ -41,6 +42,8 @@ import { windowLen } from '../src/lib/yieldHistory';
 import { CHART_WINDOWS, CHART_INTERVALS } from '../src/lib/chartWindow';
 import { buildTopicShareCard } from '../src/lib/projectShare';
 import { copySectionEl } from '../src/components/CopyControl';
+import { internIdsForBroker } from '../src/lib/interns';
+import { parseBrokerId } from '../src/lib/brokerScan';
 import { isProjectLive } from '../src/lib/routes';
 
 const snapshot = JSON.parse(fs.readFileSync('public/data.json', 'utf8'));
@@ -57,6 +60,8 @@ const ROUTES = [
   '/ecosystem',
   '/ecosystem?tab=rankings',
   '/portfolio',
+  '/broker',
+  '/broker?id=1',
   '/tokens',
   '/stocks',
   '/stonkbrokers/roi',
@@ -134,6 +139,7 @@ const VIEWS = [
   ['OverviewView', OverviewView, { data: snapshot, pending: false }],
   ['EcosystemView', EcosystemView, { data: snapshot }],
   ['PortfolioView', PortfolioView, { data: snapshot }],
+  ['BrokerScanView', BrokerScanView, { data: snapshot }],
   ['MemesTokensView·memes', MemesTokensView, { data: snapshot, type: 'memes' }],
   ['MemesTokensView·stocks', MemesTokensView, { data: snapshot, type: 'stocks' }],
   ['BonusDetailView', BonusDetailView, { data: snapshot }],
@@ -531,6 +537,25 @@ for (const [name, View, props] of VIEWS) {
     console.error('FAIL  ecosystem Copy missing');
   } else {
     console.log('ok    ecosystem heading Copy is Copy');
+  }
+}
+
+{
+  const ids = internIdsForBroker(1);
+  const parsedIntern = parseBrokerId('4445');
+  if (
+    parseBrokerId('#12') !== 12 ||
+    parseBrokerId('0') != null ||
+    parseBrokerId('4445') !== 1 ||
+    parsedIntern !== 1 ||
+    ids[0]?.id !== 1 ||
+    ids[1]?.id !== 4445 ||
+    internIdsForBroker(4444)[1]?.id !== 8888
+  ) {
+    failed++;
+    console.error(`FAIL  broker scan ids ${JSON.stringify(ids)} intern ${parsedIntern}`);
+  } else {
+    console.log('ok    broker scan maps #1 → interns 1 / 4445');
   }
 }
 
