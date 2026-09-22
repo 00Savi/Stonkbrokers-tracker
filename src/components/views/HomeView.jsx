@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { PROJECTS, projectPath } from '../../lib/routes';
 import { parseBrokerId } from '../../lib/brokerScan';
 import { NfaBanner } from '../Disclaimer';
-import { BetaTag } from '../kit';
+import { BetaTag, compactNum } from '../kit';
 
 function parseWallets(raw) {
   return String(raw || '')
@@ -185,6 +185,9 @@ export default function HomeView({ data }) {
           <h2 className="mt-3 text-[20px] font-semibold tracking-tight text-ink">The whole board.</h2>
           <p className="mt-2 flex-1 text-[13px] leading-relaxed text-muted">
             Which protocols are printing, burning, and getting activated right now.
+            {data?.onboarding?.wallets > 0
+              ? ` ${compactNum(data.onboarding.wallets)} wallets bought a cluster NFT or token in their first 10 txs.`
+              : ''}
           </p>
           <span className="mt-5 flex items-center justify-between gap-3 text-[13px] font-medium text-ink">
             <span>

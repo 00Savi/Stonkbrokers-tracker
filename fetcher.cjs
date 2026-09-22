@@ -390,6 +390,7 @@ const { fetchSmartLps, fromGgIndex, USDG } = require("./lib/smartLp.cjs");
 const dates = require("./lib/dates.cjs");
 const { fetchNight } = require("./lib/night.cjs");
 const priceDays = require("./lib/priceDays.cjs");
+const { foldOnboarding, emptySummary } = require("./lib/onboarding.cjs");
 
 const gg = new GgIndex();
 const rpc = new Rpc();
@@ -3860,6 +3861,18 @@ async function run() {
   }
   if (projectsFailed) {
     console.warn(`[warn] ${projectsFailed} project(s) carried forward; ${projectsOk} rebuilt`);
+  }
+
+  try {
+    finalJson.onboarding = await foldOnboarding({
+      rpc,
+      blockTime,
+      projects: PROJECTS,
+      head: chainHead,
+    });
+  } catch (e) {
+    finalJson.onboarding = emptySummary(previousData.onboarding);
+    console.warn(`[warn] onboarding: ${e.message}; carrying previous`);
   }
 
   for (const [key, proj] of Object.entries(finalJson.projects)) {

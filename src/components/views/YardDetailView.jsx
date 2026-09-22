@@ -21,6 +21,8 @@ import {
   ProtocolFeeVolumePanels,
   ActivationStackPanel,
   OwnershipHistoryPanels,
+  BlackHoleChartPanels,
+  OnboardLinePanel,
 } from '../HistoryCharts';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
@@ -380,6 +382,7 @@ export default function YardDetailView({ data, activeTab }) {
                   </button>
                 </div>
               </div>
+              <BlackHoleChartPanels snaps={roiSnaps} lockedLp={lockedLp} ticker={config.ticker} />
               {lpTableOpen && (
                 <div className="overflow-x-auto transition-all duration-300">
                   <table className="w-full text-left text-xs border-collapse">
@@ -545,6 +548,11 @@ export default function YardDetailView({ data, activeTab }) {
             <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm ring-1 ring-cyan-500/20"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Wallets with an activated Yard</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-cyan-300">{activation.activeHolders == null ? '—' : `${formatNumber(activation.activeHolders)} Wallets`}</p></div>
             <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm ring-1 ring-emerald-500/20"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Ownership Concentration</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-emerald-400">{(ownership.ownershipRatio || 0).toFixed(2)}%</p></div>
             <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Unique ${config.ticker} Holders</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-purple-400">{formatNumber(yardHolders)} Wallets</p></div>
+            <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm ring-1 ring-violet-500/20">
+              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Chain onboard</p>
+              <p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-violet-300">{formatNumber(Number(data?.onboarding?.byProject?.tickeryard?.wallets) || 0)}</p>
+              <p className="text-xs text-slate-500 mt-1">First 10 txs · NFT {formatNumber(data?.onboarding?.byProject?.tickeryard?.nft || 0)}{(Number(data?.onboarding?.byProject?.tickeryard?.token) || 0) ? ` · token ${formatNumber(data.onboarding.byProject.tickeryard.token)}` : ''}</p>
+            </div>
           </div>
 
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
@@ -564,6 +572,7 @@ export default function YardDetailView({ data, activeTab }) {
             snaps={roiSnaps}
             live={{ tokenHolders: yardHolders, nftHolders: ownership.nftHolders, ownershipRatio: ownership.ownershipRatio }}
           />
+          <OnboardLinePanel data={data} projectKey="tickeryard" timeframe={timeframe} interval={interval} name="TickerYard" />
         </div>
       </ShareSection>
 
@@ -573,7 +582,7 @@ export default function YardDetailView({ data, activeTab }) {
           <p><strong className="text-white">yBTC wrap:</strong> TickerYard&apos;s Bitcoin bridge is a Chainlink CCIP canonical wrap: WBTC locked on Arbitrum (<code>YAssetVault</code>) mints yBTC on Robinhood (<code>YAssetReceipt</code>). Wrap fee is 30 bps, taken on Arbitrum. Extra WBTC vs yBTC supply is un-synced protocol fee; <code>YardkeeperRewardsSynchronized</code> has not fired, so wrap fees are not in the $YARD RewardPaid chart. yXAUT (Tether Gold) is the next CCIP receipt in the same gateway and is not installed yet.</p>
           <p><strong className="text-white">Activation:</strong> Same reconstruction as Mancer. The vault emits no Deactivated event — a sale clears the position. <code>activeCount()</code> is an upper bound; this page replays Activated plus NFT transfers.</p>
           <p><strong className="text-white">Payback:</strong> Entry cost ÷ annualized trailing yield, repriced at the last sync.</p>
-          <p><strong className="text-white">Ownership:</strong> Circulating NFTs are collection size minus AMM vault inventory. Concentration is unique NFT wallets (vault and burn addresses excluded) divided by that circulating number. Activated-wallet count is unique current owners of NFTs that still have an open activation.</p>
+          <p><strong className="text-white">Ownership:</strong> Circulating NFTs are collection size minus AMM vault inventory. Concentration is unique NFT wallets (vault and burn addresses excluded) divided by that circulating number. Activated-wallet count is unique current owners of NFTs that still have an open activation. Chain onboard is unique EOAs whose first cluster buy or mint of this project was one of their first 10 txs.</p>
       </MethodologyCard>
 
     </div>

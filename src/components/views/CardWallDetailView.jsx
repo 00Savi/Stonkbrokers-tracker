@@ -20,6 +20,7 @@ import {
   ActivationStackPanel,
   OwnershipHistoryPanels,
   HolderRevenuePanel,
+  OnboardLinePanel,
 } from '../HistoryCharts';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
@@ -487,6 +488,11 @@ export default function CardWallDetailView({ data, activeTab }) {
             <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm ring-1 ring-amber-500/20"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Wallets with an activated Card Wall</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-amber-300">{activation.activeHolders == null ? '—' : `${formatNumber(activation.activeHolders)} Wallets`}</p></div>
             <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm ring-1 ring-emerald-500/20"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Ownership Concentration</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-emerald-400">{(ownership.ownershipRatio || 0).toFixed(2)}%</p></div>
             <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Unique ${config.ticker} Holders</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-purple-400">{formatNumber(wallHolders)} Wallets</p></div>
+            <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm ring-1 ring-violet-500/20">
+              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Chain onboard</p>
+              <p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-violet-300">{formatNumber(Number(data?.onboarding?.byProject?.cardwall?.wallets) || 0)}</p>
+              <p className="text-xs text-slate-500 mt-1">First 10 txs · NFT {formatNumber(data?.onboarding?.byProject?.cardwall?.nft || 0)}{(Number(data?.onboarding?.byProject?.cardwall?.token) || 0) ? ` · token ${formatNumber(data.onboarding.byProject.cardwall.token)}` : ''}</p>
+            </div>
           </div>
 
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
@@ -506,6 +512,7 @@ export default function CardWallDetailView({ data, activeTab }) {
             snaps={roiSnaps}
             live={{ tokenHolders: wallHolders, nftHolders: ownership.nftHolders, ownershipRatio: ownership.ownershipRatio }}
           />
+          <OnboardLinePanel data={data} projectKey="cardwall" timeframe={timeframe} interval={interval} name="The Card Wall" />
         </div>
       </ShareSection>
 
@@ -536,7 +543,7 @@ export default function CardWallDetailView({ data, activeTab }) {
           <p><strong className="text-white">Yield &amp; ROI:</strong> Each rank is an OpenSea rarity (1-Star through 5-Star). Cost is that rarity&apos;s listing floor. Expected yield is annualized VaultLedger delivered landed-cost, split by rarity rain weight among currently vault-activated memberships. Wall-stage and the early-build bonus are not in this table.</p>
           <p><strong className="text-white">Payback:</strong> Entry cost ÷ annualized trailing yield, repriced at the last sync.</p>
           <p><strong className="text-white">Revenue:</strong> VaultLedger landed cost (delivered vs still on the wall), not AMM swap fees. Activations are a live SoftStakingVault scan by rarityOf, not a log replay of Anvil Activated events.</p>
-          <p><strong className="text-white">Ownership:</strong> Circulating NFTs are collection size minus AMM vault inventory. Concentration is unique NFT wallets (vault and burn addresses excluded) divided by that circulating number. Activated-wallet count is unique vault stakers, not the NFT contract (the wall holds the memberships).</p>
+          <p><strong className="text-white">Ownership:</strong> Circulating NFTs are collection size minus AMM vault inventory. Concentration is unique NFT wallets (vault and burn addresses excluded) divided by that circulating number. Activated-wallet count is unique vault stakers, not the NFT contract (the wall holds the memberships). Chain onboard is unique EOAs whose first cluster buy or mint of this project was one of their first 10 txs.</p>
       </MethodologyCard>
 
     </div>

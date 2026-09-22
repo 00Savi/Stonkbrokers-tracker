@@ -16,6 +16,7 @@ import {
   tvlByModeFromVaults,
   tierActiveDatasets,
   ownershipHistory,
+  windowSeries,
 } from '../lib/yieldHistory';
 import {
   baseChartOptions,
@@ -26,6 +27,7 @@ import {
   usdStackOptions,
   PAIR_COLORS,
   STREAM_COLORS,
+  PROJECT_COLORS,
   barThickness,
   levelAxis,
 } from '../lib/charts';
@@ -415,5 +417,122 @@ export function OwnershipHistoryPanels({ snaps, live }) {
         )}
       </ChartPanel>
     </>
+  );
+}
+
+const ONBOARD_PROJECTS = [
+  { key: 'stonk', label: 'StonkBrokers' },
+  { key: 'mancer', label: 'Mancer' },
+  { key: 'cardwall', label: 'The Card Wall' },
+  { key: 'tickeryard', label: 'TickerYard' },
+  { key: 'interns', label: 'Interns' },
+];
+
+function trimOnboardLead(dates, vals) {
+  const i = (vals || []).findIndex((v) => Number(v) > 0);
+  if (i <= 0) return { dates: dates || [], vals: vals || [] };
+  return { dates: dates.slice(i), vals: vals.slice(i) };
+}
+
+function onboardWindow(data, key, timeframe, interval, trim = false) {
+  const row = data?.onboarding?.byProject?.[key];
+  const dates = row?.daily?.dates || data?.onboarding?.daily?.dates || [];
+  const vals = row?.daily?.wallets || [];
+  const sliced = windowSeries(dates, vals, timeframe, interval, 'last');
+  if (!trim) return sliced;
+  const t = trimOnboardLead(sliced.labels, sliced.data);
+  return { labels: t.dates, data: t.vals };
+}
+
+/** One project's cumulative onboard line. */
+export function OnboardLinePanel({ data, projectKey, timeframe, interval, color, name }) {
+  const sliced = onboardWindow(data, projectKey, timeframe, interval, true);
+  const labels = formatLabels(sliced.labels);
+  const opts = baseChartOptions(labels);
+  return (
+    <ChartPanel
+      title={`${name || 'Chain'} onboard`}
+      note="Wallets whose first cluster buy or mint of this project was one of their first 10 txs on Robinhood Chain."
+    >
+      {seriesHasInk(sliced.data) ? (
+        <Line
+          data={{
+            labels,
+            datasets: [{
+              label: 'Onboarded wallets',
+              data: sliced.data,
+              borderColor: color || PROJECT_COLORS[projectKey] || '#a78bfa',
+              backgroundColor: 'transparent',
+              tension: 0.3,
+              pointRadius: 0,
+              spanGaps: true,
+            }],
+          }}
+          options={{
+            ...opts,
+            plugins: { ...opts.plugins, legend: { display: false } },
+            scales: {
+              ...opts.scales,
+              y: { ...opts.scales.y, ...levelAxis(opts.scales.y.ticks, sliced.data) },
+            },
+          }}
+        />
+      ) : (
+        <EmptyChart>No onboard history yet</EmptyChart>
+      )}
+    </ChartPanel>
+  );
+}
+
+/** Ecosystem overlay: same unit (wallets), so sharing an axis is fair. */
+export function OnboardClusterPanel({ data, timeframe, interval }) {
+  const o = data?.onboarding || {};
+  const total = windowSeries(o.daily?.dates || [], o.daily?.wallets || [], timeframe, interval, 'last');
+  const labels = formatLabels(total.labels);
+  const opts = baseChartOptions(labels);
+  const datasets = [
+    {
+      label: 'All',
+      data: total.data,
+      borderColor: '#e5e7eb',
+      borderDash: [5, 4],
+      borderWidth: 1.5,
+      tension: 0.3,
+      pointRadius: 0,
+      spanGaps: true,
+    },
+    ...ONBOARD_PROJECTS.map(({ key, label }) => {
+      const sliced = onboardWindow(data, key, timeframe, interval, false);
+      return {
+        label,
+        data: sliced.data,
+        borderColor: PROJECT_COLORS[key],
+        tension: 0.3,
+        pointRadius: 0,
+        spanGaps: true,
+      };
+    }).filter((ds) => seriesHasInk(ds.data)),
+  ];
+  return (
+    <ChartPanel
+      title="Chain onboard over time"
+      note="Cumulative unique EOAs. All is the cluster total; each line is first-touch attributed to one project."
+    >
+      {seriesHasInk(total.data) ? (
+        <Line
+          data={{ labels, datasets }}
+          options={{
+            ...opts,
+            plugins: { ...opts.plugins, legend: { display: true, labels: { color: '#94a3b8', boxWidth: 10 } } },
+            scales: {
+              ...opts.scales,
+              y: { ...opts.scales.y, ...levelAxis(opts.scales.y.ticks, total.data) },
+            },
+          }}
+        />
+      ) : (
+        <EmptyChart>No onboard history yet</EmptyChart>
+      )}
+    </ChartPanel>
   );
 }

@@ -539,6 +539,12 @@ for (const [name, View, props] of VIEWS) {
   } else {
     console.log('ok    stonk heading sections ready for Copy all');
   }
+  if (!stonkHtml.includes('Chain onboard') || !stonkHtml.includes('StonkBrokers onboard')) {
+    failed++;
+    console.error('FAIL  stonk ownership missing chain onboard');
+  } else {
+    console.log('ok    stonk ownership has chain onboard');
+  }
   const sectionCopies = (stonkHtml.match(/Copy section/g) || []).length;
   if (sectionCopies < 7) {
     failed++;
@@ -578,6 +584,23 @@ for (const [name, View, props] of VIEWS) {
     console.error('FAIL  ecosystem comparison board missing');
   } else {
     console.log('ok    ecosystem ranks and sparklines instead of overlays');
+  }
+  if (!ecoHtml.includes('Chain onboard') || !/first 10/i.test(ecoHtml)) {
+    failed++;
+    console.error('FAIL  ecosystem onboard metric missing');
+  } else {
+    console.log('ok    ecosystem tracks first-10-tx onboard');
+  }
+  const ecoOwnHtml = renderToString(
+    <StaticRouter location="/ecosystem?tab=ownership">
+      <EcosystemView data={snapshot} />
+    </StaticRouter>
+  );
+  if (!ecoOwnHtml.includes('Chain onboard over time') || !ecoOwnHtml.includes('Robinhood Chain onboard')) {
+    failed++;
+    console.error('FAIL  ecosystem onboard chart missing');
+  } else {
+    console.log('ok    ecosystem shows combined onboard chart');
   }
 }
 

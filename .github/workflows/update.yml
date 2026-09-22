@@ -68,11 +68,7 @@ jobs:
         with:
           path: |
             cache_*.json
-            cache/blocktime.json
-            cache/yield_days.json
-            cache/vault_flow.json
-            cache/cardwall_rarity.json
-            cache/price_days.json
+            cache/*.json
           key: indexer-cache-${{ github.run_id }}
           restore-keys: |
             indexer-cache-

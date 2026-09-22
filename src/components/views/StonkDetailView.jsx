@@ -24,6 +24,7 @@ import {
   BlackHoleChartPanels,
   ActivationStackPanel,
   OwnershipHistoryPanels,
+  OnboardLinePanel,
 } from '../HistoryCharts';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
@@ -454,9 +455,9 @@ export default function StonkDetailView({ data, activeTab }) {
                 </button>
               }
             >
-              {smartLpOpen && (
-                <div className="space-y-4">
+              <div className="space-y-4">
             <SmartLpChartPanels snaps={roiSnaps} smartLp={smartLp} vaults={smartLpVaults} />
+              {smartLpOpen && (
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
                   {smartLpMarkets.map((g) => {
                     const open = smartLpMarket === g.market;
@@ -529,8 +530,8 @@ export default function StonkDetailView({ data, activeTab }) {
                     );
                   })}
                 </div>
-                </div>
               )}
+              </div>
             </Card>
           )}
 
@@ -548,13 +549,13 @@ export default function StonkDetailView({ data, activeTab }) {
                 </button>
               }
             >
-              <KpiStrip className={lpTableOpen ? 'mb-4' : ''}>
+              <KpiStrip className="mb-4">
                 <Stat label="Tokens locked" value={formatNumber(lockedLp.totalStonkLocked || 0)} note={config.ticker} />
                 <Stat label="Pool reserves" value={formatCurrency(lockedLp.totalLpUsd || 0)} />
               </KpiStrip>
-              {lpTableOpen && (
-                <div className="space-y-4">
+              <div className="space-y-4">
             <BlackHoleChartPanels snaps={roiSnaps} lockedLp={lockedLp} ticker={config.ticker} />
+              {lpTableOpen && (
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[480px] text-left">
                     <thead>
@@ -577,8 +578,8 @@ export default function StonkDetailView({ data, activeTab }) {
                     </tbody>
                   </table>
                 </div>
-                </div>
               )}
+              </div>
             </Card>
           )}
       </ShareSection>
@@ -752,6 +753,12 @@ export default function StonkDetailView({ data, activeTab }) {
             <Stat label="NFT holders" value={formatNumber(ownership.nftHolders || 0)} />
             <Stat label="Concentration" value={`${(ownership.ownershipRatio || 0).toFixed(2)}%`} tone="accent" />
             <Stat label="Token holders" value={formatNumber(stonkHolders)} />
+            <Stat
+              label="Chain onboard"
+              value={formatNumber(Number(data?.onboarding?.byProject?.stonk?.wallets) || 0)}
+              tone="accent"
+              note="First 10 txs"
+            />
           </KpiStrip>
           <KpiStrip className="mt-6">
             <Stat label="Max supply" value={formatNumber(ownership.currentMaxSupply || 0, 2)} />
@@ -786,13 +793,20 @@ export default function StonkDetailView({ data, activeTab }) {
               ownershipRatio: ownership.ownershipRatio,
             }}
           />
+          <OnboardLinePanel
+            data={data}
+            projectKey="stonk"
+            timeframe={timeframe}
+            interval={interval}
+            name="StonkBrokers"
+          />
       </ShareSection>
 
       <MethodologyCard>
           <p><strong className="text-ink">Yield &amp; ROI:</strong> Live cash-on-cash is a trailing sample of the T4 Partner oracle wallet, scaled by total network weight / 333, annualized, then divided by (NFT floor USD + activation tokens at DexScreener spot). From 2026-08-20 that oracle is live. Earlier ROI days estimate the same CoC from Clock In v1, v2, and Overtime pot inflows ÷ reconstructed active weight, with cost basis frozen at the first oracle snapshot. Mid-August is a real FOMO / revenue spike (NFT trades printed around 12 ETH); the % uses the later ~4 ETH floor so it tracks that yield spike rather than repricing entry cost day by day. A one-day collapse between two hot UTC sessions is treated as a bucket hole, not a crash.</p>
           <p><strong className="text-ink">Protocol revenue (StonkBooster mix):</strong> AMM collector, Clock In locker fees (v1 retired, v2, Overtime retired), launchpad tax, Partner Revenue Share (Nightshades 13.33% civ-pad + Mancer 25% dex), and Smart LP skim. Clock In is Safety Deposit lock/collect fees (90% community / 10% protocol), not a raffle. Nightshades Night vault WETH is The Night inventory and is never counted here. Bonding swap volume is notional and is not revenue.</p>
           <p><strong className="text-ink">Payback:</strong> Entry cost ÷ annualized trailing yield. Charts reprice cost at the last sync.</p>
-          <p><strong className="text-ink">Ownership:</strong> Circulating NFTs are collection size minus AMM vault inventory. Concentration is unique NFT wallets (vault and burn addresses excluded) divided by that circulating number. Activated-wallet count is unique current owners of NFTs that still have an open activation — a sale clears it.</p>
+          <p><strong className="text-ink">Ownership:</strong> Circulating NFTs are collection size minus AMM vault inventory. Concentration is unique NFT wallets (vault and burn addresses excluded) divided by that circulating number. Activated-wallet count is unique current owners of NFTs that still have an open activation — a sale clears it. Chain onboard is unique EOAs whose first cluster buy or mint of this project was one of their first 10 txs.</p>
           <p><strong className="text-ink">Burn:</strong> Token-wide $STONKBROKER destroyed (supply deflation + dead + tokens locked in the broker activation manager). The cumulative chart is that token total. Intern activations use a different manager and burn half of each intern fee into the same token; that intern total is subtracted out of the StonkBrokers tile. The daily intern vs StonkBrokers chart starts on the first intern activation and is the first difference of each series. Hourly snapshots stamp internBurnTokens going forward so the split persists on the parent series.</p>
       </MethodologyCard>
 

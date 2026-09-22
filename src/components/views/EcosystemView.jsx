@@ -16,7 +16,7 @@ import { cashflowRoiByDate, protocolFeeCols, protocolRevenueChart, seriesHasInk,
 import { typicalNightshadesSeat } from '../../lib/nightshades';
 import { useChartView } from '../../lib/chartWindow';
 import { baseChartOptions, compactTick, compactUsdTick, PROJECT_COLORS, levelAxis } from '../../lib/charts';
-import { EmptyChart } from '../HistoryCharts';
+import { EmptyChart, OnboardClusterPanel } from '../HistoryCharts';
 import { MethodologyCard } from '../Disclaimer';
 import { CopyControl, shareSlug, ShareSection } from '../CopyControl';
 import { copyElement } from '../../lib/share';
@@ -506,6 +506,31 @@ export default function EcosystemView({ data, pending = false }) {
   const bestRoi = roiRows.find((r) => r.roi > 0);
   const hrefFor = (tab) => (ds) => projectPath(ds.key, tab);
 
+  const onboard = data.onboarding || {};
+  const onboardBy = onboard.byProject || {};
+  const onboardRows = [
+    { key: 'stonk', name: 'StonkBrokers' },
+    { key: 'mancer', name: 'Mancer' },
+    { key: 'cardwall', name: 'The Card Wall' },
+    { key: 'tickeryard', name: 'TickerYard' },
+    { key: 'interns', name: 'Interns' },
+  ].map((row) => ({
+    key: row.key,
+    name: row.name,
+    color: projectColors[row.key],
+    value: Number(onboardBy[row.key]?.wallets) || 0,
+    href: projectPath(row.key, 'ownership'),
+    note: (() => {
+      const nft = Number(onboardBy[row.key]?.nft) || 0;
+      const token = Number(onboardBy[row.key]?.token) || 0;
+      if (token) return `NFT ${compactNum(nft)} · token ${compactNum(token)}`;
+      return nft ? `NFT ${compactNum(nft)}` : null;
+    })(),
+  })).sort((a, b) => b.value - a.value);
+  const onboardNote = onboard.complete === false && (onboard.pending || 0) > 0
+    ? `Still folding ${compactNum(onboard.pending)} txs`
+    : 'NFT or AMM buy · nonce 0–9';
+
   return (
     <div className="relative space-y-6 pt-4">
       <div className="sticky top-[var(--header-h,5.5rem)] z-20 -mx-3 bg-[#08090b] px-3" data-share-omit>
@@ -551,6 +576,11 @@ export default function EcosystemView({ data, pending = false }) {
               label={`${period} protocol rev`}
               value={compactUsd(revTotal)}
               note="Kept fees only"
+            />
+            <Stat
+              label="Chain onboard"
+              value={compactNum(onboard.wallets || 0)}
+              note={onboard.complete === false && !(onboard.wallets > 0) ? 'Counting' : 'First 10 txs'}
             />
           </KpiStrip>
         </Card>
@@ -762,6 +792,18 @@ export default function EcosystemView({ data, pending = false }) {
       {activeTab === 'ownership' && (
       <ShareSection id="ownership" className="space-y-4">
         <Card
+          eyebrow="Robinhood Chain onboard"
+          sub={`Wallets whose first cluster buy or mint was one of their first ${onboard.lookbackTxs || 10} transactions. Airdrops and contracts do not count. ${onboardNote}.`}
+        >
+          <KpiStrip className="mb-5">
+            <Stat label="Wallets" value={compactNum(onboard.wallets || 0)} tone="accent" note="Unique EOAs" />
+            <Stat label="First touch" value={onboardRows[0]?.name || '—'} note={onboardRows[0] ? compactNum(onboardRows[0].value) : null} />
+            <Stat label="Classified" value={compactNum(onboard.scanned || 0)} note={onboard.complete ? 'Complete' : 'In progress'} />
+          </KpiStrip>
+          <RankBar rows={onboardRows} format={compactNum} />
+        </Card>
+        <OnboardClusterPanel data={data} timeframe={timeframe} interval={interval} />
+        <Card
           eyebrow="Concentration"
           sub="Unique NFT wallets ÷ circulating supply. Holder headcount is not comparable across collections of different size, so it sits as a note, not the axis."
         >
@@ -788,6 +830,7 @@ export default function EcosystemView({ data, pending = false }) {
 
       <MethodologyCard>
         <p><strong className="text-white">What this board is for:</strong> Compare projects. It does not add them into one protocol. Each series is fetched on its own contracts. Overlaying raw units or dollars on one axis hid every tape except the largest, so ranks use a shared unit (CoC %, burn % of own cap, % activated) and history is a sparkline per project on its own scale.</p>
+        <p><strong className="text-white">Chain onboard:</strong> Unique EOAs that sent a transaction with nonce 0–9 which received or minted a StonkBrokers, Mancer, Card Wall, TickerYard, or Interns NFT, or bought STONK / MANCER / YARD / WALL off that project’s AMM. Airdrops and peer transfers do not count. Token-bound accounts are skipped; a mint-to-TBA still counts the minter. Interns share STONK, so those buys sit on StonkBrokers. Token buys are AMM-outflows only — not a walk of every holder. The hourly job folds new transfers, so the figure may still be counting up.</p>
         <p><strong className="text-white">Revenue:</strong> Protocol-kept fees only. StonkBrokers StonkBooster is the mix on that project page. Nightshades Night vault WETH is not copied here. Bonding volume is notional.</p>
         <p><strong className="text-white">All tiers:</strong> Cost repriced on each load. Yield is the same trailing sample as the project ROI tab. Cross-project APY is not comparable 1:1 because cost basis and payout mechanics differ.</p>
       </MethodologyCard>

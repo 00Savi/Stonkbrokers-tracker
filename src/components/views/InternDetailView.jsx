@@ -22,6 +22,7 @@ import {
   ProtocolFeeVolumePanels,
   ActivationStackPanel,
   OwnershipHistoryPanels,
+  OnboardLinePanel,
 } from '../HistoryCharts';
 import {
   INTERNS_DOCS,
@@ -389,10 +390,15 @@ export default function InternDetailView({ data, activeTab }) {
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5"><p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Dormant in parent TBAs</p><p className="text-2xl font-extrabold text-slate-300">{dash(awaitingContracts, dormantInterns)}</p></div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5"><p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">AMM vault</p><p className="text-2xl font-extrabold text-slate-300">{dash(awaitingContracts, ownership.ammVaultNfts)}</p></div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 border-b-4 border-b-amber-500"><p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Circulating live interns</p><p className="text-2xl font-extrabold text-amber-300">{dash(awaitingContracts, circ)}</p><p className="text-xs text-slate-500 mt-1">Live released minus Intern Exchange inventory. Dormant are not circulating.</p></div>
             <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Unique intern wallets</p><p className="text-2xl font-extrabold text-purple-400">{awaitingContracts ? '—' : `${formatNumber(ownership.nftHolders || 0)} Wallets`}</p></div>
             <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 ring-1 ring-emerald-500/20"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Ownership concentration</p><p className="text-2xl font-extrabold text-emerald-400">{awaitingContracts ? '—' : `${(ownership.ownershipRatio || 0).toFixed(2)}%`}</p></div>
+            <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 ring-1 ring-violet-500/20">
+              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Chain onboard</p>
+              <p className="text-2xl font-extrabold text-violet-300">{formatNumber(Number(data?.onboarding?.byProject?.interns?.wallets) || 0)}</p>
+              <p className="text-xs text-slate-500 mt-1">First 10 txs · NFT {formatNumber(data?.onboarding?.byProject?.interns?.nft || 0)}</p>
+            </div>
           </div>
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
             <h3 className="text-sm font-bold text-white mb-4">Intern holders over time</h3>
@@ -408,6 +414,7 @@ export default function InternDetailView({ data, activeTab }) {
             snaps={roiSnaps}
             live={{ tokenHolders: 0, nftHolders: ownership.nftHolders, ownershipRatio: ownership.ownershipRatio }}
           />
+          <OnboardLinePanel data={data} projectKey="interns" timeframe={timeframe} interval={interval} name="Interns" />
         </div>
       </ShareSection>
 
@@ -415,7 +422,7 @@ export default function InternDetailView({ data, activeTab }) {
         <p><strong className="text-white">What this is:</strong> Interns by StonkBrokers is the companion NFT to StonkBrokers, not a second broker seat. Paper at <a className="text-amber-300 underline" href={INTERNS_DOCS} target="_blank" rel="noreferrer">stonkbrokers.cash/docs/interns</a>. Holding an intern is not equity and is not a guaranteed share of revenue.</p>
         <p><strong className="text-white">Mint:</strong> Only an activated parent broker can release its intern(s). A dormant sweep puts all 8,888 into parent TBAs on mint open; they cannot move until released.</p>
         <p><strong className="text-white">Yield &amp; ROI:</strong> Intern Clock In weight is job-title slice × intern activation tier (same 1.00 / 1.25 / 1.60 / 2.00 / 3.33 multipliers as brokers). CoC is that trailing intern yield ÷ (intern floor USD + activation $STONKBROKER at spot). Parent-broker Clock In that is delegated as base pay is a separate cashflow and is not added into intern CoC until we can split it onchain.</p>
-        <p><strong className="text-white">Ownership:</strong> Circulating live interns are released supply minus Intern Exchange / AMM vault inventory. Dormant tokens in parent TBAs are not circulating. Concentration is unique intern wallets (vault and burn excluded) ÷ that circulating number.</p>
+        <p><strong className="text-white">Ownership:</strong> Circulating live interns are released supply minus Intern Exchange / AMM vault inventory. Dormant tokens in parent TBAs are not circulating. Concentration is unique intern wallets (vault and burn excluded) ÷ that circulating number. Chain onboard is unique EOAs whose first intern buy or mint was one of their first 10 txs ($STONKBROKER token buys stay on StonkBrokers).</p>
         <p><strong className="text-white">Burn:</strong> Interns and StonkBrokers do not share an activation manager. Interns use 0x668e…4b37; brokers use 0xacd5…f664. Both burn the same $STONKBROKER token (0xe934…abf50). Half of each intern fee is destroyed; that intern total is a subset of token-wide supply burn. Token-supply charts stay on the parent StonkBrokers burn page — interns are not a second ERC-20.</p>
         <p><strong className="text-white">Turning the page on:</strong> Collection and activation CAs are live in fetcher.cjs. Intern Clock In, Intern Exchange, names, and lending stay blank until those desks deploy.</p>
       </MethodologyCard>

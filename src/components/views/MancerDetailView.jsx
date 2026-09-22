@@ -20,6 +20,8 @@ import {
   ProtocolFeeVolumePanels,
   ActivationStackPanel,
   OwnershipHistoryPanels,
+  BlackHoleChartPanels,
+  OnboardLinePanel,
 } from '../HistoryCharts';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
@@ -316,6 +318,7 @@ export default function MancerDetailView({ data, activeTab }) {
                   </button>
                 </div>
               </div>
+              <BlackHoleChartPanels snaps={roiSnaps} lockedLp={lockedLp} ticker={config.ticker} />
               {lpTableOpen && (
                 <div className="overflow-x-auto transition-all duration-300">
                   <table className="w-full text-left text-xs border-collapse">
@@ -482,6 +485,11 @@ export default function MancerDetailView({ data, activeTab }) {
             <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm ring-1 ring-purple-500/20"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Wallets with an activated Mancer</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-purple-300">{activation.activeHolders == null ? '—' : `${formatNumber(activation.activeHolders)} Wallets`}</p></div>
             <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm ring-1 ring-emerald-500/20"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Ownership Concentration</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-emerald-400">{(ownership.ownershipRatio || 0).toFixed(2)}%</p></div>
             <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Unique ${config.ticker} Holders</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-purple-400">{formatNumber(mancerHolders)} Wallets</p></div>
+            <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm ring-1 ring-violet-500/20">
+              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Chain onboard</p>
+              <p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-violet-300">{formatNumber(Number(data?.onboarding?.byProject?.mancer?.wallets) || 0)}</p>
+              <p className="text-xs text-slate-500 mt-1">First 10 txs · NFT {formatNumber(data?.onboarding?.byProject?.mancer?.nft || 0)}{(Number(data?.onboarding?.byProject?.mancer?.token) || 0) ? ` · token ${formatNumber(data.onboarding.byProject.mancer.token)}` : ''}</p>
+            </div>
           </div>
 
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
@@ -501,6 +509,7 @@ export default function MancerDetailView({ data, activeTab }) {
             snaps={roiSnaps}
             live={{ tokenHolders: mancerHolders, nftHolders: ownership.nftHolders, ownershipRatio: ownership.ownershipRatio }}
           />
+          <OnboardLinePanel data={data} projectKey="mancer" timeframe={timeframe} interval={interval} name="Mancer" />
         </div>
       </ShareSection>
 
@@ -509,7 +518,7 @@ export default function MancerDetailView({ data, activeTab }) {
           <p><strong className="text-white">Activation:</strong> Total Active Units is the live set after replaying vault events plus NFT transfers. Mancer emits no Deactivated event — a sale clears the position. The contract&apos;s <code>activeCount()</code> is an upper bound and is not what this page shows. Tier flow cards are gross activate/exit events in the window, not the live mix (that is the doughnut).</p>
           <p><strong className="text-white">Revenue:</strong> Dex collector plus vault RewardPaid. 25% of Mancer dex tax is also credited to StonkBrokers Partner Revenue Share. This page still shows Mancer&apos;s full collector — do not add the two protocol totals together.</p>
           <p><strong className="text-white">Payback:</strong> Entry cost ÷ annualized trailing yield, repriced at the last sync.</p>
-          <p><strong className="text-white">Ownership:</strong> Circulating NFTs are collection size minus AMM vault inventory. Concentration is unique NFT wallets (vault and burn addresses excluded) divided by that circulating number. Activated-wallet count is unique current owners of NFTs that still have an open activation.</p>
+          <p><strong className="text-white">Ownership:</strong> Circulating NFTs are collection size minus AMM vault inventory. Concentration is unique NFT wallets (vault and burn addresses excluded) divided by that circulating number. Activated-wallet count is unique current owners of NFTs that still have an open activation. Chain onboard is unique EOAs whose first cluster buy or mint of this project was one of their first 10 txs.</p>
       </MethodologyCard>
 
     </div>
