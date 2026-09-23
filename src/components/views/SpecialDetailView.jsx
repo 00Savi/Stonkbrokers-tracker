@@ -14,9 +14,9 @@ import {
   OAKMONT_ACTIONS, OAKMONT_BASKET, OAKMONT_DOCS, OAKMONT_DAPP, OAKMONT_SITE, OAKMONT_FEES,
   fetchGeckoTokenHolders,
 } from '../../lib/oakmont';
-import { baseChartOptions, compactTick, compactUsdTick, dualAxisOptions } from '../../lib/charts';
+import { baseChartOptions, compactTick, compactUsdTick, cumulativeBurnDataset, dualAxisOptions, percentTick } from '../../lib/charts';
 import { useChartView } from '../../lib/chartWindow';
-import { YieldUsdPricePanel, PaybackPanel, HolderRevenuePanel } from '../HistoryCharts';
+import { YieldUsdPricePanel, HolderRevenuePanel } from '../HistoryCharts';
 import { DisclaimerCopy } from '../Disclaimer';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler);
@@ -198,7 +198,9 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
                       ? [{ label: 'CoC ROI %', data: histRoi, borderColor: MARK.green, tension: 0.3, borderWidth: 2 }]
                       : [{ label: 'Holders revenue (USD)', data: cashflow.dailyRevenue, borderColor: MARK.green, tension: 0.3, borderWidth: 2 }],
                   }}
-                  options={chartOpts}
+                  options={histRoi.length
+                    ? baseChartOptions(histLabels, interval, { yUnit: 'CoC %', yTick: percentTick })
+                    : baseChartOptions(histLabels, interval, { yUnit: 'USD', yTick: compactUsdTick })}
                 />
               ) : (
                 <div className="h-full flex items-center justify-center text-sm text-slate-500">Snapshots start after the first hourly run.</div>
@@ -206,10 +208,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
             </div>
           </div>
           {snaps.length > 0 && (
-            <>
-              <YieldUsdPricePanel snaps={snaps} tiers={tiers} />
-              <PaybackPanel snaps={snaps} tiers={tiers} floorCostUsd={kind === 'brokers' ? brokerCost : tokenUsd} tokenPriceUsd={tokenUsd} />
-            </>
+            <YieldUsdPricePanel snaps={snaps} tiers={tiers} />
           )}
         </div>
       </ShareSection>
@@ -246,7 +245,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
                       backgroundColor: c.color,
                     })),
                   }}
-                  options={{ ...chartOpts, scales: { ...chartOpts.scales, x: { ...chartOpts.scales.x, stacked: false }, y: { ...chartOpts.scales.y, stacked: false, ticks: { ...chartOpts.scales.y.ticks, callback: compactUsdTick } } } }}
+                  options={{ ...chartOpts, scales: { ...chartOpts.scales, x: { ...chartOpts.scales.x, stacked: false }, y: { ...chartOpts.scales.y, stacked: false, unit: 'USD', ticks: { ...chartOpts.scales.y.ticks, callback: compactUsdTick } } } }}
                 />
               ) : (
                 <div className="h-72 flex items-center justify-center text-sm text-slate-500">
@@ -313,15 +312,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
                 <Line
                   data={{
                     labels: burn.labels,
-                    datasets: [{
-                      label: 'Cumulative burnt',
-                      data: burn.data,
-                      borderColor: '#fb923c',
-                      backgroundColor: 'rgba(251, 146, 60, 0.1)',
-                      borderWidth: 3,
-                      fill: true,
-                      tension: 0.3,
-                    }],
+                    datasets: [cumulativeBurnDataset(burn.data, '#fb923c')],
                   }}
                   options={{
                     responsive: true,
@@ -329,7 +320,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
                     plugins: { legend: { display: false } },
                     scales: {
                       x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
-                      y: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactTick } },
+                      y: { unit: 'Tokens', grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactTick } },
                     },
                   }}
                 />
@@ -349,7 +340,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
                   data={{
                     labels: flywheel.labels,
                     datasets: [
-                      { type: 'line', label: `$${ticker} price`, data: flywheel.prices, borderColor: '#00a804', backgroundColor: '#00a804', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y1' },
+                      { type: 'line', label: `$${ticker} price`, data: flywheel.prices, borderColor: '#00a804', borderDash: [5, 4], borderWidth: 1.75, tension: 0, pointRadius: 0, yAxisID: 'y1' },
                       { type: 'bar', label: 'Daily burn', data: flywheel.burn, backgroundColor: 'rgba(249, 115, 22, 0.8)', borderRadius: 4, yAxisID: 'y' },
                     ],
                   }}
@@ -358,6 +349,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
                     rightTick: compactUsdTick,
                     rightColor: '#00a804',
                     leftMax: flywheel.burnAxisMax,
+                    leftUnit: 'Tokens / day',
                     leftValues: flywheel.burn,
                     rightValues: flywheel.prices,
                   })}
@@ -450,7 +442,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
                     plugins: { legend: { display: false } },
                     scales: {
                       x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
-                      y: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactTick } },
+                      y: { unit: 'Wallets', grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactTick } },
                     },
                   }}
                 />
@@ -664,8 +656,8 @@ function VaultView({
                     ...chartOpts,
                     scales: {
                       ...chartOpts.scales,
-                      y: { ...chartOpts.scales.y, position: 'left' },
-                      y1: { ticks: { color: '#94a3b8' }, grid: { drawOnChartArea: false }, position: 'right' },
+                      y: { ...chartOpts.scales.y, position: 'left', unit: 'STRIKE / RESERVE' },
+                      y1: { ticks: { color: '#94a3b8', callback: compactUsdTick }, grid: { drawOnChartArea: false }, position: 'right', unit: 'USDG' },
                     },
                   }}
                 />
@@ -688,8 +680,8 @@ function VaultView({
                     ...chartOpts,
                     scales: {
                       ...chartOpts.scales,
-                      y: { ...chartOpts.scales.y, position: 'left' },
-                      y1: { ticks: { color: '#94a3b8' }, grid: { drawOnChartArea: false }, position: 'right' },
+                      y: { ...chartOpts.scales.y, position: 'left', unit: 'Wrap ratio' },
+                      y1: { ticks: { color: '#94a3b8', callback: percentTick }, grid: { drawOnChartArea: false }, position: 'right', unit: '%' },
                     },
                   }}
                 />
@@ -702,7 +694,7 @@ function VaultView({
                       ...(reserveHist.some((v) => v > 0) ? [{ label: '$RESERVE', data: reserveHist, borderColor: MARK.lime, tension: 0.3, borderWidth: 2 }] : []),
                     ],
                   }}
-                  options={chartOpts}
+                  options={baseChartOptions(histLabels, interval, { yUnit: 'USD', yTick: compactUsdTick })}
                 />
               ) : (
                 <div className="h-full flex items-center justify-center text-sm text-slate-500">Hourly snapshots will fill wrap ratio and coverage.</div>
@@ -740,7 +732,7 @@ function VaultView({
                       backgroundColor: c.color,
                     })),
                   }}
-                  options={{ ...chartOpts, scales: { ...chartOpts.scales, y: { ...chartOpts.scales.y, ticks: { ...chartOpts.scales.y.ticks, callback: compactUsdTick } } } }}
+                  options={{ ...chartOpts, scales: { ...chartOpts.scales, y: { ...chartOpts.scales.y, unit: 'USD', ticks: { ...chartOpts.scales.y.ticks, callback: compactUsdTick } } } }}
                 />
               </div>
             </div>
@@ -865,8 +857,8 @@ function VaultView({
                     ...chartOpts,
                     scales: {
                       ...chartOpts.scales,
-                      y: { ...chartOpts.scales.y, position: 'left' },
-                      y1: { ticks: { color: '#94a3b8' }, grid: { drawOnChartArea: false }, position: 'right' },
+                      y: { ...chartOpts.scales.y, position: 'left', unit: 'STRIKE / RESERVE' },
+                      y1: { ticks: { color: '#94a3b8', callback: compactUsdTick }, grid: { drawOnChartArea: false }, position: 'right', unit: 'USDG' },
                     },
                   }}
                 />

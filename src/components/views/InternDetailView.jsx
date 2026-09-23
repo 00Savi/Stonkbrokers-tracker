@@ -3,13 +3,13 @@ import { Link } from 'react-router-dom';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, ArcElement, Filler
 } from 'chart.js';
-import { Line, Bar, Doughnut } from 'react-chartjs-2';
+import { Line, Bar } from 'react-chartjs-2';
 import { formatLabels } from '../../lib/dates';
 import { windowSnapshots, tierRoiDatasets, protocolRevenueChart, sliceCols, windowPeriodLabel, seriesHasInk, holderRevenueCol, windowChart } from '../../lib/yieldHistory';
 import { compactUsd, compactNum, YieldPeriodToggle, scaleAnnualYield, yieldSuffix } from '../kit';
 import { ShareSection } from '../CopyControl';
 import { TierFlowSection, netTierCount } from '../TierFlowCards';
-import { baseChartOptions, STREAM_COLORS, activityChartOptions } from '../../lib/charts';
+import { baseChartOptions, compactTick, compactUsdTick, STREAM_COLORS, TIER_COLORS, percentTick } from '../../lib/charts';
 import { useChartView } from '../../lib/chartWindow';
 import { holderSeries } from '../../lib/snapshots';
 import { MethodologyCard } from '../Disclaimer';
@@ -18,12 +18,13 @@ import { attributedStonkBurn } from '../../lib/burn';
 import {
   EmptyChart,
   YieldUsdPricePanel,
-  PaybackPanel,
+  ActivityChart,
   ProtocolFeeVolumePanels,
   ActivationStackPanel,
   OwnershipHistoryPanels,
   OnboardLinePanel,
 } from '../HistoryCharts';
+import { SliceChart } from '../SliceChart';
 import {
   INTERNS_DOCS,
   INTERNS_MAX_SUPPLY,
@@ -71,8 +72,6 @@ export default function InternDetailView({ data, activeTab }) {
     ? Math.max(0, INTERNS_MAX_SUPPLY - liveInterns)
     : Number(ownership.dormantInterns);
   const circ = internCirculating(ownership);
-  const chartOptions = baseChartOptions();
-
   const roiSnaps = windowSnapshots(dailySnapshots, timeframe, interval);
   const histLabels = formatLabels(roiSnaps.map((s) => s.date));
   const histDatasets = tierRoiDatasets(roiSnaps, tiers, {
@@ -256,7 +255,7 @@ export default function InternDetailView({ data, activeTab }) {
                             <td colSpan="5" className="p-4 md:p-6">
                               <div className="relative h-32 md:h-40 w-full">
                                 {seriesHasInk(t.dailyYields) ? (
-                                  <Line data={{ labels: t.dailyDates, datasets: [{ label: 'Daily Yield (USD)', data: t.dailyYields, borderColor: ACCENT, backgroundColor: 'rgba(251, 191, 36, 0.1)', borderWidth: 2, fill: true, tension: 0.4, pointRadius: 0 }] }} options={chartOptions} />
+                                  <Line data={{ labels: t.dailyDates, datasets: [{ label: 'Daily Yield (USD)', data: t.dailyYields, borderColor: ACCENT, backgroundColor: 'rgba(251, 191, 36, 0.1)', borderWidth: 2, fill: true, tension: 0.4, pointRadius: 0 }] }} options={baseChartOptions(t.dailyDates, 'daily', { yUnit: 'USD', yTick: compactUsdTick })} />
                                 ) : (
                                   <EmptyChart>Intern Clock In has not written a daily yield yet</EmptyChart>
                                 )}
@@ -294,14 +293,13 @@ export default function InternDetailView({ data, activeTab }) {
             <h3 className="text-sm font-bold text-white mb-4">Tier ROI % Trajectory</h3>
             <div className="relative h-52 sm:h-64 md:h-80 w-full">
               {seriesHasInk(histDatasets.flatMap((d) => d.data)) ? (
-                <Line data={{ labels: histLabels, datasets: histDatasets }} options={chartOptions} />
+                <Line data={{ labels: histLabels, datasets: histDatasets }} options={baseChartOptions(histLabels, interval, { yUnit: 'CoC %', yTick: percentTick })} />
               ) : (
                 <EmptyChart>Yield history starts after Intern Clock In writes a snapshot</EmptyChart>
               )}
             </div>
           </div>
           <YieldUsdPricePanel snaps={roiSnaps} tiers={tiers} />
-          <PaybackPanel snaps={roiSnaps} tiers={tiers} floorCostUsd={floorCostUsd} tokenPriceUsd={stonkPx} />
         </div>
       </ShareSection>
 
@@ -359,23 +357,19 @@ export default function InternDetailView({ data, activeTab }) {
           />
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
             <h3 className="text-sm font-bold text-white mb-6">Current tier mix</h3>
-            <div className="flex flex-col md:flex-row items-center justify-center gap-8">
-              <div className="relative h-64 md:h-72 w-full md:w-1/2 flex items-center justify-center">
-                {breakdownArr.some((n) => n > 0) ? (
-                  <Doughnut data={{ labels: tiers.map((t) => t.name), datasets: [{ data: breakdownArr, backgroundColor: ['#00a804', '#8b5cf6', '#38bdf8', '#f5b700', '#f472b6'], borderWidth: 0 }] }} options={{ responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { display: false } } }} />
-                ) : (
-                  <EmptyChart>No intern activations recorded</EmptyChart>
-                )}
-              </div>
-              <div className="w-full md:w-1/2 flex flex-col gap-3">
-                {tiers.map((t, idx) => (
-                  <div key={t.tier} className="flex justify-between items-center bg-[#0e1013] p-3 rounded-lg border border-[#1e2228]">
-                    <div className="flex items-center gap-3"><div className={`w-4 h-4 rounded-md ${['bg-[#00a804]', 'bg-[#8b5cf6]', 'bg-[#38bdf8]', 'bg-[#f5b700]', 'bg-[#f472b6]'][idx % 5]}`} /><span className="text-sm font-bold text-slate-300">{t.tier}: {t.name}</span></div>
-                    <span className="text-white font-bold">{awaitingContracts ? '—' : formatNumber(breakdownArr[idx])}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            {breakdownArr.some((n) => n > 0) ? (
+              <SliceChart
+                noun="Active"
+                format={formatNumber}
+                slices={tiers.map((t, idx) => ({
+                  label: `${t.tier}: ${t.name}`,
+                  value: breakdownArr[idx],
+                  color: TIER_COLORS[idx % TIER_COLORS.length],
+                }))}
+              />
+            ) : (
+              <EmptyChart>No intern activations recorded</EmptyChart>
+            )}
           </div>
           <ActivationStackPanel snaps={roiSnaps} tiers={tiers} breakdown={activation.breakdown} />
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
@@ -383,7 +377,7 @@ export default function InternDetailView({ data, activeTab }) {
             <p className="text-xs text-slate-400 mb-4">A sale clears intern activation the same way as a broker. Dormant interns cannot activate.</p>
             <div className="relative h-52 sm:h-64 md:h-80 w-full">
               {hasActHist ? (
-                <Bar data={{ labels: actWin.labels, datasets: [{ type: 'line', label: 'Active units', data: actWin.cols[0], borderColor: ACCENT, tension: 0.3, yAxisID: 'y' }, { type: 'bar', label: 'Daily Activations', data: actWin.cols[1], backgroundColor: '#00a804', borderRadius: 4, yAxisID: 'y1' }, { type: 'bar', label: 'Daily Deactivations', data: actWin.cols[2], backgroundColor: '#f43f5e', borderRadius: 4, yAxisID: 'y1' }] }} options={activityChartOptions(actWin.labels, actWin.cols[0], actWin.cols[1], actWin.cols[2], interval)} />
+                <ActivityChart labels={actWin.labels} net={actWin.cols[0]} ins={actWin.cols[1]} outs={actWin.cols[2]} interval={interval} lineColor={ACCENT} lineLabel="Active units" />
               ) : (
                 <EmptyChart>No intern activation history recorded</EmptyChart>
               )}
@@ -415,7 +409,7 @@ export default function InternDetailView({ data, activeTab }) {
             <h3 className="text-sm font-bold text-white mb-4">Intern holders over time</h3>
             <div className="relative h-52 sm:h-64 md:h-80 w-full">
               {seriesHasInk(ownData) ? (
-                <Line data={{ labels: ownLabels, datasets: [{ label: 'NFT holders', data: ownData, borderColor: ACCENT, backgroundColor: 'rgba(251, 191, 36, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] }} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } } } }} />
+                <Line data={{ labels: ownLabels, datasets: [{ label: 'NFT holders', data: ownData, borderColor: ACCENT, backgroundColor: 'rgba(251, 191, 36, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] }} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, unit: 'Wallets', ticks: { color: '#94a3b8', callback: compactTick } } } }} />
               ) : (
                 <EmptyChart>Holder history starts after the collection CA is indexed</EmptyChart>
               )}

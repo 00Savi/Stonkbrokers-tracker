@@ -1,3 +1,5 @@
+import { Chart } from 'chart.js';
+
 /** Copy a watermarked chart PNG to the clipboard.
  *
  * The footer is only the site and a follow line so the image can be pasted
@@ -11,35 +13,53 @@ export const LAUNCHER_REF = 'https://stonkbrokers.io/safe-launch?ref=SAVI';
 const SITE_MARK = 'savicrypto.xyz';
 const FOLLOW_MARK = `Follow ${SAVI_X_HANDLE}`;
 
-function drawWatermarked(chartCanvas, { maxW = 0 } = {}) {
+function drawWatermarked(chartCanvas, { maxW = 0, title = '', unit = '', latest = '' } = {}) {
   const srcW = chartCanvas.width;
   const srcH = chartCanvas.height;
   if (!srcW || !srcH) throw new Error('No chart to copy');
 
   const padX = 28;
   const foot = 52;
+  const head = title || latest ? 84 : 0;
   const w = maxW > 0 ? Math.min(maxW, srcW) : Math.max(1100, srcW);
   const scale = w / srcW;
   const h = srcH * scale;
 
   const out = document.createElement('canvas');
   out.width = w;
-  out.height = h + foot;
+  out.height = head + h + foot;
   const ctx = out.getContext('2d');
 
   ctx.fillStyle = '#08090b';
   ctx.fillRect(0, 0, out.width, out.height);
-  ctx.drawImage(chartCanvas, 0, 0, w, h);
+  ctx.textBaseline = 'top';
+  if (head) {
+    ctx.fillStyle = '#8b929b';
+    ctx.font = '700 14px ui-sans-serif, system-ui, sans-serif';
+    ctx.fillText(String(title || 'Chart').slice(0, 80), padX, 16);
+    ctx.fillStyle = '#f4f6f8';
+    ctx.font = '800 28px ui-sans-serif, system-ui, sans-serif';
+    const value = latest || '—';
+    ctx.fillText(value, padX, 40);
+    if (unit) {
+      const vw = ctx.measureText(value).width;
+      ctx.fillStyle = '#8b929b';
+      ctx.font = '600 14px ui-sans-serif, system-ui, sans-serif';
+      ctx.fillText(String(unit), padX + vw + 12, 52);
+    }
+  }
+  ctx.drawImage(chartCanvas, 0, head, w, h);
 
+  const footY = head + h;
   ctx.fillStyle = '#0e1013';
-  ctx.fillRect(0, h, out.width, foot);
+  ctx.fillRect(0, footY, out.width, foot);
   ctx.fillStyle = '#1e2228';
-  ctx.fillRect(0, h, out.width, 1);
+  ctx.fillRect(0, footY, out.width, 1);
 
   ctx.fillStyle = '#94a3b8';
   ctx.font = '600 18px ui-sans-serif, system-ui, sans-serif';
   ctx.textBaseline = 'middle';
-  const mid = h + foot / 2;
+  const mid = footY + foot / 2;
   ctx.fillText(SITE_MARK, padX, mid);
   const followW = ctx.measureText(FOLLOW_MARK).width;
   ctx.fillText(FOLLOW_MARK, out.width - padX - followW, mid);
@@ -118,6 +138,46 @@ async function writeClipboardPng(blob) {
   }
 }
 
+function chartCopyMeta(canvas, root) {
+  const title = root?.querySelector?.('h3, h2')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+  let unit = '';
+  let latest = '';
+  try {
+    const resolved = canvas ? Chart.getChart(canvas) : null;
+    if (!resolved) return { title, unit, latest };
+    const scale = resolved.options?.scales?.y;
+    unit = scale?.title?.text || (scale?.unit ? String(scale.unit) : '');
+    if (unit === '[object Object]') unit = '';
+    const allSets = (resolved.data?.datasets || []).filter((d) => !d.guide && !d.totalLine);
+    const onLeft = allSets.filter((d) => !d.yAxisID || d.yAxisID === 'y');
+    const sets = onLeft.length ? onLeft : allSets;
+    const stacked = sets.length > 1 && sets.every((d) => d.stack);
+    const n = Math.max(0, ...sets.map((d) => d.data?.length || 0));
+    let value = null;
+    for (let i = n - 1; i >= 0 && value == null; i--) {
+      if (stacked) {
+        const parts = sets.map((d) => Number(d.data?.[i])).filter((v) => Number.isFinite(v));
+        if (parts.length) value = parts.reduce((s, v) => s + v, 0);
+      } else {
+        const v = Number(sets[0]?.data?.[i]);
+        if (Number.isFinite(v)) value = v;
+      }
+    }
+    if (value != null) {
+      const cb = scale?.ticks?.callback;
+      if (typeof cb === 'function') {
+        const out = cb.call(resolved.scales?.y || {}, value);
+        latest = out != null && out !== '' ? String(out) : String(value);
+      } else {
+        latest = String(value);
+      }
+    }
+  } catch {
+    /* caption falls back to the title alone */
+  }
+  return { title, unit, latest };
+}
+
 /** Copy the chart PNG. Returns true if the clipboard took it; otherwise the file is downloaded. */
 export async function copyChart(root) {
   if (typeof window === 'undefined') return false;
@@ -127,7 +187,8 @@ export async function copyChart(root) {
     return copyElement(root, { filename: 'savi-chart.png', maxW: 1080 });
   }
   try {
-    const blob = await pngBlobFromCanvas(drawWatermarked(chartCanvas));
+    const meta = chartCopyMeta(chartCanvas, root);
+    const blob = await pngBlobFromCanvas(drawWatermarked(chartCanvas, meta));
     const copied = await writeClipboardPng(blob);
     if (!copied) downloadPng(blob);
     return copied;
@@ -501,7 +562,13 @@ function drawPortfolioCard({
     ctx.fillText(fitText(ctx, bars.headline, chartW - 32), pad + chartW + gap + 16, chartY + 34);
   }
   const barTop = chartY + (bars?.headline ? 66 : 40);
-  drawBars(ctx, pad + chartW + gap, barTop, chartW, chartY + chartH - barTop - 10, bars);
+  if (bars?.values?.length) {
+    drawBars(ctx, pad + chartW + gap, barTop, chartW, chartY + chartH - barTop - 10, bars);
+  } else if (bars?.note) {
+    ctx.fillStyle = '#8b929b';
+    ctx.font = '600 16px ui-sans-serif, system-ui, sans-serif';
+    ctx.fillText(fitText(ctx, bars.note, chartW - 48), pad + chartW + gap + 16, barTop + 8);
+  }
 
   const listY = chartY + chartH + 18;
   const shown = assets.slice(0, 8);

@@ -2,23 +2,23 @@ import React, { useMemo, useState } from 'react';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, ArcElement, Filler
 } from 'chart.js';
-import { Line, Bar, Doughnut } from 'react-chartjs-2';
+import { Line, Bar } from 'react-chartjs-2';
 import { burnSeries, burnRateSeries, burnOfSupplyPct, attributedStonkBurn, dailyAttributedBurnSeries } from '../../lib/burn';
 import { formatLabels } from '../../lib/dates';
 import { windowSnapshots, tierRoiDatasets, protocolRevenueChart, sliceCols, windowPeriodLabel, seriesHasInk, holderRevenueCol, windowChart } from '../../lib/yieldHistory';
 import { compactUsd, compactNum, Card, Figure, Stat, KpiStrip, Tag, SkeletonCard, SplitBar, YieldPeriodToggle, scaleAnnualYield, yieldSuffix } from '../kit';
 import { ShareSection } from '../CopyControl';
 import { TierFlowSection, netTierCount } from '../TierFlowCards';
-import { baseChartOptions, compactTick, compactUsdTick, dualAxisOptions, STREAM_COLORS, TIER_COLORS, barThickness, activityChartOptions, levelAxis } from '../../lib/charts';
+import { baseChartOptions, compactTick, compactUsdTick, cumulativeBurnDataset, dualAxisOptions, STREAM_COLORS, TIER_COLORS, barThickness, percentTick } from '../../lib/charts';
 import { useChartView } from '../../lib/chartWindow';
 import { explorerAddressUrl } from '../../lib/tba';
-import { holderSeries } from '../../lib/snapshots';
+import { SliceChart } from '../SliceChart';
 import { MethodologyCard } from '../Disclaimer';
 import {
   EmptyChart,
   ChartPanel,
   YieldUsdPricePanel,
-  PaybackPanel,
+  ActivityChart,
   ProtocolFeeVolumePanels,
   SmartLpChartPanels,
   BlackHoleChartPanels,
@@ -113,7 +113,6 @@ export default function StonkDetailView({ data, activeTab }) {
 
   const floorCostUsd = (market.nftFloorEth || 0) * (market.ethPriceUsd || 0);
 
-  const chartOptions = baseChartOptions();
   const opts = (labs) => baseChartOptions(labs, interval);
 
   // ==========================================
@@ -197,10 +196,6 @@ export default function StonkDetailView({ data, activeTab }) {
     return netTierCount(s);
   }); 
 
-  const holdersFull = holderSeries(ownership, dailySnapshots);
-  const holdersWin = windowChart(holdersFull.labels, [holdersFull.data], timeframe, interval, ['last']);
-  const ownLabels = holdersWin.labels;
-  const ownData = holdersWin.cols[0] || [];
   const stonkHolders = Number(ownership.stonkHolders) || Number(ownership.tokenHolders) || Number(ownership.erc20Holders) || 0;
 
   const actWin = windowChart(actLabels, [actCum, actDAct, actDDeact], timeframe, interval, ['last', 'sum', 'sum']);
@@ -334,7 +329,7 @@ export default function StonkDetailView({ data, activeTab }) {
                                       tension: 0.3,
                                     }],
                                   }}
-                                  options={chartOptions}
+                                  options={baseChartOptions(t.dailyDates, 'daily', { yUnit: 'USD', yTick: compactUsdTick })}
                                 />
                               ) : (
                                 <EmptyChart>No daily yield recorded for this tier</EmptyChart>
@@ -363,10 +358,9 @@ export default function StonkDetailView({ data, activeTab }) {
         </Card>
 
         <ChartPanel title="Tier ROI" tall>
-          <Line key={`yield-${timeframe}`} data={{ labels: histLabels, datasets: histDatasets }} options={opts(histLabels)} />
+          <Line key={`yield-${timeframe}`} data={{ labels: histLabels, datasets: histDatasets }} options={baseChartOptions(histLabels, interval, { yUnit: 'CoC %', yTick: percentTick })} />
         </ChartPanel>
         <YieldUsdPricePanel snaps={roiSnaps} tiers={tiers} />
-        <PaybackPanel snaps={roiSnaps} tiers={tiers} floorCostUsd={floorCostUsd} tokenPriceUsd={market.tokenPriceUsd} />
       </ShareSection>
 
       {/* ==================== TAB 3: REVENUE & LPS ==================== */}
@@ -416,7 +410,7 @@ export default function StonkDetailView({ data, activeTab }) {
             interval={interval}
             title="StonkBooster"
             mixTitle="Mix"
-            note="Full protocol mix. Clock-In bars are Safety Deposit locker fees. Nightshades 99% anti-snipe stays in the curve. Bonding volume is not plotted."
+            note="Protocol revenue that day. Swap volume is not included."
             holder={{
               labels: slicedHolder.labels,
               data: slicedHolder.cols[0]?.data,
@@ -616,21 +610,16 @@ export default function StonkDetailView({ data, activeTab }) {
         <ChartPanel
           tall
           title="Cumulative burn"
-          note="First mint through today. Pre-snapshot days reconstruct burns that lower totalSupply, plus dead, scaled to the first trusted supply read."
+          note="Cumulative tokens burnt."
         >
           {slicedBurnData.length > 0 ? (
             <Line
               key={`burn-${timeframe}`}
               data={{
                 labels: slicedBurnLabels,
-                datasets: [{
-                  label: 'Cumulative Burnt',
-                  data: slicedBurnData,
-                  borderColor: '#8b5cf6',
-                  tension: 0.3,
-                }],
+                datasets: [cumulativeBurnDataset(slicedBurnData, '#8b5cf6')],
               }}
-              options={{ ...opts(slicedBurnLabels), plugins: { ...opts(slicedBurnLabels).plugins, legend: { display: false } }, scales: { ...opts(slicedBurnLabels).scales, y: { ...opts(slicedBurnLabels).scales.y, ticks: { ...opts(slicedBurnLabels).scales.y.ticks, callback: compactTick } } } }}
+              options={{ ...opts(slicedBurnLabels), plugins: { ...opts(slicedBurnLabels).plugins, legend: { display: false } }, scales: { ...opts(slicedBurnLabels).scales, y: { ...opts(slicedBurnLabels).scales.y, unit: 'Tokens', ticks: { ...opts(slicedBurnLabels).scales.y.ticks, callback: compactTick } } } }}
             />
           ) : (
             <EmptyChart>No burn history recorded yet</EmptyChart>
@@ -639,14 +628,14 @@ export default function StonkDetailView({ data, activeTab }) {
 
         <ChartPanel
           title="The Deflationary Flywheel"
-          note={`Spot vs daily burn.${timeframe === 'all' ? ' Launch-week days above 10M are clipped so later burns stay readable.' : ''}`}
+          note="Burn bars from zero. Price is the dashed line."
         >
           <Bar
             key={`flywheel-${timeframe}`}
             data={{
               labels: fwLabels,
               datasets: [
-                    { type: 'line', label: 'Token Price ($)', data: fwPrices, borderColor: '#00a804', tension: 0.3, yAxisID: 'y1' },
+                    { type: 'line', label: 'Token Price ($)', data: fwPrices, borderColor: '#00a804', borderDash: [5, 4], borderWidth: 1.75, pointRadius: 0, tension: 0, yAxisID: 'y1' },
                 { type: 'bar', label: 'Daily burn', data: fwBurn, backgroundColor: '#8b5cf6', borderRadius: 2, maxBarThickness: barThickness(fwLabels.length), yAxisID: 'y' },
               ],
             }}
@@ -658,13 +647,14 @@ export default function StonkDetailView({ data, activeTab }) {
               labels: fwLabels,
               leftValues: fwBurn,
               rightValues: fwPrices,
+              leftUnit: 'Tokens / day',
             })}
           />
         </ChartPanel>
 
         <ChartPanel
           title="Daily intern vs StonkBrokers burn"
-          note={`From the first intern activation${dailySplit.startDay ? ` (${dailySplit.startDay})` : ''}. Separate managers, same token.`}
+          note={`From the first intern activation${dailySplit.startDay ? ` (${dailySplit.startDay})` : ''}. Separate managers, same token. A stamped day uses the intern burn change; broker activations keep at least the floor tier.`}
         >
           {dailySplit.rawLabels.length > 0 ? (
             <Bar
@@ -672,11 +662,11 @@ export default function StonkDetailView({ data, activeTab }) {
               data={{
                 labels: dailySplit.labels,
                 datasets: [
-                { type: 'bar', label: 'Interns', data: dailySplit.intern, backgroundColor: '#8b5cf6', borderRadius: 2, maxBarThickness: barThickness(dailySplit.labels.length) },
-                  { label: 'StonkBrokers', data: dailySplit.brokers, backgroundColor: '#00a804', borderRadius: 2, maxBarThickness: barThickness(dailySplit.labels.length) },
+                  { type: 'bar', label: 'Interns', data: dailySplit.intern, backgroundColor: '#8b5cf6', borderRadius: 2, maxBarThickness: barThickness(dailySplit.labels.length), stack: dailySplit.labels.length > 40 ? 'burn' : undefined },
+                  { label: 'StonkBrokers', data: dailySplit.brokers, backgroundColor: '#00a804', borderRadius: 2, maxBarThickness: barThickness(dailySplit.labels.length), stack: dailySplit.labels.length > 40 ? 'burn' : undefined },
                 ],
               }}
-              options={{ ...opts(dailySplit.labels), scales: { ...opts(dailySplit.labels).scales, y: { ...opts(dailySplit.labels).scales.y, beginAtZero: true, ticks: { ...opts(dailySplit.labels).scales.y.ticks, callback: compactTick } } } }}
+              options={{ ...opts(dailySplit.labels), scales: { ...opts(dailySplit.labels).scales, x: { ...opts(dailySplit.labels).scales.x, stacked: dailySplit.labels.length > 40 }, y: { ...opts(dailySplit.labels).scales.y, stacked: dailySplit.labels.length > 40, beginAtZero: true, unit: 'Tokens', ticks: { ...opts(dailySplit.labels).scales.y.ticks, callback: compactTick } } } }}
             />
           ) : (
             <EmptyChart>Daily intern vs broker burn starts on the first intern activation</EmptyChart>
@@ -706,37 +696,29 @@ export default function StonkDetailView({ data, activeTab }) {
           />
 
         <Card eyebrow="Tier mix" sub="Net of deactivations">
-            <div className="flex flex-col items-center justify-center gap-8 md:flex-row md:gap-16">
-              <div className="relative flex h-56 w-full items-center justify-center md:h-64 md:w-1/2">
-                <Doughnut data={{ labels: tiers.map((t) => t.name), datasets: [{ data: breakdownArr, backgroundColor: TIER_COLORS, borderWidth: 0 }] }} options={{ responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { display: false } } }} />
-              </div>
-              <div className="flex w-full flex-col gap-2 md:w-1/2">
-                {tiers.map((t, idx) => (
-                  <div key={t.tier} className="flex items-center justify-between rounded-lg border border-line px-3 py-2.5">
-                    <div className="flex items-center gap-3">
-                      <div className="h-3 w-3 rounded-[2px]" style={{ backgroundColor: TIER_COLORS[idx % TIER_COLORS.length] }} />
-                      <span className="text-[13px] text-ink">{t.tier}: {t.name}</span>
-                    </div>
-                    <span className="num text-[13px] text-ink">{formatNumber(breakdownArr[idx])}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <SliceChart
+              noun="Active"
+              format={formatNumber}
+              slices={tiers.map((t, idx) => ({
+                label: `${t.tier}: ${t.name}`,
+                value: breakdownArr[idx],
+                color: TIER_COLORS[idx % TIER_COLORS.length],
+              }))}
+            />
         </Card>
 
           <ActivationStackPanel snaps={roiSnaps} tiers={tiers} breakdown={activation.breakdown} />
         <ChartPanel title="Activity">
                 {hasActHist ? (
-                <Bar
-                  data={{
-                    labels: actWin.labels,
-                    datasets: [
-                      { type: 'line', label: 'Net active', data: actWin.cols[0], borderColor: '#38bdf8', tension: 0.3, yAxisID: 'y' },
-                      { type: 'bar', label: 'Daily activations', data: actWin.cols[1], backgroundColor: '#00a804', borderRadius: 2, maxBarThickness: barThickness(actWin.points), yAxisID: 'y1' },
-                      { type: 'bar', label: 'Daily deactivations', data: actWin.cols[2], backgroundColor: '#ff3333', borderRadius: 2, maxBarThickness: barThickness(actWin.points), yAxisID: 'y1' }
-                    ]
-                  }}
-                  options={activityChartOptions(actWin.labels, actWin.cols[0], actWin.cols[1], actWin.cols[2], interval)}
+                <ActivityChart
+                  labels={actWin.labels}
+                  net={actWin.cols[0]}
+                  ins={actWin.cols[1]}
+                  outs={actWin.cols[2]}
+                  interval={interval}
+                  lineColor="#38bdf8"
+                  lineLabel="Net active"
+                  outColor="#ff3333"
                 />
                 ) : (
                   <EmptyChart>No activation history recorded</EmptyChart>
@@ -752,7 +734,7 @@ export default function StonkDetailView({ data, activeTab }) {
           <KpiStrip>
             <Stat label="Circulating" value={formatNumber(ownership.circulatingNftSupply || 0)} />
             <Stat label="NFT holders" value={formatNumber(ownership.nftHolders || 0)} />
-            <Stat label="Concentration" value={`${(ownership.ownershipRatio || 0).toFixed(2)}%`} tone="accent" />
+            <Stat label="Holder breadth" value={`${(ownership.ownershipRatio || 0).toFixed(2)}%`} tone="accent" />
             <Stat label="Token holders" value={formatNumber(stonkHolders)} />
             <Stat
               label="Chain onboard"
@@ -769,23 +751,6 @@ export default function StonkDetailView({ data, activeTab }) {
           </KpiStrip>
         </Card>
 
-        <ChartPanel title="Token holders">
-              {seriesHasInk(ownData) ? (
-              <Line
-                data={{ labels: ownLabels, datasets: [{ label: 'Active Holders', data: ownData, borderColor: '#8b5cf6', tension: 0.3 }] }}
-                options={{
-                  ...opts(ownLabels),
-                  plugins: { ...opts(ownLabels).plugins, legend: { display: false } },
-                  scales: {
-                    ...opts(ownLabels).scales,
-                    y: { ...opts(ownLabels).scales.y, ...levelAxis(opts(ownLabels).scales.y.ticks, ownData) },
-                  },
-                }}
-              />
-              ) : (
-                <EmptyChart>No holder history recorded</EmptyChart>
-              )}
-        </ChartPanel>
           <OwnershipHistoryPanels
             snaps={roiSnaps}
             live={{
@@ -807,8 +772,8 @@ export default function StonkDetailView({ data, activeTab }) {
           <p><strong className="text-ink">Yield &amp; ROI:</strong> Live cash-on-cash is a trailing sample of the T4 Partner oracle wallet, scaled by total network weight / 333, annualized, then divided by (NFT floor USD + activation tokens at DexScreener spot). From 2026-08-20 that oracle is live. Earlier ROI days estimate the same CoC from Clock In v1, v2, and Overtime pot inflows ÷ reconstructed active weight, with cost basis frozen at the first oracle snapshot. Mid-August is a real FOMO / revenue spike (NFT trades printed around 12 ETH); the % uses the later ~4 ETH floor so it tracks that yield spike rather than repricing entry cost day by day. A one-day collapse between two hot UTC sessions is treated as a bucket hole, not a crash. Clock In 3.0 (0xf412…dbc58, 2026-09-21) is the live pot; v2 DirectedClockInBooster is retired.</p>
           <p><strong className="text-ink">Protocol revenue (StonkBooster mix):</strong> AMM collector, Clock In locker fees (v1 retired, v2 retired, v3 live, Overtime retired), launchpad tax, Partner Revenue Share (Nightshades 13.33% civ-pad + Mancer 25% dex), and Smart LP skim. Clock In is Safety Deposit lock/collect fees (90% community / 10% protocol), not a raffle. Nightshades Night vault WETH is The Night inventory and is never counted here. Bonding swap volume is notional and is not revenue.</p>
           <p><strong className="text-ink">Payback:</strong> Entry cost ÷ annualized trailing yield. Charts reprice cost at the last sync.</p>
-          <p><strong className="text-ink">Ownership:</strong> Circulating NFTs are collection size minus AMM vault inventory. Concentration is unique NFT wallets (vault and burn addresses excluded) divided by that circulating number. Activated-wallet count is unique current owners of NFTs that still have an open activation — a sale clears it. Chain onboard is unique EOAs whose first cluster buy or mint of this project was one of their first 10 txs.</p>
-          <p><strong className="text-ink">Burn:</strong> Token-wide $STONKBROKER destroyed (supply deflation + dead + tokens locked in the broker activation manager). The cumulative chart is that token total. Intern activations use a different manager and burn half of each intern fee into the same token; that intern total is subtracted out of the StonkBrokers tile. The daily intern vs StonkBrokers chart starts on the first intern activation and is the first difference of each series. Hourly snapshots stamp internBurnTokens going forward so the split persists on the parent series.</p>
+          <p><strong className="text-ink">Ownership:</strong> Circulating NFTs are collection size minus AMM vault inventory. Holder breadth is unique NFT wallets (vault and burn addresses excluded) divided by that circulating number. Activated-wallet count is unique current owners of NFTs that still have an open activation — a sale clears it. Chain onboard is unique EOAs whose first cluster buy or mint of this project was one of their first 10 txs.</p>
+          <p><strong className="text-ink">Burn:</strong> Token-wide $STONKBROKER destroyed (supply deflation + dead + tokens locked in the broker activation manager). The cumulative chart is that token total. Pre-snapshot days reconstruct burns that lower totalSupply, plus dead, scaled to the first trusted supply read. On All, flywheel days above 10M are clipped so later burns stay readable. Intern activations use a different manager and burn into the same token; that intern total is subtracted out of the StonkBrokers tile. The daily chart starts on the first intern activation. Once a snapshot stamps internBurnTokens, that day's intern bar is the change in the stamp and StonkBrokers is the rest of the day's token burn. Earlier days estimate the intern share from activations. A day with broker activations keeps at least the floor-tier burn, so the broker bar cannot print as zero. Past about 40 days the two series stack.</p>
       </MethodologyCard>
 
     </div>

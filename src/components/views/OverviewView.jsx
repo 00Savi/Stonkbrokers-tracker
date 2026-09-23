@@ -1,15 +1,44 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Chart as ChartJS, LinearScale, PointElement, Tooltip, Legend, Filler
+  Chart as ChartJS, LinearScale, LogarithmicScale, PointElement, LineElement, Tooltip, Legend, Filler
 } from 'chart.js';
 import { Scatter } from 'react-chartjs-2';
 import { NFT_PROJECTS, RANKING_PROJECTS } from '../../lib/routes';
 import { typicalNightshadesSeat } from '../../lib/nightshades';
 import { Card, Figure, Stat, SplitBar, Tag, BetaTag, Value, Skeleton, usd, num, pct } from '../kit';
-import { compactUsdTick, PROJECT_COLORS } from '../../lib/charts';
+import { axisTitle, compactUsdTick, PROJECT_COLORS } from '../../lib/charts';
 
-ChartJS.register(LinearScale, PointElement, Tooltip, Legend, Filler);
+ChartJS.register(LinearScale, LogarithmicScale, PointElement, LineElement, Tooltip, Legend, Filler);
+
+function cocGuides(costs) {
+  const xs = costs.filter((c) => c > 0);
+  if (!xs.length) return [];
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const x0 = minX * 0.85;
+  const x1 = maxX * 1.08;
+  return [0.25, 0.5, 1, 2].map((rate) => ({
+    type: 'line',
+    label: `${Math.round(rate * 100)}% CoC`,
+    endLabel: `${Math.round(rate * 100)}%`,
+    labelEnd: true,
+    guide: true,
+    data: [
+      { x: x0, y: rate * x0 },
+      { x: x1, y: rate * x1 },
+    ],
+    borderColor: 'rgba(148, 163, 184, 0.45)',
+    borderDash: [4, 4],
+    borderWidth: 1,
+    pointRadius: 0,
+    pointHoverRadius: 0,
+    showLine: true,
+    tension: 0,
+    fill: false,
+    order: 2,
+  }));
+}
 
 const SCATTER_COLORS = PROJECT_COLORS;
 
@@ -151,6 +180,9 @@ function RankTable({ rows, pending }) {
 
 export default function OverviewView({ data, pending, compact = false }) {
   const rows = tierRows(data);
+  const scatterCosts = rows.filter((r) => r.cost > 0 && r.annual > 0).map((r) => r.cost);
+  const scatterLog = scatterCosts.length >= 2 && Math.max(...scatterCosts) / Math.min(...scatterCosts) > 10;
+  const scatterGuides = cocGuides(scatterCosts);
   const top = rows[0];
 
   // Ecosystem totals. Every project contributes what it has; a project missing
@@ -313,20 +345,29 @@ export default function OverviewView({ data, pending, compact = false }) {
           <div className="relative h-64 w-full px-4 pb-4 pt-2">
             <Scatter
               data={{
-                datasets: RANKING_PROJECTS.map((m) => ({
-                  label: m.name,
-                  data: rows
-                    .filter((r) => r.project.key === m.key && r.cost > 0 && r.annual > 0)
-                    .map((r) => ({ x: r.cost, y: r.annual, label: `${r.project.name} ${r.tier}` })),
-                  backgroundColor: SCATTER_COLORS[m.key] || '#94a3b8',
-                })).filter((d) => d.data.length),
+                datasets: [
+                  ...scatterGuides,
+                  ...RANKING_PROJECTS.map((m) => ({
+                    label: m.name,
+                    data: rows
+                      .filter((r) => r.project.key === m.key && r.cost > 0 && r.annual > 0)
+                      .map((r) => ({ x: r.cost, y: r.annual, label: `${r.project.name} ${r.tier}` })),
+                    backgroundColor: SCATTER_COLORS[m.key] || '#94a3b8',
+                  })).filter((d) => d.data.length),
+                ],
               }}
               options={{
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                  legend: { labels: { color: '#94a3b8' } },
+                  legend: {
+                    labels: {
+                      color: '#94a3b8',
+                      filter: (item, data) => !data.datasets[item.datasetIndex]?.guide,
+                    },
+                  },
                   tooltip: {
+                    filter: (item) => !item.dataset?.guide,
                     callbacks: {
                       label: (ctx) => {
                         const raw = ctx.raw || {};
@@ -337,12 +378,14 @@ export default function OverviewView({ data, pending, compact = false }) {
                 },
                 scales: {
                   x: {
-                    title: { display: true, text: 'Cost to enter (USD)', color: '#94a3b8' },
+                    type: scatterLog ? 'logarithmic' : 'linear',
+                    title: axisTitle(scatterLog ? 'Cost to enter (USD, log)' : 'Cost to enter (USD)'),
                     ticks: { color: '#94a3b8', callback: compactUsdTick },
                     grid: { color: '#1e2228' },
                   },
                   y: {
-                    title: { display: true, text: 'Annual yield (USD)', color: '#94a3b8' },
+                    type: scatterLog ? 'logarithmic' : 'linear',
+                    title: axisTitle(scatterLog ? 'Annual yield (USD, log)' : 'Annual yield (USD)'),
                     ticks: { color: '#94a3b8', callback: compactUsdTick },
                     grid: { color: '#1e2228' },
                   },

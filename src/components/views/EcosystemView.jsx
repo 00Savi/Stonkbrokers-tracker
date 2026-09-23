@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { projectPath, RANKING_PROJECTS, isProjectLive, PROJECTS } from '../../lib/routes';
 import {
@@ -15,6 +15,7 @@ import { burnSeries } from '../../lib/burn';
 import { cashflowRoiByDate, protocolFeeCols, protocolRevenueChart, seriesHasInk, bucketKey, windowLen, windowPeriodLabel } from '../../lib/yieldHistory';
 import { typicalNightshadesSeat } from '../../lib/nightshades';
 import { useChartView } from '../../lib/chartWindow';
+import { useSectionScrollSpy } from '../../lib/projectScroll';
 import { baseChartOptions, compactTick, compactUsdTick, PROJECT_COLORS, levelAxis } from '../../lib/charts';
 import { EmptyChart, OnboardClusterPanel } from '../HistoryCharts';
 import { MethodologyCard } from '../Disclaimer';
@@ -80,7 +81,7 @@ function RankBar({ rows, format = compactUsd, suffix = '' }) {
                 {r.pending ? '—' : `${format(v)}${suffix}`}
               </span>
             </div>
-            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-panel-2">
+            <div className="mt-1.5 h-[6px] overflow-hidden rounded-full bg-panel-2">
               <div className="h-full rounded-full" style={{ width: `${w}%`, backgroundColor: r.color }} />
             </div>
             {r.note ? <p className="mt-1 font-mono text-[11px] text-faint">{r.note}</p> : null}
@@ -94,7 +95,15 @@ function RankBar({ rows, format = compactUsd, suffix = '' }) {
 /** Period mix. One stacked bar, not eight lines. */
 function ShareBar({ parts, format = compactUsd }) {
   const total = parts.reduce((s, p) => s + (Number(p.value) || 0), 0);
-  const live = parts.filter((p) => (Number(p.value) || 0) > 0);
+  const ranked = parts.filter((p) => (Number(p.value) || 0) > 0);
+  let other = 0;
+  const live = [];
+  for (const p of ranked) {
+    const share = total > 0 ? (Number(p.value) || 0) / total : 0;
+    if (share < 0.03) other += Number(p.value) || 0;
+    else live.push(p);
+  }
+  if (other > 0) live.push({ key: 'other', name: 'Other', value: other, color: '#575e67' });
   if (!(total > 0) || !live.length) {
     return <p className="text-[13px] text-muted">Nothing in this window.</p>;
   }
@@ -127,9 +136,29 @@ function ShareBar({ parts, format = compactUsd }) {
   );
 }
 
+function sparkDelta(data) {
+  let first = null;
+  let last = null;
+  for (const v of data || []) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) continue;
+    if (first == null) first = n;
+    last = n;
+  }
+  if (first == null || last == null || first === last) return null;
+  return last - first;
+}
+
+function signedCompact(n, tick = compactTick) {
+  const sign = n > 0 ? '+' : '−';
+  const body = String(tick(Math.abs(n)) ?? '').replace(/^-/, '');
+  return `${sign}${body}`;
+}
+
 function SparkCard({ name, href, color, labels, data, value, note, tick = compactTick }) {
   const ref = useRef(null);
   const has = seriesHasInk(data);
+  const delta = sparkDelta(data);
   const opts = baseChartOptions(labels);
   return (
     <div ref={ref} className="card relative overflow-hidden">
@@ -139,7 +168,12 @@ function SparkCard({ name, href, color, labels, data, value, note, tick = compac
             <span className="h-2 w-2 shrink-0 rounded-[2px]" style={{ backgroundColor: color }} />
             <span className="truncate">{name}</span>
           </p>
-          <p className="num shrink-0 text-[13px] text-ink">{value}</p>
+          <p className="num shrink-0 text-[13px] text-ink">
+            {value}
+            {delta != null ? (
+              <span className={`ml-1.5 ${delta < 0 ? 'text-danger' : 'text-accent'}`}>{signedCompact(delta, tick)}</span>
+            ) : null}
+          </p>
         </div>
         {note ? <p className="mt-0.5 font-mono text-[11px] text-faint">{note}</p> : null}
         <div className="relative mt-3 h-16">
@@ -150,9 +184,21 @@ function SparkCard({ name, href, color, labels, data, value, note, tick = compac
                 datasets: [{
                   data,
                   borderColor: color,
+                  backgroundColor: color,
                   borderWidth: 1.5,
                   tension: 0.3,
-                  pointRadius: 0,
+                  pointRadius(ctx) {
+                    const series = ctx.dataset.data || [];
+                    let first = -1;
+                    let last = -1;
+                    for (let i = 0; i < series.length; i++) {
+                      if (!Number.isFinite(Number(series[i]))) continue;
+                      if (first < 0) first = i;
+                      last = i;
+                    }
+                    return ctx.dataIndex === first || ctx.dataIndex === last ? 2.5 : 0;
+                  },
+                  pointHoverRadius: 3,
                   spanGaps: true,
                 }],
               }}
@@ -215,14 +261,21 @@ export default function EcosystemView({ data, pending = false }) {
   const { range: timeframe, setRange, interval, setInterval } = useChartView();
   const onboardCardRef = useRef(null);
 
-  const selectTab = (id) => {
+  const selectTab = useCallback((id) => {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       if (id === 'roi') next.delete('tab');
       else next.set('tab', id);
       return next;
     }, { replace: true });
-  };
+  }, [setSearchParams]);
+
+  useSectionScrollSpy({
+    sectionIds: ECO_TABS.map((t) => t.id),
+    activeId: activeTab,
+    ready: !!(data?.projects),
+    onActiveId: selectTab,
+  });
 
   if (!data || !data.projects) return <div className="text-center text-slate-400 p-12">Loading Ecosystem...</div>;
 
@@ -559,8 +612,7 @@ export default function EcosystemView({ data, pending = false }) {
         </div>
       </div>
 
-      {activeTab === 'roi' && (
-      <ShareSection id="roi" className="space-y-4">
+      <ShareSection id="roi" className="scroll-mt-32 space-y-4">
         <Card
           eyebrow="Base-seat CoC"
           sub="Each project’s cheapest live seat, ranked. This is not one combined yield — cost basis and payouts differ, so the table is a comparison, not a rollup."
@@ -694,10 +746,8 @@ export default function EcosystemView({ data, pending = false }) {
           </div>
         </Card>
       </ShareSection>
-      )}
 
-      {activeTab === 'historical' && (
-      <ShareSection id="historical" className="space-y-4">
+      <ShareSection id="historical" className="scroll-mt-32 space-y-4">
         <p className="max-w-2xl text-[13px] leading-relaxed text-muted">
           T0 CoC over time. One sparkline per project, on its own scale — overlaying them hid every tape except the largest.
         </p>
@@ -711,10 +761,8 @@ export default function EcosystemView({ data, pending = false }) {
           }}
         />
       </ShareSection>
-      )}
 
-      {activeTab === 'revenue' && (
-      <ShareSection id="revenue" className="space-y-4">
+      <ShareSection id="revenue" className="scroll-mt-32 space-y-4">
         <Card
           eyebrow={`${period} protocol revenue`}
           sub="Fees the protocol charged or kept in this window. Stonk dwarfs the rest in dollars, so the mix is a share bar — daily shape is each project’s own sparkline."
@@ -735,10 +783,8 @@ export default function EcosystemView({ data, pending = false }) {
           noteFor={() => `${period} in view`}
         />
       </ShareSection>
-      )}
 
-      {activeTab === 'burn' && (
-      <ShareSection id="burn" className="space-y-4">
+      <ShareSection id="burn" className="scroll-mt-32 space-y-4">
         <Card
           eyebrow="Share of own supply burnt"
           sub="Normalized to each token’s cap, so a 3k collection is comparable to a million-supply ERC-20. Raw token counts are not."
@@ -771,10 +817,8 @@ export default function EcosystemView({ data, pending = false }) {
           </>
         ) : null}
       </ShareSection>
-      )}
 
-      {activeTab === 'activation' && (
-      <ShareSection id="activation" className="space-y-4">
+      <ShareSection id="activation" className="scroll-mt-32 space-y-4">
         <Card
           eyebrow="% of own collection earning"
           sub="A doughnut of raw active units called Stonk ‘dominant’ because the collection is larger. The fair rank is percent activated on each supply."
@@ -788,10 +832,8 @@ export default function EcosystemView({ data, pending = false }) {
           noteFor={() => 'Net active · own scale'}
         />
       </ShareSection>
-      )}
 
-      {activeTab === 'ownership' && (
-      <ShareSection id="ownership" className="space-y-4">
+      <ShareSection id="ownership" className="scroll-mt-32 space-y-4">
         <Card
           ref={onboardCardRef}
           eyebrow="Robinhood Chain onboard"
@@ -832,13 +874,10 @@ export default function EcosystemView({ data, pending = false }) {
           }}
         />
       </ShareSection>
-      )}
 
-      {activeTab === 'rankings' && (
-      <ShareSection id="rankings">
+      <ShareSection id="rankings" className="scroll-mt-32">
         <OverviewView data={data} pending={pending} compact />
       </ShareSection>
-      )}
 
       <MethodologyCard>
         <p><strong className="text-white">What this board is for:</strong> Compare projects. It does not add them into one protocol. Each series is fetched on its own contracts. Overlaying raw units or dollars on one axis hid every tape except the largest, so ranks use a shared unit (CoC %, burn % of own cap, % activated) and history is a sparkline per project on its own scale.</p>

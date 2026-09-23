@@ -40,7 +40,8 @@ import { attributedStonkBurn, dailyAttributedBurnSeries, firstInternActivationDa
 import { navNftScanTargets } from '../src/lib/portfolioScan';
 import { windowLen } from '../src/lib/yieldHistory';
 import { CHART_WINDOWS, CHART_INTERVALS, DEFAULT_CHART_WINDOW, DEFAULT_CHART_INTERVAL } from '../src/lib/chartWindow';
-import { levelAxis, xTicksFor } from '../src/lib/charts';
+import { activityDatasets, divergingAxis, levelAxis, xTicksFor } from '../src/lib/charts';
+import { tierRoiDatasets } from '../src/lib/yieldHistory';
 import { buildTopicShareCard } from '../src/lib/projectShare';
 import { copySectionEl } from '../src/components/CopyControl';
 import { internIdsForBroker } from '../src/lib/interns';
@@ -431,8 +432,20 @@ for (const [name, View, props] of VIEWS) {
     failed++;
     console.error(`FAIL  daily split intern=${daily.intern.join(',')} brokers=${daily.brokers.join(',')}`);
   } else {
-    console.log(`ok    burn split intern=${split.intern} brokers=${split.brokers} total=${split.total}`);
-    console.log(`ok    daily split from ${daily.startDay} intern=${daily.intern.map((n) => Math.round(n)).join('/')} brokers=${daily.brokers.map((n) => Math.round(n)).join('/')}`);
+    const byDay = Object.fromEntries(daily.rawLabels.map((d, i) => [d, { intern: daily.intern[i], brokers: daily.brokers[i] }]));
+    const d21 = byDay['2026-09-21'];
+    const d22 = byDay['2026-09-22'];
+    const stampIntern = 9363836 - 8708037;
+    if (!d21 || !(d21.brokers >= 2 * 66666 - 1)) {
+      failed++;
+      console.error(`FAIL  9/21 broker burn ${d21?.brokers} erased two activations`);
+    } else if (!d22 || Math.abs(d22.intern - stampIntern) > 1 || !(d22.brokers > 200000)) {
+      failed++;
+      console.error(`FAIL  9/22 split intern=${d22?.intern} brokers=${d22?.brokers} want intern ${stampIntern}`);
+    } else {
+      console.log(`ok    burn split intern=${split.intern} brokers=${split.brokers} total=${split.total}`);
+      console.log(`ok    daily split from ${daily.startDay} intern=${daily.intern.map((n) => Math.round(n)).join('/')} brokers=${daily.brokers.map((n) => Math.round(n)).join('/')}`);
+    }
   }
 }
 
@@ -493,11 +506,37 @@ for (const [name, View, props] of VIEWS) {
     console.log('ok    charts default to 30D daily');
   }
   const daily30 = xTicksFor(30, 'daily');
-  if (daily30.autoSkip || daily30.maxTicksLimit < 30) {
+  const daily30Labels = [];
+  const tickCtx = { getLabelForValue: (v) => `D${v}` };
+  if (typeof daily30.callback === 'function') {
+    for (let i = 0; i < 30; i++) daily30Labels.push(daily30.callback.call(tickCtx, i, i));
+  }
+  const daily30Shown = daily30Labels.filter((label) => label);
+  const daily7 = xTicksFor(7, 'daily');
+  if (daily30.autoSkip || daily30.maxRotation !== 0 || daily30.minRotation !== 0 || daily30Shown.length < 8 || daily30Shown.length > 12 || daily30Labels[0] !== 'D0' || daily30Labels[1] !== '' || !daily30Labels[29] || daily7.autoSkip || daily7.callback) {
     failed++;
-    console.error(`FAIL  30D daily axis still skips day headings ${JSON.stringify(daily30)}`);
+    console.error(`FAIL  30D daily axis should label every 2nd/3rd day, horizontal ${JSON.stringify({ rot: daily30.maxRotation, shown: daily30Shown.length, first: daily30Labels[0], last: daily30Labels[29] })}`);
   } else {
-    console.log('ok    30D daily axis labels every day');
+    console.log(`ok    30D daily axis labels every 3rd day (${daily30Shown.length} headings)`);
+  }
+  const act = activityDatasets({ net: [10], ins: [4], outs: [3] });
+  const div = divergingAxis({}, [4, -3]);
+  if (act[2].data[0] !== -3 || !(div.min < 0) || !(div.max > 0)) {
+    failed++;
+    console.error(`FAIL  activity bars should diverge ${act[2].data[0]} ${JSON.stringify(div)}`);
+  } else {
+    console.log('ok    deactivations draw below zero');
+  }
+  const roiSets = tierRoiDatasets(
+    [{ date: '2026-09-01', tokenPriceUsd: 1, nftFloorUsd: 50, tiers: [{ tier: 'T1', roi: 20, yieldUsd: 100 }] }],
+    [{ tier: 'T1', reqTokens: 10, trackedAnnualYieldUsd: 100 }],
+    { floorCostUsd: 50, tokenPriceUsd: 1 },
+  );
+  if (roiSets[0].pointRadius != null || roiSets[0].payback?.[0] !== 0.6) {
+    failed++;
+    console.error(`FAIL  tier ROI payback tooltip ${roiSets[0].payback?.[0]} radius ${roiSets[0].pointRadius}`);
+  } else {
+    console.log('ok    tier ROI tooltip carries payback years');
   }
   const netAxis = levelAxis({}, [1800, 1840, 1900]);
   if (netAxis.beginAtZero || !(netAxis.min > 1500) || !(netAxis.max < 2200)) {

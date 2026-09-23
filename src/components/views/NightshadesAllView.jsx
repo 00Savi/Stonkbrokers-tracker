@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Line, Doughnut } from 'react-chartjs-2';
+import { Line } from 'react-chartjs-2';
 import { burnSeries, burnOfSupplyPct } from '../../lib/burn';
 import { dateKey, formatLabels } from '../../lib/dates';
 import { seriesHasInk, bucketKey } from '../../lib/yieldHistory';
 import { compactUsd, compactNum, YieldPeriodToggle, scaleAnnualYield, yieldSuffix, yieldPeriodLabel } from '../kit';
 import { ShareSection } from '../CopyControl';
-import { baseChartOptions, compactTick } from '../../lib/charts';
+import { axisTitle, baseChartOptions, compactTick, compactUsdTick, percentTick } from '../../lib/charts';
 import { useChartView } from '../../lib/chartWindow';
 import {
     NIGHTSHADES_FACTION_META,
@@ -22,6 +22,7 @@ import {
 } from '../../lib/nightshades';
 import { ChartPanel, EmptyChart } from '../HistoryCharts';
 import { MethodologyCard } from '../Disclaimer';
+import { SliceChart } from '../SliceChart';
 import { explorerTxUrl, explorerAddressUrl } from '../../lib/tba';
 
 function formatPrice(val) {
@@ -232,6 +233,8 @@ function lpEthAxis() {
       y: {
         ...base.scales.y,
         beginAtZero: true,
+        unit: 'WETH',
+        title: axisTitle('WETH'),
         ticks: { ...base.scales.y.ticks, callback: (v) => `${compactTick(v)} ETH` },
       },
     },
@@ -432,10 +435,10 @@ export default function NightshadesAllView({ project, setFaction }) {
     ...chartOptions,
     scales: {
       ...chartOptions.scales,
-      y: { min: 0, ticks: { color: '#cbd5e1', callback: (v) => `${compactTick(v)}%` }, grid: { color: '#1e2228', borderDash: [4, 4] } },
+      y: { min: 0, unit: '%', title: axisTitle('%'), ticks: { color: '#cbd5e1', callback: percentTick }, grid: { color: '#1e2228', borderDash: [4, 4] } },
     },
   };
-  const countChartOptions = {
+  const countChartOptions = (unit) => ({
     ...chartOptions,
     scales: {
       ...chartOptions.scales,
@@ -443,10 +446,12 @@ export default function NightshadesAllView({ project, setFaction }) {
         ...chartOptions.scales.y,
         beginAtZero: false,
         grace: '18%',
+        unit,
+        title: axisTitle(unit),
         ticks: { ...chartOptions.scales.y.ticks, callback: compactTick },
       },
     },
-  };
+  });
 
   const scaleYield = (annual) => scaleAnnualYield(annual, yieldPeriod);
   const yieldLabel = yieldPeriodLabel(yieldPeriod);
@@ -643,7 +648,7 @@ export default function NightshadesAllView({ project, setFaction }) {
                                       pointRadius: 0,
                                     }],
                                   }}
-                                  options={chartOptions}
+                                  options={baseChartOptions(t0.dailyDates, 'daily', { yUnit: 'USD', yTick: compactUsdTick })}
                                 />
                               ) : (
                                 <EmptyChart>No daily yield recorded for this tier</EmptyChart>
@@ -711,7 +716,7 @@ export default function NightshadesAllView({ project, setFaction }) {
             note="Each faction’s own token. Quiet days carry the last cumulative — a burn cannot reset."
             labels={burnOverlay.labels}
             datasets={burnOverlay.datasets}
-            options={countChartOptions}
+            options={countChartOptions('Tokens')}
           />
           <Together
             title="Share of each faction’s token supply burnt (%)"
@@ -748,44 +753,22 @@ export default function NightshadesAllView({ project, setFaction }) {
           </div>
           <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-4 md:p-6">
             <h3 className="text-sm font-bold text-white mb-6">Share of Nightshades active units</h3>
-            <div className="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-16">
-              <div className="relative h-64 md:h-72 w-full md:w-1/2 flex items-center justify-center">
-                <Doughnut
-                  data={{
-                    labels: slices.map((f) => f.label),
-                    datasets: [{
-                      data: slices.map((f) => f.slice.activation?.activeCount || 0),
-                      backgroundColor: slices.map((f) => f.color),
-                      borderWidth: 0,
-                    }],
-                  }}
-                  options={{ responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { display: false } } }}
-                />
-              </div>
-              <div className="w-full md:w-1/2 flex flex-col gap-3">
-                {slices.map((f) => (
-                  <button
-                    key={f.id}
-                    type="button"
-                    onClick={() => setFaction(f.id)}
-                    className="flex justify-between items-center bg-[#08090b] p-3 rounded-lg border border-[#1e2228] transition hover:border-slate-500"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-3 h-3 rounded-md" style={{ backgroundColor: f.color }} />
-                      <span className="text-sm font-bold text-slate-300">{f.label}</span>
-                    </div>
-                    <span className="text-white font-bold tracking-wide">{formatNumber(f.slice.activation?.activeCount || 0)}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
+            <SliceChart
+              noun="Active"
+              format={formatNumber}
+              slices={slices.map((f) => ({
+                label: f.label,
+                value: f.slice.activation?.activeCount || 0,
+                color: f.color,
+              }))}
+            />
           </div>
           <Together
             title="Net active units"
             note="From each vault’s activation history. Missing days stay blank."
             labels={actOverlay.labels}
             datasets={actOverlay.datasets}
-            options={countChartOptions}
+            options={countChartOptions('Units')}
           />
         </div>
       </ShareSection>
@@ -825,14 +808,14 @@ export default function NightshadesAllView({ project, setFaction }) {
             note="Snapshot nftHolders when present; otherwise the live count as the latest point."
             labels={nftOverlay.labels}
             datasets={nftOverlay.datasets}
-            options={countChartOptions}
+            options={countChartOptions('Wallets')}
           />
           <Together
             title="Token holders"
             note="hourly historicalGrowth when it exists; else snapshot tokenHolders."
             labels={tokOverlay.labels}
             datasets={tokOverlay.datasets}
-            options={countChartOptions}
+            options={countChartOptions('Wallets')}
           />
         </div>
       </ShareSection>

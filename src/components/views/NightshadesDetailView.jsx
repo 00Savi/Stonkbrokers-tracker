@@ -3,14 +3,14 @@ import { useSearchParams } from 'react-router-dom';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, ArcElement, Filler
 } from 'chart.js';
-import { Line, Bar, Doughnut } from 'react-chartjs-2';
+import { Line, Bar } from 'react-chartjs-2';
 import { burnSeries, burnRateSeries, burnOfSupplyPct } from '../../lib/burn';
 import { formatLabels } from '../../lib/dates';
 import { windowSnapshots, tierRoiDatasets, seriesHasInk, windowChart } from '../../lib/yieldHistory';
 import { compactUsd, compactNum, YieldPeriodToggle, scaleAnnualYield, yieldSuffix } from '../kit';
 import { ShareSection } from '../CopyControl';
 import { TierFlowSection, netTierCount } from '../TierFlowCards';
-import { baseChartOptions, compactTick, compactUsdTick, dualAxisOptions, activityChartOptions } from '../../lib/charts';
+import { baseChartOptions, compactTick, compactUsdTick, cumulativeBurnDataset, dualAxisOptions, TIER_COLORS, percentTick } from '../../lib/charts';
 import { useChartView } from '../../lib/chartWindow';
 import { holderSeries } from '../../lib/snapshots';
 import { NIGHTSHADES_FACTION_META } from '../../lib/nightshades';
@@ -19,10 +19,11 @@ import { MethodologyCard } from '../Disclaimer';
 import {
   EmptyChart,
   YieldUsdPricePanel,
-  PaybackPanel,
+  ActivityChart,
   ActivationStackPanel,
   OwnershipHistoryPanels,
 } from '../HistoryCharts';
+import { SliceChart } from '../SliceChart';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
@@ -93,7 +94,6 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
   const formatCurrency = compactUsd;
   const formatNumber = compactNum;
   const floorCostUsd = (market.nftFloorEth || 0) * (market.ethPriceUsd || 0);
-  const chartOptions = baseChartOptions();
   const factionLabel = FACTION_TABS.find((f) => f.id === faction)?.label || faction;
   const tokenLabel = `$${config.ticker || 'TOKEN'}`;
   const yieldTitle = `Nightshades ${factionLabel}`;
@@ -229,7 +229,7 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
                                   labels: t.dailyDates,
                                   datasets: [{ label: 'Daily Yield (USD)', data: t.dailyYields, borderColor: ACCENT, backgroundColor: 'rgba(129, 140, 248, 0.1)', borderWidth: 2, fill: true, tension: 0.4, pointRadius: 0 }]
                                 }}
-                                options={chartOptions}
+                                options={baseChartOptions(t.dailyDates, 'daily', { yUnit: 'USD', yTick: compactUsdTick })}
                               />
                               ) : (
                                 <EmptyChart>No daily yield recorded for this tier</EmptyChart>
@@ -272,11 +272,10 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mt-6">
             <h3 className="text-sm font-bold text-white mb-4">Tier ROI % Trajectory</h3>
             <div className="relative h-52 sm:h-64 md:h-80 w-full">
-              <Line data={{ labels: histLabels, datasets: histDatasets }} options={chartOptions} />
+              <Line data={{ labels: histLabels, datasets: histDatasets }} options={baseChartOptions(histLabels, interval, { yUnit: 'CoC %', yTick: percentTick })} />
             </div>
           </div>
           <YieldUsdPricePanel snaps={roiSnaps} tiers={tiers} />
-          <PaybackPanel snaps={roiSnaps} tiers={tiers} floorCostUsd={floorCostUsd} tokenPriceUsd={market.tokenPriceUsd} />
         </div>
       </ShareSection>
 
@@ -304,13 +303,13 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
 
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
             <h3 className="text-sm font-bold text-white mb-1">Cumulative Token Burn Over Time</h3>
-            <p className="text-xs text-slate-500 mb-4">First mint through today. Days before hourly snapshots are reconstructed from token burns to dead/zero, scaled to the first trusted supply read.</p>
+            <p className="text-xs text-slate-500 mb-4">Cumulative tokens burnt.</p>
             <div className="relative h-52 sm:h-64 md:h-80 w-full">
               {burn.data.length > 0 ? (
                 <Line
                   key={`burn-${timeframe}-${faction}`}
-                  data={{ labels: burn.labels, datasets: [{ label: 'Cumulative Burnt', data: burn.data, borderColor: '#fb923c', backgroundColor: 'rgba(251, 146, 60, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] }}
-                  options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactTick } } } }}
+                  data={{ labels: burn.labels, datasets: [cumulativeBurnDataset(burn.data, '#fb923c')] }}
+                  options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, unit: 'Tokens', ticks: { color: '#94a3b8', callback: compactTick } } } }}
                 />
               ) : (
                 <div className="h-full flex items-center justify-center text-sm text-slate-500">
@@ -329,7 +328,7 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
                 data={{
                   labels: flywheel.labels,
                   datasets: [
-                    { type: 'line', label: 'Token Price ($)', data: flywheel.prices, borderColor: ACCENT, backgroundColor: ACCENT, borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y1' },
+                    { type: 'line', label: 'Token Price ($)', data: flywheel.prices, borderColor: ACCENT, borderDash: [5, 4], borderWidth: 1.75, tension: 0, pointRadius: 0, yAxisID: 'y1' },
                     { type: 'bar', label: 'Daily Burn Velocity', data: flywheel.burn, backgroundColor: 'rgba(249, 115, 22, 0.8)', borderRadius: 4, yAxisID: 'y' }
                   ]
                 }}
@@ -338,6 +337,7 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
                   rightTick: compactUsdTick,
                   rightColor: ACCENT,
                   leftMax: flywheel.burnAxisMax,
+                  leftUnit: 'Tokens / day',
                   leftValues: flywheel.burn,
                   rightValues: flywheel.prices,
                 })}
@@ -366,19 +366,15 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
 
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
             <h3 className="text-sm font-bold text-white mb-6">Current Tier Mix (net of deactivations)</h3>
-            <div className="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-16">
-              <div className="relative h-64 md:h-72 w-full md:w-1/2 flex items-center justify-center">
-                <Doughnut data={{ labels: tiers.map((t) => t.name), datasets: [{ data: breakdownArr, backgroundColor: ['#00a804', '#8b5cf6', '#38bdf8', '#f5b700', '#f472b6'], borderWidth: 0 }] }} options={{ responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { display: false } } }} />
-              </div>
-              <div className="w-full md:w-1/2 flex flex-col gap-3">
-                {tiers.map((t, idx) => (
-                  <div key={t.tier} className="flex justify-between items-center bg-[#0e1013] p-3 rounded-lg border border-[#1e2228]">
-                    <div className="flex items-center gap-3"><div className={`w-4 h-4 rounded-md ${['bg-[#00a804]', 'bg-[#8b5cf6]', 'bg-[#38bdf8]', 'bg-[#f5b700]', 'bg-[#f472b6]'][idx % 5]}`}></div><span className="text-sm font-bold text-slate-300">{t.tier}: {t.name}</span></div>
-                    <span className="text-white font-bold tracking-wide">{formatNumber(breakdownArr[idx])}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <SliceChart
+              noun="Active"
+              format={formatNumber}
+              slices={tiers.map((t, idx) => ({
+                label: `${t.tier}: ${t.name}`,
+                value: breakdownArr[idx],
+                color: TIER_COLORS[idx % TIER_COLORS.length],
+              }))}
+            />
           </div>
 
           <ActivationStackPanel snaps={roiSnaps} tiers={tiers} breakdown={activation.breakdown} />
@@ -387,16 +383,14 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
              <p className="text-xs text-slate-400 mb-4">The line is currently-active NFTs at end of day (sales deactivate). Bars are new activations and exits, not upgrades.</p>
              <div className="relative h-52 sm:h-64 md:h-80 w-full">
                 {hasActHist ? (
-                <Bar
-                  data={{
-                    labels: actWin.labels,
-                    datasets: [
-                      { type: 'line', label: 'Active units', data: actWin.cols[0], borderColor: ACCENT, tension: 0.3, yAxisID: 'y' },
-                      { type: 'bar', label: 'Daily Activations', data: actWin.cols[1], backgroundColor: '#00a804', borderRadius: 4, yAxisID: 'y1' },
-                      { type: 'bar', label: 'Daily Deactivations', data: actWin.cols[2], backgroundColor: '#f43f5e', borderRadius: 4, yAxisID: 'y1' }
-                    ]
-                  }}
-                  options={activityChartOptions(actWin.labels, actWin.cols[0], actWin.cols[1], actWin.cols[2], interval)}
+                <ActivityChart
+                  labels={actWin.labels}
+                  net={actWin.cols[0]}
+                  ins={actWin.cols[1]}
+                  outs={actWin.cols[2]}
+                  interval={interval}
+                  lineColor={ACCENT}
+                  lineLabel="Active units"
                 />
                 ) : (
                   <EmptyChart>No activation history recorded</EmptyChart>
@@ -430,7 +424,7 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
               {seriesHasInk(ownData) ? (
               <Line
                 data={{ labels: ownLabels, datasets: [{ label: 'Active Holders', data: ownData, borderColor: ACCENT, backgroundColor: 'rgba(129, 140, 248, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] }}
-                options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } } } }}
+                options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, unit: 'Wallets', ticks: { color: '#94a3b8', callback: compactTick } } } }}
               />
               ) : (
                 <EmptyChart>No holder history recorded</EmptyChart>
@@ -448,6 +442,7 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
           <p><strong className="text-white">Four Anvil markets, one incubator:</strong> Ghosts, Zombies, Knights, and Watchers each have 3,000 NFTs, one faction token, and a SoftStakingVault. The All tab compares the four on one axis. This page is one market.</p>
           <p><strong className="text-white">Yield &amp; ROI:</strong> Cash-on-cash is annualized vault RewardPaid ÷ (this floor + activation tokens at spot). The 7-day sample is split by tier weight. The volume slider scales yield only — cost stays at live floor and token price. Night vault WETH is The Night inventory, not StonkBooster.</p>
           <p><strong className="text-white">Activation:</strong> Same mechanic as Mancer/Yard. The vault emits no Deactivated event — a sale clears the position. <code>activeCount()</code> is an upper bound; this page replays Activated plus NFT transfers.</p>
+          <p><strong className="text-white">Burn:</strong> Days before hourly snapshots are reconstructed from token burns to dead/zero, scaled to the first trusted supply read.</p>
           <p><strong className="text-white">Ownership:</strong> Circulating NFTs are collection size minus AMM vault inventory. Concentration is unique NFT wallets (vault and burn addresses excluded) divided by that circulating number.</p>
           <p><strong className="text-white">The Night</strong> is incubator-wide (one VRF over all four factions). Live strike, history, sunrise fees, and usable v4 LP sit on the Night tab.</p>
       </MethodologyCard>

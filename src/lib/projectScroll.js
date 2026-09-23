@@ -18,7 +18,11 @@ export function useSectionScrollSpy({ sectionIds, activeId, onActiveId, ready })
     }
     const el = document.getElementById(activeId);
     if (!el) return;
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // After ScrollToTop, which resets the window once the route mounts.
+    const frame = requestAnimationFrame(() => {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    return () => cancelAnimationFrame(frame);
   }, [ready, activeId]);
 
   useEffect(() => {

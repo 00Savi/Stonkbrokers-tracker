@@ -5,6 +5,7 @@ import { SAVI_X } from '../Shell';
 import { NfaNote } from '../Disclaimer';
 import { copyPortfolioSnapshot } from '../../lib/share';
 import { PAIR_COLORS, STREAM_COLORS } from '../../lib/charts';
+import { SliceChart } from '../SliceChart';
 import { PROJECTS } from '../../lib/routes';
 import { navNftScanTargets, portfolioProjectLabel } from '../../lib/portfolioScan';
 import { CURRENCIES, fetchEurPerUsd, formatMoney, moneyTick } from '../../lib/money';
@@ -12,7 +13,7 @@ import { formatLabels } from '../../lib/dates';
 import {
   Chart as ChartJS, ArcElement, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend, Filler
 } from 'chart.js';
-import { Doughnut, Bar } from 'react-chartjs-2';
+import { Bar } from 'react-chartjs-2';
 import {
   aggregateTbaHoldings,
   buildPriceIndex,
@@ -254,7 +255,6 @@ export default function PortfolioView({ data }) {
   const [scanProgress, setScanProgress] = useState('');
   const [thumbs, setThumbs] = useState({});
   const pickedThumb = useRef({});
-  const pieRef = useRef(null);
   const barRef = useRef(null);
 
   const priceIndex = buildPriceIndex(data);
@@ -761,16 +761,13 @@ export default function PortfolioView({ data }) {
           value: g.floorValue,
           color: PIE_COLORS[i % PIE_COLORS.length],
         })),
-        pieCanvas: chartCanvas(pieRef),
         barCanvas: chartCanvas(barRef),
         bars: mode === 'forecast'
           ? {
             title: 'Forecasted cash-flow',
             headline: `${formatCurrency(runRate[forecastGrain] || 0)} / ${GRAINS.find((g) => g.id === forecastGrain)?.title.toLowerCase()}`,
             headlineColor: '#00a804',
-            labels: GRAINS.map((g) => g.title),
-            values: GRAINS.map((g) => runRate[g.id]),
-            colors: GRAINS.map((g) => (g.id === forecastGrain ? '#00a804' : 'rgba(0,168,4,0.35)')),
+            note: 'Current wallet yield as a run-rate. Not compounded.',
           }
           : {
             title: 'Daily drops',
@@ -1049,20 +1046,15 @@ export default function PortfolioView({ data }) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
               <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
                 <h3 className="text-sm font-bold text-white mb-4">Floor allocation</h3>
-                <div className="relative h-52 w-full">
-                  <Doughnut
-                    ref={pieRef}
-                    data={{
-                      labels: grouped.filter((g) => g.floorValue > 0).map((g) => projectName(g.projectKey, g.ticker)),
-                      datasets: [{
-                        data: grouped.filter((g) => g.floorValue > 0).map((g) => g.floorValue),
-                        backgroundColor: PIE_COLORS,
-                        borderWidth: 0,
-                      }],
-                    }}
-                    options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#94a3b8' } } } }}
-                  />
-                </div>
+                <SliceChart
+                  noun="Floor"
+                  format={formatCurrency}
+                  slices={grouped.filter((g) => g.floorValue > 0).map((g, i) => ({
+                    label: projectName(g.projectKey, g.ticker),
+                    value: g.floorValue,
+                    color: PIE_COLORS[i % PIE_COLORS.length],
+                  }))}
+                />
               </div>
               {mode === 'forecast' ? (
                 <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
@@ -1076,31 +1068,7 @@ export default function PortfolioView({ data }) {
                       / {GRAINS.find((g) => g.id === forecastGrain)?.title.toLowerCase()}
                     </span>
                   </p>
-                  <p className="text-xs text-slate-500 mb-3">Current wallet yield as a run-rate. Not compounded.</p>
-                  <div className="relative h-36 w-full">
-                    <Bar
-                      ref={barRef}
-                      data={{
-                        labels: GRAINS.map((g) => g.title),
-                        datasets: [{
-                          label: 'Forecast',
-                          data: GRAINS.map((g) => runRate[g.id]),
-                          backgroundColor: GRAINS.map((g) => (g.id === forecastGrain ? '#00a804' : 'rgba(0,168,4,0.35)')),
-                          borderRadius: 4,
-                          maxBarThickness: 36,
-                        }],
-                      }}
-                      options={{
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: { legend: { display: false } },
-                        scales: {
-                          x: { ticks: { color: '#94a3b8' }, grid: { color: '#1e2228' } },
-                          y: { ticks: { color: '#94a3b8', callback: tickMoney }, grid: { color: '#1e2228' }, beginAtZero: true },
-                        },
-                      }}
-                    />
-                  </div>
+                  <p className="text-xs text-slate-500">Current wallet yield as a run-rate. Not compounded.</p>
                 </div>
               ) : (
                 <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
@@ -1131,7 +1099,7 @@ export default function PortfolioView({ data }) {
                           plugins: { legend: { display: false } },
                           scales: {
                             x: { ticks: { color: '#94a3b8', maxRotation: 0, autoSkip: true, maxTicksLimit: 8 }, grid: { color: '#1e2228' } },
-                            y: { ticks: { color: '#94a3b8', callback: tickMoney }, grid: { color: '#1e2228' }, beginAtZero: true },
+                            y: { ticks: { color: '#94a3b8', callback: tickMoney }, grid: { color: '#1e2228' }, beginAtZero: true, unit: 'USD' },
                           },
                         }}
                       />

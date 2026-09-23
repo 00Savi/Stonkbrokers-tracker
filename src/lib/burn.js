@@ -257,6 +257,117 @@ export function splitBurnSeries(stonk, intern, timeframe = 'all') {
   };
 }
 
+function internStampMap(stonk) {
+  const map = new Map();
+  for (const s of stonk?.dailySnapshots || []) {
+    if (s?.yieldSource === 'clock_in' || s?.internBurnTokens == null) continue;
+    const k = dateKey(s.date);
+    const n = Number(s.internBurnTokens);
+    if (k && Number.isFinite(n) && n >= 0) map.set(k, n);
+  }
+  return map;
+}
+
+function activationCountMap(project) {
+  const hist = project?.activation?.history || {};
+  const map = new Map();
+  (hist.labels || []).forEach((d, i) => {
+    const k = dateKey(d);
+    if (k) map.set(k, Number(hist.dailyActivations?.[i]) || 0);
+  });
+  return map;
+}
+
+function floorTierTokens(project) {
+  const tiers = project?.tiers || [];
+  const t0 = tiers.find((t) => t.tier === 'T0') || tiers[0];
+  return Number(t0?.reqTokens) || 0;
+}
+
+/** Move intern burn onto earlier days that still have broker residual. */
+function parkInternBackward(intern, brokers, amount, before) {
+  let left = amount;
+  for (let j = before - 1; j >= 0 && left > 1e-6; j--) {
+    const room = Number(brokers[j]) || 0;
+    if (room <= 0) continue;
+    const move = Math.min(room, left);
+    brokers[j] = room - move;
+    intern[j] = (Number(intern[j]) || 0) + move;
+    left -= move;
+  }
+  return left;
+}
+
+/**
+ * Token burn is measured. Intern burn is the other manager.
+ * Adjacent internBurnTokens stamps are the day's split. Before the first
+ * stamp, activations only estimate the intern share. Broker activations
+ * keep a floor-tier reserve so a hot intern day cannot print a zero bar.
+ */
+function reconcileDailyBurn(labels, totalDaily, guessedIntern, stonk) {
+  const stamps = internStampMap(stonk);
+  const brokerActs = activationCountMap(stonk);
+  const brokerFloor = floorTierTokens(stonk);
+  const intern = guessedIntern.map((n) => Math.max(0, Number(n) || 0));
+  const stampAt = [];
+  labels.forEach((d, i) => {
+    if (stamps.has(dateKey(d))) stampAt.push(i);
+  });
+
+  if (stampAt.length) {
+    const first = stampAt[0];
+    const opening = stamps.get(dateKey(labels[first]));
+    const guessSum = intern.slice(0, first + 1).reduce((s, n) => s + n, 0);
+    if (guessSum > 0 && opening >= 0) {
+      const scale = opening / guessSum;
+      for (let i = 0; i <= first; i++) intern[i] *= scale;
+    }
+  }
+
+  const brokers = totalDaily.map((t, i) => Math.max(0, (Number(t) || 0) - intern[i]));
+  const measured = new Set();
+
+  for (let s = 1; s < stampAt.length; s++) {
+    const i = stampAt[s];
+    const prev = stampAt[s - 1];
+    if (i !== prev + 1) continue;
+    const tokenDay = Number(totalDaily[i]) || 0;
+    const internDay = Math.max(0, stamps.get(dateKey(labels[i])) - stamps.get(dateKey(labels[prev])));
+    intern[i] = Math.min(tokenDay, internDay);
+    brokers[i] = Math.max(0, tokenDay - intern[i]);
+    measured.add(i);
+    const overflow = internDay - intern[i];
+    if (overflow > 0) parkInternBackward(intern, brokers, overflow, i);
+  }
+
+  for (let i = 0; i < labels.length; i++) {
+    if (measured.has(i)) continue;
+    const tokenDay = Number(totalDaily[i]) || 0;
+    if (intern[i] > tokenDay) {
+      const overflow = intern[i] - tokenDay;
+      intern[i] = tokenDay;
+      brokers[i] = 0;
+      parkInternBackward(intern, brokers, overflow, i);
+    }
+  }
+
+  if (brokerFloor > 0) {
+    for (let i = 0; i < labels.length; i++) {
+      if (measured.has(i)) continue;
+      const acts = brokerActs.get(dateKey(labels[i])) || 0;
+      const tokenDay = Number(totalDaily[i]) || 0;
+      if (!(acts > 0) || !(tokenDay > 0) || (Number(brokers[i]) || 0) > 0) continue;
+      const move = Math.min(tokenDay, acts * brokerFloor, Number(intern[i]) || 0);
+      if (!(move > 0)) continue;
+      intern[i] -= move;
+      brokers[i] = move;
+      parkInternBackward(intern, brokers, move, i);
+    }
+  }
+
+  return { intern, brokers };
+}
+
 /**
  * Daily intern vs broker $STONKBROKER burn, from the first intern activation.
  * Timeframe still windows the tail (weekly / monthly / all).
@@ -275,7 +386,7 @@ export function dailyAttributedBurnSeries(stonk, intern, timeframe = 'all', inte
   const priorTotal = startIdx > 0 ? Number(totalFilled.data[startIdx - 1]) || 0 : 0;
   const priorIntern = startIdx > 0 ? Number(internCum[startIdx - 1]) || 0 : 0;
 
-  const internDaily = internSlice.map((v, i) => {
+  const guessedIntern = internSlice.map((v, i) => {
     const prev = i === 0 ? priorIntern : Number(internSlice[i - 1]) || 0;
     return Math.max(0, (Number(v) || 0) - prev);
   });
@@ -283,7 +394,9 @@ export function dailyAttributedBurnSeries(stonk, intern, timeframe = 'all', inte
     const prev = i === 0 ? priorTotal : Number(totalCum[i - 1]) || 0;
     return Math.max(0, (Number(v) || 0) - prev);
   });
-  const brokersDaily = totalDaily.map((t, i) => Math.max(0, t - (internDaily[i] || 0)));
+  const split = reconcileDailyBurn(labels, totalDaily, guessedIntern, stonk);
+  const internDaily = split.intern;
+  const brokersDaily = split.brokers;
 
   const n = windowLen(timeframe, labels.length);
   const labs = labels.slice(-n);

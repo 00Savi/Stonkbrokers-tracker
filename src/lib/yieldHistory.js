@@ -484,6 +484,15 @@ export function barDatasets(cols, { stacked = false } = {}) {
   }));
 }
 
+function yearsPayback(snap, tier, floorCostUsd, tokenPriceUsd) {
+  const y = Number(snap.tiers?.find((st) => st.tier === tier.tier)?.yieldUsd) || 0;
+  const floor = pickNum(snap, ['nftFloorUsd']) ?? floorCostUsd;
+  const px = Number(snap.tokenPriceUsd) || tokenPriceUsd;
+  const cost = floor + (tier.reqTokens || 0) * px;
+  if (!(y > 0) || !(cost > 0)) return null;
+  return +(cost / y).toFixed(2);
+}
+
 export function tierRoiDatasets(snaps, tiers, { floorCostUsd = 0, tokenPriceUsd = 0, colors = TIER_ROI_COLORS } = {}) {
   return (tiers || []).map((t, i) => {
     const tc = floorCostUsd + (t.reqTokens || 0) * tokenPriceUsd;
@@ -492,16 +501,17 @@ export function tierRoiDatasets(snaps, tiers, { floorCostUsd = 0, tokenPriceUsd 
       : '0.00';
     return {
       label: `${t.tier} ROI (${currentRoi}%)`,
+      endLabel: `${t.tier} ${Number(currentRoi).toFixed(1)}%`,
       data: snaps.map((s) => {
         const roi = s.tiers?.find((st) => st.tier === t.tier)?.roi;
         if (roi == null) return null;
         const n = Number(roi);
         return Number.isFinite(n) ? n : null;
       }),
+      payback: snaps.map((s) => yearsPayback(s, t, floorCostUsd, tokenPriceUsd)),
       borderColor: colors[i % colors.length],
       tension: 0.3,
       borderWidth: 2,
-      pointRadius: 2,
       spanGaps: true,
     };
   });
@@ -516,10 +526,10 @@ export function tierYieldUsdDatasets(snaps, tiers, { colors = TIER_ROI_COLORS } 
       const n = Number(y);
       return Number.isFinite(n) ? n : null;
     }),
+    endLabel: t.tier,
     borderColor: colors[i % colors.length],
     tension: 0.3,
     borderWidth: 2,
-    pointRadius: 2,
     yAxisID: 'y',
     spanGaps: true,
   }));
@@ -533,6 +543,7 @@ export function tokenPriceDataset(snaps) {
       const n = Number(s.tokenPriceUsd);
       return Number.isFinite(n) ? n : null;
     }),
+    endLabel: 'Price',
     borderColor: '#94a3b8',
     borderDash: [4, 4],
     tension: 0.3,
@@ -541,25 +552,6 @@ export function tokenPriceDataset(snaps) {
     yAxisID: 'y1',
     spanGaps: true,
   };
-}
-
-export function paybackYearDatasets(snaps, tiers, { floorCostUsd = 0, tokenPriceUsd = 0, colors = TIER_ROI_COLORS } = {}) {
-  return (tiers || []).map((t, i) => ({
-    label: `${t.tier} payback (years)`,
-    data: snaps.map((s) => {
-      const y = Number(s.tiers?.find((st) => st.tier === t.tier)?.yieldUsd) || 0;
-      const floor = pickNum(s, ['nftFloorUsd']) ?? floorCostUsd;
-      const px = Number(s.tokenPriceUsd) || tokenPriceUsd;
-      const cost = floor + (t.reqTokens || 0) * px;
-      if (!(y > 0) || !(cost > 0)) return null;
-      return +(cost / y).toFixed(2);
-    }),
-    borderColor: colors[i % colors.length],
-    tension: 0.3,
-    borderWidth: 2,
-    pointRadius: 2,
-    spanGaps: true,
-  }));
 }
 
 export function tvlByModeFromVaults(vaults) {

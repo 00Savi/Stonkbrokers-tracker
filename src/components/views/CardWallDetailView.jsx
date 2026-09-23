@@ -2,26 +2,27 @@ import React, { useState } from 'react';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, ArcElement, Filler
 } from 'chart.js';
-import { Line, Bar, Doughnut } from 'react-chartjs-2';
+import { Line, Bar } from 'react-chartjs-2';
 import { burnSeries, burnRateSeries, burnOfSupplyPct } from '../../lib/burn';
 import { formatLabels } from '../../lib/dates';
 import { windowSnapshots, protocolRevenueChart, sliceCols, seriesHasInk, windowChart } from '../../lib/yieldHistory';
 import { BetaTag, compactUsd, compactNum, YieldPeriodToggle, scaleAnnualYield, yieldSuffix } from '../kit';
 import { ShareSection } from '../CopyControl';
 import { TierFlowSection, netTierCount } from '../TierFlowCards';
-import { baseChartOptions, compactTick, compactUsdTick, dualAxisOptions, activityChartOptions } from '../../lib/charts';
+import { baseChartOptions, compactTick, compactUsdTick, cumulativeBurnDataset, dualAxisOptions, TIER_COLORS, percentTick } from '../../lib/charts';
 import { useChartView } from '../../lib/chartWindow';
 import { holderSeries } from '../../lib/snapshots';
 import { MethodologyCard } from '../Disclaimer';
 import {
   EmptyChart,
   YieldUsdPricePanel,
-  PaybackPanel,
+  ActivityChart,
   ActivationStackPanel,
   OwnershipHistoryPanels,
   HolderRevenuePanel,
   OnboardLinePanel,
 } from '../HistoryCharts';
+import { SliceChart } from '../SliceChart';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
@@ -47,8 +48,6 @@ export default function CardWallDetailView({ data, activeTab }) {
     const eth = t.floorEth > 0 ? t.floorEth : (market.starFloorEth?.[i] > 0 ? market.starFloorEth[i] : market.nftFloorEth);
     return (eth || 0) * (market.ethPriceUsd || 0);
   };
-
-  const chartOptions = baseChartOptions();
 
   const hasSnaps = Array.isArray(dailySnapshots) && dailySnapshots.length > 0 && dailySnapshots[0].date;
   const roiSnaps = windowSnapshots(dailySnapshots, timeframe, interval).filter((s) =>
@@ -233,7 +232,7 @@ export default function CardWallDetailView({ data, activeTab }) {
                                     labels: t.dailyDates?.length ? t.dailyDates : revDates, 
                                     datasets: [{ label: 'Daily Yield (USD)', data: t.dailyYields, borderColor: '#f5b700', backgroundColor: 'rgba(245, 183, 0, 0.1)', borderWidth: 2, fill: true, tension: 0.4, pointRadius: 0 }] 
                                   }} 
-                                  options={chartOptions} 
+                                  options={baseChartOptions(t.dailyDates, 'daily', { yUnit: 'USD', yTick: compactUsdTick })} 
                                 />
                               ) : (
                                 <EmptyChart>No daily yield recorded for this tier</EmptyChart>
@@ -276,14 +275,13 @@ export default function CardWallDetailView({ data, activeTab }) {
             <h3 className="text-sm font-bold text-white mb-4">Tier ROI % Trajectory</h3>
             <div className="relative h-52 sm:h-64 md:h-80 w-full">
               {histLabels.length ? (
-                <Line data={{ labels: histLabels, datasets: histDatasets }} options={chartOptions} />
+                <Line data={{ labels: histLabels, datasets: histDatasets }} options={baseChartOptions(histLabels, interval, { yUnit: 'CoC %', yTick: percentTick })} />
               ) : (
                 <div className="h-full flex items-center justify-center text-sm text-slate-500">No rain-backed ROI days recorded yet</div>
               )}
             </div>
           </div>
           <YieldUsdPricePanel snaps={roiSnaps} tiers={tiers} />
-          <PaybackPanel snaps={roiSnaps} tiers={tiers} floorCostUsd={floorCostUsd} tokenPriceUsd={market.tokenPriceUsd} />
         </div>
       </ShareSection>
 
@@ -322,7 +320,7 @@ export default function CardWallDetailView({ data, activeTab }) {
                     { label: "Still on the wall", data: revData2, backgroundColor: "#f5b700", borderRadius: 4 }
                   ]
                 }} 
-                options={{ responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true, grid: { color: '#1e2228', borderDash: [4, 4] } }, y: { stacked: true, grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactUsdTick } } }, plugins: { legend: { labels: { color: '#cbd5e1' } } } }} 
+                options={{ responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true, grid: { color: '#1e2228', borderDash: [4, 4] } }, y: { stacked: true, unit: 'USD', grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactUsdTick } } }, plugins: { legend: { labels: { color: '#cbd5e1' } } } }} 
               />
             </div>
           </div>
@@ -376,8 +374,8 @@ export default function CardWallDetailView({ data, activeTab }) {
               {slicedBurnData.length > 0 ? (
                 <Line
                   key={`burn-${timeframe}`}
-                  data={{ labels: slicedBurnLabels, datasets: [{ label: 'Cumulative Burnt', data: slicedBurnData, borderColor: '#fb923c', backgroundColor: 'rgba(251, 146, 60, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] }}
-                  options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactTick } } } }}
+                  data={{ labels: slicedBurnLabels, datasets: [cumulativeBurnDataset(slicedBurnData, '#fb923c')] }}
+                  options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, unit: 'Tokens', ticks: { color: '#94a3b8', callback: compactTick } } } }}
                 />
               ) : (
                 <div className="h-full flex items-center justify-center text-sm text-slate-500">
@@ -396,7 +394,7 @@ export default function CardWallDetailView({ data, activeTab }) {
                 data={{
                   labels: flywheel.labels,
                   datasets: [
-                    { type: 'line', label: 'Token Price ($)', data: fwPrices, borderColor: '#f5b700', backgroundColor: '#f5b700', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y1' },
+                    { type: 'line', label: 'Token Price ($)', data: fwPrices, borderColor: '#f5b700', borderDash: [5, 4], borderWidth: 1.75, tension: 0, pointRadius: 0, yAxisID: 'y1' },
                     { type: 'bar', label: 'Daily Burn Velocity', data: fwBurn, backgroundColor: 'rgba(249, 115, 22, 0.8)', borderRadius: 4, yAxisID: 'y' }
                   ]
                 }} 
@@ -405,6 +403,7 @@ export default function CardWallDetailView({ data, activeTab }) {
                   rightTick: compactUsdTick,
                   rightColor: '#f5b700',
                   leftMax: flywheel.burnAxisMax,
+                  leftUnit: 'Tokens / day',
                   leftValues: flywheel.burn,
                   rightValues: flywheel.prices,
                 })} 
@@ -433,19 +432,15 @@ export default function CardWallDetailView({ data, activeTab }) {
 
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
             <h3 className="text-sm font-bold text-white mb-6">Current Tier Mix (net of deactivations)</h3>
-            <div className="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-16">
-              <div className="relative h-64 md:h-72 w-full md:w-1/2 flex items-center justify-center">
-                <Doughnut data={{ labels: tiers.map(t => t.name), datasets: [{ data: breakdownArr, backgroundColor: ['#00a804', '#8b5cf6', '#38bdf8', '#f5b700', '#f472b6'], borderWidth: 0 }] }} options={{ responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { display: false } } }} />
-              </div>
-              <div className="w-full md:w-1/2 flex flex-col gap-3">
-                {tiers.map((t, idx) => (
-                  <div key={t.tier} className="flex justify-between items-center bg-[#0e1013] p-3 rounded-lg border border-[#1e2228]">
-                    <div className="flex items-center gap-3"><div className={`w-4 h-4 rounded-md ${['bg-[#00a804]', 'bg-[#8b5cf6]', 'bg-[#38bdf8]', 'bg-[#f5b700]', 'bg-[#f472b6]'][idx % 5]}`}></div><span className="text-sm font-bold text-slate-300">{t.tier}: {t.name}</span></div>
-                    <span className="text-white font-bold tracking-wide">{formatNumber(breakdownArr[idx])}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <SliceChart
+              noun="Active"
+              format={formatNumber}
+              slices={tiers.map((t, idx) => ({
+                label: `${t.tier}: ${t.name}`,
+                value: breakdownArr[idx],
+                color: TIER_COLORS[idx % TIER_COLORS.length],
+              }))}
+            />
           </div>
 
           <ActivationStackPanel snaps={roiSnaps} tiers={tiers} breakdown={activation.breakdown} />
@@ -453,16 +448,14 @@ export default function CardWallDetailView({ data, activeTab }) {
              <h3 className="text-sm font-bold text-white mb-4">Historical Activity (Net vs. Daily)</h3>
              <div className="relative h-52 sm:h-64 md:h-80 w-full">
                 {hasActHist ? (
-                <Bar 
-                  data={{
-                    labels: actWin.labels,
-                    datasets: [
-                      { type: 'line', label: 'Net Active Units', data: actWin.cols[0], borderColor: '#f5b700', tension: 0.3, yAxisID: 'y' },
-                      { type: 'bar', label: 'Daily Activations', data: actWin.cols[1], backgroundColor: '#00a804', borderRadius: 4, yAxisID: 'y1' },
-                      { type: 'bar', label: 'Daily Deactivations', data: actWin.cols[2], backgroundColor: '#f43f5e', borderRadius: 4, yAxisID: 'y1' }
-                    ]
-                  }} 
-                  options={activityChartOptions(actWin.labels, actWin.cols[0], actWin.cols[1], actWin.cols[2], interval)} 
+                <ActivityChart
+                  labels={actWin.labels}
+                  net={actWin.cols[0]}
+                  ins={actWin.cols[1]}
+                  outs={actWin.cols[2]}
+                  interval={interval}
+                  lineColor="#f5b700"
+                  lineLabel="Net Active Units"
                 />
                 ) : (
                   <EmptyChart>No activation history recorded</EmptyChart>
@@ -501,7 +494,7 @@ export default function CardWallDetailView({ data, activeTab }) {
               {seriesHasInk(ownData) ? (
               <Line 
                 data={{ labels: ownLabels, datasets: [{ label: 'Active Holders', data: ownData, borderColor: '#f5b700', backgroundColor: 'rgba(245, 183, 0, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] }} 
-                options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } } } }} 
+                options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, unit: 'Wallets', ticks: { color: '#94a3b8', callback: compactTick } } } }} 
               />
               ) : (
                 <EmptyChart>No holder history recorded</EmptyChart>
