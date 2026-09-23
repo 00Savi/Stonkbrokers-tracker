@@ -103,14 +103,37 @@ export function applyChartJsLayout() {
   ChartJS.defaults.scale.ticks.font = { size: narrow ? 9 : 10 };
 }
 
-/** X-axis density: show every tick on a week, skip on a long daily tape. */
-export function xTicksFor(n) {
+/** X-axis density follows the interval: Daily 7D/30D labels every day. */
+export function xTicksFor(n, interval = 'daily') {
   const count = Number(n) || 0;
   const narrow = typeof window !== 'undefined' && isNarrow();
-  if (count <= 1) return { autoSkip: false, maxTicksLimit: 1, maxRotation: 0 };
-  if (count <= 8) return { autoSkip: false, maxTicksLimit: count, maxRotation: narrow ? 40 : 0 };
-  if (count <= 16) return { autoSkip: true, maxTicksLimit: narrow ? 6 : count, maxRotation: narrow ? 40 : 0 };
-  return { autoSkip: true, maxTicksLimit: narrow ? 5 : 8, maxRotation: narrow ? 40 : 0 };
+  if (count <= 1) return { autoSkip: false, maxTicksLimit: 1, maxRotation: 0, minRotation: 0 };
+
+  if (interval === 'monthly') {
+    return { autoSkip: false, maxTicksLimit: Math.max(count, 1), maxRotation: 0, minRotation: 0 };
+  }
+  if (interval === 'weekly') {
+    if (count <= 16) return { autoSkip: false, maxTicksLimit: count, maxRotation: narrow ? 40 : 0, minRotation: 0 };
+    return { autoSkip: true, maxTicksLimit: narrow ? 8 : 16, maxRotation: narrow ? 40 : 0, minRotation: 0 };
+  }
+
+  // Daily: 7D and 30D keep one heading per day. Longer tapes skip.
+  if (count <= 10) {
+    return { autoSkip: false, maxTicksLimit: count, maxRotation: narrow ? 40 : 0, minRotation: 0 };
+  }
+  if (count <= 32) {
+    return {
+      autoSkip: false,
+      maxTicksLimit: count,
+      maxRotation: 45,
+      minRotation: 45,
+      autoSkipPadding: 0,
+    };
+  }
+  if (count <= 96) {
+    return { autoSkip: true, maxTicksLimit: narrow ? 8 : 16, maxRotation: 40, minRotation: 0 };
+  }
+  return { autoSkip: true, maxTicksLimit: narrow ? 6 : 12, maxRotation: 40, minRotation: 0 };
 }
 
 /** Bar width vs point count: a 7D week is one fat bar, All daily is a tape. */
@@ -124,9 +147,9 @@ export function barThickness(n) {
   return 3;
 }
 
-export function baseChartOptions(labels) {
+export function baseChartOptions(labels, interval = 'daily') {
   const n = Array.isArray(labels) ? labels.length : Number(labels) || 0;
-  const xt = n > 0 ? xTicksFor(n) : {};
+  const xt = n > 0 ? xTicksFor(n, interval) : {};
   return {
     responsive: true,
     maintainAspectRatio: false,
@@ -157,8 +180,8 @@ export function baseChartOptions(labels) {
   };
 }
 
-export function usdStackOptions(labels) {
-  const base = baseChartOptions(labels);
+export function usdStackOptions(labels, interval = 'daily') {
+  const base = baseChartOptions(labels, interval);
   return {
     ...base,
     scales: {
@@ -174,8 +197,8 @@ export function usdStackOptions(labels) {
   };
 }
 
-export function percentStackOptions(labels) {
-  const base = usdStackOptions(labels);
+export function percentStackOptions(labels, interval = 'daily') {
+  const base = usdStackOptions(labels, interval);
   return {
     ...base,
     scales: {
@@ -250,12 +273,13 @@ export function dualAxisOptions({
   rightColor = '#00a804',
   leftMax,
   labels,
+  interval = 'daily',
   leftKind = 'flow',
   rightKind = 'level',
   leftValues,
   rightValues,
 } = {}) {
-  const base = baseChartOptions(labels);
+  const base = baseChartOptions(labels, interval);
   const leftTicks = { ...base.scales.y.ticks, callback: leftTick };
   const rightTicks = { color: rightColor, callback: rightTick };
   const leftExtra = Number.isFinite(leftMax) && leftMax > 0 ? { max: leftMax } : {};
@@ -291,12 +315,13 @@ export function dualAxisOptions({
 }
 
 /** Net active (zoomed) vs daily in/out bars (from zero). */
-export function activityChartOptions(labels, net, ins, outs) {
+export function activityChartOptions(labels, net, ins, outs, interval = 'daily') {
   return dualAxisOptions({
     leftTick: compactTick,
     rightTick: compactTick,
     rightColor: '#8b929b',
     labels,
+    interval,
     leftKind: 'level',
     rightKind: 'flow',
     leftValues: net,

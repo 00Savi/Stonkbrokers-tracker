@@ -352,6 +352,7 @@ export default function YardDetailView({ data, activeTab }) {
             labels={slicedVault.labels}
             cols={slicedVault.cols}
             kind={rawRev.kind}
+            interval={interval}
             title="Daily vault distributions (USD)"
             note="RewardPaid from the TickerYard SoftStakingVault. This is yield paid to activated Yardkeepers, not a StonkBrokers AMM / Clock-In / snipe mix."
             holder={{
@@ -519,7 +520,7 @@ export default function YardDetailView({ data, activeTab }) {
                       { type: 'bar', label: 'Daily Deactivations', data: actWin.cols[2], backgroundColor: '#f43f5e', borderRadius: 4, yAxisID: 'y1' }
                     ]
                   }} 
-                  options={activityChartOptions(actWin.labels, actWin.cols[0], actWin.cols[1], actWin.cols[2])} 
+                  options={activityChartOptions(actWin.labels, actWin.cols[0], actWin.cols[1], actWin.cols[2], interval)} 
                 />
                 ) : (
                   <EmptyChart>No activation history recorded</EmptyChart>

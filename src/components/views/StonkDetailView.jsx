@@ -114,7 +114,7 @@ export default function StonkDetailView({ data, activeTab }) {
   const floorCostUsd = (market.nftFloorEth || 0) * (market.ethPriceUsd || 0);
 
   const chartOptions = baseChartOptions();
-  const opts = (labs) => baseChartOptions(labs);
+  const opts = (labs) => baseChartOptions(labs, interval);
 
   // ==========================================
   // BULLETPROOF CHART DATA FALLBACKS & FIXES
@@ -413,6 +413,7 @@ export default function StonkDetailView({ data, activeTab }) {
             labels={slicedRev.labels}
             cols={REV_STREAMS}
             kind={rawRev.kind}
+            interval={interval}
             title="StonkBooster"
             mixTitle="Mix"
             note="Full protocol mix. Clock-In bars are Safety Deposit locker fees. Nightshades 99% anti-snipe stays in the curve. Bonding volume is not plotted."
@@ -735,7 +736,7 @@ export default function StonkDetailView({ data, activeTab }) {
                       { type: 'bar', label: 'Daily deactivations', data: actWin.cols[2], backgroundColor: '#ff3333', borderRadius: 2, maxBarThickness: barThickness(actWin.points), yAxisID: 'y1' }
                     ]
                   }}
-                  options={activityChartOptions(actWin.labels, actWin.cols[0], actWin.cols[1], actWin.cols[2])}
+                  options={activityChartOptions(actWin.labels, actWin.cols[0], actWin.cols[1], actWin.cols[2], interval)}
                 />
                 ) : (
                   <EmptyChart>No activation history recorded</EmptyChart>

@@ -104,7 +104,7 @@ export function PaybackPanel({ snaps, tiers, floorCostUsd, tokenPriceUsd }) {
   );
 }
 
-export function HolderRevenuePanel({ labels, data, note, title }) {
+export function HolderRevenuePanel({ labels, data, note, title, interval = 'daily' }) {
   const has = seriesHasInk(data);
   return (
     <ChartPanel
@@ -124,7 +124,7 @@ export function HolderRevenuePanel({ labels, data, note, title }) {
               skipNull: true,
             }],
           }}
-          options={usdStackOptions(labels)}
+          options={usdStackOptions(labels, interval)}
         />
       ) : (
         <EmptyChart>No holder-revenue days in this window</EmptyChart>
@@ -133,10 +133,10 @@ export function HolderRevenuePanel({ labels, data, note, title }) {
   );
 }
 
-export function ProtocolFeeVolumePanels({ labels, cols, kind, holder, note, title, mixTitle }) {
+export function ProtocolFeeVolumePanels({ labels, cols, kind, holder, note, title, mixTitle, interval = 'daily' }) {
   const holderInk = holder && seriesHasInk(holder.data);
   const holderPanel = holderInk ? (
-    <HolderRevenuePanel labels={holder.labels || labels} data={holder.data} note={holder.note} title={holder.title} />
+    <HolderRevenuePanel labels={holder.labels || labels} data={holder.data} note={holder.note} title={holder.title} interval={interval} />
   ) : null;
 
   if (kind === 'ledger' || kind === 'cashflow') return holderPanel;
@@ -151,14 +151,14 @@ export function ProtocolFeeVolumePanels({ labels, cols, kind, holder, note, titl
         note={note || "Money the protocol charged or kept: AMM, Clock-In locker fees, V2 snipe / curve tax, Partner Revenue Share, and Smart LP skim. Clock-In bars are Safety Deposit locker fees (then 90% community / 10% protocol). Nightshades 99% anti-snipe stays in the curve and is not this stack. Bonding swap volume is not revenue and is not plotted here."}
       >
         {fees.length ? (
-          <Bar data={{ labels, datasets: barDatasets(fees, { stacked: true }) }} options={usdStackOptions(labels)} />
+          <Bar data={{ labels, datasets: barDatasets(fees, { stacked: true }) }} options={usdStackOptions(labels, interval)} />
         ) : (
           <EmptyChart>No revenue days in this window</EmptyChart>
         )}
       </ChartPanel>
       {mix.length > 1 ? (
         <ChartPanel title={mixTitle || "Revenue mix (100%)"} note="Share of protocol revenue that day. Days with no rev are blank. Swap volume is excluded.">
-          <Bar data={{ labels, datasets: barDatasets(mix, { stacked: true }) }} options={percentStackOptions(labels)} />
+          <Bar data={{ labels, datasets: barDatasets(mix, { stacked: true }) }} options={percentStackOptions(labels, interval)} />
         </ChartPanel>
       ) : null}
       {holderPanel}
@@ -448,7 +448,7 @@ function onboardWindow(data, key, timeframe, interval, trim = false) {
 export function OnboardLinePanel({ data, projectKey, timeframe, interval, color, name }) {
   const sliced = onboardWindow(data, projectKey, timeframe, interval, true);
   const labels = formatLabels(sliced.labels);
-  const opts = baseChartOptions(labels);
+  const opts = baseChartOptions(labels, interval);
   return (
     <ChartPanel
       title={`${name || 'Chain'} onboard`}
@@ -489,7 +489,7 @@ export function OnboardClusterPanel({ data, timeframe, interval }) {
   const o = data?.onboarding || {};
   const total = windowSeries(o.daily?.dates || [], o.daily?.wallets || [], timeframe, interval, 'last');
   const labels = formatLabels(total.labels);
-  const opts = baseChartOptions(labels);
+  const opts = baseChartOptions(labels, interval);
   const datasets = [
     {
       label: 'All',

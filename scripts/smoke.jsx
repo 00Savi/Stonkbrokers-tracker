@@ -40,7 +40,7 @@ import { attributedStonkBurn, dailyAttributedBurnSeries, firstInternActivationDa
 import { navNftScanTargets } from '../src/lib/portfolioScan';
 import { windowLen } from '../src/lib/yieldHistory';
 import { CHART_WINDOWS, CHART_INTERVALS, DEFAULT_CHART_WINDOW, DEFAULT_CHART_INTERVAL } from '../src/lib/chartWindow';
-import { levelAxis } from '../src/lib/charts';
+import { levelAxis, xTicksFor } from '../src/lib/charts';
 import { buildTopicShareCard } from '../src/lib/projectShare';
 import { copySectionEl } from '../src/components/CopyControl';
 import { internIdsForBroker } from '../src/lib/interns';
@@ -492,6 +492,13 @@ for (const [name, View, props] of VIEWS) {
   } else {
     console.log('ok    charts default to 30D daily');
   }
+  const daily30 = xTicksFor(30, 'daily');
+  if (daily30.autoSkip || daily30.maxTicksLimit < 30) {
+    failed++;
+    console.error(`FAIL  30D daily axis still skips day headings ${JSON.stringify(daily30)}`);
+  } else {
+    console.log('ok    30D daily axis labels every day');
+  }
   const netAxis = levelAxis({}, [1800, 1840, 1900]);
   if (netAxis.beginAtZero || !(netAxis.min > 1500) || !(netAxis.max < 2200)) {
     failed++;
@@ -599,6 +606,9 @@ for (const [name, View, props] of VIEWS) {
   if (!ecoOwnHtml.includes('Chain onboard over time') || !ecoOwnHtml.includes('Robinhood Chain onboard')) {
     failed++;
     console.error('FAIL  ecosystem onboard chart missing');
+  } else if (!ecoOwnHtml.includes('Copy Robinhood Chain onboard for X')) {
+    failed++;
+    console.error('FAIL  ecosystem onboard card has no copy button');
   } else {
     console.log('ok    ecosystem shows combined onboard chart');
   }

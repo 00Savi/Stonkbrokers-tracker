@@ -289,6 +289,7 @@ export default function MancerDetailView({ data, activeTab }) {
             labels={slicedRev.labels}
             cols={slicedRev.cols}
             kind={rawRev.kind}
+            interval={interval}
             holder={{
               labels: slicedHolder.labels,
               data: slicedHolder.cols[0]?.data,
@@ -456,7 +457,7 @@ export default function MancerDetailView({ data, activeTab }) {
                       { type: 'bar', label: 'Daily Deactivations', data: actWin.cols[2], backgroundColor: '#f43f5e', borderRadius: 4, yAxisID: 'y1' }
                     ]
                   }} 
-                  options={activityChartOptions(actWin.labels, actWin.cols[0], actWin.cols[1], actWin.cols[2])} 
+                  options={activityChartOptions(actWin.labels, actWin.cols[0], actWin.cols[1], actWin.cols[2], interval)} 
                 />
                 ) : (
                   <EmptyChart>No activation history recorded</EmptyChart>

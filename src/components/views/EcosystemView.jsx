@@ -213,6 +213,7 @@ export default function EcosystemView({ data, pending = false }) {
   const [expandedProject, setExpandedProject] = useState(null);
   const [yieldPeriod, setYieldPeriod] = useState('Y');
   const { range: timeframe, setRange, interval, setInterval } = useChartView();
+  const onboardCardRef = useRef(null);
 
   const selectTab = (id) => {
     setSearchParams((prev) => {
@@ -792,8 +793,19 @@ export default function EcosystemView({ data, pending = false }) {
       {activeTab === 'ownership' && (
       <ShareSection id="ownership" className="space-y-4">
         <Card
+          ref={onboardCardRef}
           eyebrow="Robinhood Chain onboard"
           sub={`Wallets whose first cluster buy or mint was one of their first ${onboard.lookbackTxs || 10} transactions. Airdrops and contracts do not count. ${onboardNote}.`}
+          corner={(
+            <CopyControl
+              heading
+              alwaysLabel
+              idleLabel="Copy"
+              title="Copy Robinhood Chain onboard for X"
+              className="bg-[#08090b]"
+              onCopy={() => copyElement(onboardCardRef.current, { filename: 'savi-robinhood-chain-onboard.png' })}
+            />
+          )}
         >
           <KpiStrip className="mb-5">
             <Stat label="Wallets" value={compactNum(onboard.wallets || 0)} tone="accent" note="Unique EOAs" />

@@ -318,6 +318,7 @@ export default function InternDetailView({ data, activeTab }) {
             labels={slicedRev.labels}
             cols={slicedRev.cols}
             kind={rawRev.kind}
+            interval={interval}
             holder={{
               labels: slicedHolder.labels,
               data: slicedHolder.cols[0]?.data,
@@ -382,7 +383,7 @@ export default function InternDetailView({ data, activeTab }) {
             <p className="text-xs text-slate-400 mb-4">A sale clears intern activation the same way as a broker. Dormant interns cannot activate.</p>
             <div className="relative h-52 sm:h-64 md:h-80 w-full">
               {hasActHist ? (
-                <Bar data={{ labels: actWin.labels, datasets: [{ type: 'line', label: 'Active units', data: actWin.cols[0], borderColor: ACCENT, tension: 0.3, yAxisID: 'y' }, { type: 'bar', label: 'Daily Activations', data: actWin.cols[1], backgroundColor: '#00a804', borderRadius: 4, yAxisID: 'y1' }, { type: 'bar', label: 'Daily Deactivations', data: actWin.cols[2], backgroundColor: '#f43f5e', borderRadius: 4, yAxisID: 'y1' }] }} options={activityChartOptions(actWin.labels, actWin.cols[0], actWin.cols[1], actWin.cols[2])} />
+                <Bar data={{ labels: actWin.labels, datasets: [{ type: 'line', label: 'Active units', data: actWin.cols[0], borderColor: ACCENT, tension: 0.3, yAxisID: 'y' }, { type: 'bar', label: 'Daily Activations', data: actWin.cols[1], backgroundColor: '#00a804', borderRadius: 4, yAxisID: 'y1' }, { type: 'bar', label: 'Daily Deactivations', data: actWin.cols[2], backgroundColor: '#f43f5e', borderRadius: 4, yAxisID: 'y1' }] }} options={activityChartOptions(actWin.labels, actWin.cols[0], actWin.cols[1], actWin.cols[2], interval)} />
               ) : (
                 <EmptyChart>No intern activation history recorded</EmptyChart>
               )}

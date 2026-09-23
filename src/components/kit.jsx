@@ -66,9 +66,9 @@ export function SkeletonCard({ rows = 3 }) {
  * child (a table) sets `flush` rather than zeroing the card's own padding,
  * which would drag the title flush against the border too.
  */
-export function Card({ eyebrow, sub, corner, children, flush = false, className = '' }) {
+export const Card = React.forwardRef(function Card({ eyebrow, sub, corner, children, flush = false, className = '' }, ref) {
   return (
-    <section className={`card overflow-hidden ${className}`}>
+    <section ref={ref} className={`card overflow-hidden ${className}`}>
       {(eyebrow || corner) && (
         <header className="flex items-start justify-between gap-3 px-4 pb-4 pt-4 sm:px-5 sm:pt-5">
           <div>
@@ -81,7 +81,7 @@ export function Card({ eyebrow, sub, corner, children, flush = false, className 
       <div className={flush ? '' : 'px-4 pb-4 sm:px-5 sm:pb-5'}>{children}</div>
     </section>
   );
-}
+});
 
 /** Hero figure + trailing descriptor, the reference's signature pairing. */
 export function Figure({
