@@ -82,7 +82,13 @@ export default function InternDetailView({ data, activeTab }) {
 
   const revPeriod = windowPeriodLabel(timeframe);
   const rawRev = protocolRevenueChart(project);
-  const slicedRev = sliceCols(rawRev.labels, rawRev.cols, timeframe, interval);
+  const byKey = Object.fromEntries((rawRev.cols || []).map((c) => [c.key, c]));
+  const internCols = [
+    { ...(byKey.amm || { data: [] }), label: 'Intern Clock In', color: STREAM_COLORS.amm },
+    { ...(byKey.dex || { data: [] }), label: 'Intern Exchange', color: STREAM_COLORS.dex },
+    { ...(byKey.box || { data: [] }), label: 'Names + V2 lending', color: STREAM_COLORS.box },
+  ];
+  const slicedRev = sliceCols(rawRev.labels, internCols, timeframe, interval);
   const slicedHolder = sliceCols(rawRev.labels, [holderRevenueCol(project, rawRev.rawLabels || rawRev.labels)], timeframe, interval);
 
   const realBurntTokens = Math.max(Number(activation.dualBurn?.totalBurnTokens || 0), Number(ownership.permanentlyBurntTokens || 0));
@@ -140,6 +146,10 @@ export default function InternDetailView({ data, activeTab }) {
               <strong className="text-amber-300">Collection is live.</strong> Mint, live/dormant, and intern activation are on-chain.
               Intern Clock In, Intern Exchange, names, and lending are still empty — yield tiles stay blank until those desks deploy.
             </div>
+          ) : (!config.namesCa && !config.lendingCa) ? (
+            <div className="rounded-xl border border-slate-700/60 bg-[#08090b] px-4 py-3 text-sm text-slate-300">
+              Intern Clock In 3.0 and Intern Exchange (desks) are live. Names and V2 lending stay empty until those desks deploy.
+            </div>
           ) : null}
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -180,7 +190,7 @@ export default function InternDetailView({ data, activeTab }) {
               <h3 className="text-sm font-bold text-white">Activation CoC — intern ladder</h3>
               <span className="text-xs font-bold text-amber-400 bg-amber-900/30 px-2 py-1 rounded border border-amber-800/50">{parseFloat(volumeMultiplier).toFixed(1)}x Intern Clock In volume</span>
             </div>
-            <p className="text-xs text-slate-400 mb-4">Five school-year tiers in $STONKBROKER (Freshman 3,333 → Alumnus 83,333), same weights as brokers. Half of every activation fee is burned. Yield stays empty until Intern Clock In is live.</p>
+            <p className="text-xs text-slate-400 mb-4">Five school-year tiers in $STONKBROKER (Freshman 3,333 → Alumnus 83,333), same weights as brokers. Half of every activation fee is burned. Intern CoC is trailing Intern Clock In inflows, not parent-broker base pay.</p>
             <input type="range" min="0.1" max="10" step="0.1" value={volumeMultiplier} onChange={(e) => setVolumeMultiplier(e.target.value)} className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500 mb-6" />
 
             <div className="overflow-x-auto -mx-1 sm:mx-0">
@@ -267,7 +277,7 @@ export default function InternDetailView({ data, activeTab }) {
       <ShareSection id="yield" className="scroll-mt-32">
         <div className="bg-[#0e1013] border border-[#1e2228] p-4 md:p-6 rounded-2xl shadow-lg space-y-6">
           <h2 className="text-xl font-bold text-white">Historical Yield &amp; Payback Horizon</h2>
-          <p className="text-xs md:text-sm text-slate-400">Intern Clock In payouts once the engine is live. Base pay from the parent broker is a separate slice and is not this chart.</p>
+          <p className="text-xs md:text-sm text-slate-400">Intern Clock In 3.0 payouts. Base pay from the parent broker is a separate slice and is not this chart.</p>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             {tiers.map((t) => {
               const tc = floorCostUsd + (t.reqTokens || 0) * stonkPx;
@@ -298,11 +308,11 @@ export default function InternDetailView({ data, activeTab }) {
       <ShareSection id="revenue" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-lg md:text-xl font-bold text-white">Intern desks</h2>
-          <p className="text-xs text-slate-400">Fees from desks the interns run land in Intern Clock In. Clock In, Exchange, names, and lending CAs are not deployed yet.</p>
+          <p className="text-xs text-slate-400">Intern Clock In is intern CoC (inflows to the intern pot). Intern Exchange is desks protocol fees (9.99% of curve); 25% of that fee is already in Clock In and is not added twice. Names and V2 lending stay empty.</p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Intern Clock In ({revPeriod})</p><p className="text-2xl font-extrabold text-amber-300">{dash(building, slicedRev.cols?.[0]?.total, formatCurrency)}</p></div>
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Intern Exchange ({revPeriod})</p><p className="text-2xl font-extrabold" style={{ color: STREAM_COLORS.amm }}>{dash(building, slicedRev.cols?.[1]?.total, formatCurrency)}</p></div>
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Names + V2 lending ({revPeriod})</p><p className="text-2xl font-extrabold" style={{ color: STREAM_COLORS.box }}>{dash(building, slicedRev.cols?.[2]?.total, formatCurrency)}</p></div>
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Intern Clock In ({revPeriod})</p><p className="text-2xl font-extrabold text-amber-300">{dash(!config.clockInCa, slicedRev.cols?.[0]?.total, formatCurrency)}</p></div>
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Intern Exchange ({revPeriod})</p><p className="text-2xl font-extrabold" style={{ color: STREAM_COLORS.amm }}>{dash(!(config.ammCa || config.internExchangeCa), slicedRev.cols?.[1]?.total, formatCurrency)}</p></div>
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Names + V2 lending ({revPeriod})</p><p className="text-2xl font-extrabold" style={{ color: STREAM_COLORS.box }}>{dash(!(config.namesCa || config.lendingCa), slicedRev.cols?.[2]?.total, formatCurrency)}</p></div>
           </div>
           <ProtocolFeeVolumePanels
             labels={slicedRev.labels}
@@ -421,10 +431,11 @@ export default function InternDetailView({ data, activeTab }) {
       <MethodologyCard accent="text-amber-400">
         <p><strong className="text-white">What this is:</strong> Interns by StonkBrokers is the companion NFT to StonkBrokers, not a second broker seat. Paper at <a className="text-amber-300 underline" href={INTERNS_DOCS} target="_blank" rel="noreferrer">stonkbrokers.cash/docs/interns</a>. Holding an intern is not equity and is not a guaranteed share of revenue.</p>
         <p><strong className="text-white">Mint:</strong> Only an activated parent broker can release its intern(s). A dormant sweep puts all 8,888 into parent TBAs on mint open; they cannot move until released.</p>
-        <p><strong className="text-white">Yield &amp; ROI:</strong> Intern Clock In weight is job-title slice × intern activation tier (same 1.00 / 1.25 / 1.60 / 2.00 / 3.33 multipliers as brokers). CoC is that trailing intern yield ÷ (intern floor USD + activation $STONKBROKER at spot). Parent-broker Clock In that is delegated as base pay is a separate cashflow and is not added into intern CoC until we can split it onchain.</p>
+        <p><strong className="text-white">Yield &amp; ROI:</strong> Intern Clock In 3.0 (0xf90a…bc059) is the intern yield pot. Weight is job-title slice × intern activation tier (same 1.00 / 1.25 / 1.60 / 2.00 / 3.33 multipliers as brokers). CoC is trailing intern Clock In inflows ÷ (intern floor USD + activation $STONKBROKER at spot). Parent-broker Clock In that is delegated as base pay is a separate cashflow and is not added into intern CoC.</p>
+        <p><strong className="text-white">Intern desks:</strong> Intern Exchange (0xDea3…f518) is the intern AMM. A 9.99% protocol fee on the curve splits 66% desk / 25% Intern Clock In / 9% treasury. The Exchange tile is that gross fee; the 25% engine share is already in intern CoC via Clock In inflows and is not counted twice. Names and V2 lending stay blank until those desks deploy.</p>
         <p><strong className="text-white">Ownership:</strong> Circulating live interns are released supply minus Intern Exchange / AMM vault inventory. Dormant tokens in parent TBAs are not circulating. Concentration is unique intern wallets (vault and burn excluded) ÷ that circulating number. Chain onboard is unique EOAs whose first intern buy or mint was one of their first 10 txs ($STONKBROKER token buys stay on StonkBrokers).</p>
         <p><strong className="text-white">Burn:</strong> Interns and StonkBrokers do not share an activation manager. Interns use 0x668e…4b37; brokers use 0xacd5…f664. Both burn the same $STONKBROKER token (0xe934…abf50). Half of each intern fee is destroyed; that intern total is a subset of token-wide supply burn. Token-supply charts stay on the parent StonkBrokers burn page — interns are not a second ERC-20.</p>
-        <p><strong className="text-white">Turning the page on:</strong> Collection and activation CAs are live in fetcher.cjs. Intern Clock In, Intern Exchange, names, and lending stay blank until those desks deploy.</p>
+        <p><strong className="text-white">Turning the page on:</strong> Collection, activation, Intern Clock In 3.0, and Intern Exchange are live in fetcher.cjs. Names and lending stay blank until those desks deploy.</p>
       </MethodologyCard>
     </div>
   );

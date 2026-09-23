@@ -60,7 +60,7 @@ export function internContractsReady(config = {}) {
   return !!(config.nftCa && config.activationCa);
 }
 
-/** Intern Clock In / Exchange are a later desk. Collection + activation can be live without them. */
+/** Intern Clock In 3.0 / Intern Exchange (desks). Collection + activation can be live without them. */
 export function internDesksReady(config = {}) {
   return !!(config.clockInCa || config.ammCa || config.internExchangeCa);
 }

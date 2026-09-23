@@ -588,7 +588,10 @@ const PROJECTS = {
     underConstruction: false,
     teamWallets: 3,
     streams: {
-      amm: "0x1f12fe622c11947f93f53d63f68f7f46b6d081c9".toLowerCase(),
+      // Clock In 3.0 (ClockInEngineV3). v2 DirectedClockInBooster is retired
+      // and stays in PROTOCOL_CONTRACTS so leftover token hops to the T4
+      // oracle still count.
+      amm: "0xf4129019d8838f2555bdc8ecb3024a02145dbc58".toLowerCase(),
       securityBox: "0x55642a3f10f1af5145d3d59021b1d6b03bb8692c".toLowerCase(),
       // Launch Fee Router (Stonk Launcher). Smart Launch bonding tax is
       // counted separately via Clock In Card — see fetchLaunchpadRevenue.
@@ -700,18 +703,19 @@ const PROJECTS = {
       { id: "T4", name: "5-Star", reqTokens: 1200000, weight: 333, rainWeight: 5 }
     ]
   },
-  // Interns by StonkBrokers. Collection + activation are live on Robinhood
-  // Chain (mint opened 2026-09-19). Intern Clock In / Exchange / names /
-  // lending stay empty until those desks ship (Clock In is +72h).
+  // Interns by StonkBrokers. Collection + activation live 2026-09-19.
+  // Intern Clock In 3.0 (2026-09-22) is the intern yield pot. InternExchange
+  // is the intern AMM ("desks"); names / lending stay empty.
+  // internEngineCa is the intern title engine, not Clock In — do not overwrite.
   interns: {
     genesisBlock: 66628699,
     tokenCa: "0xe934e36a439c94017b64a3fece66af12099abf50".toLowerCase(),
     nftCa: "0xfc4b0c4f464dc3037cf013934648a8a726d565a5".toLowerCase(),
     activationCa: "0x668ea9e44e0ceb5b203067873e0b9bcdf2214b37".toLowerCase(),
-    ammCa: "",
-    clockInCa: "",
+    ammCa: "0xdea32d8aee85b41a0f320ff823e4625aab01f518".toLowerCase(),
+    clockInCa: "0xf90a384936af8e6fd1c6c0f9ca804da5395bc059".toLowerCase(),
     internEngineCa: "0xf58f19be7c3ab385500862dc2391f42b6596f978".toLowerCase(),
-    internExchangeCa: "",
+    internExchangeCa: "0xdea32d8aee85b41a0f320ff823e4625aab01f518".toLowerCase(),
     namesCa: "",
     lendingCa: "",
     maxSupply: 8888,
@@ -900,15 +904,21 @@ const NIGHTSHADES_FACTIONS = {
   },
 };
 
-// Oracle AMM sample: protocol contracts that fund Clock In v2 / the T4 TBA.
-// The Safety Deposit Clock In router (0x55642a3f) is deliberately absent —
-// its outbound STONK/stock is broker claim rounds from locker fees already
-// booked on the box series. Sampling those as AMM and scaling by network
-// weight would double-count locker Clock-In as swap rev.
+// Oracle AMM sample: protocol contracts that fund Clock In / the T4 TBA.
+// v3 is live (2026-09-21). v2 stays so leftover hops still count. The Safety
+// Deposit Clock In router (0x55642a3f) is deliberately absent — its outbound
+// STONK/stock is broker claim rounds from locker fees already booked on the
+// box series. Sampling those as AMM and scaling by network weight would
+// double-count locker Clock-In as swap rev.
 const PROTOCOL_CONTRACTS = [
+  "0xf4129019d8838f2555bdc8ecb3024a02145dbc58",
   "0x1f12fe622c11947f93f53d63f68f7f46b6d081c9",
   "0xeca5726dae1e53365c37ffc02369d947a91d71f9"
 ];
+
+// InternExchange.FeeRouted(address indexed quote, address indexed pool,
+// uint256 toDesk, uint256 toEngine, uint256 toTreasury)
+const FEE_ROUTED_TOPIC = ethers.id("FeeRouted(address,address,uint256,uint256,uint256)");
 
 const ACTIVATION_ABI = [
   "event ActivationUpgraded(uint256 indexed tokenId, address indexed owner, uint8 fromTier, uint8 toTier, uint256 feePaid)",
@@ -1220,6 +1230,8 @@ function buildInternStub(conf, markets, prev = {}) {
       activationCa: conf.activationCa || "",
       ammCa: conf.ammCa || "",
       clockInCa: conf.clockInCa || "",
+      internEngineCa: conf.internEngineCa || "",
+      internExchangeCa: conf.internExchangeCa || conf.ammCa || "",
       site: conf.site,
       maxSupply: conf.maxSupply,
       parentKey: "stonk",
@@ -2884,8 +2896,112 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
           }
       }
   } else if (conf.yieldMode === "intern_clockin") {
-      if (!conf.clockInCa) {
-        console.log("  intern Clock In CA empty; yield left at zero until the desk is live");
+      const clockIn = (conf.clockInCa || "").toLowerCase();
+      const exchange = (conf.internExchangeCa || conf.ammCa || "").toLowerCase();
+      if (!clockIn && !exchange) {
+        console.log("  intern Clock In / Exchange CAs empty; yield left at zero");
+      } else {
+        const fromBlock = blockTime.blockAt(sevenDaysAgo);
+        const toBlock = await rpc.blockNumber();
+        const internPriceOf = (token) => {
+          const t = (token || "").toLowerCase();
+          if (!t || t === ZERO_ADDR) return marketData.ethPriceUsd || 0;
+          if (t === WETH) return marketData.ethPriceUsd || 0;
+          if (t === USDG) return 1;
+          if (t === (conf.tokenCa || "").toLowerCase()) {
+            return marketData.tokenPriceUsd || tokenPrices[t] || 0;
+          }
+          return tokenPrices[t] || 0;
+        };
+
+        // Intern CoC = inflows to Intern Clock In 3.0 (ETH + ERC-20). The
+        // 25% InternExchange engine share already lands here, so it is not
+        // added a second time from FeeRouted. Parent DependentDelivered is
+        // intern base pay and is not this pot.
+        if (clockIn) {
+          try {
+            const tokens = [...new Set([WETH, USDG, ...Object.keys(TOKEN_TICKERS)].map((a) => a.toLowerCase()))]
+              .filter((t) => internPriceOf(t) > 0);
+            const logs = await erc20Transfers(rpc, {
+              tokens,
+              to: clockIn,
+              fromBlock,
+              toBlock,
+              label: "intern-clockin",
+              blockTime,
+            });
+            let n = 0;
+            let usd = 0;
+            for (const log of logs) {
+              const price = internPriceOf(log.token);
+              if (!(price > 0) || !(log.amount > 0)) continue;
+              if ((log.from || "") === clockIn) continue;
+              const usdVal = log.amount * price;
+              creditSample(usdVal, log.timeStamp, { amm: true });
+              n++;
+              usd += usdVal;
+            }
+            console.log(`  intern Clock In token inflows: ${n} transfers, $${usd.toFixed(2)}`);
+          } catch (e) {
+            truncatedWalks.push(`intern clockin logs: ${e.message || e}`);
+          }
+
+          try {
+            await walkPagesBackTo(
+              (page) => `${EXPLORER_API}?chain_id=${CHAIN_ID}&module=account&action=txlistinternal&address=${clockIn}&page=${page}&offset=1000&sort=desc${BLOCKSCOUT_KEY ? `&apikey=${BLOCKSCOUT_KEY}` : ""}`,
+              sevenDaysAgo,
+              (tx, ts) => {
+                const fromAddr = (tx.from || "").toLowerCase();
+                const toAddr = (tx.to || "").toLowerCase();
+                if (toAddr !== clockIn) return;
+                if (fromAddr === WETH || fromAddr === clockIn) return;
+                const eth = Number(tx.value || 0) / 1e18;
+                if (!(eth > 0)) return;
+                creditSample(eth * (marketData.ethPriceUsd || 0), ts, { amm: true });
+              },
+            );
+          } catch (e) {
+            console.warn(`[warn] intern Clock In native ETH: ${e.message || e}`);
+          }
+        }
+
+        // Intern desks tile: gross InternExchange protocol fee (9.99%, split
+        // 66% desk / 25% engine / 9% treasury). Engine share is intern CoC
+        // via the Clock In walk above — do not creditSample it here.
+        if (exchange) {
+          try {
+            const logs = await rpc.getLogs({
+              address: exchange,
+              fromBlock,
+              toBlock,
+              topics: [FEE_ROUTED_TOPIC],
+            });
+            let n = 0;
+            let usd = 0;
+            for (const log of logs) {
+              const quote = topicAddr(log.topics[1]) || ZERO_ADDR;
+              const toDesk = decodeUint(log.data, 0) ?? 0n;
+              const toEngine = decodeUint(log.data, 1) ?? 0n;
+              const toTreasury = decodeUint(log.data, 2) ?? 0n;
+              const fee = toDesk + toEngine + toTreasury;
+              if (fee <= 0n) continue;
+              const ts = blockTime.at(parseInt(log.blockNumber, 16));
+              if (ts < sevenDaysAgo) continue;
+              const price = internPriceOf(quote);
+              if (!(price > 0)) continue;
+              const feeUsd = (Number(fee) / 1e18) * price;
+              const dayIdx = yieldDayIdx(ts, sevenDaysAgo, oneDay);
+              if (dayIdx == null || !(feeUsd > 0)) continue;
+              revenueBreakdown.dexFeesUsd += feeUsd;
+              revenueBreakdown.dailyDex[dayIdx] += feeUsd;
+              n++;
+              usd += feeUsd;
+            }
+            console.log(`  intern Exchange FeeRouted: ${n} fills, $${usd.toFixed(2)}`);
+          } catch (e) {
+            console.warn(`[warn] intern Exchange FeeRouted: ${e.message || e}`);
+          }
+        }
       }
   }
 
@@ -3680,7 +3796,9 @@ async function run() {
         await attachRevenueHistory(projectKey, revenueBreakdown, scale, conf.yieldMode, prevProjData.revenue);
       }
 
-      let lockedLpData = projectKey === "interns" && !conf.ammCa
+      // Interns share $STONKBROKER; locked-LP scan stays on the parent page.
+      // InternExchange is an NFT AMM, not a STONK Uniswap vault.
+      let lockedLpData = projectKey === "interns"
         ? null
         : scanLockedStonkLiquidity(conf.tokenCa, markets[projectKey].tokenPriceUsd);
       if (projectKey === "stonk") {
@@ -3767,6 +3885,7 @@ async function run() {
               ammCa: conf.ammCa || "",
               clockInCa: conf.clockInCa || "",
               internEngineCa: conf.internEngineCa || "",
+              internExchangeCa: conf.internExchangeCa || conf.ammCa || "",
               site: conf.site,
               maxSupply: conf.maxSupply,
               parentKey: "stonk",
