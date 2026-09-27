@@ -130,6 +130,14 @@ export function wallStars(rarity) {
   return n + 1;
 }
 
+/** OpenSea floor for this star count, or the collection floor when that star has no listing. */
+export function wallFloorEth(stars, market) {
+  const idx = Number(stars) - 1;
+  const listed = Array.isArray(market?.starFloorEth) ? Number(market.starFloorEth[idx]) : 0;
+  if (listed > 0) return listed;
+  return Number(market?.nftFloorEth) || 0;
+}
+
 export function rankVaultRows(rows, sort = 'value') {
   const copy = [...(rows || [])];
   if (sort === 'id') copy.sort((a, b) => a.tokenId - b.tokenId);
@@ -184,7 +192,8 @@ function nftAssets(data) {
   const rows = ANVIL_VAULTS.map((vault) => ({
     ca: vault.nftCa,
     symbol: vault.nftSymbol || `${vault.ticker} NFT`,
-    price: floorUsd(data, vault),
+    // Wall value depends on the star rating of each membership, applied after those are known.
+    price: vault.id === 'cardwall' ? 0 : floorUsd(data, vault),
     nft: true,
     decimals: 0,
   }));
@@ -380,6 +389,29 @@ async function attachWallStars(mc, rows, signal, report) {
   }
 }
 
+function applyWallFloors(rows, data) {
+  const market = data?.projects?.cardwall?.market || {};
+  const eth = Number(market.ethPriceUsd) || ethPrice(data);
+  const wallCa = anvilVaultById('cardwall').nftCa.toLowerCase();
+  const collection = Number(market.nftFloorEth) || 0;
+  for (const row of rows) {
+    const holding = row.holdings.find((h) => h.contract === wallCa && h.nft);
+    if (!holding) continue;
+    if (holding.pieces?.length) {
+      let usd = 0;
+      for (const piece of holding.pieces) {
+        const floor = wallFloorEth(piece.stars, market);
+        piece.floorEth = floor;
+        piece.usd = floor * eth;
+        usd += piece.usd;
+      }
+      holding.usd = usd;
+      continue;
+    }
+    if (holding.amount > 0 && collection > 0) holding.usd = holding.amount * collection * eth;
+  }
+}
+
 function abortError() {
   const err = new Error('aborted');
   err.name = 'AbortError';
@@ -517,6 +549,7 @@ export async function scanAnvilVault(vaultId, data, { onProgress, onPartial, sig
   }
 
   await attachWallStars(mc, rows, signal, report);
+  applyWallFloors(rows, data);
   publish();
 
   // A full stock list against every vault NFT is tens of thousands of reads.

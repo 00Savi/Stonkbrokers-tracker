@@ -126,7 +126,7 @@ export default function AnvilScanView({ data }) {
         <h2 className="text-lg md:text-xl font-bold text-white">Anvil scan</h2>
         <p className="text-xs text-slate-400 mt-1">
           NFTs sitting in a project&apos;s AMM vault, listed by the value in each token-bound wallet.
-          The dollar figure is ETH, Anvil tokens, and other Anvil NFTs at collection floor.
+          The dollar figure is ETH, Anvil tokens, Interns at the OpenSea floor, and each Wall at the OpenSea floor for its star rating.
           Market tokens are added for wallets that already hold something.
         </p>
       </div>

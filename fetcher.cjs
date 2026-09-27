@@ -729,6 +729,7 @@ const PROJECTS = {
     logo: "Intern.svg",
     yieldMode: "intern_clockin",
     deactivateOnTransfer: true,
+    openseaSlug: "interns",
     site: "https://www.stonkbrokers.cash/docs/interns",
     underConstruction: false,
     teamWallets: 0,
@@ -1091,6 +1092,12 @@ async function loadMarketPrices() {
       markets.cardwall.floorSource = "opensea";
     }
     markets.cardwall.starFloorEth = os.byRarity;
+    try {
+      const stars = await fetchStarFloorsGraphql(PROJECTS.cardwall.openseaSlug);
+      if (stars.some((v) => v > 0)) markets.cardwall.starFloorEth = stars;
+    } catch (e) {
+      console.warn(`[warn] cardwall star floors: ${e.message}`);
+    }
   }
 
   if (PROJECTS.coattail) {
@@ -1104,10 +1111,17 @@ async function loadMarketPrices() {
   // Interns activate in $STONKBROKER. There is no intern ERC-20 yet, so the
   // activation-cost tiles reuse the parent token's DexScreener print.
   if (PROJECTS.interns) {
+    let internFloor = 0;
+    try {
+      internFloor = await fetchCollectionFloorGraphql("interns");
+    } catch (e) {
+      console.warn(`[warn] intern floor: ${e.message}`);
+    }
     markets.interns = {
       ethPriceUsd,
       tokenPriceUsd: markets.stonk?.tokenPriceUsd || 0,
-      nftFloorEth: 0,
+      nftFloorEth: internFloor > 0 ? +internFloor.toFixed(4) : 0,
+      ...(internFloor > 0 ? { floorSource: "opensea" } : {}),
     };
   }
 
@@ -2127,6 +2141,59 @@ async function fetchCardWallStarFloors(conf) {
     );
   }
   return { collectionEth, byRarity };
+}
+
+const STAR_MARKS = ["★", "★★", "★★★", "★★★★", "★★★★★"];
+
+async function fetchOpenSeaGraphql(query) {
+  const res = await fetch("https://gql.opensea.io/graphql", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      accept: "application/json",
+      origin: "https://opensea.io",
+    },
+    body: JSON.stringify({ query }),
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!res.ok) throw new Error(`opensea graphql ${res.status}`);
+  const body = await res.json();
+  if (body.errors?.length) throw new Error(body.errors[0].message);
+  return body.data || {};
+}
+
+function listedEth(node) {
+  const token = node?.items?.[0]?.bestListing?.pricePerItem?.token;
+  const unit = Number(token?.unit);
+  const sym = String(token?.symbol || "ETH").toUpperCase();
+  if (!(unit > 0) || (sym !== "ETH" && sym !== "WETH")) return null;
+  return unit;
+}
+
+/** Cheapest OpenSea listing at each Card Wall star rating. rarityOf 0 is one star. */
+async function fetchStarFloorsGraphql(slug) {
+  const parts = STAR_MARKS.map((marks, i) => `
+    s${i}: collectionItems(
+      collectionSlug: "${slug}",
+      sort: { by: PRICE, direction: ASC },
+      limit: 1,
+      filter: { isListed: true, attributes: [{ traitType: "Rarity", values: ["${marks}"] }] }
+    ) { items { bestListing { pricePerItem { token { unit symbol } } } } }`).join("\n");
+  const data = await fetchOpenSeaGraphql(`query { ${parts} }`);
+  return STAR_MARKS.map((_, i) => listedEth(data[`s${i}`]));
+}
+
+async function fetchCollectionFloorGraphql(slug) {
+  const data = await fetchOpenSeaGraphql(`query {
+    collectionBySlug(slug: "${slug}") {
+      ... on Collection { floorPrice { pricePerItem { token { unit symbol } } } }
+    }
+  }`);
+  const token = data?.collectionBySlug?.floorPrice?.pricePerItem?.token;
+  const unit = Number(token?.unit);
+  const sym = String(token?.symbol || "ETH").toUpperCase();
+  if (!(unit > 0) || (sym !== "ETH" && sym !== "WETH")) return 0;
+  return unit;
 }
 
 const VAULT_LEDGER_ABI = [

@@ -47,7 +47,7 @@ import { buildTopicShareCard } from '../src/lib/projectShare';
 import { copySectionEl } from '../src/components/CopyControl';
 import { internIdsForBroker } from '../src/lib/interns';
 import { parseBrokerId } from '../src/lib/brokerScan';
-import { ANVIL_VAULTS, rankVaultRows, wallStars } from '../src/lib/anvilScan';
+import { ANVIL_VAULTS, rankVaultRows, wallFloorEth, wallStars } from '../src/lib/anvilScan';
 import { isProjectLive } from '../src/lib/routes';
 import { typicalNightshadesSeat } from '../src/lib/nightshades';
 
@@ -730,6 +730,13 @@ for (const [name, View, props] of VIEWS) {
     console.error(`FAIL  wall stars ${wallStars(0)} ${wallStars(3)} ${wallStars(4)}`);
   } else {
     console.log('ok    card wall rarity 0–4 is 1–5 stars');
+  }
+  const starMarket = { starFloorEth: [0.239, 0.23, 0.239, 0.33, 0.75], nftFloorEth: 0.23 };
+  if (wallFloorEth(5, starMarket) !== 0.75 || wallFloorEth(2, starMarket) !== 0.23 || wallFloorEth(3, { nftFloorEth: 0.23 }) !== 0.23) {
+    failed++;
+    console.error(`FAIL  wall floors ${wallFloorEth(5, starMarket)} ${wallFloorEth(2, starMarket)}`);
+  } else {
+    console.log('ok    wall floor follows the star rating');
   }
 }
 
