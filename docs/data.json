@@ -42898,18 +42898,18 @@
         "tokenCa": "0xb03058b8a39f3967df08d833682c1c99b29821b1"
       },
       "gacha": {
-        "usd": 154992.48,
-        "pulls": 1611,
+        "usd": 155381.01,
+        "pulls": 1613,
         "unpriced": 0,
         "stickerUsd": 50,
         "alley": {
           "address": "0x668676e967e9c3820ee36ef9aadc115165ea5676",
-          "pulls": 932,
-          "usd": 126725,
+          "pulls": 934,
+          "usd": 127225,
           "rails": {
             "wall": 22325,
-            "usdg": 54050,
-            "eth": 47900,
+            "usdg": 54300,
+            "eth": 48150,
             "weth": 2450,
             "credit": 0
           }
@@ -42917,14 +42917,14 @@
         "claw": {
           "address": "0xc004e705ac4dd59c7f43f13934032105e4876b33",
           "pulls": 679,
-          "usd": 28267.48,
+          "usd": 28156.01,
           "creditPulls": 44,
           "emptyPulls": 0,
           "rails": {
             "wall": 8234.2,
             "usdg": 13589.2,
             "eth": 0,
-            "weth": 6444.19,
+            "weth": 6332.69,
             "credit": 0
           }
         },
@@ -42933,141 +42933,201 @@
             "id": "0x0bdab3876f84f0dfa644dd909e4acdd2bd378396e06efad90d773afcf516a533",
             "label": "Legendary Pokemon $250",
             "game": "alley",
-            "pulls": 321,
-            "usd": 80250
+            "pulls": 323,
+            "usd": 80750,
+            "paidIn": 78500,
+            "valueOut": 78056,
+            "spread": 444
           },
           {
             "id": "0x36fc1fab5926b0f7668bfe7ac0e89bd7daebff8cee6b837aab57d7879fe152a8",
             "label": "Elite Pokemon $50",
             "game": "alley",
             "pulls": 320,
-            "usd": 16000
+            "usd": 16000,
+            "paidIn": 15750,
+            "valueOut": 15572,
+            "spread": 178
           },
           {
             "id": "0x4b2e8ac97cbdd59bfd0840c3ced449b27a9946bf0fa0d63a86ccff0660c23a83",
             "label": "Bronze Pokemon $100",
             "game": "alley",
             "pulls": 65,
-            "usd": 6500
+            "usd": 6500,
+            "paidIn": 6500,
+            "valueOut": 7204,
+            "spread": -704
           },
           {
             "id": "0x947503c6f53fb3a7318e6f0a7e4bcd611bda8bdffd9c5d426278c3c90bd895f9",
             "label": "Riftbound $250",
             "game": "alley",
             "pulls": 17,
-            "usd": 4250
+            "usd": 4250,
+            "paidIn": 4250,
+            "valueOut": 3897,
+            "spread": 353
           },
           {
             "id": "0xb7a5cec46cfe185bb52f96f961b30190da8d8dfed5d71355ddd2e9642ba0670e",
             "label": "One Piece Ocean Blue $50",
             "game": "alley",
             "pulls": 82,
-            "usd": 4100
+            "usd": 4100,
+            "paidIn": 3900,
+            "valueOut": 3636,
+            "spread": 264
           },
           {
             "id": "0xca56bb38360f3948854b06a6456935fcb8562126826342012893a7c51907c740",
             "label": "Basketball $100",
             "game": "alley",
             "pulls": 33,
-            "usd": 3300
+            "usd": 3300,
+            "paidIn": 3300,
+            "valueOut": 2879,
+            "spread": 421
           },
           {
             "id": "0xc6549d6217282098b249dd846cb9eeb1dcc972fb0daf5e3b2f1a553c7deb0118",
             "label": "Baseball $250",
             "game": "alley",
             "pulls": 13,
-            "usd": 3250
+            "usd": 3250,
+            "paidIn": 3000,
+            "valueOut": 2687,
+            "spread": 313
           },
           {
             "id": "0xb179d909d3432e7e7a2b59e5043b50ae77e4a4c533f5b2688e2c7804b0fc1fa8",
             "label": "Basketball $250",
             "game": "alley",
             "pulls": 7,
-            "usd": 1750
+            "usd": 1750,
+            "paidIn": 1750,
+            "valueOut": 1365,
+            "spread": 385
           },
           {
             "id": "0xe60dbf4685cbe281fdf00865d1b2dbe38b35bdf44c2f202420e9a7275cec5034",
             "label": "Baseball $100",
             "game": "alley",
             "pulls": 15,
-            "usd": 1500
+            "usd": 1500,
+            "paidIn": 1500,
+            "valueOut": 1670,
+            "spread": -170
           },
           {
             "id": "0xeacedb6e8e1b9bec4d2e1ba5ebefe288c15d4358b5db42a9372ad0a76960de02",
             "label": "Football $250",
             "game": "alley",
             "pulls": 5,
-            "usd": 1250
+            "usd": 1250,
+            "paidIn": 1000,
+            "valueOut": 915,
+            "spread": 85
           },
           {
             "id": "0x3416333e9daa1893b44f4646e6ac26365808f0a6a64c33e090eb11c1c7c41267",
             "label": "Soccer $50",
             "game": "alley",
             "pulls": 24,
-            "usd": 1200
+            "usd": 1200,
+            "paidIn": 1100,
+            "valueOut": 1402,
+            "spread": -302
           },
           {
             "id": "0xbb0228461dac9178d6c33c1daa1af807646e04e236c57b064bf9723782a0ac5d",
             "label": "One Piece Crew $250",
             "game": "alley",
             "pulls": 4,
-            "usd": 1000
+            "usd": 1000,
+            "paidIn": 1000,
+            "valueOut": 830,
+            "spread": 170
           },
           {
             "id": "0xaec2210bed7f6a7d6e96fd7ab7aaee7a639ac6ef55c4e8f7d2ef64bd883324e8",
             "label": "Riftbound $100",
             "game": "alley",
             "pulls": 6,
-            "usd": 600
+            "usd": 600,
+            "paidIn": 600,
+            "valueOut": 512,
+            "spread": 88
           },
           {
             "id": "0x6266313dd05cb25a97541ccccf63938aaccfdb03bd5945f95b0db8a84f0c6db3",
             "label": "Sports Mix $100",
             "game": "alley",
             "pulls": 5,
-            "usd": 500
+            "usd": 500,
+            "paidIn": 500,
+            "valueOut": 447,
+            "spread": 53
           },
           {
             "id": "0xae7c601be3ec5106116b3e92a32f590575e82c9e4c7b2833cbcd71f08b8fcbd7",
             "label": "Dragon Ball $50",
             "game": "alley",
             "pulls": 6,
-            "usd": 300
+            "usd": 300,
+            "paidIn": 300,
+            "valueOut": 238,
+            "spread": 62
           },
           {
             "id": "0x6af216c5c14ce5dd8976eb7e5da87c9ba47373e36b0d0d77c007859cb42cbf93",
             "label": "Dragon Ball $100",
             "game": "alley",
             "pulls": 3,
-            "usd": 300
+            "usd": 300,
+            "paidIn": 300,
+            "valueOut": 175,
+            "spread": 125
           },
           {
             "id": "0x8e239bc10cb455b567cea5aba5605376e6075e937b6080504a80dfcb43cfddcc",
             "label": "Football $100",
             "game": "alley",
             "pulls": 3,
-            "usd": 300
+            "usd": 300,
+            "paidIn": 300,
+            "valueOut": 210,
+            "spread": 90
           },
           {
             "id": "0xe38dc1635f6ee3cfbf21ccd6da3381d6f58a99afc1a612adddccc49e8ed401b7",
             "label": "Soccer $250",
             "game": "alley",
             "pulls": 1,
-            "usd": 250
+            "usd": 250,
+            "paidIn": 250,
+            "valueOut": 140,
+            "spread": 110
           },
           {
             "id": "0x3f0d871be07802733db95be59c345f8c4d427cd1d8c8930969d1327c59bd572f",
             "label": "Anime Pop Culture $75",
             "game": "alley",
             "pulls": 1,
-            "usd": 75
+            "usd": 75,
+            "paidIn": 75,
+            "valueOut": 55,
+            "spread": 20
           },
           {
             "id": "0x5da1393564f5c98be3e177e3b9e1fdaf3efaf9c5088ab9d5ae313a8a65568ed1",
             "label": "Alley machine",
             "game": "alley",
             "pulls": 1,
-            "usd": 50
+            "usd": 50,
+            "paidIn": 0,
+            "valueOut": 0,
+            "spread": 0
           }
         ],
         "historyDates": [
@@ -43084,17 +43144,17 @@
           "2026-09-27"
         ],
         "historyUsd": [
-          1010.52,
-          3364.78,
-          10140.48,
-          3008.94,
-          5687.55,
-          5005.24,
-          49.98,
+          1008.58,
+          3357.22,
+          10088.25,
+          2990,
+          5662.41,
+          5000.44,
+          49.12,
           0,
           450,
           49475,
-          76800
+          77300
         ],
         "historyAlley": [
           0,
@@ -43107,20 +43167,494 @@
           0,
           450,
           49475,
-          76800
+          77300
         ],
         "historyClaw": [
-          1010.52,
-          3364.78,
-          10140.48,
-          3008.94,
-          5687.55,
-          5005.24,
-          49.98,
+          1008.58,
+          3357.22,
+          10088.25,
+          2990,
+          5662.41,
+          5000.44,
+          49.12,
           0,
           0,
           0,
           0
+        ],
+        "historyValue": [
+          1582.66,
+          3817.99,
+          11881.97,
+          3440.58,
+          9543,
+          6646.73,
+          16,
+          0,
+          361,
+          44034,
+          77495
+        ],
+        "edge": {
+          "moneyIn": 152031.01,
+          "valueOut": 158818.93,
+          "spread": -6787.92,
+          "awarded": 1634,
+          "refunded": 23,
+          "refundedUsd": 3350,
+          "missing": 0,
+          "creditAwarded": 44,
+          "creditValue": 1924.46,
+          "buybackPulls": 655,
+          "buybackUsd": 73917.17,
+          "deliveredPulls": 242,
+          "deliveredValue": 38447,
+          "alley": {
+            "moneyIn": 123875,
+            "valueOut": 121890,
+            "awarded": 911,
+            "spread": 1985
+          },
+          "claw": {
+            "moneyIn": 28156.01,
+            "valueOut": 36928.93,
+            "awarded": 723,
+            "spread": -8772.92
+          }
+        },
+        "drops": [
+          {
+            "id": "alley:934",
+            "game": "alley",
+            "machine": "Legendary Pokemon $250",
+            "name": "2023 #174 Nidoking PSA 10 Mew EN",
+            "grade": "PSA 10",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/Zf7CE4uNokqQ7WFYLnW9YTg53j9qgO1VosAWxNsb5LI",
+            "value": 150,
+            "paid": 250,
+            "at": "2026-09-27T12:47:41.000Z",
+            "buyback": 135
+          },
+          {
+            "id": "alley:933",
+            "game": "alley",
+            "machine": "Legendary Pokemon $250",
+            "name": "2025 #086 Regigigas Master Ball ",
+            "grade": "PSA 10",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/0FSwGwoko7HXjCRiN_AZfrrOhvl-Iueyr6_oRgNIt_4",
+            "value": 200,
+            "paid": 250,
+            "at": "2026-09-27T12:36:20.000Z",
+            "buyback": 180
+          },
+          {
+            "id": "alley:932",
+            "game": "alley",
+            "machine": "Legendary Pokemon $250",
+            "name": "1999 #10 Lapras-Holo 1st Edition",
+            "grade": "PSA 8",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/bfIIb8nNdLaKurKQUXWD2xRZj2mG1IsCp7PKfRlXDiQ",
+            "value": 230,
+            "paid": 250,
+            "at": "2026-09-27T12:24:43.000Z",
+            "buyback": 207
+          },
+          {
+            "id": "alley:931",
+            "game": "alley",
+            "machine": "Legendary Pokemon $250",
+            "name": "1999 #43 Abra PSA 10 Game Pokemo",
+            "grade": "PSA 10",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/pfA1PxN30b1mc5S1m23U-yrYhuQnNRuBOj1qDFKvnJo",
+            "value": 150,
+            "paid": 250,
+            "at": "2026-09-27T12:24:00.000Z",
+            "buyback": 135
+          },
+          {
+            "id": "alley:930",
+            "game": "alley",
+            "machine": "Legendary Pokemon $250",
+            "name": "2025 #233 Team Rocket's Nidoking",
+            "grade": "PSA 10",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/c3yERou7XxSUeMrmBcebzlnj1pb1sdNbs_pvg2PELNQ",
+            "value": 260,
+            "paid": 250,
+            "at": "2026-09-27T12:23:00.000Z",
+            "buyback": 234
+          },
+          {
+            "id": "alley:929",
+            "game": "alley",
+            "machine": "Legendary Pokemon $250",
+            "name": "2022 #005 Lillie PSA 10 Simplifi",
+            "grade": "PSA 10",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/pCwWjM-KHioypKRT77w0qQ9_RkOHgW-XokXzJeIaQcE",
+            "value": 200,
+            "paid": 250,
+            "at": "2026-09-27T12:22:09.000Z",
+            "buyback": 180
+          },
+          {
+            "id": "alley:928",
+            "game": "alley",
+            "machine": "Legendary Pokemon $250",
+            "name": "2019 #68 Full Art/Jessie & James",
+            "grade": "PSA 10",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/5VSGDLaSO2Psv-s46m2ESTzV2MrmbdR-1Cz11EbEvqE",
+            "value": 180,
+            "paid": 250,
+            "at": "2026-09-27T12:21:26.000Z",
+            "buyback": 162
+          },
+          {
+            "id": "alley:927",
+            "game": "alley",
+            "machine": "Legendary Pokemon $250",
+            "name": "2016 #035 Greninja PSA 10 Japane",
+            "grade": "PSA 10",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/djGoixp3YbWKLvgVsLzf0-YYZSSykGVvW4sBCu4T3LU",
+            "value": 150,
+            "paid": 250,
+            "at": "2026-09-27T12:20:28.000Z",
+            "buyback": 135
+          },
+          {
+            "id": "alley:926",
+            "game": "alley",
+            "machine": "Legendary Pokemon $250",
+            "name": "2025 #063 Houndoom Master Ball R",
+            "grade": "PSA 10",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/74Axoy8eLXTHKhjIxV-czz_gXS5R7fr79wnO_K6Mdn8",
+            "value": 180,
+            "paid": 250,
+            "at": "2026-09-27T12:19:53.000Z",
+            "buyback": 162
+          },
+          {
+            "id": "alley:925",
+            "game": "alley",
+            "machine": "Legendary Pokemon $250",
+            "name": "2024 Pokemon Indonesian Scarlet ",
+            "grade": "PSA 10",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/8tmumEFwYauI9zanC3ebWiJKgZICmg3OcPdO12B6gY4",
+            "value": 150,
+            "paid": 250,
+            "at": "2026-09-27T12:19:02.000Z",
+            "buyback": 135
+          },
+          {
+            "id": "alley:924",
+            "game": "alley",
+            "machine": "Legendary Pokemon $250",
+            "name": "2020 #020 Full Art/Charizard Vma",
+            "grade": "PSA 10",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/O3iAz7zAruxGNGHFV_8n7-9yk1ktma6_JvC3KnjnoAk",
+            "value": 160,
+            "paid": 250,
+            "at": "2026-09-27T12:18:19.000Z",
+            "buyback": 144
+          },
+          {
+            "id": "alley:923",
+            "game": "alley",
+            "machine": "Elite Pokemon $50",
+            "name": "2025 #023 Mega Charizard X EX PS",
+            "grade": "PSA 9",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/PfHJivJW17EKTN1-WInfFnu8WfAWED48bPJgJX5NRRI",
+            "value": 42,
+            "paid": 50,
+            "at": "2026-09-27T12:06:43.000Z",
+            "buyback": 0
+          },
+          {
+            "id": "alley:922",
+            "game": "alley",
+            "machine": "Legendary Pokemon $250",
+            "name": "2024 #148 Squirtle IR BGS 9.5 TC",
+            "grade": "Beckett 9.5",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/2liQjdJgSiwkn95Skc2QrCkByyfIymCjlB7IiFlUg5Q",
+            "value": 177,
+            "paid": 250,
+            "at": "2026-09-27T12:00:25.000Z",
+            "buyback": 159.3
+          },
+          {
+            "id": "alley:921",
+            "game": "alley",
+            "machine": "Legendary Pokemon $250",
+            "name": "2012 #4 Dragonair-Holo PSA 9 Bla",
+            "grade": "PSA 9",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/dFFxPlAbC474zQ7c6pm0VM36ARttd9-7vCfMCSnd6Vk",
+            "value": 150,
+            "paid": 250,
+            "at": "2026-09-27T11:56:43.000Z",
+            "buyback": 135
+          },
+          {
+            "id": "alley:920",
+            "game": "alley",
+            "machine": "Legendary Pokemon $250",
+            "name": "2025 #230 Ethan's HO-Oh EX PSA 9",
+            "grade": "PSA 9",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/trunsjrg2JrS7RxVOfYRQrk5Lm1J23E9ybHlwtME300",
+            "value": 165,
+            "paid": 250,
+            "at": "2026-09-27T11:55:50.000Z",
+            "buyback": 148.5
+          },
+          {
+            "id": "alley:919",
+            "game": "alley",
+            "machine": "Legendary Pokemon $250",
+            "name": "2021 #SV107 Full Art/Charizard V",
+            "grade": "PSA 10",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/hD-B3hWh8FIL9CKOgz-vgmm_edCy9fNY0iGVT2SUL9w",
+            "value": 255,
+            "paid": 250,
+            "at": "2026-09-27T11:55:41.000Z",
+            "buyback": 0
+          },
+          {
+            "id": "alley:918",
+            "game": "alley",
+            "machine": "Legendary Pokemon $250",
+            "name": "2025 #261 Hiroshima's Pikachu PS",
+            "grade": "PSA 10",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/4wIvLVVKd_thM2snTcpr5wrw9EF6n16p7pFl_LkwNlg",
+            "value": 215,
+            "paid": 250,
+            "at": "2026-09-27T11:55:05.000Z",
+            "buyback": 193.5
+          },
+          {
+            "id": "alley:917",
+            "game": "alley",
+            "machine": "Legendary Pokemon $250",
+            "name": "2026 #279 Iono's Bellibolt EX PS",
+            "grade": "PSA 10",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/fP9pUyOXpjYcqieIJ169Si5oP_AcJ3W4tBUnwRqWovk",
+            "value": 165,
+            "paid": 250,
+            "at": "2026-09-27T11:54:43.000Z",
+            "buyback": 0
+          },
+          {
+            "id": "alley:916",
+            "game": "alley",
+            "machine": "Legendary Pokemon $250",
+            "name": "2000 #3 Dark Blastoise-Holo PSA ",
+            "grade": "PSA 8",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/0q7JcT0McdM4k8aJAxhc6EBWtoXlksfin4aY8w4jbxQ",
+            "value": 255,
+            "paid": 250,
+            "at": "2026-09-27T11:54:16.000Z",
+            "buyback": 229.5
+          },
+          {
+            "id": "alley:915",
+            "game": "alley",
+            "machine": "Legendary Pokemon $250",
+            "name": "2024 #136 Pikachu EX PSA 10 Japa",
+            "grade": "PSA 10",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/oOn2u65q4GbO89o_WBQIRfLYgZeTTUBRTQCfQGE_kjA",
+            "value": 190,
+            "paid": 250,
+            "at": "2026-09-27T11:53:26.000Z",
+            "buyback": 171
+          },
+          {
+            "id": "alley:914",
+            "game": "alley",
+            "machine": "Elite Pokemon $50",
+            "name": "2023 #215 Charizard EX PSA 9 Obf",
+            "grade": "PSA 9",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/aXt9oELbG35_qCmrFwBdOkW6dL7hGMyys0w1NvzGtSY",
+            "value": 55,
+            "paid": 50,
+            "at": "2026-09-27T11:42:16.000Z",
+            "buyback": 0
+          },
+          {
+            "id": "alley:913",
+            "game": "alley",
+            "machine": "Bronze Pokemon $100",
+            "name": "2024 #217 Carmine PSA 8 Twm EN-T",
+            "grade": "PSA 8",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/k8pN-lX6qHCCl1ImPniuELPaH1vmppHz2uYFR5AbOwE",
+            "value": 60,
+            "paid": 100,
+            "at": "2026-09-27T11:41:00.000Z",
+            "buyback": 54
+          },
+          {
+            "id": "alley:912",
+            "game": "alley",
+            "machine": "Basketball $250",
+            "name": "2025 #GR-4 Kon Knueppel PSA 10 T",
+            "grade": "PSA 10",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/hxoUyws_Xi4jGKcIXrTKPSWw3pn6wzN1NNdR9Zag29o",
+            "value": 180,
+            "paid": 250,
+            "at": "2026-09-27T11:40:31.000Z",
+            "buyback": 0
+          },
+          {
+            "id": "alley:911",
+            "game": "alley",
+            "machine": "Legendary Pokemon $250",
+            "name": "2023 #044 Charmander PSA 10 Svp ",
+            "grade": "PSA 10",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/fCfbzibMBtXPaedV5o5nro6YJI8sNTQNXsZa7AUNUvo",
+            "value": 600,
+            "paid": 250,
+            "at": "2026-09-27T11:21:14.000Z",
+            "buyback": 0
+          },
+          {
+            "id": "alley:910",
+            "game": "alley",
+            "machine": "Legendary Pokemon $250",
+            "name": "2023 #069 Glaceon PSA 10 Japanes",
+            "grade": "PSA 10",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/6FcZsDD6s2JmPLVH_j2hzoCQoQpVnvyDVWxdeTDLhEk",
+            "value": 182,
+            "paid": 250,
+            "at": "2026-09-27T11:20:06.000Z",
+            "buyback": 163.8
+          },
+          {
+            "id": "alley:909",
+            "game": "alley",
+            "machine": "Legendary Pokemon $250",
+            "name": "2014 #XY24 Greninja-Holo PSA 7 X",
+            "grade": "PSA 7",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/hKjHai9p2RiJObifdf6_OFR0Fz0vPhyWOFpW8tVNQ8g",
+            "value": 300,
+            "paid": 250,
+            "at": "2026-09-27T11:19:19.000Z",
+            "buyback": 270
+          },
+          {
+            "id": "alley:908",
+            "game": "alley",
+            "machine": "Elite Pokemon $50",
+            "name": "2023 #169 Charmeleon PSA 8 Mew E",
+            "grade": "PSA 8",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/wt9ZZ6WN0LCa90pAYNBcIFnHs0RHjIdZ8Srq1hWp3rw",
+            "value": 50,
+            "paid": 50,
+            "at": "2026-09-27T11:14:32.000Z",
+            "buyback": 42.5
+          },
+          {
+            "id": "alley:907",
+            "game": "alley",
+            "machine": "Elite Pokemon $50",
+            "name": "2026 #271 Mega Dragonite EX PSA ",
+            "grade": "PSA 10",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/l7I4G2dXcmJHrh_ZQqg6rC3GoGFNqKINx6Fh-_pitMQ",
+            "value": 150,
+            "paid": 50,
+            "at": "2026-09-27T10:56:05.000Z",
+            "buyback": 0
+          },
+          {
+            "id": "alley:906",
+            "game": "alley",
+            "machine": "Elite Pokemon $50",
+            "name": "2025 #128 Mega Lopunny EX PSA 10",
+            "grade": "PSA 10",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/ziWJpZ6BFqiyq100_7_-0hFdkXQBn7xFwAxxawu8PkI",
+            "value": 58,
+            "paid": 50,
+            "at": "2026-09-27T10:55:05.000Z",
+            "buyback": 49.3
+          },
+          {
+            "id": "alley:905",
+            "game": "alley",
+            "machine": "Elite Pokemon $50",
+            "name": "2019 #016 Reshiram & Charizard G",
+            "grade": "PSA 9",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/tdTxHCozEiB0si0TaYS7N9lT0wDF-1EPVTxfstqMTxA",
+            "value": 43,
+            "paid": 50,
+            "at": "2026-09-27T10:50:20.000Z",
+            "buyback": 36.55
+          },
+          {
+            "id": "alley:904",
+            "game": "alley",
+            "machine": "Elite Pokemon $50",
+            "name": "2026 #112 Mega Clefable EX PSA 1",
+            "grade": "PSA 10",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/ZfSJ5HbzDGcowSawT47GUU6ar1MeVdoqJgD5aGxC6I8",
+            "value": 75,
+            "paid": 50,
+            "at": "2026-09-27T10:49:36.000Z",
+            "buyback": 63.75
+          },
+          {
+            "id": "alley:903",
+            "game": "alley",
+            "machine": "Elite Pokemon $50",
+            "name": "2021 #144 Greninja-Gold Star PSA",
+            "grade": "PSA 8",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/P2HZjr6ZNEh7_IYJ861DmrzVl7j7Nj8LgJOuUUVFwhc",
+            "value": 35,
+            "paid": 50,
+            "at": "2026-09-27T10:48:51.000Z",
+            "buyback": 29.75
+          },
+          {
+            "id": "alley:902",
+            "game": "alley",
+            "machine": "Riftbound $100",
+            "name": "2025 #302 Darius - Hand of Noxus",
+            "grade": "PSA 10",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/8w9eITmnpfODfVA417EG-BzqsvV9hZfNAZStA-rDoWA",
+            "value": 197,
+            "paid": 100,
+            "at": "2026-09-27T10:48:26.000Z",
+            "buyback": 183.21
+          },
+          {
+            "id": "alley:901",
+            "game": "alley",
+            "machine": "Elite Pokemon $50",
+            "name": "2024 #119 Durant EX PSA 10 Japan",
+            "grade": "PSA 10",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/-jaSz2GbRMxs0akYSOvuJS2uAcWylfJ5iFPb31Nnt6I",
+            "value": 45,
+            "paid": 50,
+            "at": "2026-09-27T10:48:12.000Z",
+            "buyback": 38.25
+          },
+          {
+            "id": "alley:900",
+            "game": "alley",
+            "machine": "Elite Pokemon $50",
+            "name": "2016 #35 Gengar-Reverse Foil PSA",
+            "grade": "PSA 5",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/cU7VZY2kuCzP9hZtK1IoFygLvEr2ReClTfJ_WnuAvis",
+            "value": 30,
+            "paid": 50,
+            "at": "2026-09-27T10:47:29.000Z",
+            "buyback": 25.5
+          },
+          {
+            "id": "alley:899",
+            "game": "alley",
+            "machine": "Riftbound $100",
+            "name": "2025 #246a Viktor - Leader PSA 1",
+            "grade": "PSA 10",
+            "image": "https://d1xpxki1g4htqu.cloudfront.net/1m2N65JWVTExH-KuXYOC3VGfhQ3itporOGC1Ym4Y7V0",
+            "value": 60,
+            "paid": 100,
+            "at": "2026-09-27T10:47:11.000Z",
+            "buyback": 55.8
+          }
         ]
       }
     },

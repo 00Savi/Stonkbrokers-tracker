@@ -70,6 +70,10 @@ export default function CardWallDetailView({ data, activeTab }) {
   const gachaWin = gacha?.historyDates?.length
     ? windowChart(gacha.historyDates, [gacha.historyAlley || [], gacha.historyClaw || []], timeframe, interval, ['sum', 'sum'])
     : null;
+  const edgeWin = gacha?.historyValue?.length
+    ? windowChart(gacha.historyDates, [gacha.historyUsd || [], gacha.historyValue || []], timeframe, interval, ['sum', 'sum'])
+    : null;
+  const edge = gacha?.edge || null;
   const railLine = (rails) => {
     if (!rails) return '';
     const bits = [
@@ -357,7 +361,9 @@ export default function CardWallDetailView({ data, activeTab }) {
                           <tr className="text-left text-xs uppercase tracking-wider text-slate-500">
                             <th className="pb-2 font-medium">Machine</th>
                             <th className="pb-2 font-medium text-right">Pulls</th>
-                            <th className="pb-2 font-medium text-right">USD</th>
+                            <th className="pb-2 font-medium text-right">Paid in</th>
+                            <th className="pb-2 font-medium text-right">Card value</th>
+                            <th className="pb-2 font-medium text-right">Spread</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -365,11 +371,92 @@ export default function CardWallDetailView({ data, activeTab }) {
                             <tr key={m.id} className="border-t border-[#1e2228]">
                               <td className="py-2 text-slate-300">{m.label}</td>
                               <td className="py-2 text-right text-slate-400">{formatNumber(m.pulls)}</td>
-                              <td className="py-2 text-right text-amber-400">{formatCurrency(m.usd)}</td>
+                              <td className="py-2 text-right text-amber-400">{formatCurrency(m.paidIn ?? m.usd)}</td>
+                              <td className="py-2 text-right text-slate-300">{formatCurrency(m.valueOut || 0)}</td>
+                              <td className={`py-2 text-right font-semibold ${(m.spread || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{formatCurrency(m.spread || 0)}</td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
+                    </div>
+                  </div>
+                ) : null}
+                {edge ? (
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="text-lg font-bold text-white">Paid in vs card value out</h3>
+                      <p className="text-sm text-slate-400 leading-relaxed max-w-3xl mt-1">
+                        Each pull hands back a slab with a posted value: insured price on The Alley, fair-market value on The Claw. Spread is money in minus that posted value. It is the house result against the card the player was awarded, not what the protocol paid to acquire the slab. On The Alley, {formatNumber(edge.deliveredPulls || 0)} slabs actually left ({formatCurrency(edge.deliveredValue || 0)} posted). {formatNumber(edge.buybackPulls || 0)} were sold back for {formatCurrency(edge.buybackUsd || 0)}, and those cards stayed.
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
+                        <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Money in</p>
+                        <p className="text-2xl font-extrabold text-emerald-400">{formatCurrency(edge.moneyIn || 0)}</p>
+                        <p className="text-xs text-slate-500 mt-1">{formatNumber(edge.awarded || 0)} cards revealed{edge.refunded ? ` · ${formatNumber(edge.refunded)} refunded` : ''}</p>
+                      </div>
+                      <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
+                        <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Card value out</p>
+                        <p className="text-2xl font-extrabold text-amber-400">{formatCurrency(edge.valueOut || 0)}</p>
+                        <p className="text-xs text-slate-500 mt-1">Alley {formatCurrency(edge.alley?.valueOut || 0)} · Claw {formatCurrency(edge.claw?.valueOut || 0)}{edge.creditValue ? ` · ${formatCurrency(edge.creditValue)} on credit` : ''}</p>
+                      </div>
+                      <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
+                        <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Spread</p>
+                        <p className={`text-2xl font-extrabold ${(edge.spread || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{formatCurrency(edge.spread || 0)}</p>
+                        <p className="text-xs text-slate-500 mt-1">{edge.buybackPulls ? `${formatNumber(edge.buybackPulls)} alley slabs sold back for ${formatCurrency(edge.buybackUsd)}` : 'No alley buybacks recorded'}</p>
+                      </div>
+                    </div>
+                    <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
+                      <h3 className="text-sm font-bold text-white mb-1">Money in and card value by day</h3>
+                      <p className="text-xs text-slate-500 mb-4">Green is what players paid. Amber is the posted value of the slabs revealed that day. The sticky range control slices this series.</p>
+                      <div className="relative h-52 sm:h-64 md:h-80 w-full">
+                        {edgeWin?.labels?.length ? (
+                          <Bar
+                            data={{
+                              labels: edgeWin.labels,
+                              datasets: [
+                                { label: 'Paid in', data: edgeWin.cols[0] || [], backgroundColor: '#00a804', borderRadius: 4 },
+                                { label: 'Card value', data: edgeWin.cols[1] || [], backgroundColor: '#f5b700', borderRadius: 4 },
+                              ],
+                            }}
+                            options={{ responsive: true, maintainAspectRatio: false, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] } }, y: { unit: 'USD', grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactUsdTick } } }, plugins: { legend: { labels: { color: '#cbd5e1' } } } }}
+                          />
+                        ) : (
+                          <div className="h-full flex items-center justify-center text-sm text-slate-500">No card values recorded yet</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+                {gacha.drops?.length ? (
+                  <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
+                    <div className="flex justify-between items-end gap-3 mb-4">
+                      <div>
+                        <h3 className="text-sm font-bold text-white">Latest drops</h3>
+                        <p className="text-xs text-slate-500 mt-1">Newest slabs the machines revealed. Paid is the pull. Value is the posted insured or fair-market price.</p>
+                      </div>
+                      <span className="text-xs font-semibold px-2.5 py-1 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">{gacha.drops.length} shown</span>
+                    </div>
+                    <div className="flex gap-3 overflow-x-auto pb-2">
+                      {gacha.drops.map((drop) => (
+                        <div key={drop.id} className="shrink-0 w-36 bg-[#0e1013] border border-[#1e2228] rounded-xl p-2.5 flex flex-col">
+                          <div className="w-full h-40 bg-[#08090b] rounded-lg overflow-hidden flex items-center justify-center relative">
+                            {drop.image ? (
+                              <img src={drop.image} alt={drop.name} className="max-h-full max-w-full object-contain" />
+                            ) : (
+                              <span className="text-[10px] text-slate-500">No photo</span>
+                            )}
+                            {drop.grade ? <span className="absolute top-1.5 right-1.5 bg-emerald-500/90 text-slate-950 font-black text-[9px] px-1.5 py-0.5 rounded">{drop.grade}</span> : null}
+                          </div>
+                          <p className="mt-2 text-xs font-bold text-white line-clamp-2 min-h-8">{drop.name}</p>
+                          <p className="text-[10px] text-slate-500 mt-1 truncate">{drop.game === 'claw' ? 'The Claw' : drop.machine}</p>
+                          <div className="mt-2 flex justify-between text-[10px]">
+                            <span className="text-slate-400">Paid {formatCurrency(drop.paid || 0)}</span>
+                            <span className="font-bold text-amber-400">{formatCurrency(drop.value || 0)}</span>
+                          </div>
+                          {drop.buyback ? <p className="text-[10px] text-violet-300 mt-1">Sold back {formatCurrency(drop.buyback)}</p> : null}
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ) : null}
@@ -626,7 +713,7 @@ export default function CardWallDetailView({ data, activeTab }) {
       <MethodologyCard accent="text-amber-500">
           <p><strong className="text-white">Yield &amp; ROI:</strong> Each rank is an OpenSea rarity (1-Star through 5-Star). Cost is that rarity&apos;s listing floor. Expected yield is annualized VaultLedger delivered landed-cost, split by rarity rain weight among currently vault-activated memberships. Wall-stage and the early-build bonus are not in this table.</p>
           <p><strong className="text-white">Payback:</strong> Entry cost ÷ annualized trailing yield, repriced at the last sync.</p>
-          <p><strong className="text-white">Revenue:</strong> Gacha pull revenue is the USD price charged on The Alley till (0x6686…5676) and The Claw pool (0xC004…6b33, the crane). Alley USD is the quote&apos;s reference cents. Claw USD is the USDG received, plus $WALL at that day&apos;s close and WETH at the ETH price. Credit pulls are excluded. The slab chart under it is VaultLedger landed cost (delivered vs still on the wall), not AMM swap fees. Activations are a live SoftStakingVault scan by rarityOf, not a log replay of Anvil Activated events.</p>
+          <p><strong className="text-white">Revenue:</strong> Gacha pull revenue is the USD price charged on The Alley till (0x6686…5676) and The Claw pool (0xC004…6b33, the crane). Alley USD is the quote&apos;s reference cents. Claw USD is the USDG received, plus $WALL at that day&apos;s close and WETH at the ETH price. Credit pulls are excluded from money in. Card value out is the insured price on The Alley and the fair-market value on The Claw, joined from each pull result. Spread is money in minus that posted value. It is not the protocol&apos;s purchase cost. Alley buyback cash is shown separately: those slabs were sold back and stayed with the house. The slab chart under it is VaultLedger landed cost (delivered vs still on the wall), not AMM swap fees. Activations are a live SoftStakingVault scan by rarityOf, not a log replay of Anvil Activated events.</p>
           <p><strong className="text-white">Ownership:</strong> Circulating NFTs are collection size minus AMM vault inventory. Concentration is unique NFT wallets (vault and burn addresses excluded) divided by that circulating number. Activated-wallet count is unique vault stakers, not the NFT contract (the wall holds the memberships). Chain onboard is unique EOAs whose first cluster buy or mint of this project was one of their first 10 txs.</p>
       </MethodologyCard>
 

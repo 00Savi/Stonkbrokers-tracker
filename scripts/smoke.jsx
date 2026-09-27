@@ -274,7 +274,7 @@ for (const [name, View, props] of VIEWS) {
       <CardWallDetailView data={snapshot} activeTab="revenue" />
     </StaticRouter>
   );
-  const want = ['Gacha pull revenue', 'The Alley', 'The Claw', '$155.0k', '$126.7k', '$28.3k', 'Legendary Pokemon $250', 'thecardwall.com/crane'];
+  const want = ['Gacha pull revenue', 'The Alley', 'The Claw', 'Card value out', 'Latest drops', 'Paid in vs card value out', 'Legendary Pokemon $250', 'thecardwall.com/crane'];
   const missing = want.filter((s) => !html.includes(s));
   if (missing.length) {
     failed++;
