@@ -27,6 +27,16 @@ import { loadLiveDrops, mergeDrops } from '../../lib/cardwallDrops';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
+function DropEdge({ paid, value, formatCurrency, className = '' }) {
+  const edge = (Number(value) || 0) - (Number(paid) || 0);
+  const tone = edge > 0 ? 'text-emerald-400' : edge < 0 ? 'text-red-400' : 'text-slate-500';
+  return (
+    <span className={`block font-bold ${tone} ${className}`}>
+      {edge > 0 ? '+' : ''}{formatCurrency(edge)}
+    </span>
+  );
+}
+
 export default function CardWallDetailView({ data, activeTab }) {
   const { range: timeframe, interval } = useChartView();
   const [expandedTier, setExpandedTier] = useState(null);
@@ -484,9 +494,12 @@ export default function CardWallDetailView({ data, activeTab }) {
                           </div>
                           <p className="mt-2 text-xs font-bold text-white line-clamp-2 min-h-8">{drop.name}</p>
                           <p className="text-[10px] text-slate-500 mt-1 truncate">{drop.game === 'claw' ? 'The Claw' : drop.machine}</p>
-                          <div className="mt-2 flex justify-between text-[10px] w-full">
+                          <div className="mt-2 flex justify-between items-start text-[10px] w-full gap-2">
                             <span className="text-slate-400">Paid {formatCurrency(drop.paid || 0)}</span>
-                            <span className="font-bold text-amber-400">{formatCurrency(drop.value || 0)}</span>
+                            <span className="text-right">
+                              <span className="block font-bold text-amber-400">{formatCurrency(drop.value || 0)}</span>
+                              <DropEdge paid={drop.paid} value={drop.value} formatCurrency={formatCurrency} />
+                            </span>
                           </div>
                           {drop.buyback ? <p className="text-[10px] text-violet-300 mt-1">Sold back {formatCurrency(drop.buyback)}</p> : null}
                         </button>
@@ -742,7 +755,7 @@ export default function CardWallDetailView({ data, activeTab }) {
             </div>
             <div className="grid grid-cols-2 gap-3 text-xs">
               <div className="bg-[#08090b] p-3 rounded-xl border border-[#1e2228]"><p className="text-slate-400 uppercase text-[9px]">Paid</p><p className="text-base font-extrabold text-emerald-400">{formatCurrency(selectedDrop.paid || 0)}</p></div>
-              <div className="bg-[#08090b] p-3 rounded-xl border border-[#1e2228]"><p className="text-slate-400 uppercase text-[9px]">{selectedDrop.game === 'claw' ? 'Fair market value' : 'Insured value'}</p><p className="text-base font-extrabold text-amber-400">{formatCurrency(selectedDrop.value || 0)}</p></div>
+              <div className="bg-[#08090b] p-3 rounded-xl border border-[#1e2228]"><p className="text-slate-400 uppercase text-[9px]">{selectedDrop.game === 'claw' ? 'Fair market value' : 'Insured value'}</p><p className="text-base font-extrabold text-amber-400">{formatCurrency(selectedDrop.value || 0)}</p><DropEdge paid={selectedDrop.paid} value={selectedDrop.value} formatCurrency={formatCurrency} className="text-xs mt-1" /></div>
               {selectedDrop.grade ? <div className="bg-[#08090b] p-3 rounded-xl border border-[#1e2228]"><p className="text-slate-400 uppercase text-[9px]">Grade</p><p className="text-base font-extrabold text-white">{selectedDrop.grade}</p></div> : null}
               {selectedDrop.rarity ? <div className="bg-[#08090b] p-3 rounded-xl border border-[#1e2228]"><p className="text-slate-400 uppercase text-[9px]">Band</p><p className="text-base font-extrabold text-white capitalize">{selectedDrop.rarity}</p></div> : null}
               {selectedDrop.cert ? <div className="bg-[#08090b] p-3 rounded-xl border border-[#1e2228]"><p className="text-slate-400 uppercase text-[9px]">Cert</p><p className="text-base font-extrabold text-white">{selectedDrop.cert}</p></div> : null}
