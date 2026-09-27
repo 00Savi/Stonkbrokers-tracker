@@ -736,47 +736,53 @@ export default function CardWallDetailView({ data, activeTab }) {
 
       {/* SLAB DETAIL MODAL */}
       {selectedDrop && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setSelectedDrop(null)}>
-          <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-start gap-3">
-              <div>
-                <span className="text-[10px] bg-amber-500/20 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-full font-bold uppercase">{selectedDrop.game === 'claw' ? 'The Claw' : selectedDrop.machine}</span>
-                <h3 className="text-lg font-bold text-white mt-1">{selectedDrop.name}</h3>
-                {selectedDrop.at ? <p className="text-xs text-slate-500 mt-1">{selectedDrop.at.replace('T', ' ').slice(0, 16)} UTC</p> : null}
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onClick={() => setSelectedDrop(null)}>
+          <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl w-full max-w-xl h-[min(94vh,920px)] p-4 shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-start gap-3 shrink-0 mb-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-amber-400">{selectedDrop.game === 'claw' ? 'The Claw' : selectedDrop.machine}</p>
+                <h3 className="text-sm sm:text-base font-bold text-white leading-snug line-clamp-2">{selectedDrop.name}</h3>
+                {selectedDrop.at ? <p className="text-[10px] text-slate-500 mt-0.5">{selectedDrop.at.replace('T', ' ').slice(0, 16)} UTC</p> : null}
               </div>
-              <button type="button" onClick={() => setSelectedDrop(null)} className="text-slate-400 hover:text-white p-1 rounded-lg bg-[#08090b]">✕</button>
+              <button type="button" onClick={() => setSelectedDrop(null)} className="text-slate-400 hover:text-white p-1 rounded-lg bg-[#08090b] shrink-0">✕</button>
             </div>
-            <div className="h-72 bg-[#08090b] rounded-xl flex items-center justify-center p-3 border border-[#1e2228]">
+            <div className="flex-1 min-h-0 bg-[#08090b] rounded-xl flex items-center justify-center p-2 border border-[#1e2228]">
               {selectedDrop.image ? (
-                <img src={selectedDrop.image} alt={selectedDrop.name} className="max-h-full object-contain" />
+                <img src={selectedDrop.image} alt={selectedDrop.name} data-drop-id={selectedDrop.id} className="max-h-full max-w-full object-contain" />
               ) : (
                 <span className="text-sm text-slate-500">No photo</span>
               )}
             </div>
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="bg-[#08090b] p-3 rounded-xl border border-[#1e2228]"><p className="text-slate-400 uppercase text-[9px]">Paid</p><p className="text-base font-extrabold text-emerald-400">{formatCurrency(selectedDrop.paid || 0)}</p></div>
-              <div className="bg-[#08090b] p-3 rounded-xl border border-[#1e2228]"><p className="text-slate-400 uppercase text-[9px]">{selectedDrop.game === 'claw' ? 'Fair market value' : 'Insured value'}</p><p className="text-base font-extrabold text-amber-400">{formatCurrency(selectedDrop.value || 0)}</p><DropEdge paid={selectedDrop.paid} value={selectedDrop.value} formatCurrency={formatCurrency} className="text-xs mt-1" /></div>
-              {selectedDrop.grade ? <div className="bg-[#08090b] p-3 rounded-xl border border-[#1e2228]"><p className="text-slate-400 uppercase text-[9px]">Grade</p><p className="text-base font-extrabold text-white">{selectedDrop.grade}</p></div> : null}
-              {selectedDrop.rarity ? <div className="bg-[#08090b] p-3 rounded-xl border border-[#1e2228]"><p className="text-slate-400 uppercase text-[9px]">Band</p><p className="text-base font-extrabold text-white capitalize">{selectedDrop.rarity}</p></div> : null}
-              {selectedDrop.cert ? <div className="bg-[#08090b] p-3 rounded-xl border border-[#1e2228]"><p className="text-slate-400 uppercase text-[9px]">Cert</p><p className="text-base font-extrabold text-white">{selectedDrop.cert}</p></div> : null}
-              {selectedDrop.set ? <div className="bg-[#08090b] p-3 rounded-xl border border-[#1e2228]"><p className="text-slate-400 uppercase text-[9px]">Set</p><p className="text-sm font-bold text-white">{selectedDrop.set}</p></div> : null}
-              {selectedDrop.year ? <div className="bg-[#08090b] p-3 rounded-xl border border-[#1e2228]"><p className="text-slate-400 uppercase text-[9px]">Year</p><p className="text-base font-extrabold text-white">{selectedDrop.year}</p></div> : null}
-              {selectedDrop.number ? <div className="bg-[#08090b] p-3 rounded-xl border border-[#1e2228]"><p className="text-slate-400 uppercase text-[9px]">Number</p><p className="text-base font-extrabold text-white">{selectedDrop.number}</p></div> : null}
-              {selectedDrop.parallel ? <div className="bg-[#08090b] p-3 rounded-xl border border-[#1e2228] col-span-2"><p className="text-slate-400 uppercase text-[9px]">Parallel</p><p className="text-sm font-bold text-white">{selectedDrop.parallel}</p></div> : null}
-              {selectedDrop.buyback ? (
-                <div className="bg-[#08090b] p-3 rounded-xl border border-[#1e2228] col-span-2">
-                  <p className="text-slate-400 uppercase text-[9px]">Sold back to the house</p>
-                  <p className="text-base font-extrabold text-violet-300">{formatCurrency(selectedDrop.buyback)}{selectedDrop.payoutWall ? ` · ${formatNumber(selectedDrop.payoutWall)} $WALL` : ''}</p>
+            <div className="shrink-0 pt-3 space-y-2">
+              <div className="flex items-end justify-between gap-4">
+                <div>
+                  <p className="text-[9px] uppercase tracking-wider text-slate-500">Paid</p>
+                  <p className="text-lg font-extrabold text-emerald-400 leading-none">{formatCurrency(selectedDrop.paid || 0)}</p>
                 </div>
-              ) : selectedDrop.delivered ? (
-                <div className="bg-[#08090b] p-3 rounded-xl border border-[#1e2228] col-span-2"><p className="text-slate-400 uppercase text-[9px]">Where it went</p><p className="text-sm font-bold text-white">Delivered to the player</p></div>
+                <div className="text-right">
+                  <p className="text-[9px] uppercase tracking-wider text-slate-500">{selectedDrop.game === 'claw' ? 'Fair market value' : 'Insured value'}</p>
+                  <p className="text-lg font-extrabold text-amber-400 leading-none">{formatCurrency(selectedDrop.value || 0)}</p>
+                  <DropEdge paid={selectedDrop.paid} value={selectedDrop.value} formatCurrency={formatCurrency} className="text-xs" />
+                </div>
+              </div>
+              {[selectedDrop.grade, selectedDrop.rarity, selectedDrop.year, selectedDrop.number, selectedDrop.parallel].filter(Boolean).length ? (
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  {[selectedDrop.grade, selectedDrop.rarity, selectedDrop.year, selectedDrop.number, selectedDrop.parallel].filter(Boolean).join(' · ')}
+                </p>
               ) : null}
-            </div>
-            <div className="flex flex-wrap gap-3 text-xs">
-              {selectedDrop.tx ? <a href={`https://robin.etherscan.io/tx/${selectedDrop.tx}`} target="_blank" rel="noreferrer" className="text-blue-400 hover:text-blue-300">Payment tx</a> : null}
-              {selectedDrop.payoutTx ? <a href={`https://robin.etherscan.io/tx/${selectedDrop.payoutTx}`} target="_blank" rel="noreferrer" className="text-blue-400 hover:text-blue-300">Buyback tx</a> : null}
-              {selectedDrop.deliverTx ? <a href={`https://robin.etherscan.io/tx/${selectedDrop.deliverTx}`} target="_blank" rel="noreferrer" className="text-blue-400 hover:text-blue-300">Delivery tx</a> : null}
-              {selectedDrop.cert && String(selectedDrop.grade || '').startsWith('PSA') ? <a href={`https://www.psacard.com/cert/${selectedDrop.cert}`} target="_blank" rel="noreferrer" className="text-blue-400 hover:text-blue-300">PSA cert</a> : null}
+              {selectedDrop.set ? <p className="text-xs text-slate-400">{selectedDrop.set}{selectedDrop.edition ? ` · ${selectedDrop.edition}` : ''}</p> : null}
+              {selectedDrop.cert ? <p className="text-xs text-slate-400">Cert {selectedDrop.cert}</p> : null}
+              {selectedDrop.buyback ? (
+                <p className="text-xs font-semibold text-violet-300">Sold back {formatCurrency(selectedDrop.buyback)}{selectedDrop.payoutWall ? ` · ${formatNumber(selectedDrop.payoutWall)} $WALL` : ''}</p>
+              ) : selectedDrop.delivered ? (
+                <p className="text-xs font-semibold text-slate-300">Delivered to the player</p>
+              ) : null}
+              <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
+                {selectedDrop.tx ? <a href={`https://robin.etherscan.io/tx/${selectedDrop.tx}`} target="_blank" rel="noreferrer" className="text-blue-400 hover:text-blue-300">Payment</a> : null}
+                {selectedDrop.payoutTx ? <a href={`https://robin.etherscan.io/tx/${selectedDrop.payoutTx}`} target="_blank" rel="noreferrer" className="text-blue-400 hover:text-blue-300">Buyback</a> : null}
+                {selectedDrop.deliverTx ? <a href={`https://robin.etherscan.io/tx/${selectedDrop.deliverTx}`} target="_blank" rel="noreferrer" className="text-blue-400 hover:text-blue-300">Delivery</a> : null}
+                {selectedDrop.cert && String(selectedDrop.grade || '').startsWith('PSA') ? <a href={`https://www.psacard.com/cert/${selectedDrop.cert}`} target="_blank" rel="noreferrer" className="text-blue-400 hover:text-blue-300">PSA cert</a> : null}
+              </div>
             </div>
           </div>
         </div>
