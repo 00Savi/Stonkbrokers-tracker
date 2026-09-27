@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, ArcElement, Filler
 } from 'chart.js';
@@ -7,7 +7,7 @@ import { burnSeries, burnRateSeries, burnOfSupplyPct } from '../../lib/burn';
 import { formatLabels } from '../../lib/dates';
 import { windowSnapshots, protocolRevenueChart, sliceCols, seriesHasInk, windowChart } from '../../lib/yieldHistory';
 import { BetaTag, compactUsd, compactNum, YieldPeriodToggle, scaleAnnualYield, yieldSuffix } from '../kit';
-import { ShareSection } from '../CopyControl';
+import { CopyControl, ShareSection, copySectionEl } from '../CopyControl';
 import { TierFlowSection, netTierCount } from '../TierFlowCards';
 import { baseChartOptions, compactTick, compactUsdTick, cumulativeBurnDataset, dualAxisOptions, TIER_COLORS, percentTick } from '../../lib/charts';
 import { useChartView } from '../../lib/chartWindow';
@@ -31,6 +31,8 @@ export default function CardWallDetailView({ data, activeTab }) {
   const [expandedTier, setExpandedTier] = useState(null);
   const [tierTimeframe, setTierTimeframe] = useState('allTime');
   const [selectedSlab, setSelectedSlab] = useState(null);
+  const [selectedDrop, setSelectedDrop] = useState(null);
+  const dropsRef = useRef(null);
   const [volumeMultiplier, setVolumeMultiplier] = useState(1);
   const [yieldPeriod, setYieldPeriod] = useState('Y');
 
@@ -429,17 +431,32 @@ export default function CardWallDetailView({ data, activeTab }) {
                   </div>
                 ) : null}
                 {gacha.drops?.length ? (
-                  <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
+                  <div ref={dropsRef} id="cardwall-drops" className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
                     <div className="flex justify-between items-end gap-3 mb-4">
                       <div>
                         <h3 className="text-sm font-bold text-white">Latest drops</h3>
-                        <p className="text-xs text-slate-500 mt-1">Newest slabs the machines revealed. Paid is the pull. Value is the posted insured or fair-market price.</p>
+                        <p className="text-xs text-slate-500 mt-1">Newest slabs the machines revealed. Paid is the pull. Value is the posted insured or fair-market price. Click a card for the full pull.</p>
                       </div>
-                      <span className="text-xs font-semibold px-2.5 py-1 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">{gacha.drops.length} shown</span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <CopyControl
+                          alwaysLabel
+                          heading
+                          idleLabel="Copy section"
+                          title="Copy the latest drops for X"
+                          className="bg-[#0e1013]"
+                          onCopy={() => copySectionEl(dropsRef.current, 'cardwall-drops')}
+                        />
+                        <span className="text-xs font-semibold px-2.5 py-1 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">{gacha.drops.length} shown</span>
+                      </div>
                     </div>
                     <div className="flex gap-3 overflow-x-auto pb-2">
                       {gacha.drops.map((drop) => (
-                        <div key={drop.id} className="shrink-0 w-36 bg-[#0e1013] border border-[#1e2228] rounded-xl p-2.5 flex flex-col">
+                        <button
+                          key={drop.id}
+                          type="button"
+                          onClick={() => setSelectedDrop(drop)}
+                          className="shrink-0 w-36 bg-[#0e1013] border border-[#1e2228] rounded-xl p-2.5 flex flex-col text-left cursor-pointer hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/10 transition-all"
+                        >
                           <div className="w-full h-40 bg-[#08090b] rounded-lg overflow-hidden flex items-center justify-center relative">
                             {drop.image ? (
                               <img src={drop.image} alt={drop.name} className="max-h-full max-w-full object-contain" />
@@ -450,12 +467,12 @@ export default function CardWallDetailView({ data, activeTab }) {
                           </div>
                           <p className="mt-2 text-xs font-bold text-white line-clamp-2 min-h-8">{drop.name}</p>
                           <p className="text-[10px] text-slate-500 mt-1 truncate">{drop.game === 'claw' ? 'The Claw' : drop.machine}</p>
-                          <div className="mt-2 flex justify-between text-[10px]">
+                          <div className="mt-2 flex justify-between text-[10px] w-full">
                             <span className="text-slate-400">Paid {formatCurrency(drop.paid || 0)}</span>
                             <span className="font-bold text-amber-400">{formatCurrency(drop.value || 0)}</span>
                           </div>
                           {drop.buyback ? <p className="text-[10px] text-violet-300 mt-1">Sold back {formatCurrency(drop.buyback)}</p> : null}
-                        </div>
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -688,6 +705,53 @@ export default function CardWallDetailView({ data, activeTab }) {
       </ShareSection>
 
       {/* SLAB DETAIL MODAL */}
+      {selectedDrop && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setSelectedDrop(null)}>
+          <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-start gap-3">
+              <div>
+                <span className="text-[10px] bg-amber-500/20 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-full font-bold uppercase">{selectedDrop.game === 'claw' ? 'The Claw' : selectedDrop.machine}</span>
+                <h3 className="text-lg font-bold text-white mt-1">{selectedDrop.name}</h3>
+                {selectedDrop.at ? <p className="text-xs text-slate-500 mt-1">{selectedDrop.at.replace('T', ' ').slice(0, 16)} UTC</p> : null}
+              </div>
+              <button type="button" onClick={() => setSelectedDrop(null)} className="text-slate-400 hover:text-white p-1 rounded-lg bg-[#08090b]">✕</button>
+            </div>
+            <div className="h-72 bg-[#08090b] rounded-xl flex items-center justify-center p-3 border border-[#1e2228]">
+              {selectedDrop.image ? (
+                <img src={selectedDrop.image} alt={selectedDrop.name} className="max-h-full object-contain" />
+              ) : (
+                <span className="text-sm text-slate-500">No photo</span>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="bg-[#08090b] p-3 rounded-xl border border-[#1e2228]"><p className="text-slate-400 uppercase text-[9px]">Paid</p><p className="text-base font-extrabold text-emerald-400">{formatCurrency(selectedDrop.paid || 0)}</p></div>
+              <div className="bg-[#08090b] p-3 rounded-xl border border-[#1e2228]"><p className="text-slate-400 uppercase text-[9px]">{selectedDrop.game === 'claw' ? 'Fair market value' : 'Insured value'}</p><p className="text-base font-extrabold text-amber-400">{formatCurrency(selectedDrop.value || 0)}</p></div>
+              {selectedDrop.grade ? <div className="bg-[#08090b] p-3 rounded-xl border border-[#1e2228]"><p className="text-slate-400 uppercase text-[9px]">Grade</p><p className="text-base font-extrabold text-white">{selectedDrop.grade}</p></div> : null}
+              {selectedDrop.rarity ? <div className="bg-[#08090b] p-3 rounded-xl border border-[#1e2228]"><p className="text-slate-400 uppercase text-[9px]">Band</p><p className="text-base font-extrabold text-white capitalize">{selectedDrop.rarity}</p></div> : null}
+              {selectedDrop.cert ? <div className="bg-[#08090b] p-3 rounded-xl border border-[#1e2228]"><p className="text-slate-400 uppercase text-[9px]">Cert</p><p className="text-base font-extrabold text-white">{selectedDrop.cert}</p></div> : null}
+              {selectedDrop.set ? <div className="bg-[#08090b] p-3 rounded-xl border border-[#1e2228]"><p className="text-slate-400 uppercase text-[9px]">Set</p><p className="text-sm font-bold text-white">{selectedDrop.set}</p></div> : null}
+              {selectedDrop.year ? <div className="bg-[#08090b] p-3 rounded-xl border border-[#1e2228]"><p className="text-slate-400 uppercase text-[9px]">Year</p><p className="text-base font-extrabold text-white">{selectedDrop.year}</p></div> : null}
+              {selectedDrop.number ? <div className="bg-[#08090b] p-3 rounded-xl border border-[#1e2228]"><p className="text-slate-400 uppercase text-[9px]">Number</p><p className="text-base font-extrabold text-white">{selectedDrop.number}</p></div> : null}
+              {selectedDrop.parallel ? <div className="bg-[#08090b] p-3 rounded-xl border border-[#1e2228] col-span-2"><p className="text-slate-400 uppercase text-[9px]">Parallel</p><p className="text-sm font-bold text-white">{selectedDrop.parallel}</p></div> : null}
+              {selectedDrop.buyback ? (
+                <div className="bg-[#08090b] p-3 rounded-xl border border-[#1e2228] col-span-2">
+                  <p className="text-slate-400 uppercase text-[9px]">Sold back to the house</p>
+                  <p className="text-base font-extrabold text-violet-300">{formatCurrency(selectedDrop.buyback)}{selectedDrop.payoutWall ? ` · ${formatNumber(selectedDrop.payoutWall)} $WALL` : ''}</p>
+                </div>
+              ) : selectedDrop.delivered ? (
+                <div className="bg-[#08090b] p-3 rounded-xl border border-[#1e2228] col-span-2"><p className="text-slate-400 uppercase text-[9px]">Where it went</p><p className="text-sm font-bold text-white">Delivered to the player</p></div>
+              ) : null}
+            </div>
+            <div className="flex flex-wrap gap-3 text-xs">
+              {selectedDrop.tx ? <a href={`https://robin.etherscan.io/tx/${selectedDrop.tx}`} target="_blank" rel="noreferrer" className="text-blue-400 hover:text-blue-300">Payment tx</a> : null}
+              {selectedDrop.payoutTx ? <a href={`https://robin.etherscan.io/tx/${selectedDrop.payoutTx}`} target="_blank" rel="noreferrer" className="text-blue-400 hover:text-blue-300">Buyback tx</a> : null}
+              {selectedDrop.deliverTx ? <a href={`https://robin.etherscan.io/tx/${selectedDrop.deliverTx}`} target="_blank" rel="noreferrer" className="text-blue-400 hover:text-blue-300">Delivery tx</a> : null}
+              {selectedDrop.cert && String(selectedDrop.grade || '').startsWith('PSA') ? <a href={`https://www.psacard.com/cert/${selectedDrop.cert}`} target="_blank" rel="noreferrer" className="text-blue-400 hover:text-blue-300">PSA cert</a> : null}
+            </div>
+          </div>
+        </div>
+      )}
+
       {selectedSlab && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setSelectedSlab(null)}>
           <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4" onClick={(e) => e.stopPropagation()}>
