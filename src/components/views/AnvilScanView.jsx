@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { compactNum, compactUsd } from '../kit';
 import { explorerAddressUrl } from '../../lib/tba';
-import { ANVIL_VAULTS, anvilVaultById, rankVaultRows, scanAnvilVault } from '../../lib/anvilScan';
+import { ANVIL_VAULTS, anvilVaultById, priceMarketHoldings, rankVaultRows, scanAnvilVault } from '../../lib/anvilScan';
 
 function shortAddr(addr) {
   const a = String(addr || '');
@@ -54,12 +54,14 @@ export default function AnvilScanView({ data }) {
   const [fundedOnly, setFundedOnly] = useState(true);
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState(null);
+  const [pricingMarkets, setPricingMarkets] = useState(false);
   const runRef = useRef(0);
 
   const run = async (id) => {
     const ticket = ++runRef.current;
     setError('');
     setBusy(true);
+    setPricingMarkets(false);
     setProgress('Connecting to Robinhood Chain…');
     setResult(null);
     setOpenId(null);
@@ -95,6 +97,39 @@ export default function AnvilScanView({ data }) {
     if (ticket === runRef.current) setBusy(false);
   };
 
+  const addMarkets = async () => {
+    if (!result?.rows?.length || pricingMarkets || busy) return;
+    const ticket = runRef.current;
+    setPricingMarkets(true);
+    setError('');
+    setProgress('Pricing stocks and memes…');
+    const controller = new AbortController();
+    runRef.controller?.abort();
+    runRef.controller = controller;
+    try {
+      const rows = await priceMarketHoldings(result.rows, data, {
+        signal: controller.signal,
+        onProgress: ({ label, done, total }) => {
+          if (ticket !== runRef.current) return;
+          const pct = total > 0 ? ` ${Math.min(100, Math.round((done / total) * 100))}%` : '';
+          setProgress(`${label}${pct}`);
+        },
+        onPartial: (nextRows) => {
+          if (ticket !== runRef.current) return;
+          setResult((prev) => (prev ? { ...prev, rows: nextRows, partial: true } : prev));
+        },
+      });
+      if (ticket !== runRef.current) return;
+      setResult((prev) => (prev ? { ...prev, rows, partial: false } : prev));
+      setProgress('');
+    } catch (err) {
+      if (ticket !== runRef.current || err?.name === 'AbortError') return;
+      setError(err?.shortMessage || err?.message || 'Stock pricing failed.');
+      setProgress('');
+    }
+    if (ticket === runRef.current) setPricingMarkets(false);
+  };
+
   const submit = (event) => {
     event.preventDefault();
     const next = new URLSearchParams(params);
@@ -127,7 +162,7 @@ export default function AnvilScanView({ data }) {
         <p className="text-xs text-slate-400 mt-1">
           NFTs sitting in a project&apos;s AMM vault, listed by the value in each token-bound wallet.
           The dollar figure is ETH, Anvil tokens, Interns at the OpenSea floor, and each Wall at the OpenSea floor for its star rating.
-          Market tokens are added for wallets that already hold something.
+          Stocks and meme coins are a separate pass.
         </p>
       </div>
 
@@ -183,6 +218,11 @@ export default function AnvilScanView({ data }) {
               <SortButton active={fundedOnly} onClick={() => setFundedOnly((v) => !v)}>
                 {fundedOnly ? 'With a balance' : 'Every NFT'}
               </SortButton>
+              {!busy && (
+                <SortButton active={pricingMarkets} onClick={addMarkets}>
+                  {pricingMarkets ? 'Pricing stocks…' : 'Add stocks and memes'}
+                </SortButton>
+              )}
             </div>
             {result.partial && (
               <span className="font-mono text-[10px] text-slate-500">Still pricing wallets</span>

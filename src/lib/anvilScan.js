@@ -258,6 +258,20 @@ async function mapChunks(items, fn, { onStep, signal } = {}) {
   return out;
 }
 
+async function mapPool(items, limit, fn, signal) {
+  const out = new Array(items.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      if (signal?.aborted) throw abortError();
+      const i = cursor++;
+      out[i] = await fn(items[i], i);
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
+
 function priceRow(row) {
   let usd = 0;
   let nftCount = 0;
@@ -552,18 +566,48 @@ export async function scanAnvilVault(vaultId, data, { onProgress, onPartial, sig
   applyWallFloors(rows, data);
   publish();
 
-  // A full stock list against every vault NFT is tens of thousands of reads.
-  // Wallets that already hold ETH, an Anvil token, or an NFT are the ones
-  // worth pricing further; the table is already on screen from onPartial.
-  const funded = rows.filter((row) => row.holdings.length > 0);
-  const markets = funded.length ? marketTokens(data, fungible) : [];
-  await withDecimals(mc, markets, signal);
-  for (let i = 0; i < markets.length; i++) {
-    report('Pricing market tokens…', i + 1, markets.length);
-    await applyToken(mc, funded, markets[i], signal);
-    if ((i + 1) % 25 === 0 || i === markets.length - 1) publish();
-  }
-
   rows.forEach(priceRow);
   return { vault, vaultBalance, rows: snapshot(rows) };
+}
+
+/**
+ * Stocks and meme coins inside wallets that already hold something.
+ * This is a separate pass: one balance read per token per wallet, so it stays
+ * off the main scan. Several tokens are read at once.
+ */
+export async function priceMarketHoldings(rows, data, { onProgress, onPartial, signal } = {}) {
+  const list = (rows || []).map((row) => ({
+    ...row,
+    holdings: (row.holdings || []).map((h) => ({ ...h, pieces: h.pieces ? [...h.pieces] : undefined })),
+  }));
+  const funded = list.filter((row) => row.holdings.length > 0 && row.tba);
+  const seen = [];
+  for (const row of funded) {
+    for (const holding of row.holdings) {
+      if (holding.contract) seen.push({ ca: holding.contract });
+    }
+  }
+  const markets = marketTokens(data, seen);
+  if (!funded.length || !markets.length) return list;
+
+  const provider = new ethers.JsonRpcProvider(ROBINHOOD_RPC);
+  const mc = new ethers.Contract(MULTICALL, MULTICALL_ABI, provider);
+  await withDecimals(mc, markets, signal);
+
+  let done = 0;
+  const publish = () => {
+    list.forEach(priceRow);
+    if (onPartial) onPartial(snapshot(list));
+  };
+
+  await mapPool(markets, 4, async (token) => {
+    if (signal?.aborted) throw abortError();
+    await applyToken(mc, funded, token, signal);
+    done += 1;
+    if (onProgress) onProgress({ label: 'Pricing stocks and memes…', done, total: markets.length });
+    if (done % 20 === 0 || done === markets.length) publish();
+  }, signal);
+
+  list.forEach(priceRow);
+  return snapshot(list);
 }
