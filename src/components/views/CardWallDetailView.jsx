@@ -45,6 +45,7 @@ export default function CardWallDetailView({ data, activeTab }) {
   const [selectedDrop, setSelectedDrop] = useState(null);
   const [liveDrops, setLiveDrops] = useState(null);
   const dropsRef = useRef(null);
+  const dropModalRef = useRef(null);
 
   useEffect(() => {
     const ac = new AbortController();
@@ -737,16 +738,26 @@ export default function CardWallDetailView({ data, activeTab }) {
       {/* SLAB DETAIL MODAL */}
       {selectedDrop && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6" onClick={() => setSelectedDrop(null)}>
-          <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl w-full max-w-xl h-[min(94vh,920px)] p-4 shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+          <div ref={dropModalRef} id="cardwall-drop" className="bg-[#0e1013] border border-[#1e2228] rounded-2xl w-full max-w-xl max-h-[94vh] overflow-y-auto p-4 shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-start gap-3 shrink-0 mb-3">
               <div className="min-w-0">
                 <p className="text-[10px] font-bold uppercase tracking-wide text-amber-400">{selectedDrop.game === 'claw' ? 'The Claw' : selectedDrop.machine}</p>
                 <h3 className="text-sm sm:text-base font-bold text-white leading-snug line-clamp-2">{selectedDrop.name}</h3>
                 {selectedDrop.at ? <p className="text-[10px] text-slate-500 mt-0.5">{selectedDrop.at.replace('T', ' ').slice(0, 16)} UTC</p> : null}
               </div>
-              <button type="button" onClick={() => setSelectedDrop(null)} className="text-slate-400 hover:text-white p-1 rounded-lg bg-[#08090b] shrink-0">✕</button>
+              <div className="flex items-center gap-2 shrink-0" data-share-omit>
+                <CopyControl
+                  alwaysLabel
+                  heading
+                  idleLabel="Copy"
+                  title="Copy this pull for X"
+                  className="bg-[#08090b]"
+                  onCopy={() => copySectionEl(dropModalRef.current, 'cardwall-drop')}
+                />
+                <button type="button" onClick={() => setSelectedDrop(null)} className="text-slate-400 hover:text-white p-1 rounded-lg bg-[#08090b]">✕</button>
+              </div>
             </div>
-            <div className="flex-1 min-h-0 bg-[#08090b] rounded-xl flex items-center justify-center p-2 border border-[#1e2228]">
+            <div className="h-[min(62vh,680px)] shrink-0 bg-[#08090b] rounded-xl flex items-center justify-center p-2 border border-[#1e2228]">
               {selectedDrop.image ? (
                 <img src={selectedDrop.image} alt={selectedDrop.name} data-drop-id={selectedDrop.id} className="max-h-full max-w-full object-contain" />
               ) : (
@@ -777,7 +788,7 @@ export default function CardWallDetailView({ data, activeTab }) {
               ) : selectedDrop.delivered ? (
                 <p className="text-xs font-semibold text-slate-300">Delivered to the player</p>
               ) : null}
-              <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
+              <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px]" data-share-omit>
                 {selectedDrop.tx ? <a href={`https://robin.etherscan.io/tx/${selectedDrop.tx}`} target="_blank" rel="noreferrer" className="text-blue-400 hover:text-blue-300">Payment</a> : null}
                 {selectedDrop.payoutTx ? <a href={`https://robin.etherscan.io/tx/${selectedDrop.payoutTx}`} target="_blank" rel="noreferrer" className="text-blue-400 hover:text-blue-300">Buyback</a> : null}
                 {selectedDrop.deliverTx ? <a href={`https://robin.etherscan.io/tx/${selectedDrop.deliverTx}`} target="_blank" rel="noreferrer" className="text-blue-400 hover:text-blue-300">Delivery</a> : null}
