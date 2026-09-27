@@ -95,7 +95,7 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           # public/data.json is what the next build reads; docs/ is what Pages
           # serves (index.html, hashed assets, and the data.json mirror).
-          git add public/data.json docs/
+          git add public/data.json public/gacha-pulls.json docs/
           git commit -m "Automated data sync" || exit 0
           for attempt in 1 2 3; do
             git push && exit 0

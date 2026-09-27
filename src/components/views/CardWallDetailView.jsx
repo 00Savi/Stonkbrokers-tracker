@@ -27,6 +27,27 @@ import { loadLiveDrops, mergeDrops } from '../../lib/cardwallDrops';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
+const PULL_SORTS = [
+  { id: 'recent', label: 'Recent' },
+  { id: 'value', label: 'Value' },
+  { id: 'paid', label: 'Paid' },
+  { id: 'edge', label: 'Edge' },
+  { id: 'name', label: 'Name' },
+];
+
+function sortPulls(list, sort) {
+  const rows = [...list];
+  const edge = (row) => (Number(row.value) || 0) - (Number(row.paid) || 0);
+  rows.sort((a, b) => {
+    if (sort === 'value') return (Number(b.value) || 0) - (Number(a.value) || 0) || String(b.at || '').localeCompare(String(a.at || ''));
+    if (sort === 'paid') return (Number(b.paid) || 0) - (Number(a.paid) || 0) || String(b.at || '').localeCompare(String(a.at || ''));
+    if (sort === 'edge') return edge(b) - edge(a) || String(b.at || '').localeCompare(String(a.at || ''));
+    if (sort === 'name') return String(a.name || '').localeCompare(String(b.name || ''));
+    return String(b.at || '').localeCompare(String(a.at || ''));
+  });
+  return rows;
+}
+
 function DropEdge({ paid, value, formatCurrency, className = '' }) {
   const edge = (Number(value) || 0) - (Number(paid) || 0);
   const tone = edge > 0 ? 'text-emerald-400' : edge < 0 ? 'text-red-400' : 'text-slate-500';
@@ -44,6 +65,9 @@ export default function CardWallDetailView({ data, activeTab }) {
   const [selectedSlab, setSelectedSlab] = useState(null);
   const [selectedDrop, setSelectedDrop] = useState(null);
   const [liveDrops, setLiveDrops] = useState(null);
+  const [machinePulls, setMachinePulls] = useState(undefined);
+  const [openMachine, setOpenMachine] = useState(null);
+  const [pullSort, setPullSort] = useState('recent');
   const dropsRef = useRef(null);
   const dropModalRef = useRef(null);
 
@@ -59,6 +83,21 @@ export default function CardWallDetailView({ data, activeTab }) {
       clearTimeout(timer);
       ac.abort();
     };
+  }, []);
+
+  useEffect(() => {
+    const ac = new AbortController();
+    fetch(`/gacha-pulls.json?v=${Date.now()}`, { signal: ac.signal, cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body) => {
+        if (ac.signal.aborted) return;
+        setMachinePulls(Array.isArray(body?.pulls) ? body.pulls : null);
+      })
+      .catch((err) => {
+        if (err?.name === 'AbortError') return;
+        setMachinePulls(null);
+      });
+    return () => ac.abort();
   }, []);
   const [volumeMultiplier, setVolumeMultiplier] = useState(1);
   const [yieldPeriod, setYieldPeriod] = useState('Y');
@@ -104,6 +143,13 @@ export default function CardWallDetailView({ data, activeTab }) {
     : null;
   const edge = gacha?.edge || null;
   const drops = mergeDrops(gacha?.drops, liveDrops);
+  const pullsByMachine = new Map();
+  for (const pull of machinePulls || []) {
+    if (!pull?.machineHash) continue;
+    const list = pullsByMachine.get(pull.machineHash);
+    if (list) list.push(pull);
+    else pullsByMachine.set(pull.machineHash, [pull]);
+  }
   const railLine = (rails) => {
     if (!rails) return '';
     const bits = [
@@ -384,7 +430,8 @@ export default function CardWallDetailView({ data, activeTab }) {
                 </div>
                 {gacha.machines?.length ? (
                   <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
-                    <h3 className="text-sm font-bold text-white mb-3">Alley machines</h3>
+                    <h3 className="text-sm font-bold text-white mb-1">Alley machines</h3>
+                    <p className="text-xs text-slate-500 mb-3">Open a machine for every slab it revealed. Sort by newest, value, what was paid, or the difference.</p>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
@@ -397,15 +444,87 @@ export default function CardWallDetailView({ data, activeTab }) {
                           </tr>
                         </thead>
                         <tbody>
-                          {gacha.machines.map((m) => (
-                            <tr key={m.id} className="border-t border-[#1e2228]">
-                              <td className="py-2 text-slate-300">{m.label}</td>
-                              <td className="py-2 text-right text-slate-400">{formatNumber(m.pulls)}</td>
-                              <td className="py-2 text-right text-amber-400">{formatCurrency(m.paidIn ?? m.usd)}</td>
-                              <td className="py-2 text-right text-slate-300">{formatCurrency(m.valueOut || 0)}</td>
-                              <td className={`py-2 text-right font-semibold ${(m.spread || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{formatCurrency(m.spread || 0)}</td>
-                            </tr>
-                          ))}
+                          {gacha.machines.map((m) => {
+                            const open = openMachine === m.id;
+                            const rows = open ? sortPulls(pullsByMachine.get(m.id) || [], pullSort) : [];
+                            return (
+                              <React.Fragment key={m.id}>
+                                <tr
+                                  className={`border-t border-[#1e2228] cursor-pointer hover:bg-white/[0.03] ${open ? 'bg-white/[0.03]' : ''}`}
+                                  onClick={() => setOpenMachine(open ? null : m.id)}
+                                >
+                                  <td className="py-2 text-slate-300">
+                                    <span className="inline-flex items-center gap-2">
+                                      <span className="text-[10px] text-slate-500 w-3" aria-hidden="true">{open ? '▾' : '▸'}</span>
+                                      {m.label}
+                                    </span>
+                                  </td>
+                                  <td className="py-2 text-right text-slate-400">{formatNumber(m.pulls)}</td>
+                                  <td className="py-2 text-right text-amber-400">{formatCurrency(m.paidIn ?? m.usd)}</td>
+                                  <td className="py-2 text-right text-slate-300">{formatCurrency(m.valueOut || 0)}</td>
+                                  <td className={`py-2 text-right font-semibold ${(m.spread || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{formatCurrency(m.spread || 0)}</td>
+                                </tr>
+                                {open ? (
+                                  <tr className="border-t border-[#1e2228]">
+                                    <td colSpan={5} className="px-2 py-3" data-share-omit>
+                                      <div className="flex flex-wrap items-center gap-1.5 mb-3">
+                                        {PULL_SORTS.map((sort) => (
+                                          <button
+                                            key={sort.id}
+                                            type="button"
+                                            onClick={() => setPullSort(sort.id)}
+                                            className={`rounded-md border px-2 py-1 font-mono text-[10px] ${
+                                              pullSort === sort.id
+                                                ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+                                                : 'border-[#1e2228] text-slate-400 hover:text-white'
+                                            }`}
+                                          >
+                                            {sort.label}
+                                          </button>
+                                        ))}
+                                        <span className="ml-auto text-[10px] text-slate-500">{formatNumber(rows.length)} slabs</span>
+                                      </div>
+                                      {machinePulls === undefined ? (
+                                        <p className="text-xs text-slate-500">Loading pulls…</p>
+                                      ) : machinePulls === null ? (
+                                        <p className="text-xs text-slate-500">The pull list lands with the next hourly index.</p>
+                                      ) : rows.length ? (
+                                        <div className="max-h-[28rem] overflow-y-auto rounded-lg border border-[#1e2228]">
+                                          {rows.map((pull) => (
+                                            <button
+                                              key={pull.id}
+                                              type="button"
+                                              onClick={() => setSelectedDrop({ ...pull, machine: pull.machine || m.label, game: pull.game || 'alley' })}
+                                              className="flex w-full items-center gap-3 border-b border-[#1e2228] px-3 py-2 text-left last:border-b-0 hover:bg-white/[0.03]"
+                                            >
+                                              <span className="h-14 w-10 shrink-0 overflow-hidden rounded bg-[#08090b]">
+                                                {pull.image ? (
+                                                  <img src={pull.image} alt="" data-drop-id={pull.id} className="h-full w-full object-contain" />
+                                                ) : null}
+                                              </span>
+                                              <span className="min-w-0 flex-1">
+                                                <span className={`block truncate text-sm ${pull.pending ? 'text-slate-500' : 'text-white'}`}>{pull.name}</span>
+                                                <span className="block truncate text-[10px] text-slate-500">
+                                                  {[pull.grade, pull.at ? `${pull.at.replace('T', ' ').slice(0, 16)} UTC` : null].filter(Boolean).join(' · ')}
+                                                </span>
+                                              </span>
+                                              <span className="shrink-0 text-right">
+                                                <span className="block text-sm font-bold text-amber-400 leading-none">{formatCurrency(pull.value || 0)}</span>
+                                                <span className="block text-[10px] text-slate-500 mt-1">paid {formatCurrency(pull.paid || 0)}</span>
+                                                <DropEdge paid={pull.paid} value={pull.value} formatCurrency={formatCurrency} className="text-[10px]" />
+                                              </span>
+                                            </button>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <p className="text-xs text-slate-500">No revealed slabs for this machine.</p>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ) : null}
+                              </React.Fragment>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
