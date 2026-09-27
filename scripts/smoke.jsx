@@ -47,7 +47,7 @@ import { buildTopicShareCard } from '../src/lib/projectShare';
 import { copySectionEl } from '../src/components/CopyControl';
 import { internIdsForBroker } from '../src/lib/interns';
 import { parseBrokerId } from '../src/lib/brokerScan';
-import { ANVIL_VAULTS, rankVaultRows } from '../src/lib/anvilScan';
+import { ANVIL_VAULTS, rankVaultRows, wallStars } from '../src/lib/anvilScan';
 import { isProjectLive } from '../src/lib/routes';
 import { typicalNightshadesSeat } from '../src/lib/nightshades';
 
@@ -724,6 +724,12 @@ for (const [name, View, props] of VIEWS) {
     console.error(`FAIL  anvil scan rank ${ranked.map((r) => r.tokenId)} vaults ${vaultIds}`);
   } else {
     console.log('ok    anvil scan ranks vault NFTs by TBA value');
+  }
+  if (wallStars(0) !== 1 || wallStars(3) !== 4 || wallStars(4) !== 5 || wallStars(6) != null) {
+    failed++;
+    console.error(`FAIL  wall stars ${wallStars(0)} ${wallStars(3)} ${wallStars(4)}`);
+  } else {
+    console.log('ok    card wall rarity 0–4 is 1–5 stars');
   }
 }
 

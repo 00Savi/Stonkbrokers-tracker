@@ -18,10 +18,27 @@ function formatAmount(holding) {
   return n.toLocaleString('en-US', { maximumFractionDigits: 4 });
 }
 
+function starMarks(stars) {
+  const n = Number(stars);
+  if (!(n >= 1 && n <= 5)) return '';
+  return '★'.repeat(n);
+}
+
+function holdingText(holding, compact) {
+  const base = `${formatAmount(holding)} ${holding.symbol}`;
+  if (!holding.pieces?.length) return base;
+  const bits = holding.pieces.map((piece) => (
+    compact ? starMarks(piece.stars) : `#${piece.tokenId} ${starMarks(piece.stars)}`
+  ));
+  const shown = compact ? bits.slice(0, 3) : bits;
+  const extra = compact && bits.length > 3 ? ` +${bits.length - 3}` : '';
+  return `${base} · ${shown.join(', ')}${extra}`;
+}
+
 function holdingLine(row) {
   const top = (row.holdings || []).slice(0, 3);
   if (!top.length) return 'Empty';
-  return top.map((h) => `${formatAmount(h)} ${h.symbol}`).join(' · ');
+  return top.map((h) => holdingText(h, true)).join(' · ');
 }
 
 export default function AnvilScanView({ data }) {
@@ -221,7 +238,7 @@ export default function AnvilScanView({ data }) {
                               <ul className="grid grid-cols-1 gap-1 sm:grid-cols-2">
                                 {row.holdings.map((h) => (
                                   <li key={`${h.contract}-${h.symbol}`} className="flex items-baseline justify-between gap-3 text-xs">
-                                    <span className="text-slate-300">{formatAmount(h)} {h.symbol}</span>
+                                    <span className="text-slate-300">{holdingText(h, false)}</span>
                                     <span className="font-mono text-slate-500">{h.usd > 0 ? compactUsd(h.usd) : 'unpriced'}</span>
                                   </li>
                                 ))}

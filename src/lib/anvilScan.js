@@ -12,6 +12,8 @@ export const ANVIL_VAULTS = [
     key: 'stonk',
     name: 'StonkBrokers',
     ticker: 'STONK',
+    tokenSymbol: 'Stonkbroker',
+    nftSymbol: 'Stonkbroker',
     nftCa: '0x539cdd042c2f3d93ebc5be7dfff0c79f3b4fabf0',
     tokenCa: '0xe934e36a439c94017b64a3fece66af12099abf50',
     ammCa: '0xe302733accf4800146e55fc45b46b4e4ffc032d2',
@@ -23,6 +25,8 @@ export const ANVIL_VAULTS = [
     key: 'interns',
     name: 'Interns',
     ticker: 'STONKBROKER',
+    tokenSymbol: 'Stonkbroker',
+    nftSymbol: 'Interns',
     nftCa: '0xfc4b0c4f464dc3037cf013934648a8a726d565a5',
     tokenCa: '0xe934e36a439c94017b64a3fece66af12099abf50',
     ammCa: '0xdea32d8aee85b41a0f320ff823e4625aab01f518',
@@ -56,6 +60,7 @@ export const ANVIL_VAULTS = [
     key: 'cardwall',
     name: 'The Card Wall',
     ticker: 'WALL',
+    nftSymbol: 'Wall',
     nftCa: '0x890215157dbec26d67605324271b34ba05ee9e58',
     tokenCa: '0xb03058b8a39f3967df08d833682c1c99b29821b1',
     ammCa: '0xdd59536f394c4b589e695f5921723b89ea479379',
@@ -87,6 +92,7 @@ const MULTICALL = '0xcA11bde05977b3631167028862bE2a173976CA11';
 const CHUNK = 400;
 
 const OWNER_OF = new ethers.Interface(['function ownerOf(uint256) view returns (address)']);
+const RARITY_OF = new ethers.Interface(['function rarityOf(uint256) view returns (uint256)']);
 const ACCOUNT = new ethers.Interface([
   'function account(address implementation, bytes32 salt, uint256 chainId, address tokenContract, uint256 tokenId) view returns (address)',
 ]);
@@ -115,6 +121,13 @@ function faction(id, label, ticker, nftCa, tokenCa, ammCa) {
 
 export function anvilVaultById(id) {
   return ANVIL_VAULTS.find((v) => v.id === id) || null;
+}
+
+/** Card Wall rarityOf is 0–4. The membership metadata draws that as 1–5 stars. */
+export function wallStars(rarity) {
+  const n = Number(rarity);
+  if (!Number.isInteger(n) || n < 0 || n > 4) return null;
+  return n + 1;
 }
 
 export function rankVaultRows(rows, sort = 'value') {
@@ -159,7 +172,7 @@ function protocolTokens(data) {
   const rows = [];
   for (const vault of ANVIL_VAULTS) {
     const price = tokenPrice(data, vault);
-    if (price > 0) rows.push({ ca: vault.tokenCa, symbol: vault.ticker, price, nft: false });
+    if (price > 0) rows.push({ ca: vault.tokenCa, symbol: vault.tokenSymbol || vault.ticker, price, nft: false });
   }
   rows.push({ ca: USDG, symbol: 'USDG', price: 1, decimals: 6, nft: false });
   const eth = ethPrice(data);
@@ -170,7 +183,7 @@ function protocolTokens(data) {
 function nftAssets(data) {
   const rows = ANVIL_VAULTS.map((vault) => ({
     ca: vault.nftCa,
-    symbol: `${vault.ticker} NFT`,
+    symbol: vault.nftSymbol || `${vault.ticker} NFT`,
     price: floorUsd(data, vault),
     nft: true,
     decimals: 0,
@@ -304,6 +317,67 @@ async function withDecimals(mc, tokens, signal) {
     token.decimals = Number.isFinite(n) && n >= 0 && n <= 36 ? n : 18;
   });
   return tokens;
+}
+
+/**
+ * Wall NFTs inside these token-bound wallets, with each membership's star
+ * rating. One owner scan of the collection, then rarityOf on the matches.
+ */
+async function attachWallStars(mc, rows, signal, report) {
+  const wall = anvilVaultById('cardwall');
+  const wallCa = wall.nftCa.toLowerCase();
+  const holders = rows.filter((row) => row.holdings.some((h) => h.contract === wallCa && h.nft && h.amount > 0));
+  if (!holders.length) return;
+
+  const tbaSet = new Set(holders.map((row) => row.tba.toLowerCase()));
+  const ids = [];
+  for (let id = wall.firstId; id < wall.firstId + wall.maxSupply; id++) ids.push(id);
+  const matched = [];
+  await mapChunks(ids, async (slice) => {
+    const packed = slice.map((id) => ({
+      target: wall.nftCa,
+      callData: OWNER_OF.encodeFunctionData('ownerOf', [id]),
+    }));
+    const returned = await tryAggregate(mc, packed, signal);
+    returned.forEach((item, i) => {
+      if (!item.success) return;
+      const owner = decodeAddress(item.returnData);
+      if (owner && tbaSet.has(owner.toLowerCase())) matched.push({ id: slice[i], owner: owner.toLowerCase() });
+    });
+    return [];
+  }, {
+    signal,
+    onStep: (done, total) => report('Reading Wall star ratings…', done, total),
+  });
+  if (!matched.length) return;
+
+  const rarities = await mapChunks(matched, async (slice) => {
+    const packed = slice.map((row) => ({
+      target: wall.nftCa,
+      callData: RARITY_OF.encodeFunctionData('rarityOf', [row.id]),
+    }));
+    const returned = await tryAggregate(mc, packed, signal);
+    return returned.map((item) => (item.success ? wallStars(decodeUint(item.returnData)) : null));
+  }, { signal });
+
+  const byOwner = new Map();
+  matched.forEach((row, i) => {
+    const stars = rarities[i];
+    if (stars == null) return;
+    const list = byOwner.get(row.owner) || [];
+    list.push({ tokenId: row.id, stars });
+    byOwner.set(row.owner, list);
+  });
+
+  for (const row of holders) {
+    const pieces = byOwner.get(row.tba.toLowerCase());
+    if (!pieces?.length) continue;
+    const holding = row.holdings.find((h) => h.contract === wallCa);
+    if (!holding) continue;
+    pieces.sort((a, b) => b.stars - a.stars || a.tokenId - b.tokenId);
+    holding.pieces = pieces;
+    holding.stars = pieces.map((p) => p.stars);
+  }
 }
 
 function abortError() {
@@ -442,6 +516,7 @@ export async function scanAnvilVault(vaultId, data, { onProgress, onPartial, sig
     await applyToken(mc, rows, nfts[i], signal);
   }
 
+  await attachWallStars(mc, rows, signal, report);
   publish();
 
   // A full stock list against every vault NFT is tens of thousands of reads.
