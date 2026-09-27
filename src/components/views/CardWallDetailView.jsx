@@ -66,6 +66,20 @@ export default function CardWallDetailView({ data, activeTab }) {
   });
 
   const zeros = [0, 0, 0, 0, 0, 0, 0];
+  const gacha = project.gacha || null;
+  const gachaWin = gacha?.historyDates?.length
+    ? windowChart(gacha.historyDates, [gacha.historyAlley || [], gacha.historyClaw || []], timeframe, interval, ['sum', 'sum'])
+    : null;
+  const railLine = (rails) => {
+    if (!rails) return '';
+    const bits = [
+      ['USDG', rails.usdg],
+      ['$WALL', rails.wall],
+      ['ETH', rails.eth],
+      ['WETH', rails.weth],
+    ].filter(([, n]) => Number(n) > 0);
+    return bits.map(([name, n]) => `${name} ${formatCurrency(n)}`).join(' · ');
+  };
   const rawRev = protocolRevenueChart(project);
   const { labels: revDates, cols: revCols } = sliceCols(rawRev.labels, rawRev.cols, timeframe, interval);
   const revData1 = revCols[0]?.data || zeros;
@@ -288,8 +302,85 @@ export default function CardWallDetailView({ data, activeTab }) {
       {/* TAB 3: REVENUE */}
       <ShareSection id="revenue" className="scroll-mt-32">
         <div className="space-y-6">
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-lg md:text-xl font-bold text-white">Gacha pull revenue</h2>
+              <p className="text-sm text-slate-400 leading-relaxed max-w-3xl mt-1">
+                The Alley and The Claw charge ETH, WETH, USDG, or $WALL for a slab. This is that charge, taken from each machine&apos;s pull event. Buyback credit spent on the claw is a recycled payout, so it is not counted again.
+              </p>
+            </div>
+            {gacha ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
+                    <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Pull revenue</p>
+                    <p className="text-2xl font-extrabold text-emerald-400">{formatCurrency(gacha.usd || 0)}</p>
+                    <p className="text-xs text-slate-500 mt-1">{formatNumber(gacha.pulls || 0)} pulls</p>
+                  </div>
+                  <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
+                    <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">The Alley</p>
+                    <p className="text-2xl font-extrabold text-amber-400">{formatCurrency(gacha.alley?.usd || 0)}</p>
+                    <p className="text-xs text-slate-500 mt-1">{formatNumber(gacha.alley?.pulls || 0)} pulls{railLine(gacha.alley?.rails) ? ` · ${railLine(gacha.alley.rails)}` : ''}</p>
+                  </div>
+                  <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
+                    <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">The Claw</p>
+                    <p className="text-2xl font-extrabold text-violet-300">{formatCurrency(gacha.claw?.usd || 0)}</p>
+                    <p className="text-xs text-slate-500 mt-1">{formatNumber(gacha.claw?.pulls || 0)} pulls{gacha.claw?.creditPulls ? ` · ${formatNumber(gacha.claw.creditPulls)} on credit` : ''}{railLine(gacha.claw?.rails) ? ` · ${railLine(gacha.claw.rails)}` : ''}</p>
+                  </div>
+                </div>
+                <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
+                  <h3 className="text-sm font-bold text-white mb-1">Pulls by day</h3>
+                  <p className="text-xs text-slate-500 mb-4">USD charged that day. The sticky range control slices this series. The Claw is the crane at thecardwall.com/crane.</p>
+                  <div className="relative h-52 sm:h-64 md:h-80 w-full">
+                    {gachaWin?.labels?.length ? (
+                      <Bar
+                        data={{
+                          labels: gachaWin.labels,
+                          datasets: [
+                            { label: 'The Alley', data: gachaWin.cols[0] || [], backgroundColor: '#f5b700', borderRadius: 4 },
+                            { label: 'The Claw', data: gachaWin.cols[1] || [], backgroundColor: '#a78bfa', borderRadius: 4 },
+                          ],
+                        }}
+                        options={{ responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true, grid: { color: '#1e2228', borderDash: [4, 4] } }, y: { stacked: true, unit: 'USD', grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactUsdTick } } }, plugins: { legend: { labels: { color: '#cbd5e1' } } } }}
+                      />
+                    ) : (
+                      <div className="h-full flex items-center justify-center text-sm text-slate-500">No pulls recorded yet</div>
+                    )}
+                  </div>
+                </div>
+                {gacha.machines?.length ? (
+                  <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
+                    <h3 className="text-sm font-bold text-white mb-3">Alley machines</h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-left text-xs uppercase tracking-wider text-slate-500">
+                            <th className="pb-2 font-medium">Machine</th>
+                            <th className="pb-2 font-medium text-right">Pulls</th>
+                            <th className="pb-2 font-medium text-right">USD</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {gacha.machines.map((m) => (
+                            <tr key={m.id} className="border-t border-[#1e2228]">
+                              <td className="py-2 text-slate-300">{m.label}</td>
+                              <td className="py-2 text-right text-slate-400">{formatNumber(m.pulls)}</td>
+                              <td className="py-2 text-right text-amber-400">{formatCurrency(m.usd)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <p className="text-sm text-slate-500">Pull revenue has not been indexed yet.</p>
+            )}
+          </div>
+
           <p className="text-sm text-slate-400 leading-relaxed max-w-3xl">
-            This page is the slab vault, not AMM fees. Each card is a real PSA 10 the protocol bought: <strong className="text-slate-300">total volume</strong> is landed cost of every slab ever recorded, <strong className="text-slate-300">on the wall</strong> is still in custody, and <strong className="text-slate-300">with members</strong> has already rained or sold. The chart is that landed cost by the day it was written to VaultLedger — green when it went to a member, amber when it was still sitting in the vault that day.
+            Below that is the slab vault, not AMM fees. Each card is a real grade 10 the protocol bought: <strong className="text-slate-300">total volume</strong> is landed cost of every slab ever recorded, <strong className="text-slate-300">on the wall</strong> is still in custody, and <strong className="text-slate-300">with members</strong> has already rained or sold. The chart is that landed cost by the day it was written to VaultLedger — green when it went to a member, amber when it was still sitting in the vault that day.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
@@ -535,7 +626,7 @@ export default function CardWallDetailView({ data, activeTab }) {
       <MethodologyCard accent="text-amber-500">
           <p><strong className="text-white">Yield &amp; ROI:</strong> Each rank is an OpenSea rarity (1-Star through 5-Star). Cost is that rarity&apos;s listing floor. Expected yield is annualized VaultLedger delivered landed-cost, split by rarity rain weight among currently vault-activated memberships. Wall-stage and the early-build bonus are not in this table.</p>
           <p><strong className="text-white">Payback:</strong> Entry cost ÷ annualized trailing yield, repriced at the last sync.</p>
-          <p><strong className="text-white">Revenue:</strong> VaultLedger landed cost (delivered vs still on the wall), not AMM swap fees. Activations are a live SoftStakingVault scan by rarityOf, not a log replay of Anvil Activated events.</p>
+          <p><strong className="text-white">Revenue:</strong> Gacha pull revenue is the USD price charged on The Alley till (0x6686…5676) and The Claw pool (0xC004…6b33, the crane). Alley USD is the quote&apos;s reference cents. Claw USD is the USDG received, plus $WALL at that day&apos;s close and WETH at the ETH price. Credit pulls are excluded. The slab chart under it is VaultLedger landed cost (delivered vs still on the wall), not AMM swap fees. Activations are a live SoftStakingVault scan by rarityOf, not a log replay of Anvil Activated events.</p>
           <p><strong className="text-white">Ownership:</strong> Circulating NFTs are collection size minus AMM vault inventory. Concentration is unique NFT wallets (vault and burn addresses excluded) divided by that circulating number. Activated-wallet count is unique vault stakers, not the NFT contract (the wall holds the memberships). Chain onboard is unique EOAs whose first cluster buy or mint of this project was one of their first 10 txs.</p>
       </MethodologyCard>
 

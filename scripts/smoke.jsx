@@ -269,6 +269,40 @@ for (const [name, View, props] of VIEWS) {
 }
 
 {
+  const html = renderToString(
+    <StaticRouter location="/cardwall/revenue">
+      <CardWallDetailView data={snapshot} activeTab="revenue" />
+    </StaticRouter>
+  );
+  const want = ['Gacha pull revenue', 'The Alley', 'The Claw', '$155.0k', '$126.7k', '$28.3k', 'Legendary Pokemon $250', 'thecardwall.com/crane'];
+  const missing = want.filter((s) => !html.includes(s));
+  if (missing.length) {
+    failed++;
+    console.error(`FAIL  cardwall gacha missing ${missing.join(', ')}`);
+  } else {
+    console.log('ok    cardwall gacha revenue rendered');
+  }
+  const stripped = JSON.parse(JSON.stringify(snapshot));
+  delete stripped.projects.cardwall.gacha;
+  const withGacha = renderToString(
+    <StaticRouter location="/ecosystem">
+      <OverviewView data={snapshot} />
+    </StaticRouter>
+  );
+  const without = renderToString(
+    <StaticRouter location="/ecosystem">
+      <OverviewView data={stripped} />
+    </StaticRouter>
+  );
+  if (withGacha === without) {
+    failed++;
+    console.error('FAIL  overview protocol revenue ignored gacha');
+  } else {
+    console.log('ok    overview protocol revenue includes gacha');
+  }
+}
+
+{
   const stonk = snapshot.projects?.stonk;
   const o = stonk?.ownership || {};
   const circ = (o.currentMaxSupply || 0) - (o.ammVaultNfts || 0);

@@ -385,6 +385,14 @@ export default function EcosystemView({ data, pending = false }) {
   };
 
   const projectRevenueSeries = (p) => {
+    const gacha = p?.gacha;
+    if (gacha?.historyDates?.length && (gacha.historyUsd || []).some((v) => Number(v) > 0)) {
+      return {
+        labels: formatLabels(gacha.historyDates),
+        data: gacha.historyUsd.map((v) => Number(v) || 0),
+        source: 'gacha',
+      };
+    }
     const chart = protocolRevenueChart(p);
     if (chart.labels?.length) {
       const fees = protocolFeeCols(chart.cols);

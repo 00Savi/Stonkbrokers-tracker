@@ -391,6 +391,7 @@ const dates = require("./lib/dates.cjs");
 const { fetchNight } = require("./lib/night.cjs");
 const priceDays = require("./lib/priceDays.cjs");
 const { foldOnboarding, emptySummary, keepOnboardingHistory } = require("./lib/onboarding.cjs");
+const { fetchGachaRevenue } = require("./lib/gacha.cjs");
 
 const gg = new GgIndex();
 const rpc = new Rpc();
@@ -676,6 +677,10 @@ const PROJECTS = {
     ammCa: "0xdd59536f394c4b589e695f5921723b89ea479379".toLowerCase(),
     vaultLedger: "0x0e12931e7b7a6a68c82dfdaf4e98d9c8959720a9".toLowerCase(),
     slabNftCa: "0x8565507566c6a79b57e4eaa70b8232a64003d352".toLowerCase(),
+    // Gacha tills. The Alley is the live machine till. The Claw is the crane
+    // pool at thecardwall.com/crane. Pull revenue is read in lib/gacha.cjs.
+    alleyCa: "0x668676e967e9c3820ee36ef9aadc115165ea5676".toLowerCase(),
+    clawCa: "0xc004e705ac4dd59c7f43f13934032105e4876b33".toLowerCase(),
     openseaSlug: "thecardwall-nft",
     maxSupply: 4444,
     unitValue: 500000,
@@ -3864,6 +3869,32 @@ async function run() {
         lockedLpUsd: lockedLpData?.totalLpUsd || 0,
       }, dailySnapshots, todayStamp));
 
+      let gacha = null;
+      if (projectKey === "cardwall") {
+        gacha = prevProjData.gacha || null;
+        try {
+          const wallByDay = {};
+          for (const s of prevProjData.dailySnapshots || []) {
+            const k = dates.dateKey(s?.date);
+            if (k && Number(s.tokenPriceUsd) > 0) wallByDay[k] = Number(s.tokenPriceUsd);
+          }
+          const live = markets[projectKey] || {};
+          gacha = await fetchGachaRevenue({
+            rpc,
+            blockTime,
+            wallByDay,
+            wallSpot: live.tokenPriceUsd || 0,
+            ethSpot: live.ethPriceUsd || 0,
+          });
+          console.log(
+            `  gacha: ${gacha.pulls} pulls, $${gacha.usd.toFixed(0)} ` +
+              `(alley $${gacha.alley.usd.toFixed(0)}, claw $${gacha.claw.usd.toFixed(0)})`,
+          );
+        } catch (e) {
+          console.warn(`[warn] gacha revenue: ${e.message}`);
+        }
+      }
+
       finalJson.projects[projectKey] = {
         market: markets[projectKey],
         activation: activationStats,
@@ -3872,6 +3903,7 @@ async function run() {
         revenue: revenueBreakdown,
         lockedLp: lockedLpData,
         ledger: ledger,
+        ...(projectKey === "cardwall" ? { gacha } : {}),
         underConstruction: projectKey === "interns" ? !internContractsReady(conf) : conf.underConstruction,
         dailySnapshots: dailySnapshots,
         config: projectKey === "interns"
