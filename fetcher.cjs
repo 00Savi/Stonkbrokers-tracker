@@ -697,15 +697,15 @@ const PROJECTS = {
     streams: {
       vault: "0xb3f6f0fad13b0b60873ac2a90281ebe431fdb6ed".toLowerCase()
     },
-    // ROI ranks are OpenSea rarity (rarityOf 0–4 = ★–★★★★★). Cost is that
-    // rarity's listing floor plus the $WALL to activate the matching wall
-    // stage (Foundation → Fortress). rainWeight is the rarity rain-queue leg.
+    // Wall levels, Foundation through Fortress. Cost is the membership floor
+    // plus the $WALL to reach this level. weight splits Anvil staking rewards.
+    // rainWeight is the level's base rain points (a star adds more on top).
     tiers: [
-      { id: "T0", name: "1-Star", reqTokens: 50000, weight: 100, rainWeight: 1 },
-      { id: "T1", name: "2-Star", reqTokens: 110000, weight: 125, rainWeight: 2 },
-      { id: "T2", name: "3-Star", reqTokens: 225000, weight: 160, rainWeight: 3 },
-      { id: "T3", name: "4-Star", reqTokens: 450000, weight: 200, rainWeight: 4 },
-      { id: "T4", name: "5-Star", reqTokens: 1200000, weight: 333, rainWeight: 5 }
+      { id: "T0", name: "Foundation", reqTokens: 50000, weight: 100, rainWeight: 2 },
+      { id: "T1", name: "First row", reqTokens: 110000, weight: 125, rainWeight: 3 },
+      { id: "T2", name: "Reinforced", reqTokens: 225000, weight: 160, rainWeight: 4 },
+      { id: "T3", name: "Towered", reqTokens: 450000, weight: 200, rainWeight: 5 },
+      { id: "T4", name: "Fortress", reqTokens: 1200000, weight: 333, rainWeight: 6 }
     ]
   },
   // Interns by StonkBrokers. Collection + activation live 2026-09-19.
@@ -1806,6 +1806,12 @@ async function fetchActivations(projectKey, conf) {
 const RARITY_OF_SEL = ethers.id("rarityOf(uint256)").slice(0, 10);
 const ACTIVATIONS_SEL = ethers.id("activations(uint256)").slice(0, 10);
 const ACTIVE_COUNT_SEL = ethers.id("activeCount()").slice(0, 10);
+// SoftStakingVault. Verified against live logs: Activated is sparse,
+// TierUpgraded is the wall-level climb, ActivationVoided is the exit.
+const CARDWALL_ACTIVATED = "0x4e4f107f0e9557eb4a56fbc0e0697242ee73b7aa9002ceb8c344bdaf2f5d0930";
+const CARDWALL_UPGRADED = "0x8b603787383a028fae5b767c11e41bc8f2c9720dd4a008fd3f59d0c7deea7f10";
+const CARDWALL_VOIDED = "0x8d1c3f912b90cde417a26c3081730b53855bd9e8fd8b9fd236efe54d01199c9c";
+const CARDWALL_REWARD_PAID = "0x56a43be815d86b39dc4d398124c956790410b5e9cf70d477de0299f25fc18313";
 const OWNER_OF_SEL = ethers.id("ownerOf(uint256)").slice(0, 10);
 
 async function countUniqueNftOwners(nftCa, tokenIds) {
@@ -1820,19 +1826,25 @@ async function countUniqueNftOwners(nftCa, tokenIds) {
   return owners.size;
 }
 
+/** activations(uint256) is (owner, stage, timestamp). Owner is word 0. */
+function readVaultSlot(raw) {
+  if (!raw || raw === "0x") return { owner: null, stage: 0 };
+  const body = String(raw).replace(/^0x/, "");
+  const owner = decodeAddr("0x" + body.slice(0, 64));
+  const stage = Number(decodeUint(raw, 1) ?? 0n);
+  return { owner, stage: Number.isFinite(stage) ? stage : 0 };
+}
+
+function wallTier(stage) {
+  if (!(stage >= 0)) return null;
+  if (stage > 4) return "T4";
+  return `T${stage}`;
+}
+
 /**
- * Card Wall SoftStakingVault emits Activated only rarely (two logs in the last
- * 2M blocks while 841 NFTs sit in the vault). Most positions are an in-place
- * stake after a buy: deactivateOnTransfer cleared the previous holder, then
- * the buyer called activate with no second event.
- *
- * 24h/7d/30d ACT is the last NFT transfer of each currently-vaulted token —
- * that transfer is when the current holder received it, so they activated
- * after it. The old walk recorded the same clock as DEACT and hardcoded ACT
- * to 0. Hourly vault-set diffs still catch in-place stakes and vault exits
- * that a current-set transfer walk cannot see.
- *
- * rarityOf never changes; cache it so later runs only scan activations(id).
+ * Card Wall stakes live in SoftStakingVault. rarityOf never changes, so a
+ * rarity mix cannot show a wall-level upgrade. Activated, TierUpgraded, and
+ * ActivationVoided are the flow. The vault scan is who is staked right now.
  */
 async function fetchCardWallLiveActivations(conf, prevActivation = {}) {
   const n = conf.maxSupply;
@@ -1879,12 +1891,13 @@ async function fetchCardWallLiveActivations(conf, prevActivation = {}) {
     const tokenId = String(i + 1);
     tokenRarity[tokenId] = tierId;
     raritySupply[tierId]++;
-    const owner = decodeAddr(raw[rarityOffset + i]);
-    if (owner && owner !== ZERO_ADDR) {
+    const slot = readVaultSlot(raw[rarityOffset + i]);
+    if (slot.owner && slot.owner !== ZERO_ADDR) {
+      const stageId = wallTier(slot.stage) || "T0";
       active++;
-      breakdown[tierId]++;
-      activeOwners.add(owner);
-      activeTokenTiers[tokenId] = { t: tierId, ts: 0 };
+      breakdown[stageId]++;
+      activeOwners.add(slot.owner);
+      activeTokenTiers[tokenId] = { t: stageId, ts: 0 };
     }
   }
 
@@ -1897,21 +1910,32 @@ async function fetchCardWallLiveActivations(conf, prevActivation = {}) {
   const dualBurn = await getTrueDeflationStats(conf);
   const useCount = contractCount > 0 ? contractCount : active;
   const now = Math.floor(Date.now() / 1000);
-  const seedEvents = await cardWallSeedActs(conf, activeTokenTiers, tokenRarity);
+  const seedEvents = await cardWallActivationLogs(conf);
+  // The stored set used to be star rarity. Comparing it to wall level would
+  // record a fake upgrade for every membership on the first run.
+  let prevSet = prevActivation.activeTokenTiers || {};
+  let overlap = 0;
+  let changed = 0;
+  for (const id of Object.keys(activeTokenTiers)) {
+    if (!prevSet[id]) continue;
+    overlap += 1;
+    if (prevSet[id].t !== activeTokenTiers[id].t) changed += 1;
+  }
+  if (overlap > 20 && changed / overlap > 0.3) prevSet = {};
   const { added, flow, tierStats, history } = vaultFlow.observe({
     projectKey: "cardwall",
-    prevSet: prevActivation.activeTokenTiers,
+    prevSet,
     prevFlow: prevActivation.flow,
     seedEvents,
     currSet: activeTokenTiers,
-    liveBreakdown: breakdown,
+    // Event counts, not the live stock. The pie chart uses `breakdown`.
+    liveBreakdown: {},
     liveCount: useCount,
     now,
   });
   const actN = added.filter((e) => e.type === "act").length;
   const deactN = added.filter((e) => e.type === "deact").length;
-  const seedAct = seedEvents.filter((e) => e.type === "act").length;
-  console.log(`  cardwall vault: ${useCount} active (${breakdown.T0}/${breakdown.T1}/${breakdown.T2}/${breakdown.T3}/${breakdown.T4} by star); hour +${actN}/-${deactN}; seeded ${seedAct} last-transfer acts`);
+  console.log(`  cardwall vault: ${useCount} active (${breakdown.T0}/${breakdown.T1}/${breakdown.T2}/${breakdown.T3}/${breakdown.T4} by wall level); hour +${actN}/-${deactN}; logs ${seedEvents.length}`);
 
   return {
     activeCount: useCount,
@@ -1929,35 +1953,91 @@ async function fetchCardWallLiveActivations(conf, prevActivation = {}) {
 }
 
 /**
- * Last ERC-721 transfer of each currently-vaulted membership. deactivateOnTransfer
- * means that transfer closed the previous position; the current holder activated
- * afterwards, so the clock belongs on ACT, not DEACT.
+ * Activated, TierUpgraded, and ActivationVoided since genesis. Replay order
+ * so a void knows the level being left. Transfers are not a stand-in: a sale
+ * of a staked membership already emits the void, and a buy is not an upgrade.
  */
-async function cardWallSeedActs(conf, activeTokenTiers, tokenRarity) {
-  const transferLogs = await fetchAllLogs("cardwall_nft", conf.nftCa, conf.genesisBlock, TRANSFER_TOPIC);
-  const events = [];
-  for (const log of transferLogs) {
-    const topics = log.topics && Array.isArray(log.topics) ? log.topics.filter((t) => t !== null) : [];
-    if (topics.length !== 4) continue;
-    const from = topicToAddr(topics[1]);
-    const to = topicToAddr(topics[2]);
-    if (from === ZERO_ADDR) continue;
-    if (from === conf.activationCa || to === conf.activationCa) continue;
-    let ts = log.timeStamp || log.timestamp;
-    ts = ts ? (String(ts).startsWith("0x") ? parseInt(ts, 16) : parseInt(ts, 10)) : 0;
-    events.push({ tokenId: BigInt(topics[3]).toString(), ts });
-  }
-  events.sort((a, b) => b.ts - a.ts || 0);
+async function cardWallActivationLogs(conf) {
+  const head = await rpc.blockNumber();
+  await blockTime.ensureRange(rpc, conf.genesisBlock, head);
+  const logs = await rpc.getLogs({
+    address: conf.activationCa,
+    fromBlock: conf.genesisBlock,
+    toBlock: head,
+    topics: [[CARDWALL_ACTIVATED, CARDWALL_UPGRADED, CARDWALL_VOIDED]],
+  });
+  logs.sort((a, b) => {
+    const ba = parseInt(a.blockNumber, 16) - parseInt(b.blockNumber, 16);
+    if (ba) return ba;
+    return logNum(a.logIndex) - logNum(b.logIndex);
+  });
 
-  const remaining = new Set(Object.keys(activeTokenTiers));
-  const seeded = [];
-  for (const ev of events) {
-    if (!remaining.has(ev.tokenId) || !(ev.ts > 0)) continue;
-    const t = tokenRarity[ev.tokenId] || activeTokenTiers[ev.tokenId]?.t || "T0";
-    seeded.push({ ts: ev.ts, id: ev.tokenId, type: "act", t });
-    remaining.delete(ev.tokenId);
+  const stage = new Map();
+  const events = [];
+  for (const log of logs) {
+    const topic0 = (log.topics?.[0] || "").toLowerCase();
+    const id = BigInt(log.topics[1]).toString();
+    const ts = blockTime.at(parseInt(log.blockNumber, 16));
+    if (!(ts > 0)) continue;
+    if (topic0 === CARDWALL_ACTIVATED) {
+      const t = wallTier(Number(decodeUint(log.data, 0) ?? 0n)) || "T0";
+      stage.set(id, t);
+      events.push({ ts, id, type: "act", t });
+    } else if (topic0 === CARDWALL_UPGRADED) {
+      const from = wallTier(Number(decodeUint(log.data, 0) ?? 0n));
+      const to = wallTier(Number(decodeUint(log.data, 1) ?? 0n));
+      if (from) stage.set(id, from);
+      if (to) stage.set(id, to);
+      if (from && to && from !== to) events.push({ ts, id, type: "up", t: to, from });
+    } else if (topic0 === CARDWALL_VOIDED) {
+      const t = stage.get(id) || null;
+      stage.delete(id);
+      events.push({ ts, id, type: "deact", t });
+    }
   }
-  return seeded;
+  return events;
+}
+
+/**
+ * RewardPaid in $WALL. This is the Anvil stream members actually receive
+ * (swap fees and interest), separate from slab rain and from gacha receipts.
+ */
+async function fetchCardWallStaking(conf, tokenPriceUsd) {
+  const price = Number(tokenPriceUsd) || 0;
+  const head = await rpc.blockNumber();
+  await blockTime.ensureRange(rpc, conf.genesisBlock, head);
+  const logs = await rpc.getLogs({
+    address: conf.activationCa,
+    fromBlock: conf.genesisBlock,
+    toBlock: head,
+    topics: [CARDWALL_REWARD_PAID],
+  });
+  const now = Math.floor(Date.now() / 1000);
+  const cut = now - 30 * 86400;
+  const byDay = new Map();
+  let usd30 = 0;
+  let usdLife = 0;
+  let n = 0;
+  for (const log of logs) {
+    const token = topicToAddr(log.topics?.[3]);
+    if (token !== conf.tokenCa) continue;
+    const amt = decodeUint(log.data, 0);
+    if (amt == null || amt <= 0n) continue;
+    const ts = blockTime.at(parseInt(log.blockNumber, 16));
+    const usd = (Number(amt) / 1e18) * price;
+    if (!(usd > 0)) continue;
+    n += 1;
+    usdLife += usd;
+    if (ts >= cut) usd30 += usd;
+    const day = dates.utcIsoFromTs(ts);
+    if (day) byDay.set(day, (byDay.get(day) || 0) + usd);
+  }
+  return {
+    usd30: +usd30.toFixed(2),
+    usdLife: +usdLife.toFixed(2),
+    payments: n,
+    byDay,
+  };
 }
 
 async function fetchOpenSeaFloorEth(slug) {
@@ -2167,11 +2247,15 @@ function rainAnnualFromLedger(ledger, nowSec = Math.floor(Date.now() / 1000)) {
     for (let i = 0; i < ts.length; i++) {
       if (ts[i] >= cutoff) sum += delivered[i] || 0;
     }
-    return {
-      annual: sum * (365 / RAIN_LOOKBACK_DAYS),
-      days: RAIN_LOOKBACK_DAYS,
-      window: `${RAIN_LOOKBACK_DAYS}d`,
-    };
+    // Slabs are dated when the vault bought them, not when they rained.
+    // A quiet purchase month must not zero out cards already delivered.
+    if (sum > 0) {
+      return {
+        annual: sum * (365 / RAIN_LOOKBACK_DAYS),
+        days: RAIN_LOOKBACK_DAYS,
+        window: `${RAIN_LOOKBACK_DAYS}d`,
+      };
+    }
   }
   return {
     annual: (ledger.deliveredUsd || 0) * (365 / ageDays),
@@ -3649,6 +3733,18 @@ async function run() {
         // Card Wall ROI is VaultLedger rain, not the 7-day RewardPaid sample.
         // Slabs arrive in bursts; a quiet week printed ~$6/yr against ~$22k
         // already delivered. Trailing 30d once the vault is a month old.
+        let staking = null;
+        if (projectKey === "cardwall") {
+          try {
+            staking = await fetchCardWallStaking(conf, markets[projectKey].tokenPriceUsd || 0);
+            console.log(
+              `  staking to holders: $${staking.usd30.toFixed(0)} / 30d, $${staking.usdLife.toFixed(0)} life (${staking.payments} payments)`,
+            );
+          } catch (e) {
+            console.warn(`[warn] cardwall staking: ${e.message}`);
+          }
+        }
+
         let rainYieldByTier = null;
         if (ledger && ledger.deliveredUsd > 0) {
           const rain = rainAnnualFromLedger(ledger);
@@ -3661,6 +3757,9 @@ async function run() {
           const perPoint = annualDelivered / rainNetwork;
           rainYieldByTier = {};
           for (const t of conf.tiers) rainYieldByTier[t.id] = (t.rainWeight || 0) * perPoint;
+          yieldData.revenueBreakdown.holderRainUsd = ledger.deliveredUsd;
+          yieldData.revenueBreakdown.holderRainAnnualUsd = +annualDelivered.toFixed(2);
+          yieldData.revenueBreakdown.holderRainWindow = rain.window;
           yieldData.revenueBreakdown.ammFeesUsd = ledger.deliveredUsd;
           yieldData.revenueBreakdown.dailyAmm = ledger.historyDelivered?.length ? ledger.historyDelivered : (ledger.dailyDelivered || yieldData.revenueBreakdown.dailyAmm);
           yieldData.revenueBreakdown.dailyDex = ledger.historyVaulted?.length ? ledger.historyVaulted : (ledger.dailyVaulted || yieldData.revenueBreakdown.dailyDex);
@@ -3676,12 +3775,22 @@ async function run() {
         const histDates = ledger?.historyDates?.length ? ledger.historyDates : (ledger?.dailyDates || yieldData.dailyDates);
         const histDelivered = ledger?.historyDelivered?.length ? ledger.historyDelivered : (ledger?.dailyDelivered || []);
 
+        let stakeWeight = 0;
+        if (staking && staking.usd30 > 0) {
+          for (const t of conf.tiers) stakeWeight += (activationStats.breakdown[t.id] || 0) * t.weight;
+          yieldData.revenueBreakdown.holderStaking30dUsd = staking.usd30;
+          yieldData.revenueBreakdown.holderStakingLifeUsd = staking.usdLife;
+        }
+        const stakeAnnualPool = staking && staking.usd30 > 0 ? staking.usd30 * (365 / 30) : 0;
+
         const starFloors = markets[projectKey].starFloorEth || [];
         mappedTiers = [];
         for (const t of conf.tiers) {
-          const annual = rainYieldByTier
+          const rainAnnual = rainYieldByTier
             ? (rainYieldByTier[t.id] || 0)
             : t.weight * yieldPerWeightUnitAnnual;
+          const stakeAnnual = stakeWeight > 0 ? stakeAnnualPool * (t.weight / stakeWeight) : 0;
+          const annual = rainAnnual + stakeAnnual;
           const rarityIdx = Number(String(t.id).replace("T", ""));
           const floorEth = (starFloors[rarityIdx] > 0 ? starFloors[rarityIdx] : markets[projectKey].nftFloorEth) || 0;
           const share = (t.rainWeight || 0) / rainNetworkForDaily;
@@ -3742,15 +3851,20 @@ async function run() {
           }
           let lastPx = markets[projectKey].tokenPriceUsd;
           let cum = 0;
+          let cumStake = 0;
           const start = ledger.firstDeliveredAt || ledger.firstRecordedAt || Math.floor(Date.now() / 1000);
           dailySnapshots = histDates.map((date, i) => {
             cum += histDelivered[i] || 0;
+            cumStake += staking?.byDay?.get(date) || 0;
             const dayTs = (ledger.historyTs && ledger.historyTs[i]) || (start + i * 86400);
             const elapsed = Math.max(1, (dayTs - start) / 86400);
             const annualNet = cum * (365 / elapsed);
+            const stakeAnnualNow = cumStake * (365 / elapsed);
             const annualByTier = {};
             for (const t of mappedTiers) {
-              annualByTier[t.tier] = annualNet * ((t.rainWeight || 0) / rainNetworkForDaily);
+              const rainPart = annualNet * ((t.rainWeight || 0) / rainNetworkForDaily);
+              const stakePart = stakeWeight > 0 ? stakeAnnualNow * (t.weight / stakeWeight) : 0;
+              annualByTier[t.tier] = rainPart + stakePart;
             }
             if (prevPxByDate[date] > 0) lastPx = prevPxByDate[date];
             const row = snapshotRow(date, dayTs * 1000, annualByTier, lastPx);
@@ -4068,10 +4182,97 @@ async function rebuildActivations(keys) {
   console.log(`wrote ${written.join(", ")}`);
 }
 
+async function refreshCardWall() {
+  const payload = readPreviousData();
+  const proj = payload?.projects?.cardwall;
+  if (!proj) throw new Error("public/data.json has no cardwall project");
+  const conf = PROJECTS.cardwall;
+  const market = proj.market || {};
+  const head = await rpc.blockNumber();
+  await blockTime.ensureRange(rpc, conf.genesisBlock, head);
+  const activation = await fetchCardWallLiveActivations(conf, proj.activation || {});
+  const staking = await fetchCardWallStaking(conf, market.tokenPriceUsd || 0);
+  const ledger = proj.ledger || {};
+  const rain = rainAnnualFromLedger(ledger);
+  let stakeW = 0;
+  let rainW = 0;
+  for (const t of conf.tiers) {
+    const n = activation.breakdown[t.id] || 0;
+    stakeW += n * t.weight;
+    rainW += n * (t.rainWeight || 0);
+  }
+  const px = market.tokenPriceUsd || 0;
+  const eth = market.ethPriceUsd || 0;
+  const floor = market.nftFloorEth || 0;
+  const prevTiers = proj.tiers || [];
+  proj.tiers = conf.tiers.map((t) => {
+    const prev = prevTiers.find((x) => x.tier === t.id) || {};
+    const stakeAnnual = stakeW > 0 ? staking.usd30 * (365 / 30) * (t.weight / stakeW) : 0;
+    const rainAnnual = rainW > 0 ? rain.annual * ((t.rainWeight || 0) / rainW) : 0;
+    return {
+      ...prev,
+      tier: t.id,
+      name: t.name,
+      reqTokens: t.reqTokens,
+      multiplier: `${(t.weight / 100).toFixed(2)}x`,
+      weight: t.weight,
+      rainWeight: t.rainWeight,
+      trackedAnnualYieldUsd: stakeAnnual + rainAnnual,
+    };
+  });
+  proj.activation = activation;
+  proj.revenue = {
+    ...(proj.revenue || {}),
+    holderStaking30dUsd: staking.usd30,
+    holderStakingLifeUsd: staking.usdLife,
+    holderRainUsd: ledger.deliveredUsd || 0,
+    holderRainAnnualUsd: +rain.annual.toFixed(2),
+    holderRainWindow: rain.window,
+  };
+  const start = ledger.firstDeliveredAt || ledger.firstRecordedAt || Math.floor(Date.now() / 1000);
+  let cum = 0;
+  let cumStake = 0;
+  const deliveredByDate = new Map();
+  (ledger.historyDates || []).forEach((d, i) => deliveredByDate.set(d, ledger.historyDelivered?.[i] || 0));
+  const tsByDate = new Map();
+  (ledger.historyDates || []).forEach((d, i) => tsByDate.set(d, ledger.historyTs?.[i] || 0));
+  proj.dailySnapshots = (proj.dailySnapshots || []).map((snap, i) => {
+    const date = snap.date;
+    cum += deliveredByDate.get(date) || 0;
+    cumStake += staking.byDay.get(date) || 0;
+    const dayTs = tsByDate.get(date) || (start + i * 86400);
+    const elapsed = Math.max(1, (dayTs - start) / 86400);
+    const annualNet = cum * (365 / elapsed);
+    const stakeAnnualNow = cumStake * (365 / elapsed);
+    return {
+      ...snap,
+      activeCount: activation.activeCount,
+      percentActivated: activation.percentActivated,
+      tierActive: { ...activation.breakdown },
+      tiers: proj.tiers.map((t) => {
+        const rainPart = rainW > 0 ? annualNet * ((t.rainWeight || 0) / rainW) : 0;
+        const stakePart = stakeW > 0 ? stakeAnnualNow * (t.weight / stakeW) : 0;
+        const annual = rainPart + stakePart;
+        const totalCost = ((t.floorEth || floor) * eth) + (t.reqTokens * px);
+        const roi = totalCost > 0 ? (annual / totalCost) * 100 : 0;
+        return { tier: t.tier, roi, yieldUsd: annual };
+      }),
+    };
+  });
+  const written = writeData(payload);
+  console.log(
+    `cardwall holders: staking $${staking.usd30.toFixed(0)}/30d, rain $${(ledger.deliveredUsd || 0).toFixed(0)} delivered, ` +
+    `active ${activation.activeCount} (${activation.breakdown.T0}/${activation.breakdown.T1}/${activation.breakdown.T2}/${activation.breakdown.T3}/${activation.breakdown.T4})`,
+  );
+  console.log(`wrote ${written.join(", ")}`);
+}
+
 if (require.main === module) {
   const argv = process.argv.slice(2);
   if (argv[0] === "--activations") {
     rebuildActivations(argv.slice(1)).catch((err) => { console.error(err); process.exit(1); });
+  } else if (argv[0] === "--cardwall") {
+    refreshCardWall().catch((err) => { console.error(err); process.exit(1); });
   } else {
     run().catch((err) => { console.error(err); process.exit(1); });
   }

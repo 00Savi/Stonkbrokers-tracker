@@ -216,6 +216,24 @@ export default function CardWallDetailView({ data, activeTab }) {
             </div>
           </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4">
+              <p className="text-[10px] uppercase tracking-wider text-slate-500">Staking to holders</p>
+              <p className="text-xl font-extrabold text-emerald-400 mt-1">{formatCurrency(revenue.holderStaking30dUsd || 0)}</p>
+              <p className="text-[11px] text-slate-500 mt-1">RewardPaid in $WALL over the last 30 days. This is the yield in the table, annualized.</p>
+            </div>
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4">
+              <p className="text-[10px] uppercase tracking-wider text-slate-500">Slab rain to holders</p>
+              <p className="text-xl font-extrabold text-amber-400 mt-1">{formatCurrency(revenue.holderRainUsd || ledger?.deliveredUsd || 0)}</p>
+              <p className="text-[11px] text-slate-500 mt-1">Landed cost of slabs delivered since the vault opened, split by wall level.</p>
+            </div>
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4">
+              <p className="text-[10px] uppercase tracking-wider text-slate-500">Gacha charged</p>
+              <p className="text-xl font-extrabold text-slate-300 mt-1">{formatCurrency(gacha?.usd || 0)}</p>
+              <p className="text-[11px] text-slate-500 mt-1">Pull receipts. They restock the vault. They are not added again on top of rain.</p>
+            </div>
+          </div>
+
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-2">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
@@ -773,10 +791,11 @@ export default function CardWallDetailView({ data, activeTab }) {
             timeframe={tierTimeframe}
             onTimeframe={setTierTimeframe}
             formatNumber={formatNumber}
+            note="Act is an activation or an upgrade into this wall level. Deact is a void or a sale. Up is a move to a higher level, not an exit."
           />
 
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
-            <h3 className="text-sm font-bold text-white mb-6">Current Tier Mix (net of deactivations)</h3>
+            <h3 className="text-sm font-bold text-white mb-6">Who is staked, by wall level</h3>
             <SliceChart
               noun="Active"
               format={formatNumber}
@@ -941,7 +960,7 @@ export default function CardWallDetailView({ data, activeTab }) {
       )}
 
       <MethodologyCard accent="text-amber-500">
-          <p><strong className="text-white">Yield &amp; ROI:</strong> Each rank is an OpenSea rarity (1-Star through 5-Star). Cost is that rarity&apos;s listing floor. Expected yield is annualized VaultLedger delivered landed-cost, split by rarity rain weight among currently vault-activated memberships. Wall-stage and the early-build bonus are not in this table.</p>
+          <p><strong className="text-white">Yield &amp; ROI:</strong> Each row is a wall level, Foundation through Fortress. Cost is the membership floor plus the $WALL to reach that level. Expected yield is two holder streams: RewardPaid staking over the last 30 days, annualized and split by that level&apos;s weight, plus slab-rain landed cost since the vault opened, split by the level&apos;s rain points. Gacha pull receipts restock the vault and are not added on top of slabs already delivered. The early-build bonus and the extra rain points from star rarity are not in this table.</p>
           <p><strong className="text-white">Payback:</strong> Entry cost ÷ annualized trailing yield, repriced at the last sync.</p>
           <p><strong className="text-white">Revenue:</strong> Gacha pull revenue is the USD price charged on The Alley till (0x6686…5676) and The Claw pool (0xC004…6b33, the crane). Alley USD is the quote&apos;s reference cents. Claw USD is the USDG received, plus $WALL at that day&apos;s close and WETH at the ETH price. Credit pulls are excluded from money in. Card value out is the insured price on The Alley and the fair-market value on The Claw, joined from each pull result. Spread is money in minus that posted value. It is not the protocol&apos;s purchase cost. Alley buyback cash is shown separately: those slabs were sold back and stayed with the house. The slab chart under it is VaultLedger landed cost (delivered vs still on the wall), not AMM swap fees. Activations are a live SoftStakingVault scan by rarityOf, not a log replay of Anvil Activated events.</p>
           <p><strong className="text-white">Ownership:</strong> Circulating NFTs are collection size minus AMM vault inventory. Concentration is unique NFT wallets (vault and burn addresses excluded) divided by that circulating number. Activated-wallet count is unique vault stakers, not the NFT contract (the wall holds the memberships). Chain onboard is unique EOAs whose first cluster buy or mint of this project was one of their first 10 txs.</p>

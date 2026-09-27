@@ -19,16 +19,14 @@ export function TierFlowSection({
   formatNumber,
   pending = false,
   title = 'Tier Activation Flow',
+  note = 'Act is every time an NFT reached this tier, including upgrades. Deact is a sale or transfer. Up is a level increase — not a deactivation. Current mix = Act − Up − Deact.',
 }) {
   return (
     <>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-4 gap-4 mt-8">
         <div>
           <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">{title}</h3>
-          <p className="text-[11px] text-slate-500 mt-1 max-w-2xl leading-relaxed">
-            Act is every time an NFT reached this tier, including upgrades. Deact is a sale or transfer.
-            Up is a level increase — not a deactivation. Current mix = Act − Up − Deact.
-          </p>
+          <p className="text-[11px] text-slate-500 mt-1 max-w-2xl leading-relaxed">{note}</p>
         </div>
         <div className="flex bg-[#0e1013] rounded-lg p-1 border border-[#1e2228] w-full sm:w-auto">
           {['24h', '7d', '30d', 'allTime'].map((tf) => (
