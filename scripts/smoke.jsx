@@ -23,6 +23,7 @@ import OverviewView from '../src/components/views/OverviewView';
 import EcosystemView from '../src/components/views/EcosystemView';
 import PortfolioView from '../src/components/views/PortfolioView';
 import BrokerScanView from '../src/components/views/BrokerScanView';
+import AnvilScanView from '../src/components/views/AnvilScanView';
 import MemesTokensView from '../src/components/views/MemesTokensView';
 import StonkDetailView from '../src/components/views/StonkDetailView';
 import InternDetailView from '../src/components/views/InternDetailView';
@@ -46,6 +47,7 @@ import { buildTopicShareCard } from '../src/lib/projectShare';
 import { copySectionEl } from '../src/components/CopyControl';
 import { internIdsForBroker } from '../src/lib/interns';
 import { parseBrokerId } from '../src/lib/brokerScan';
+import { ANVIL_VAULTS, rankVaultRows } from '../src/lib/anvilScan';
 import { isProjectLive } from '../src/lib/routes';
 import { typicalNightshadesSeat } from '../src/lib/nightshades';
 
@@ -65,6 +67,8 @@ const ROUTES = [
   '/portfolio',
   '/broker',
   '/broker?id=1',
+  '/anvil',
+  '/anvil?project=cardwall',
   '/tokens',
   '/stocks',
   '/stonkbrokers/roi',
@@ -143,6 +147,7 @@ const VIEWS = [
   ['EcosystemView', EcosystemView, { data: snapshot }],
   ['PortfolioView', PortfolioView, { data: snapshot }],
   ['BrokerScanView', BrokerScanView, { data: snapshot }],
+  ['AnvilScanView', AnvilScanView, { data: snapshot }],
   ['MemesTokensView·memes', MemesTokensView, { data: snapshot, type: 'memes' }],
   ['MemesTokensView·stocks', MemesTokensView, { data: snapshot, type: 'stocks' }],
   ['BonusDetailView', BonusDetailView, { data: snapshot }],
@@ -703,6 +708,22 @@ for (const [name, View, props] of VIEWS) {
     console.error(`FAIL  broker scan ids ${JSON.stringify(ids)} intern ${parsedIntern}`);
   } else {
     console.log('ok    broker scan maps #1 → interns 1 / 4445');
+  }
+}
+
+{
+  const ranked = rankVaultRows([
+    { tokenId: 3, usd: 1, nftCount: 0 },
+    { tokenId: 1, usd: 40, nftCount: 0 },
+    { tokenId: 2, usd: 40, nftCount: 2 },
+  ], 'value');
+  const byId = rankVaultRows(ranked, 'id').map((row) => row.tokenId).join(',');
+  const vaultIds = ANVIL_VAULTS.map((v) => v.id).join(',');
+  if (ranked.map((row) => row.tokenId).join(',') !== '2,1,3' || byId !== '1,2,3' || !vaultIds.includes('cardwall') || !vaultIds.includes('nightshades:watchers')) {
+    failed++;
+    console.error(`FAIL  anvil scan rank ${ranked.map((r) => r.tokenId)} vaults ${vaultIds}`);
+  } else {
+    console.log('ok    anvil scan ranks vault NFTs by TBA value');
   }
 }
 

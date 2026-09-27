@@ -86,7 +86,7 @@ export default function ChartShareLayer() {
     };
   }, [location.pathname, location.search]);
 
-  if (location.pathname === '/portfolio' || location.pathname === '/broker') return null;
+  if (location.pathname === '/portfolio' || location.pathname === '/broker' || location.pathname === '/anvil') return null;
 
   return (
     <>

@@ -162,6 +162,21 @@ export default function HomeView({ data }) {
           </span>
         </Link>
         <Link
+          to="/anvil"
+          className="card group flex flex-col p-5 transition-colors hover:bg-panel-2 sm:p-6"
+        >
+          <p className="eyebrow text-[#fbbf24]">Anvil</p>
+          <h2 className="mt-3 text-[20px] font-semibold tracking-tight text-ink">
+            Vault NFTs, by wallet.
+          </h2>
+          <p className="mt-2 flex-1 text-[13px] leading-relaxed text-muted">
+            Every supported AMM. Lists the NFTs in the vault by what each token-bound wallet holds.
+          </p>
+          <span className="mt-5 text-[13px] font-medium text-ink">
+            Open Anvil scan <span className="text-muted transition-colors group-hover:text-ink">→</span>
+          </span>
+        </Link>
+        <Link
           to="/portfolio"
           className="card group flex flex-col p-5 transition-colors hover:bg-panel-2 sm:p-6"
         >
