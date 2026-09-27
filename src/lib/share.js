@@ -1,4 +1,5 @@
 import { Chart } from 'chart.js';
+import { dropArtUrl } from './cardwallDrops';
 
 /** Copy a watermarked chart PNG to the clipboard.
  *
@@ -279,6 +280,40 @@ function isForeignImage(el) {
   } catch {
     return true;
   }
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+/** Pull slab photos through gg-index so a copy can paint them.
+ *  CloudFront does not allow this origin to read pixels. The art route does.
+ */
+async function inlineDropArt(root) {
+  const imgs = [...root.querySelectorAll('img[data-drop-id]')];
+  const restore = [];
+  await Promise.all(imgs.map(async (img) => {
+    if (!isForeignImage(img)) return;
+    const url = dropArtUrl(img.getAttribute('data-drop-id'));
+    if (!url) return;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return;
+      const dataUrl = await blobToDataUrl(await res.blob());
+      restore.push([img, img.src]);
+      img.src = dataUrl;
+    } catch {
+      // Leave the frame. The rest of the card still copies.
+    }
+  }));
+  return () => {
+    for (const [img, src] of restore) img.src = src;
+  };
 }
 
 function roundRect(ctx, x, y, w, h, r) {
@@ -1013,20 +1048,25 @@ function snapshotOptions(root, { scale, wide, tall }) {
 /** Full-page PNG of an element. Strips wallet addresses from the clone. */
 export async function copyElement(root, { filename = 'savi-dashboard.png', maxW = 0 } = {}) {
   if (typeof window === 'undefined' || !root) return false;
-  const { default: html2canvas } = await import('html2canvas-pro');
-  const tall = Math.max(root.scrollHeight || 0, root.offsetHeight || 0, root.clientHeight || 0);
-  const wide = Math.max(root.scrollWidth || 0, root.clientWidth || 0, 960);
-  const scale = tall > 2400 ? 1 : Math.min(2, window.devicePixelRatio || 1.5);
-  const opts = snapshotOptions(root, { scale, wide, tall });
-  let shot;
+  const restoreArt = await inlineDropArt(root);
   try {
-    shot = await html2canvas(root, opts);
-  } catch {
-    shot = await html2canvas(root, { ...opts, scale: 1, foreignObjectRendering: false });
+    const { default: html2canvas } = await import('html2canvas-pro');
+    const tall = Math.max(root.scrollHeight || 0, root.offsetHeight || 0, root.clientHeight || 0);
+    const wide = Math.max(root.scrollWidth || 0, root.clientWidth || 0, 960);
+    const scale = tall > 2400 ? 1 : Math.min(2, window.devicePixelRatio || 1.5);
+    const opts = snapshotOptions(root, { scale, wide, tall });
+    let shot;
+    try {
+      shot = await html2canvas(root, opts);
+    } catch {
+      shot = await html2canvas(root, { ...opts, scale: 1, foreignObjectRendering: false });
+    }
+    if (!shot?.width || !shot?.height) throw new Error('Empty snapshot');
+    const blob = await pngBlobFromCanvas(drawWatermarked(shot, { maxW }));
+    const copied = await writeClipboardPng(blob);
+    if (!copied) downloadPng(blob, filename);
+    return copied;
+  } finally {
+    restoreArt();
   }
-  if (!shot?.width || !shot?.height) throw new Error('Empty snapshot');
-  const blob = await pngBlobFromCanvas(drawWatermarked(shot, { maxW }));
-  const copied = await writeClipboardPng(blob);
-  if (!copied) downloadPng(blob, filename);
-  return copied;
 }

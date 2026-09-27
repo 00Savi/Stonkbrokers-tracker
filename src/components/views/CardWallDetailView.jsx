@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, ArcElement, Filler
 } from 'chart.js';
@@ -23,6 +23,7 @@ import {
   OnboardLinePanel,
 } from '../HistoryCharts';
 import { SliceChart } from '../SliceChart';
+import { loadLiveDrops, mergeDrops } from '../../lib/cardwallDrops';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
@@ -32,7 +33,22 @@ export default function CardWallDetailView({ data, activeTab }) {
   const [tierTimeframe, setTierTimeframe] = useState('allTime');
   const [selectedSlab, setSelectedSlab] = useState(null);
   const [selectedDrop, setSelectedDrop] = useState(null);
+  const [liveDrops, setLiveDrops] = useState(null);
   const dropsRef = useRef(null);
+
+  useEffect(() => {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 20_000);
+    loadLiveDrops(ac.signal)
+      .then((drops) => {
+        if (!ac.signal.aborted && drops) setLiveDrops(drops);
+      })
+      .catch(() => {});
+    return () => {
+      clearTimeout(timer);
+      ac.abort();
+    };
+  }, []);
   const [volumeMultiplier, setVolumeMultiplier] = useState(1);
   const [yieldPeriod, setYieldPeriod] = useState('Y');
 
@@ -76,6 +92,7 @@ export default function CardWallDetailView({ data, activeTab }) {
     ? windowChart(gacha.historyDates, [gacha.historyUsd || [], gacha.historyValue || []], timeframe, interval, ['sum', 'sum'])
     : null;
   const edge = gacha?.edge || null;
+  const drops = mergeDrops(gacha?.drops, liveDrops);
   const railLine = (rails) => {
     if (!rails) return '';
     const bits = [
@@ -430,12 +447,12 @@ export default function CardWallDetailView({ data, activeTab }) {
                     </div>
                   </div>
                 ) : null}
-                {gacha.drops?.length ? (
+                {drops.length ? (
                   <div ref={dropsRef} id="cardwall-drops" className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
                     <div className="flex justify-between items-end gap-3 mb-4">
                       <div>
                         <h3 className="text-sm font-bold text-white">Latest drops</h3>
-                        <p className="text-xs text-slate-500 mt-1">Newest slabs the machines revealed. Paid is the pull. Value is the posted insured or fair-market price. Click a card for the full pull.</p>
+                        <p className="text-xs text-slate-500 mt-1">Newest slabs the machines revealed. A reload includes pulls the hourly index has not written yet. Paid is the pull. Value is the posted insured or fair-market price. Click a card for the full pull.</p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <CopyControl
@@ -446,11 +463,11 @@ export default function CardWallDetailView({ data, activeTab }) {
                           className="bg-[#0e1013]"
                           onCopy={() => copySectionEl(dropsRef.current, 'cardwall-drops')}
                         />
-                        <span className="text-xs font-semibold px-2.5 py-1 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">{gacha.drops.length} shown</span>
+                        <span className="text-xs font-semibold px-2.5 py-1 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">{drops.length} shown</span>
                       </div>
                     </div>
                     <div className="flex gap-3 overflow-x-auto pb-2">
-                      {gacha.drops.map((drop) => (
+                      {drops.map((drop) => (
                         <button
                           key={drop.id}
                           type="button"
@@ -459,7 +476,7 @@ export default function CardWallDetailView({ data, activeTab }) {
                         >
                           <div className="w-full h-40 bg-[#08090b] rounded-lg overflow-hidden flex items-center justify-center relative">
                             {drop.image ? (
-                              <img src={drop.image} alt={drop.name} className="max-h-full max-w-full object-contain" />
+                              <img src={drop.image} alt={drop.name} data-drop-id={drop.id} className="max-h-full max-w-full object-contain" />
                             ) : (
                               <span className="text-[10px] text-slate-500">No photo</span>
                             )}
