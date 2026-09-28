@@ -1,6 +1,6 @@
 import React from 'react';
 import { Routes, Route, Navigate, useParams, useLocation, useSearchParams } from 'react-router-dom';
-import { TopNav, TabBar, SiteFooter } from './components/Shell';
+import { TopNav, TabBar } from './components/Shell';
 import ChartShareLayer from './components/ChartShareLayer';
 import { ChartMobileSync } from './lib/charts';
 import HomeView from './components/views/HomeView';
@@ -106,9 +106,6 @@ function ScrollToTop() {
 export default function App() {
   const { data, sources, pending } = useDashboard();
   const booting = sources.snapshot === 'loading';
-  const { pathname } = useLocation();
-  const first = pathname.split('/').filter(Boolean)[0];
-  const showFooter = !PROJECTS.some((p) => p.slug === first);
 
   if (sources.snapshot === 'error') {
     return (
@@ -125,7 +122,7 @@ export default function App() {
   }
 
   return (
-    <div className={`flex min-h-full flex-col ${showFooter ? 'pb-28' : 'pb-8'}`}>
+    <div className="flex min-h-full flex-col pb-8">
       <ScrollToTop />
       <TopNav live={sources.prices === 'ready'} sources={sources} data={data} pending={booting || pending('overlay')} />
       <ChartMobileSync />
@@ -205,7 +202,6 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
-      <SiteFooter />
     </div>
   );
 }
@@ -219,5 +215,5 @@ function RedirectToDefaultTab() {
 }
 
 function Section({ children }) {
-  return <div className="pb-28 pt-6">{children}</div>;
+  return <div className="pb-10 pt-6">{children}</div>;
 }

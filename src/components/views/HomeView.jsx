@@ -68,7 +68,7 @@ export default function HomeView({ data }) {
     : null;
 
   return (
-    <div className="pb-16 pt-8 sm:pt-10">
+    <div className="pb-10 pt-8 sm:pt-10">
       <header className="max-w-3xl">
         <p className="eyebrow text-muted">Savi&apos;s Dashboard</p>
         <h1 className="mt-3 text-[32px] font-semibold tracking-tight text-ink sm:text-[42px] md:text-[48px] leading-[1.05]">
@@ -79,71 +79,113 @@ export default function HomeView({ data }) {
           or open a collection.
         </p>
         <NfaBanner className="mt-6 max-w-2xl" />
-
-        <form onSubmit={goScan} className="mt-7 flex max-w-2xl flex-col gap-3 sm:flex-row">
-          <label className="sr-only" htmlFor="home-wallet">
-            Wallet address
-          </label>
-          <input
-            id="home-wallet"
-            type="text"
-            value={wallet}
-            onChange={(e) => {
-              setWallet(e.target.value);
-              if (error) setError('');
-            }}
-            placeholder="Paste a wallet (0x…)"
-            autoComplete="off"
-            spellCheck="false"
-            className="flex-1 rounded-xl border border-line bg-panel px-4 py-3 text-[14px] text-ink placeholder:text-faint focus:border-accent focus:outline-none"
-          />
-          <button
-            type="submit"
-            className="rounded-xl bg-accent px-5 py-3 text-[13px] font-semibold text-black transition-opacity hover:opacity-90 sm:shrink-0"
-          >
-            Scan wallet
-          </button>
-        </form>
-        {error ? (
-          <p className="mt-2 font-mono text-[12px] text-danger">{error}</p>
-        ) : (
-          <p className="mt-2 font-mono text-[11px] text-faint">
-            Comma-separated wallets are fine. You can also skip the scan and pick a card below.
-          </p>
-        )}
-
-        <form onSubmit={goBroker} className="mt-4 flex max-w-2xl flex-col gap-3 sm:flex-row">
-          <label className="sr-only" htmlFor="home-broker">
-            Broker ID
-          </label>
-          <input
-            id="home-broker"
-            type="text"
-            inputMode="numeric"
-            value={brokerId}
-            onChange={(e) => {
-              setBrokerId(e.target.value);
-              if (brokerError) setBrokerError('');
-            }}
-            placeholder="Broker ID (1–4444)"
-            autoComplete="off"
-            className="flex-1 rounded-xl border border-line bg-panel px-4 py-3 text-[14px] text-ink placeholder:text-faint focus:border-accent focus:outline-none"
-          />
-          <button
-            type="submit"
-            className="rounded-xl border border-line px-5 py-3 text-[13px] font-semibold text-ink transition-colors hover:bg-panel-2 sm:shrink-0"
-          >
-            Scan broker
-          </button>
-        </form>
-        {brokerError ? (
-          <p className="mt-2 font-mono text-[12px] text-danger">{brokerError}</p>
-        ) : (
-          <p className="mt-2 font-mono text-[11px] text-faint">
-            Looks up that broker&apos;s TBA wallet and whether its interns have been minted.
-          </p>
-        )}
       </header>
+
+      <div className="mt-7 flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between lg:gap-8">
+        <div className="min-w-0 w-full max-w-2xl flex-1 lg:w-auto">
+          <form onSubmit={goScan} className="flex flex-col gap-3 sm:flex-row">
+            <label className="sr-only" htmlFor="home-wallet">
+              Wallet address
+            </label>
+            <input
+              id="home-wallet"
+              type="text"
+              value={wallet}
+              onChange={(e) => {
+                setWallet(e.target.value);
+                if (error) setError('');
+              }}
+              placeholder="Paste a wallet (0x…)"
+              autoComplete="off"
+              spellCheck="false"
+              className="flex-1 rounded-xl border border-line bg-panel px-4 py-3 text-[14px] text-ink placeholder:text-faint focus:border-accent focus:outline-none"
+            />
+            <button
+              type="submit"
+              className="rounded-xl bg-accent px-5 py-3 text-[13px] font-semibold text-black transition-opacity hover:opacity-90 sm:shrink-0"
+            >
+              Scan wallet
+            </button>
+          </form>
+          {error ? (
+            <p className="mt-2 font-mono text-[12px] text-danger">{error}</p>
+          ) : (
+            <p className="mt-2 font-mono text-[11px] text-faint">
+              Comma-separated wallets are fine. You can also skip the scan and pick a card below.
+            </p>
+          )}
+
+          <form onSubmit={goBroker} className="mt-4 flex flex-col gap-3 sm:flex-row">
+            <label className="sr-only" htmlFor="home-broker">
+              Broker ID
+            </label>
+            <input
+              id="home-broker"
+              type="text"
+              inputMode="numeric"
+              value={brokerId}
+              onChange={(e) => {
+                setBrokerId(e.target.value);
+                if (brokerError) setBrokerError('');
+              }}
+              placeholder="Broker ID (1–4444)"
+              autoComplete="off"
+              className="flex-1 rounded-xl border border-line bg-panel px-4 py-3 text-[14px] text-ink placeholder:text-faint focus:border-accent focus:outline-none"
+            />
+            <button
+              type="submit"
+              className="rounded-xl border border-line px-5 py-3 text-[13px] font-semibold text-ink transition-colors hover:bg-panel-2 sm:shrink-0"
+            >
+              Scan broker
+            </button>
+          </form>
+          {brokerError ? (
+            <p className="mt-2 font-mono text-[12px] text-danger">{brokerError}</p>
+          ) : (
+            <p className="mt-2 font-mono text-[11px] text-faint">
+              Looks up that broker&apos;s TBA wallet and whether its interns have been minted.
+            </p>
+          )}
+        </div>
+
+        <section
+          aria-label="Projects"
+          className="card w-full shrink-0 p-5 sm:p-6 lg:w-80 xl:w-[32rem]"
+        >
+          <p className="eyebrow text-mark-sky">Projects</p>
+          <h2 className="mt-3 text-[20px] font-semibold tracking-tight text-ink">
+            One collection, full depth.
+          </h2>
+          <p className="mt-2 text-[13px] leading-relaxed text-muted">
+            Tiers, revenue, LP, ownership, unit-level ROI.
+          </p>
+          <ul className="mt-4 grid grid-cols-2 gap-1 lg:grid-cols-1 xl:grid-cols-2">
+            {LIVE_PROJECTS.map((p) => {
+              const logo = p.logo || data?.projects?.[p.key]?.config?.logo || FALLBACK_LOGO[p.key];
+              return (
+                <li key={p.key}>
+                  <Link
+                    to={projectPath(p.key)}
+                    className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] font-medium text-ink transition-colors hover:bg-panel-2"
+                  >
+                    {logo ? (
+                      <img
+                        src={logo.startsWith('http') ? logo : `/${logo}`}
+                        alt=""
+                        className="h-6 w-6 rounded-md border border-line object-cover"
+                      />
+                    ) : (
+                      <span className="h-6 w-6 rounded-md border border-line bg-panel-2" />
+                    )}
+                    <span className="min-w-0 truncate">{p.name}</span>
+                    {p.beta && <BetaTag />}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      </div>
 
       <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Link
@@ -213,41 +255,6 @@ export default function HomeView({ data }) {
             )}
           </span>
         </Link>
-
-        <section className="card flex flex-col p-5 sm:p-6">
-          <p className="eyebrow text-mark-sky">Projects</p>
-          <h2 className="mt-3 text-[20px] font-semibold tracking-tight text-ink">
-            One collection, full depth.
-          </h2>
-          <p className="mt-2 text-[13px] leading-relaxed text-muted">
-            Tiers, revenue, LP, ownership, unit-level ROI.
-          </p>
-          <ul className="mt-5 grid grid-cols-1 gap-1.5 sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2">
-            {LIVE_PROJECTS.map((p) => {
-              const logo = p.logo || data?.projects?.[p.key]?.config?.logo || FALLBACK_LOGO[p.key];
-              return (
-                <li key={p.key}>
-                  <Link
-                    to={projectPath(p.key)}
-                    className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] font-medium text-ink transition-colors hover:bg-panel-2"
-                  >
-                    {logo ? (
-                      <img
-                        src={logo.startsWith('http') ? logo : `/${logo}`}
-                        alt=""
-                        className="h-6 w-6 rounded-md border border-line object-cover"
-                      />
-                    ) : (
-                      <span className="h-6 w-6 rounded-md border border-line bg-panel-2" />
-                    )}
-                    <span className="min-w-0 truncate">{p.name}</span>
-                    {p.beta && <BetaTag />}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
       </div>
     </div>
   );
