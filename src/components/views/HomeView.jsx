@@ -69,7 +69,7 @@ export default function HomeView({ data }) {
 
   return (
     <div className="pb-10 pt-8 sm:pt-10">
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2 lg:gap-8 xl:gap-10">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2 lg:items-stretch lg:gap-8 xl:gap-10">
         <div className="min-w-0">
           <header>
             <p className="eyebrow text-muted">Savi&apos;s Dashboard</p>
@@ -152,35 +152,34 @@ export default function HomeView({ data }) {
 
         <section
           aria-label="Projects"
-          className="card flex w-full flex-col p-5 sm:p-6"
+          className="card flex w-full flex-col p-4 sm:p-5 lg:h-full"
         >
-          <p className="eyebrow text-mark-sky">Projects</p>
-          <h2 className="mt-3 text-[20px] font-semibold tracking-tight text-ink">
-            One collection, full depth.
-          </h2>
-          <p className="mt-2 text-[13px] leading-relaxed text-muted">
-            Tiers, revenue, LP, ownership, unit-level ROI.
-          </p>
-          <ul className="mt-4 grid grid-cols-2 gap-1">
+          <div className="flex items-baseline justify-between gap-3 px-1">
+            <p className="eyebrow text-mark-sky">Projects</p>
+            <p className="text-[12px] text-faint">Open a collection</p>
+          </div>
+          <ul className="mt-3 grid flex-1 grid-cols-2 content-center gap-2 lg:gap-3">
             {LIVE_PROJECTS.map((p) => {
               const logo = p.logo || data?.projects?.[p.key]?.config?.logo || FALLBACK_LOGO[p.key];
               return (
-                <li key={p.key}>
+                <li key={p.key} className="min-h-0">
                   <Link
                     to={projectPath(p.key)}
-                    className="flex items-center gap-2.5 rounded-lg px-2 py-2 text-[13px] font-medium text-ink transition-colors hover:bg-panel-2"
+                    className="flex h-full items-center gap-2.5 rounded-xl border border-line bg-bg px-2.5 py-2.5 text-[13px] font-medium text-ink transition-colors hover:border-[#2c323a] hover:bg-panel-2 lg:flex-col lg:justify-center lg:gap-2 lg:px-3 lg:py-4 lg:text-center"
                   >
                     {logo ? (
                       <img
                         src={logo.startsWith('http') ? logo : `/${logo}`}
                         alt=""
-                        className="h-6 w-6 rounded-md border border-line object-cover"
+                        className="h-8 w-8 shrink-0 rounded-lg border border-line object-cover lg:h-11 lg:w-11 lg:rounded-xl"
                       />
                     ) : (
-                      <span className="h-6 w-6 rounded-md border border-line bg-panel-2" />
+                      <span className="h-8 w-8 shrink-0 rounded-lg border border-line bg-panel-2 lg:h-11 lg:w-11 lg:rounded-xl" />
                     )}
-                    <span className="min-w-0 truncate">{p.name}</span>
-                    {p.beta && <BetaTag />}
+                    <span className="flex min-w-0 items-center gap-1.5 lg:flex-col lg:gap-1">
+                      <span className="min-w-0 truncate lg:text-[12px]">{p.name}</span>
+                      {p.beta && <BetaTag />}
+                    </span>
                   </Link>
                 </li>
               );
