@@ -69,21 +69,22 @@ export default function HomeView({ data }) {
 
   return (
     <div className="pb-10 pt-8 sm:pt-10">
-      <header className="max-w-3xl">
-        <p className="eyebrow text-muted">Savi&apos;s Dashboard</p>
-        <h1 className="mt-3 text-[32px] font-semibold tracking-tight text-ink sm:text-[42px] md:text-[48px] leading-[1.05]">
-          See what your NFTs actually earn.
-        </h1>
-        <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-muted sm:text-[16px]">
-          Track floor, yield, burns, and activations across Robinhood Chain projects. Scan a wallet
-          or open a collection.
-        </p>
-        <NfaBanner className="mt-6 max-w-2xl" />
-      </header>
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2 lg:gap-8 xl:gap-10">
+        <div className="min-w-0">
+          <header>
+            <p className="eyebrow text-muted">Savi&apos;s Dashboard</p>
+            <h1 className="mt-3 text-[32px] font-semibold tracking-tight text-ink sm:text-[42px] md:text-[48px] leading-[1.05]">
+              See what your NFTs actually earn.
+            </h1>
+            <p className="mt-4 text-[15px] leading-relaxed text-muted sm:text-[16px]">
+              Track floor, yield, burns, and activations across Robinhood Chain projects. Scan a wallet
+              or open a collection.
+            </p>
+            <NfaBanner className="mt-6" />
+          </header>
 
-      <div className="mt-7 flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between lg:gap-8">
-        <div className="min-w-0 w-full max-w-2xl flex-1 lg:w-auto">
-          <form onSubmit={goScan} className="flex flex-col gap-3 sm:flex-row">
+          <div className="mt-7">
+            <form onSubmit={goScan} className="flex flex-col gap-3 sm:flex-row">
             <label className="sr-only" htmlFor="home-wallet">
               Wallet address
             </label>
@@ -147,10 +148,11 @@ export default function HomeView({ data }) {
             </p>
           )}
         </div>
+        </div>
 
         <section
           aria-label="Projects"
-          className="card w-full shrink-0 p-5 sm:p-6 lg:w-80 xl:w-[32rem]"
+          className="card flex w-full flex-col p-5 sm:p-6"
         >
           <p className="eyebrow text-mark-sky">Projects</p>
           <h2 className="mt-3 text-[20px] font-semibold tracking-tight text-ink">
@@ -159,14 +161,14 @@ export default function HomeView({ data }) {
           <p className="mt-2 text-[13px] leading-relaxed text-muted">
             Tiers, revenue, LP, ownership, unit-level ROI.
           </p>
-          <ul className="mt-4 grid grid-cols-2 gap-1 lg:grid-cols-1 xl:grid-cols-2">
+          <ul className="mt-4 grid grid-cols-2 gap-1">
             {LIVE_PROJECTS.map((p) => {
               const logo = p.logo || data?.projects?.[p.key]?.config?.logo || FALLBACK_LOGO[p.key];
               return (
                 <li key={p.key}>
                   <Link
                     to={projectPath(p.key)}
-                    className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] font-medium text-ink transition-colors hover:bg-panel-2"
+                    className="flex items-center gap-2.5 rounded-lg px-2 py-2 text-[13px] font-medium text-ink transition-colors hover:bg-panel-2"
                   >
                     {logo ? (
                       <img
