@@ -201,16 +201,29 @@ function nftAssets(data) {
   return uniqTokens(rows);
 }
 
-function marketTokens(data, already) {
-  const skip = new Set(already.map((t) => t.ca));
-  const rows = [];
-  for (const t of [...(data?.memes || []), ...(data?.stocks || [])]) {
+function pricedMarketRows(rows, kind) {
+  const out = [];
+  for (const t of rows || []) {
     const derived = t.totalSupply > 0 && t.fdv > 0 ? t.fdv / t.totalSupply : 0;
     const price = Number(t.priceUsd) || derived;
     if (!t.ca || !(price > 0)) continue;
-    rows.push({ ca: t.ca, symbol: t.name || t.ca.slice(0, 6), price, nft: false });
+    out.push({
+      ca: String(t.ca).toLowerCase(),
+      symbol: t.name || String(t.ca).slice(0, 6),
+      price,
+      nft: false,
+      kind,
+    });
   }
-  return uniqTokens(rows).filter((t) => !skip.has(t.ca));
+  return uniqTokens(out);
+}
+
+/** Stocks first, then memes. Protocol tokens already read on the scan are left out. */
+function splitMarkets(data, fungible) {
+  const skip = new Set((fungible || []).map((t) => t.ca));
+  const stocks = pricedMarketRows(data?.stocks, 'stock').filter((t) => !skip.has(t.ca));
+  const memes = pricedMarketRows(data?.memes, 'meme').filter((t) => !skip.has(t.ca));
+  return { stocks, memes };
 }
 
 function decodeAddress(data) {
@@ -438,10 +451,10 @@ function sleep(ms) {
 
 /**
  * NFTs sitting in one project's AMM, ranked by the priced contents of each
- * token-bound wallet. Calls `onPartial` once protocol tokens and Anvil NFTs
- * are priced, then again as market tokens fill in.
+ * token-bound wallet. Stocks are priced before memes. `onPlan` is the full
+ * checklist; `onStep` flips each item to running, then done.
  */
-export async function scanAnvilVault(vaultId, data, { onProgress, onPartial, signal } = {}) {
+export async function scanAnvilVault(vaultId, data, { onProgress, onPartial, onPlan, onStep, signal } = {}) {
   const vault = anvilVaultById(vaultId);
   if (!vault) throw new Error('Pick a supported project.');
 
@@ -453,11 +466,31 @@ export async function scanAnvilVault(vaultId, data, { onProgress, onPartial, sig
   const report = (label, done, total) => {
     if (onProgress) onProgress({ label, done, total });
   };
+  const mark = (id, status) => {
+    if (onStep) onStep({ id, status });
+  };
+
+  const fungible = protocolTokens(data);
+  const nfts = nftAssets(data);
+  const { stocks, memes } = splitMarkets(data, fungible);
+  const steps = [
+    { id: 'vault', label: 'Vault NFTs', group: 'Vault' },
+    { id: 'tba', label: 'TBA wallets', group: 'Vault' },
+    { id: 'eth', label: 'ETH', group: 'Anvil' },
+    ...fungible.map((t) => ({ id: `tok:${t.ca}`, label: t.symbol, group: 'Anvil' })),
+    ...nfts.map((t) => ({ id: `nft:${t.ca}`, label: t.symbol, group: 'Anvil' })),
+    { id: 'stars', label: 'Wall stars', group: 'Anvil' },
+    ...stocks.map((t) => ({ id: `stock:${t.ca}`, label: t.symbol, group: 'Stocks' })),
+    ...memes.map((t) => ({ id: `meme:${t.ca}`, label: t.symbol, group: 'Memes' })),
+  ];
+  if (onPlan) onPlan(steps);
 
   if (!(vaultBalance > 0)) {
+    mark('vault', 'done');
     return { vault, vaultBalance: 0, rows: [] };
   }
 
+  mark('vault', 'run');
   report(`Finding NFTs in the ${vault.name} vault…`, 0, vault.maxSupply);
   const ownerCalls = [];
   for (let id = vault.firstId; id < vault.firstId + vault.maxSupply; id++) {
@@ -481,8 +514,9 @@ export async function scanAnvilVault(vaultId, data, { onProgress, onPartial, sig
     signal,
     onStep: (done, total) => report(`Finding NFTs in the ${vault.name} vault…`, done, total),
   });
+  mark('vault', 'done');
 
-  report(`Resolving ${ownedIds.length} token-bound wallets…`, 0, ownedIds.length);
+  mark('tba', 'run');
   const tbaById = new Map();
   await mapChunks(ownedIds, async (slice) => {
     const packed = slice.map((id) => ({
@@ -504,6 +538,7 @@ export async function scanAnvilVault(vaultId, data, { onProgress, onPartial, sig
     signal,
     onStep: (done, total) => report('Resolving token-bound wallets…', done, total),
   });
+  mark('tba', 'done');
 
   const rows = ownedIds
     .filter((id) => tbaById.get(id))
@@ -516,6 +551,7 @@ export async function scanAnvilVault(vaultId, data, { onProgress, onPartial, sig
     }));
 
   const eth = ethPrice(data);
+  mark('eth', 'run');
   if (eth > 0 && rows.length) {
     report('Reading ETH in token-bound wallets…', 0, rows.length);
     const bals = [];
@@ -541,73 +577,48 @@ export async function scanAnvilVault(vaultId, data, { onProgress, onPartial, sig
       });
     });
   }
+  mark('eth', 'done');
 
   const publish = () => {
     rows.forEach(priceRow);
     if (onPartial) onPartial(snapshot(rows), vaultBalance);
   };
 
-  const fungible = protocolTokens(data);
   await withDecimals(mc, fungible, signal);
   const ownCa = vault.tokenCa.toLowerCase();
   for (let i = 0; i < fungible.length; i++) {
+    mark(`tok:${fungible[i].ca}`, 'run');
     report(`Reading ${fungible[i].symbol}…`, i, fungible.length);
     await applyToken(mc, rows, fungible[i], signal);
+    mark(`tok:${fungible[i].ca}`, 'done');
     if (fungible[i].ca === ownCa) publish();
   }
 
-  const nfts = nftAssets(data);
   for (let i = 0; i < nfts.length; i++) {
-    report(`Reading ${nfts[i].symbol} balances…`, i, nfts.length);
+    mark(`nft:${nfts[i].ca}`, 'run');
+    report(`Reading ${nfts[i].symbol}…`, i, nfts.length);
     await applyToken(mc, rows, nfts[i], signal);
+    mark(`nft:${nfts[i].ca}`, 'done');
   }
 
+  mark('stars', 'run');
   await attachWallStars(mc, rows, signal, report);
   applyWallFloors(rows, data);
+  mark('stars', 'done');
   publish();
+
+  const funded = rows.filter((row) => row.holdings.length > 0);
+  const queue = [...stocks, ...memes];
+  await withDecimals(mc, queue, signal);
+  await mapPool(queue, 4, async (token) => {
+    const id = `${token.kind}:${token.ca}`;
+    mark(id, 'run');
+    report(token.kind === 'stock' ? `Stock ${token.symbol}` : `Meme ${token.symbol}`, 0, 1);
+    if (funded.length) await applyToken(mc, funded, token, signal);
+    mark(id, 'done');
+    publish();
+  }, signal);
 
   rows.forEach(priceRow);
   return { vault, vaultBalance, rows: snapshot(rows) };
-}
-
-/**
- * Stocks and meme coins inside wallets that already hold something.
- * This is a separate pass: one balance read per token per wallet, so it stays
- * off the main scan. Several tokens are read at once.
- */
-export async function priceMarketHoldings(rows, data, { onProgress, onPartial, signal } = {}) {
-  const list = (rows || []).map((row) => ({
-    ...row,
-    holdings: (row.holdings || []).map((h) => ({ ...h, pieces: h.pieces ? [...h.pieces] : undefined })),
-  }));
-  const funded = list.filter((row) => row.holdings.length > 0 && row.tba);
-  const seen = [];
-  for (const row of funded) {
-    for (const holding of row.holdings) {
-      if (holding.contract) seen.push({ ca: holding.contract });
-    }
-  }
-  const markets = marketTokens(data, seen);
-  if (!funded.length || !markets.length) return list;
-
-  const provider = new ethers.JsonRpcProvider(ROBINHOOD_RPC);
-  const mc = new ethers.Contract(MULTICALL, MULTICALL_ABI, provider);
-  await withDecimals(mc, markets, signal);
-
-  let done = 0;
-  const publish = () => {
-    list.forEach(priceRow);
-    if (onPartial) onPartial(snapshot(list));
-  };
-
-  await mapPool(markets, 4, async (token) => {
-    if (signal?.aborted) throw abortError();
-    await applyToken(mc, funded, token, signal);
-    done += 1;
-    if (onProgress) onProgress({ label: 'Pricing stocks and memes…', done, total: markets.length });
-    if (done % 20 === 0 || done === markets.length) publish();
-  }, signal);
-
-  list.forEach(priceRow);
-  return snapshot(list);
 }

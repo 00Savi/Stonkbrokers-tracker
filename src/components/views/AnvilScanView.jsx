@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { compactNum, compactUsd } from '../kit';
 import { explorerAddressUrl } from '../../lib/tba';
-import { ANVIL_VAULTS, anvilVaultById, priceMarketHoldings, rankVaultRows, scanAnvilVault } from '../../lib/anvilScan';
+import { ANVIL_VAULTS, anvilVaultById, rankVaultRows, scanAnvilVault } from '../../lib/anvilScan';
 
 function shortAddr(addr) {
   const a = String(addr || '');
@@ -54,15 +54,15 @@ export default function AnvilScanView({ data }) {
   const [fundedOnly, setFundedOnly] = useState(true);
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState(null);
-  const [pricingMarkets, setPricingMarkets] = useState(false);
+  const [steps, setSteps] = useState([]);
   const runRef = useRef(0);
 
   const run = async (id) => {
     const ticket = ++runRef.current;
     setError('');
     setBusy(true);
-    setPricingMarkets(false);
     setProgress('Connecting to Robinhood Chain…');
+    setSteps([]);
     setResult(null);
     setOpenId(null);
     const controller = new AbortController();
@@ -71,10 +71,17 @@ export default function AnvilScanView({ data }) {
     try {
       const next = await scanAnvilVault(id, data, {
         signal: controller.signal,
-        onProgress: ({ label, done, total }) => {
+        onProgress: ({ label }) => {
           if (ticket !== runRef.current) return;
-          const pct = total > 0 ? ` ${Math.min(100, Math.round((done / total) * 100))}%` : '';
-          setProgress(`${label}${pct}`);
+          setProgress(label);
+        },
+        onPlan: (plan) => {
+          if (ticket !== runRef.current) return;
+          setSteps(plan.map((step) => ({ ...step, status: 'wait' })));
+        },
+        onStep: ({ id, status }) => {
+          if (ticket !== runRef.current) return;
+          setSteps((prev) => prev.map((step) => (step.id === id ? { ...step, status } : step)));
         },
         onPartial: (rows, vaultBalance) => {
           if (ticket !== runRef.current) return;
@@ -88,46 +95,13 @@ export default function AnvilScanView({ data }) {
       });
       if (ticket !== runRef.current) return;
       setResult({ ...next, partial: false });
-      setProgress('');
+      setProgress('Scan complete');
     } catch (err) {
       if (ticket !== runRef.current || err?.name === 'AbortError') return;
       setError(err?.shortMessage || err?.message || 'Scan failed.');
       setProgress('');
     }
     if (ticket === runRef.current) setBusy(false);
-  };
-
-  const addMarkets = async () => {
-    if (!result?.rows?.length || pricingMarkets || busy) return;
-    const ticket = runRef.current;
-    setPricingMarkets(true);
-    setError('');
-    setProgress('Pricing stocks and memes…');
-    const controller = new AbortController();
-    runRef.controller?.abort();
-    runRef.controller = controller;
-    try {
-      const rows = await priceMarketHoldings(result.rows, data, {
-        signal: controller.signal,
-        onProgress: ({ label, done, total }) => {
-          if (ticket !== runRef.current) return;
-          const pct = total > 0 ? ` ${Math.min(100, Math.round((done / total) * 100))}%` : '';
-          setProgress(`${label}${pct}`);
-        },
-        onPartial: (nextRows) => {
-          if (ticket !== runRef.current) return;
-          setResult((prev) => (prev ? { ...prev, rows: nextRows, partial: true } : prev));
-        },
-      });
-      if (ticket !== runRef.current) return;
-      setResult((prev) => (prev ? { ...prev, rows, partial: false } : prev));
-      setProgress('');
-    } catch (err) {
-      if (ticket !== runRef.current || err?.name === 'AbortError') return;
-      setError(err?.shortMessage || err?.message || 'Stock pricing failed.');
-      setProgress('');
-    }
-    if (ticket === runRef.current) setPricingMarkets(false);
   };
 
   const submit = (event) => {
@@ -161,8 +135,8 @@ export default function AnvilScanView({ data }) {
         <h2 className="text-lg md:text-xl font-bold text-white">Anvil scan</h2>
         <p className="text-xs text-slate-400 mt-1">
           NFTs sitting in a project&apos;s AMM vault, listed by the value in each token-bound wallet.
-          The dollar figure is ETH, Anvil tokens, Interns at the OpenSea floor, and each Wall at the OpenSea floor for its star rating.
-          Stocks and meme coins are a separate pass.
+          The dollar figure is ETH, Anvil tokens, Interns at the OpenSea floor, each Wall at its star floor, then stocks, then memes.
+          Each item checks off as that read finishes.
         </p>
       </div>
 
@@ -187,15 +161,14 @@ export default function AnvilScanView({ data }) {
         </button>
       </form>
 
+      {steps.length > 0 && <ScanChecklist steps={steps} label={progress} />}
       {error ? (
         <p className="mb-4 font-mono text-[12px] text-rose-400">{error}</p>
-      ) : progress ? (
-        <p className="mb-4 font-mono text-[11px] text-slate-400">{progress}</p>
-      ) : (
+      ) : steps.length === 0 ? (
         <p className="mb-4 font-mono text-[11px] text-slate-600">
-          Pick a project and scan its AMM. A full vault is a few thousand NFTs, so the list fills in as wallets are priced.
+          Pick a project and scan its AMM. Stocks are priced before memes, and each one checks off as it finishes.
         </p>
-      )}
+      ) : null}
 
       {result && (
         <>
@@ -218,14 +191,9 @@ export default function AnvilScanView({ data }) {
               <SortButton active={fundedOnly} onClick={() => setFundedOnly((v) => !v)}>
                 {fundedOnly ? 'With a balance' : 'Every NFT'}
               </SortButton>
-              {!busy && (
-                <SortButton active={pricingMarkets} onClick={addMarkets}>
-                  {pricingMarkets ? 'Pricing stocks…' : 'Add stocks and memes'}
-                </SortButton>
-              )}
             </div>
             {result.partial && (
-              <span className="font-mono text-[10px] text-slate-500">Still pricing wallets</span>
+              <span className="font-mono text-[10px] text-slate-500">Still pricing</span>
             )}
           </div>
 
@@ -296,6 +264,71 @@ export default function AnvilScanView({ data }) {
         </>
       )}
     </div>
+  );
+}
+
+function ScanChecklist({ steps, label }) {
+  const done = steps.filter((step) => step.status === 'done').length;
+  const pct = steps.length ? (done / steps.length) * 100 : 0;
+  const groups = [];
+  for (const step of steps) {
+    const name = step.group || 'Scan';
+    let bucket = groups.find((group) => group.name === name);
+    if (!bucket) {
+      bucket = { name, steps: [] };
+      groups.push(bucket);
+    }
+    bucket.steps.push(step);
+  }
+
+  return (
+    <div className="mb-4 rounded-xl border border-[#1e2228] bg-[#08090b] p-3">
+      <div className="mb-2 flex items-baseline justify-between gap-3">
+        <p className="text-[12px] text-slate-300">{label || 'Scanning'}</p>
+        <p className="font-mono text-[11px] text-slate-400">{done} / {steps.length}</p>
+      </div>
+      <div className="mb-3 h-2 overflow-hidden rounded-full bg-[#1e2228]">
+        <div className="h-full rounded-full bg-emerald-400 transition-[width] duration-300" style={{ width: `${pct}%` }} />
+      </div>
+      <div className="max-h-40 space-y-2 overflow-y-auto">
+        {groups.map((group) => (
+          <div key={group.name}>
+            <p className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">{group.name}</p>
+            <div className="flex flex-wrap gap-1">
+              {group.steps.map((step) => (
+                <StepChip key={step.id} step={step} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function StepChip({ step }) {
+  const done = step.status === 'done';
+  const running = step.status === 'run';
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] leading-none ${
+        done
+          ? 'border-emerald-700/60 text-emerald-300'
+          : running
+            ? 'border-blue-500/50 text-blue-200'
+            : 'border-[#1e2228] text-slate-500'
+      }`}
+    >
+      <span
+        className={`inline-flex h-3 w-3 shrink-0 items-center justify-center rounded-[3px] border text-[8px] ${
+          done ? 'border-emerald-400 bg-emerald-400 text-[#04140c]' : 'border-current'
+        }`}
+        aria-hidden="true"
+      >
+        {done ? '✓' : ''}
+      </span>
+      {step.label}
+    </span>
   );
 }
 
