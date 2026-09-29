@@ -93,7 +93,7 @@ export const PROJECTS = [
   { slug: 'mancer', key: 'mancer', name: 'Mancer', ticker: 'MANCER' },
   { slug: 'tickeryard', key: 'tickeryard', name: 'TickerYard', ticker: 'YARD' },
   { slug: 'cardwall', key: 'cardwall', name: 'The Card Wall', ticker: 'WALL', beta: true },
-  { slug: 'index', key: 'index', name: 'The Index', ticker: 'INDEX', kind: 'cashflow', logo: 'Index.png', beta: true },
+  { slug: 'index', key: 'index', name: 'The Index', ticker: 'INDEX', kind: 'cashflow', logo: 'Index.png', beta: true, live: false },
   { slug: 'rhmachines', key: 'printer', name: 'RH Machines', ticker: 'PRINTER', kind: 'machines', logo: 'Printer.png', beta: true, live: false },
   { slug: 'coattail', key: 'coattail', name: 'Coattail Brokers', ticker: 'COAT', kind: 'brokers', logo: 'Coattail.svg', beta: true, unitValue: 36750, live: false },
   { slug: 'oakmont', key: 'oakmont', name: 'Oakmont Vault', ticker: 'STRIKE', kind: 'vault', logo: 'Oakmont.png', beta: true },
