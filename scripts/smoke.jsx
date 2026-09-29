@@ -658,6 +658,9 @@ for (const [name, View, props] of VIEWS) {
   } else if (!ecoHtml.includes('Copy section')) {
     failed++;
     console.error('FAIL  ecosystem Copy section missing');
+  } else if (!ecoHtml.includes('Copy protocol revenue mix for X') || !ecoHtml.includes('Copy protocol revenue rank for X')) {
+    failed++;
+    console.error('FAIL  ecosystem protocol revenue cards missing Copy');
   } else {
     console.log('ok    ecosystem heading Copy is Copy section');
   }

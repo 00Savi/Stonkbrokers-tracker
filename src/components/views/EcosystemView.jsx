@@ -260,6 +260,8 @@ export default function EcosystemView({ data, pending = false }) {
   const [yieldPeriod, setYieldPeriod] = useState('Y');
   const { range: timeframe, setRange, interval, setInterval } = useChartView();
   const onboardCardRef = useRef(null);
+  const revMixRef = useRef(null);
+  const revRankRef = useRef(null);
 
   const selectTab = useCallback((id) => {
     setSearchParams((prev) => {
@@ -772,15 +774,40 @@ export default function EcosystemView({ data, pending = false }) {
 
       <ShareSection id="revenue" className="scroll-mt-32 space-y-4">
         <Card
+          ref={revMixRef}
           eyebrow={`${period} protocol revenue`}
           sub="Fees the protocol charged or kept in this window. Stonk dwarfs the rest in dollars, so the mix is a share bar — daily shape is each project’s own sparkline."
+          corner={(
+            <CopyControl
+              heading
+              alwaysLabel
+              idleLabel="Copy"
+              title="Copy protocol revenue mix for X"
+              className="bg-[#08090b]"
+              onCopy={() => copyElement(revMixRef.current, { filename: 'savi-protocol-revenue.png' })}
+            />
+          )}
         >
           <FigureStrip total={revTotal} leader={revRows[0]} />
           <div className="mt-5">
             <ShareBar parts={revRows} />
           </div>
         </Card>
-        <Card eyebrow="Ranked" sub={`${period} totals, same unit (USD).`}>
+        <Card
+          ref={revRankRef}
+          eyebrow="Ranked"
+          sub={`${period} totals, same unit (USD).`}
+          corner={(
+            <CopyControl
+              heading
+              alwaysLabel
+              idleLabel="Copy"
+              title="Copy protocol revenue rank for X"
+              className="bg-[#08090b]"
+              onCopy={() => copyElement(revRankRef.current, { filename: 'savi-protocol-revenue-ranked.png' })}
+            />
+          )}
+        >
           <RankBar rows={revRows} />
         </Card>
         <SparkGrid
