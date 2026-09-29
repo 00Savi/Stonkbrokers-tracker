@@ -449,7 +449,7 @@ export default function CardWallDetailView({ data, activeTab }) {
                 {gacha.machines?.length ? (
                   <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
                     <h3 className="text-sm font-bold text-white mb-1">Alley machines</h3>
-                    <p className="text-xs text-slate-500 mb-3">Open a machine for every slab it revealed. Sort by newest, value, what was paid, or the difference.</p>
+                    <p className="text-xs text-slate-500 mb-3">Every machine on the till, including ones that have not been spun. Open a machine for every slab it revealed.</p>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
