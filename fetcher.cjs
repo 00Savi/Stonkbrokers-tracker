@@ -382,7 +382,7 @@ const RAIN_LOOKBACK_DAYS = 30;
 const { GgIndex } = require("./lib/ggindex.cjs");
 const { Rpc, TOPIC, addrTopic, decodeUint, decodeAddr, encodeUint, topicAddr } = require("./lib/rpc.cjs");
 const { fetchLogsWithTimestamps, erc20Transfers } = require("./lib/chain.cjs");
-const { advanceUnderwater } = require("./lib/underwater.cjs");
+const { scoreFromPositions } = require("./lib/underwater.cjs");
 const { BlockTime } = require("./lib/blocktime.cjs");
 const { buildSpecialProject, isSpecial } = require("./lib/specials.cjs");
 const yieldDays = require("./lib/yieldDays.cjs");
@@ -4206,7 +4206,6 @@ async function run() {
         project,
         tokenLeg,
         priceProject: priceProject || project,
-        nftCache: conf.deactivateOnTransfer ? `cache_${key}_nft_logs.json` : "",
       });
     };
     pushUw("stonk", PROJECTS.stonk, finalJson.projects.stonk, true);
@@ -4217,7 +4216,46 @@ async function run() {
     for (const id of Object.keys(NIGHTSHADES_FACTIONS)) {
       pushUw(id, NIGHTSHADES_FACTIONS[id], finalJson.projects.nightshades?.factions?.[id], true);
     }
-    await advanceUnderwater({ rpc, blockTime, jobs: uw, budgetMs: 3 * 60 * 1000 });
+    const noteUnderwaterPending = (job) => {
+      const prev = job.project.ownership?.underwater;
+      if (prev?.caughtUp) return;
+      job.project.ownership = job.project.ownership || {};
+      job.project.ownership.underwater = { caughtUp: false };
+      console.log(`  underwater ${job.key}: still catching up`);
+    };
+    for (const job of uw) {
+      try {
+        const nft = await gg.costPositions(job.conf.nftCa);
+        if (!nft?.complete) {
+          noteUnderwaterPending(job);
+          continue;
+        }
+        let tokenPositions = [];
+        if (job.tokenLeg) {
+          const token = await gg.costPositions(job.conf.tokenCa);
+          if (!token?.complete) {
+            noteUnderwaterPending(job);
+            continue;
+          }
+          tokenPositions = token.positions || [];
+        }
+        const summary = scoreFromPositions(job.project, {
+          nftHolds: nft.holds || [],
+          tokenPositions,
+          tokenLeg: job.tokenLeg,
+          priceProject: job.priceProject,
+          amm: job.conf.ammCa,
+        });
+        job.project.ownership = job.project.ownership || {};
+        job.project.ownership.underwater = summary;
+        console.log(
+          `  underwater ${job.key}: ${summary.pct}% of ${summary.wallets} ` +
+          `(nft ${summary.nftOnly}, token ${summary.tokenOnly}, both ${summary.both})`,
+        );
+      } catch (e) {
+        console.warn(`[warn] underwater ${job.key}: ${e.message}`);
+      }
+    }
   } catch (e) {
     console.warn(`[warn] underwater: ${e.message}`);
   }
