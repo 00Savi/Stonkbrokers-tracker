@@ -37,6 +37,62 @@ export function mergeDrops(snapshot, live) {
     .slice(0, 36);
 }
 
+/** Alley spins the hourly snapshot has not counted yet. Same payload as the drops strip. */
+export function freshAlleyDrops(snapshotDrops, liveDrops) {
+  const seen = new Set();
+  let cutoff = '';
+  for (const drop of snapshotDrops || []) {
+    if (drop?.id) seen.add(drop.id);
+    if (drop?.at && drop.at > cutoff) cutoff = drop.at;
+  }
+  if (!cutoff) return [];
+  return (liveDrops || []).filter((drop) => {
+    if (!drop?.id || seen.has(drop.id)) return false;
+    if (drop.game && drop.game !== 'alley') return false;
+    if (!drop.game && !String(drop.id).startsWith('alley:')) return false;
+    if (!drop.machine) return false;
+    return String(drop.at || '') > cutoff;
+  });
+}
+
+function roundMoney(n) {
+  return Math.round((Number(n) || 0) * 100) / 100;
+}
+
+/** Add those spins onto the hourly machine totals. Machines with no spins stay on the hourly list. */
+export function applyLiveMachines(machines, fresh) {
+  if (!fresh?.length) return machines || [];
+  const rows = (machines || []).map((row) => ({ ...row }));
+  const byLabel = new Map(rows.map((row) => [row.label, row]));
+  for (const drop of fresh) {
+    let row = byLabel.get(drop.machine);
+    if (!row) {
+      row = {
+        id: `live:${drop.machine}`,
+        label: drop.machine,
+        game: 'alley',
+        pulls: 0,
+        usd: 0,
+        paidIn: 0,
+        valueOut: 0,
+        spread: 0,
+      };
+      rows.push(row);
+      byLabel.set(drop.machine, row);
+    }
+    const paid = Number(drop.paid) || 0;
+    const value = Number(drop.value) || 0;
+    const prevPaid = Number(row.paidIn ?? row.usd) || 0;
+    row.pulls = (Number(row.pulls) || 0) + 1;
+    row.usd = roundMoney((Number(row.usd) || 0) + paid);
+    row.paidIn = roundMoney(prevPaid + paid);
+    row.valueOut = roundMoney((Number(row.valueOut) || 0) + value);
+    row.spread = roundMoney(row.paidIn - row.valueOut);
+  }
+  rows.sort((a, b) => (Number(b.usd) || 0) - (Number(a.usd) || 0) || (Number(b.pulls) || 0) - (Number(a.pulls) || 0));
+  return rows;
+}
+
 function fill(prev, live) {
   const out = { ...prev };
   for (const [key, value] of Object.entries(live)) {

@@ -34,6 +34,7 @@ import BonusDetailView from '../src/components/views/BonusDetailView';
 import SpecialDetailView from '../src/components/views/SpecialDetailView';
 import NightshadesDetailView from '../src/components/views/NightshadesDetailView';
 import { protocolRevenueChart } from '../src/lib/yieldHistory';
+import { applyLiveMachines, freshAlleyDrops } from '../src/lib/cardwallDrops';
 import { dateKey } from '../src/lib/dates';
 import { PROJECTS, tabsForProject } from '../src/lib/routes';
 import { activationTokenCostUsd, tokenPriceAtTs } from '../src/lib/portfolioHistory';
@@ -286,6 +287,22 @@ for (const [name, View, props] of VIEWS) {
     console.error(`FAIL  cardwall gacha missing ${missing.join(', ')}`);
   } else {
     console.log('ok    cardwall gacha revenue rendered');
+  }
+  const snapDrops = [{ id: 'alley:1', at: '2026-09-29T16:00:00Z', game: 'alley', machine: 'Elite Pokemon $50', paid: 50, value: 40 }];
+  const live = [
+    snapDrops[0],
+    { id: 'alley:2', at: '2026-09-29T18:31:30Z', game: 'alley', machine: 'Grail Pokemon $1000', paid: 1000, value: 625 },
+    { id: 'claw:9', at: '2026-09-29T18:40:00Z', game: 'claw', machine: 'The Claw', paid: 5, value: 1 },
+  ];
+  const fresh = freshAlleyDrops(snapDrops, live);
+  const folded = applyLiveMachines([{ id: '0xabc', label: 'Elite Pokemon $50', pulls: 10, usd: 500, paidIn: 500, valueOut: 400, spread: 100 }], fresh);
+  const grail = folded.find((row) => row.label === 'Grail Pokemon $1000');
+  const elite = folded.find((row) => row.label === 'Elite Pokemon $50');
+  if (fresh.length !== 1 || !grail || grail.pulls !== 1 || grail.paidIn !== 1000 || grail.valueOut !== 625 || elite.pulls !== 10) {
+    failed++;
+    console.error('FAIL  live alley spins did not fold onto the machine table');
+  } else {
+    console.log('ok    alley machine table folds spins newer than the snapshot');
   }
   const stripped = JSON.parse(JSON.stringify(snapshot));
   delete stripped.projects.cardwall.gacha;

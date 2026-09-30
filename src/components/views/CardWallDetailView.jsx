@@ -23,7 +23,7 @@ import {
   OnboardLinePanel,
 } from '../HistoryCharts';
 import { SliceChart } from '../SliceChart';
-import { loadLiveDrops, mergeDrops } from '../../lib/cardwallDrops';
+import { applyLiveMachines, freshAlleyDrops, loadLiveDrops, mergeDrops } from '../../lib/cardwallDrops';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
@@ -143,6 +143,8 @@ export default function CardWallDetailView({ data, activeTab }) {
     : null;
   const edge = gacha?.edge || null;
   const drops = mergeDrops(gacha?.drops, liveDrops);
+  const freshMachines = freshAlleyDrops(gacha?.drops, liveDrops);
+  const alleyMachines = applyLiveMachines(gacha?.machines, freshMachines);
   const pullsByMachine = new Map();
   for (const pull of machinePulls || []) {
     if (!pull?.machineHash) continue;
@@ -446,10 +448,10 @@ export default function CardWallDetailView({ data, activeTab }) {
                     )}
                   </div>
                 </div>
-                {gacha.machines?.length ? (
+                {alleyMachines.length ? (
                   <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
                     <h3 className="text-sm font-bold text-white mb-1">Alley machines</h3>
-                    <p className="text-xs text-slate-500 mb-3">Every machine on the till, including ones that have not been spun. Open a machine for every slab it revealed.</p>
+                    <p className="text-xs text-slate-500 mb-3">Every machine on the till. A reload adds spins the hourly index has not written yet. Open a machine for every slab it revealed.</p>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
@@ -462,9 +464,11 @@ export default function CardWallDetailView({ data, activeTab }) {
                           </tr>
                         </thead>
                         <tbody>
-                          {gacha.machines.map((m) => {
+                          {alleyMachines.map((m) => {
                             const open = openMachine === m.id;
-                            const rows = open ? sortPulls(pullsByMachine.get(m.id) || [], pullSort) : [];
+                            const seen = new Set((pullsByMachine.get(m.id) || []).map((pull) => pull.id));
+                            const extra = freshMachines.filter((drop) => drop.machine === m.label && !seen.has(drop.id));
+                            const rows = open ? sortPulls([...(pullsByMachine.get(m.id) || []), ...extra], pullSort) : [];
                             return (
                               <React.Fragment key={m.id}>
                                 <tr
