@@ -23,7 +23,7 @@ import {
   OnboardLinePanel,
 } from '../HistoryCharts';
 import { SliceChart } from '../SliceChart';
-import { applyLiveMachines, freshAlleyDrops, loadLiveDrops, mergeDrops } from '../../lib/cardwallDrops';
+import { applyLiveMachines, dropsForMachine, freshAlleyDrops, loadLiveDrops } from '../../lib/cardwallDrops';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
@@ -68,6 +68,7 @@ export default function CardWallDetailView({ data, activeTab }) {
   const [machinePulls, setMachinePulls] = useState(undefined);
   const [openMachine, setOpenMachine] = useState(null);
   const [pullSort, setPullSort] = useState('recent');
+  const [dropMachine, setDropMachine] = useState('');
   const dropsRef = useRef(null);
   const dropModalRef = useRef(null);
 
@@ -142,9 +143,20 @@ export default function CardWallDetailView({ data, activeTab }) {
     ? windowChart(gacha.historyDates, [gacha.historyUsd || [], gacha.historyValue || []], timeframe, interval, ['sum', 'sum'])
     : null;
   const edge = gacha?.edge || null;
-  const drops = mergeDrops(gacha?.drops, liveDrops);
   const freshMachines = freshAlleyDrops(gacha?.drops, liveDrops);
   const alleyMachines = applyLiveMachines(gacha?.machines, freshMachines);
+  const machineNames = [];
+  const seenNames = new Set();
+  for (const row of alleyMachines) {
+    if (!row.label || seenNames.has(row.label)) continue;
+    seenNames.add(row.label);
+    machineNames.push(row.label);
+  }
+  const clawSeen = (gacha?.drops || []).some((drop) => drop.game === 'claw')
+    || (liveDrops || []).some((drop) => drop.game === 'claw');
+  if (clawSeen) machineNames.push('The Claw');
+  const activeMachine = machineNames.includes(dropMachine) ? dropMachine : '';
+  const drops = dropsForMachine(gacha?.drops, liveDrops, machinePulls, activeMachine);
   const pullsByMachine = new Map();
   for (const pull of machinePulls || []) {
     if (!pull?.machineHash) continue;
@@ -599,14 +611,27 @@ export default function CardWallDetailView({ data, activeTab }) {
                     </div>
                   </div>
                 ) : null}
-                {drops.length ? (
+                {drops.length || machineNames.length ? (
                   <div ref={dropsRef} id="cardwall-drops" className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
-                    <div className="flex justify-between items-end gap-3 mb-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-end mb-4">
                       <div>
                         <h3 className="text-sm font-bold text-white">Latest drops</h3>
-                        <p className="text-xs text-slate-500 mt-1">Newest slabs the machines revealed. A reload includes pulls the hourly index has not written yet. Paid is the pull. Value is the posted insured or fair-market price. Click a card for the full pull.</p>
+                        <p className="text-xs text-slate-500 mt-1">Newest slabs the machines revealed. Choose a machine to see only that till, or leave it on all. A reload includes pulls the hourly index has not written yet. Paid is the pull. Value is the posted insured or fair-market price. Click a card for the full pull.</p>
                       </div>
-                      <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex flex-wrap items-center gap-2 shrink-0">
+                        <label className="sr-only" htmlFor="cardwall-drop-machine">Machine</label>
+                        <select
+                          id="cardwall-drop-machine"
+                          value={activeMachine}
+                          onChange={(e) => setDropMachine(e.target.value)}
+                          data-share-omit
+                          className="rounded-lg border border-[#1e2228] bg-[#0e1013] px-2.5 py-1.5 text-xs text-white focus:border-amber-500 focus:outline-none max-w-full"
+                        >
+                          <option value="">All machines</option>
+                          {machineNames.map((name) => (
+                            <option key={name} value={name}>{name}</option>
+                          ))}
+                        </select>
                         <CopyControl
                           alwaysLabel
                           heading
@@ -618,6 +643,7 @@ export default function CardWallDetailView({ data, activeTab }) {
                         <span className="text-xs font-semibold px-2.5 py-1 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">{drops.length} shown</span>
                       </div>
                     </div>
+                    {drops.length ? (
                     <div className="flex gap-3 overflow-x-auto pb-2">
                       {drops.map((drop) => (
                         <button
@@ -647,6 +673,9 @@ export default function CardWallDetailView({ data, activeTab }) {
                         </button>
                       ))}
                     </div>
+                    ) : (
+                      <p className="text-xs text-slate-500">{activeMachine ? 'No recent slabs for this machine.' : 'No recent slabs yet.'}</p>
+                    )}
                   </div>
                 ) : null}
               </>

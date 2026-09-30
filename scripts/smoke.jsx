@@ -34,7 +34,7 @@ import BonusDetailView from '../src/components/views/BonusDetailView';
 import SpecialDetailView from '../src/components/views/SpecialDetailView';
 import NightshadesDetailView from '../src/components/views/NightshadesDetailView';
 import { protocolRevenueChart } from '../src/lib/yieldHistory';
-import { applyLiveMachines, freshAlleyDrops } from '../src/lib/cardwallDrops';
+import { applyLiveMachines, dropsForMachine, freshAlleyDrops } from '../src/lib/cardwallDrops';
 import { dateKey } from '../src/lib/dates';
 import { PROJECTS, tabsForProject } from '../src/lib/routes';
 import { activationTokenCostUsd, tokenPriceAtTs } from '../src/lib/portfolioHistory';
@@ -280,7 +280,7 @@ for (const [name, View, props] of VIEWS) {
       <CardWallDetailView data={snapshot} activeTab="revenue" />
     </StaticRouter>
   );
-  const want = ['Gacha pull revenue', 'The Alley', 'The Claw', 'Card value out', 'Latest drops', 'Copy section', 'Click a card for the full pull', 'Paid in vs card value out', 'Legendary Pokemon $250', 'thecardwall.com/crane'];
+  const want = ['Gacha pull revenue', 'The Alley', 'The Claw', 'Card value out', 'Latest drops', 'All machines', 'cardwall-drop-machine', 'Copy section', 'Click a card for the full pull', 'Paid in vs card value out', 'Legendary Pokemon $250', 'thecardwall.com/crane'];
   const missing = want.filter((s) => !html.includes(s));
   if (missing.length) {
     failed++;
@@ -303,6 +303,27 @@ for (const [name, View, props] of VIEWS) {
     console.error('FAIL  live alley spins did not fold onto the machine table');
   } else {
     console.log('ok    alley machine table folds spins newer than the snapshot');
+  }
+  const pulls = [
+    { id: 'alley:10', at: '2026-09-28T12:00:00Z', game: 'alley', machine: 'Hyper Pokemon $500', paid: 500, value: 200 },
+    { id: 'alley:11', at: '2026-09-29T12:00:00Z', game: 'alley', machine: 'Hyper Pokemon $500', paid: 500, value: 300 },
+    { id: 'alley:12', at: '2026-09-29T13:00:00Z', game: 'alley', machine: 'Elite Pokemon $50', paid: 50, value: 40 },
+  ];
+  const filtered = dropsForMachine(snapDrops, live, pulls, 'Hyper Pokemon $500');
+  const mixed = dropsForMachine(snapDrops, live, pulls, '');
+  const clawOnly = dropsForMachine(snapDrops, live, pulls, 'The Claw');
+  if (
+    filtered.length !== 2
+    || filtered[0].id !== 'alley:11'
+    || filtered.some((drop) => drop.machine !== 'Hyper Pokemon $500')
+    || mixed.length !== 3
+    || clawOnly.length !== 1
+    || clawOnly[0].id !== 'claw:9'
+  ) {
+    failed++;
+    console.error('FAIL  latest drops machine filter');
+  } else {
+    console.log('ok    latest drops filter by machine');
   }
   const stripped = JSON.parse(JSON.stringify(snapshot));
   delete stripped.projects.cardwall.gacha;

@@ -21,6 +21,20 @@ export async function loadLiveDrops(signal) {
   return Array.isArray(body.drops) ? body.drops : null;
 }
 
+const STRIP = 36;
+
+function machineName(drop) {
+  if (!drop) return '';
+  if (drop.game === 'claw' || String(drop.id || '').startsWith('claw:')) return 'The Claw';
+  return drop.machine || '';
+}
+
+function newest(drops, limit = STRIP) {
+  return [...drops]
+    .sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')))
+    .slice(0, limit);
+}
+
 /** Snapshot first, then any pulls the hourly index has not written yet. */
 export function mergeDrops(snapshot, live) {
   const byId = new Map();
@@ -32,9 +46,28 @@ export function mergeDrops(snapshot, live) {
     const prev = byId.get(drop.id);
     byId.set(drop.id, prev ? fill(prev, drop) : drop);
   }
-  return [...byId.values()]
-    .sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')))
-    .slice(0, 36);
+  return newest(byId.values());
+}
+
+/**
+ * All machines: the mixed newest strip.
+ * One machine: that till's newest slabs from the pull index, with any live
+ * spins the index has not written yet laid on top. No extra request.
+ */
+export function dropsForMachine(snapshotDrops, liveDrops, machinePulls, machine) {
+  if (!machine) return mergeDrops(snapshotDrops, liveDrops);
+  const byId = new Map();
+  const take = (drop) => {
+    if (!drop?.id || machineName(drop) !== machine) return;
+    const prev = byId.get(drop.id);
+    byId.set(drop.id, prev ? fill(prev, drop) : drop);
+  };
+  if (machine !== 'The Claw') {
+    for (const pull of machinePulls || []) take(pull);
+  }
+  for (const drop of snapshotDrops || []) take(drop);
+  for (const drop of liveDrops || []) take(drop);
+  return newest(byId.values());
 }
 
 /** Alley spins the hourly snapshot has not counted yet. Same payload as the drops strip. */
