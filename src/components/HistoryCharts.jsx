@@ -64,7 +64,7 @@ export function ChartPanel({ title, note, children, className = '', tall = false
 }
 
 
-export function YieldUsdPricePanel({ snaps, tiers, chartOptions }) {
+export function YieldUsdPricePanel({ snaps, tiers }) {
   const yieldSets = tierYieldUsdDatasets(snaps, tiers);
   const price = tokenPriceDataset(snaps);
   const has = seriesHasInk(yieldSets.flatMap((d) => d.data)) || seriesHasInk(price.data);
@@ -92,6 +92,77 @@ export function YieldUsdPricePanel({ snaps, tiers, chartOptions }) {
       ) : (
         <EmptyChart />
       )}
+    </ChartPanel>
+  );
+}
+
+export function FlywheelPanel({
+  title = 'The Deflationary Flywheel',
+  labels,
+  burn,
+  prices,
+  priceColor = '#94a3b8',
+  burnColor = '#8b5cf6',
+  burnLabel = 'Daily burn',
+  leftMax,
+  frame = 'card',
+}) {
+  const note = 'Burn bars from zero. Token price is the dashed line.';
+  const plot = labels?.length ? (
+    <Bar
+      data={{
+        labels,
+        datasets: [
+          {
+            type: 'line',
+            label: 'Token price',
+            data: prices || [],
+            borderColor: priceColor,
+            borderDash: [4, 4],
+            borderWidth: 1.75,
+            pointRadius: 0,
+            tension: 0,
+            spanGaps: true,
+            yAxisID: 'y1',
+          },
+          {
+            type: 'bar',
+            label: burnLabel,
+            data: burn,
+            backgroundColor: burnColor,
+            borderRadius: 2,
+            maxBarThickness: barThickness((labels || []).length),
+            yAxisID: 'y',
+          },
+        ],
+      }}
+      options={dualAxisOptions({
+        leftTick: compactTick,
+        rightTick: compactUsdTick,
+        rightColor: priceColor,
+        leftMax,
+        labels,
+        leftValues: burn,
+        rightValues: prices,
+        leftUnit: 'Tokens / day',
+        rightUnit: 'USD',
+      })}
+    />
+  ) : (
+    <EmptyChart>No burn history recorded yet</EmptyChart>
+  );
+  if (frame === 'legacy') {
+    return (
+      <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
+        <h3 className="mb-1 text-sm font-bold text-white">{title}</h3>
+        <p className="mb-4 text-xs text-slate-400">{note}</p>
+        <div className="relative h-52 w-full sm:h-64 md:h-80">{plot}</div>
+      </div>
+    );
+  }
+  return (
+    <ChartPanel title={title} note={note}>
+      {plot}
     </ChartPanel>
   );
 }

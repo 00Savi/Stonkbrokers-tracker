@@ -9,15 +9,17 @@ import { windowSnapshots, tierRoiDatasets, protocolRevenueChart, sliceCols, wind
 import { compactUsd, compactNum, Card, Figure, Stat, KpiStrip, Tag, SkeletonCard, SplitBar, YieldPeriodToggle, scaleAnnualYield, yieldSuffix } from '../kit';
 import { ShareSection } from '../CopyControl';
 import { TierFlowSection, netTierCount } from '../TierFlowCards';
-import { baseChartOptions, compactTick, compactUsdTick, cumulativeBurnDataset, dualAxisOptions, STREAM_COLORS, TIER_COLORS, barThickness, percentTick } from '../../lib/charts';
+import { baseChartOptions, compactTick, compactUsdTick, cumulativeBurnDataset, STREAM_COLORS, TIER_COLORS, barThickness, percentTick } from '../../lib/charts';
 import { useChartView } from '../../lib/chartWindow';
 import { explorerAddressUrl } from '../../lib/tba';
 import { SliceChart } from '../SliceChart';
 import { MethodologyCard } from '../Disclaimer';
+import { UnderwaterCard } from '../UnderwaterCard';
 import {
   EmptyChart,
   ChartPanel,
   YieldUsdPricePanel,
+  FlywheelPanel,
   ActivityChart,
   ProtocolFeeVolumePanels,
   SmartLpChartPanels,
@@ -178,9 +180,6 @@ export default function StonkDetailView({ data, activeTab }) {
 
   // 4. Flywheel Chart
   const flywheel = burnRateSeries(project, timeframe, interval);
-  const fwLabels = flywheel.labels;
-  const fwPrices = flywheel.prices;
-  const fwBurn = flywheel.burn;
 
   // 5. Activation Chart — no invented Aug 14–20 series
   const actHistory = activation.history || {};
@@ -626,31 +625,14 @@ export default function StonkDetailView({ data, activeTab }) {
           )}
         </ChartPanel>
 
-        <ChartPanel
-          title="The Deflationary Flywheel"
-          note="Burn bars from zero. Price is the dashed line."
-        >
-          <Bar
-            key={`flywheel-${timeframe}`}
-            data={{
-              labels: fwLabels,
-              datasets: [
-                    { type: 'line', label: 'Token Price ($)', data: fwPrices, borderColor: '#00a804', borderDash: [5, 4], borderWidth: 1.75, pointRadius: 0, tension: 0, yAxisID: 'y1' },
-                { type: 'bar', label: 'Daily burn', data: fwBurn, backgroundColor: '#8b5cf6', borderRadius: 2, maxBarThickness: barThickness(fwLabels.length), yAxisID: 'y' },
-              ],
-            }}
-            options={dualAxisOptions({
-              leftTick: compactTick,
-              rightTick: compactUsdTick,
-              rightColor: '#00a804',
-              leftMax: flywheel.burnAxisMax,
-              labels: fwLabels,
-              leftValues: fwBurn,
-              rightValues: fwPrices,
-              leftUnit: 'Tokens / day',
-            })}
-          />
-        </ChartPanel>
+        <FlywheelPanel
+          labels={flywheel.labels}
+          burn={flywheel.burn}
+          prices={flywheel.prices}
+          priceColor="#00a804"
+          burnColor="#8b5cf6"
+          leftMax={flywheel.burnAxisMax}
+        />
 
         <ChartPanel
           title="Daily intern vs StonkBrokers burn"
@@ -750,6 +732,7 @@ export default function StonkDetailView({ data, activeTab }) {
             <Stat label="Activated wallets" value={activation.activeHolders == null ? '—' : formatNumber(activation.activeHolders)} />
           </KpiStrip>
         </Card>
+          <UnderwaterCard ownership={ownership} />
 
           <OwnershipHistoryPanels
             snaps={roiSnaps}

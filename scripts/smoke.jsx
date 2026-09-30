@@ -48,7 +48,7 @@ import { buildTopicShareCard } from '../src/lib/projectShare';
 import { copySectionEl } from '../src/components/CopyControl';
 import { internIdsForBroker } from '../src/lib/interns';
 import { parseBrokerId } from '../src/lib/brokerScan';
-import { ANVIL_VAULTS, rankVaultRows, wallFloorEth, wallStars } from '../src/lib/anvilScan';
+import { ANVIL_VAULTS, predictTbaAddress, rankVaultRows, wallFloorEth, wallStars } from '../src/lib/anvilScan';
 import { isProjectLive } from '../src/lib/routes';
 import { typicalNightshadesSeat } from '../src/lib/nightshades';
 
@@ -271,6 +271,22 @@ for (const [name, View, props] of VIEWS) {
   } catch (err) {
     failed++;
     console.error(`  FAIL  ${name.padEnd(24)} ${err.message}`);
+  }
+}
+
+{
+  const burnHtml = renderToString(
+    <StaticRouter location="/stonkbrokers/burn">
+      <StonkDetailView data={snapshot} activeTab="burn" />
+    </StaticRouter>
+  );
+  const banned = ['>Token<', '>NFT<', '>Both<'];
+  const leftover = banned.filter((s) => burnHtml.includes(s));
+  if (!burnHtml.includes('The Deflationary Flywheel') || leftover.length) {
+    failed++;
+    console.error(`FAIL  flywheel toggle still present ${leftover.join(', ')}`);
+  } else {
+    console.log('ok    flywheel is token price only');
   }
 }
 
@@ -765,6 +781,14 @@ for (const [name, View, props] of VIEWS) {
     console.error(`FAIL  anvil scan rank ${ranked.map((r) => r.tokenId)} vaults ${vaultIds}`);
   } else {
     console.log('ok    anvil scan ranks vault NFTs by TBA value');
+  }
+  const tbaA = predictTbaAddress(ANVIL_VAULTS[0].nftCa, 1);
+  const tbaB = predictTbaAddress(ANVIL_VAULTS[0].nftCa, 2);
+  if (!/^0x[0-9a-fA-F]{40}$/.test(tbaA) || tbaA.toLowerCase() === tbaB.toLowerCase()) {
+    failed++;
+    console.error(`FAIL  tba predict ${tbaA} ${tbaB}`);
+  } else {
+    console.log('ok    tba address is deterministic');
   }
   if (wallStars(0) !== 1 || wallStars(3) !== 4 || wallStars(4) !== 5 || wallStars(6) != null) {
     failed++;

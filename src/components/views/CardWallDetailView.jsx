@@ -9,13 +9,15 @@ import { windowSnapshots, protocolRevenueChart, sliceCols, seriesHasInk, windowC
 import { BetaTag, compactUsd, compactNum, YieldPeriodToggle, scaleAnnualYield, yieldSuffix } from '../kit';
 import { CopyControl, ShareSection, copySectionEl } from '../CopyControl';
 import { TierFlowSection, netTierCount } from '../TierFlowCards';
-import { baseChartOptions, compactTick, compactUsdTick, cumulativeBurnDataset, dualAxisOptions, TIER_COLORS, percentTick } from '../../lib/charts';
+import { baseChartOptions, compactTick, compactUsdTick, cumulativeBurnDataset, TIER_COLORS, percentTick } from '../../lib/charts';
 import { useChartView } from '../../lib/chartWindow';
 import { holderSeries } from '../../lib/snapshots';
 import { MethodologyCard } from '../Disclaimer';
+import { UnderwaterCard } from '../UnderwaterCard';
 import {
   EmptyChart,
   YieldUsdPricePanel,
+  FlywheelPanel,
   ActivityChart,
   ActivationStackPanel,
   OwnershipHistoryPanels,
@@ -188,8 +190,6 @@ export default function CardWallDetailView({ data, activeTab }) {
   const slicedBurnData = burn.data;
 
   const flywheel = burnRateSeries(project, timeframe, interval);
-  const fwPrices = flywheel.prices;
-  const fwBurn = flywheel.burn;
 
   const actHistory = activation.history || {};
   const hasActHist = Array.isArray(actHistory.labels) && actHistory.labels.length > 0;
@@ -781,31 +781,16 @@ export default function CardWallDetailView({ data, activeTab }) {
             </div>
           </div>
 
-          <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
-            <h3 className="text-sm font-bold text-white mb-1">The Deflationary Flywheel</h3>
-            <p className="text-xs text-slate-400 mb-4">Tracks the correlation between token spot price and daily burn rate.</p>
-            <div className="relative h-52 sm:h-64 md:h-80 w-full">
-              <Bar
-                key={`flywheel-${timeframe}`}
-                data={{
-                  labels: flywheel.labels,
-                  datasets: [
-                    { type: 'line', label: 'Token Price ($)', data: fwPrices, borderColor: '#f5b700', borderDash: [5, 4], borderWidth: 1.75, tension: 0, pointRadius: 0, yAxisID: 'y1' },
-                    { type: 'bar', label: 'Daily Burn Velocity', data: fwBurn, backgroundColor: 'rgba(249, 115, 22, 0.8)', borderRadius: 4, yAxisID: 'y' }
-                  ]
-                }} 
-                options={dualAxisOptions({
-                  leftTick: compactTick,
-                  rightTick: compactUsdTick,
-                  rightColor: '#f5b700',
-                  leftMax: flywheel.burnAxisMax,
-                  leftUnit: 'Tokens / day',
-                  leftValues: flywheel.burn,
-                  rightValues: flywheel.prices,
-                })} 
-              />
-            </div>
-          </div>
+          <FlywheelPanel
+            frame="legacy"
+            labels={flywheel.labels}
+            burn={flywheel.burn}
+            prices={flywheel.prices}
+            priceColor="#f5b700"
+            burnColor="rgba(249, 115, 22, 0.8)"
+            burnLabel="Daily Burn Velocity"
+            leftMax={flywheel.burnAxisMax}
+          />
         </div>
       </ShareSection>
 
@@ -866,6 +851,7 @@ export default function CardWallDetailView({ data, activeTab }) {
       <ShareSection id="ownership" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-lg md:text-xl font-bold text-white mb-6">Protocol Ownership & Distribution</h2>
+          <UnderwaterCard ownership={ownership} />
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner"><p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Current Max Supply</p><p className="text-xl md:text-3xl font-extrabold text-white">{formatNumber(ownership.currentMaxSupply || 0, 2)}</p></div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner"><p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Permanently Burnt</p><p className="text-xl md:text-3xl font-extrabold text-orange-400">{formatNumber(realBurntUnits, 2)}</p></div>

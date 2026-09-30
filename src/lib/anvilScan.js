@@ -90,6 +90,7 @@ const WETH = '0x0bd7d308f8e1639fab988df18a8011f41eacad73';
 const SLAB = '0x8565507566c6a79b57e4eaa70b8232a64003d352';
 const MULTICALL = '0xcA11bde05977b3631167028862bE2a173976CA11';
 const CHUNK = 400;
+const READ_POOL = 3;
 
 const OWNER_OF = new ethers.Interface(['function ownerOf(uint256) view returns (address)']);
 const RARITY_OF = new ethers.Interface(['function rarityOf(uint256) view returns (uint256)']);
@@ -259,6 +260,30 @@ async function tryAggregate(mc, calls, signal) {
   throw last || new Error('Chain read failed.');
 }
 
+function chunkItems(items, size = CHUNK) {
+  const chunks = [];
+  for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
+  return chunks;
+}
+
+/** ERC-6551 registry CREATE2. Confirmed against account() before a scan trusts it. */
+export function predictTbaAddress(nftCa, tokenId) {
+  const implementation = DEFAULT_TBA.implementation;
+  const initCode = ethers.concat([
+    '0x3d60ad80600a3d3981f3363d3d373d3d3d363d73',
+    implementation,
+    '0x5af43d82803e903d91602b57fd5bf3',
+  ]);
+  const bytecodeHash = ethers.keccak256(initCode);
+  const saltHash = ethers.keccak256(
+    ethers.AbiCoder.defaultAbiCoder().encode(
+      ['bytes32', 'uint256', 'address', 'uint256'],
+      [DEFAULT_TBA.salt, DEFAULT_TBA.chainId, nftCa, tokenId],
+    ),
+  );
+  return ethers.getCreate2Address(DEFAULT_TBA.registry, saltHash, bytecodeHash);
+}
+
 async function mapChunks(items, fn, { onStep, signal } = {}) {
   const out = [];
   const chunks = [];
@@ -269,6 +294,18 @@ async function mapChunks(items, fn, { onStep, signal } = {}) {
     if (onStep) onStep(Math.min(items.length, (i + 1) * CHUNK), items.length);
   }
   return out;
+}
+
+async function mapChunksPooled(items, fn, { onStep, signal, limit = READ_POOL, size = CHUNK } = {}) {
+  const chunks = chunkItems(items, size);
+  let done = 0;
+  const parts = await mapPool(chunks, limit, async (slice) => {
+    const out = await fn(slice);
+    done += slice.length;
+    if (onStep) onStep(Math.min(items.length, done), items.length);
+    return out;
+  }, signal);
+  return parts.flat();
 }
 
 async function mapPool(items, limit, fn, signal) {
@@ -339,6 +376,52 @@ async function applyToken(mc, rows, token, signal) {
   amounts.forEach((raw, i) => addHolding(rows[i], token, raw));
 }
 
+/** Several balanceOf reads in one multicall, still capped at CHUNK, three calls in flight. */
+async function applyTokenGroup(mc, rows, tokens, signal, onStep) {
+  const list = (tokens || []).filter((token) => token?.ca);
+  if (!rows.length || !list.length) return;
+  const width = Math.max(1, Math.floor(CHUNK / list.length));
+  await mapChunksPooled(rows, async (slice) => {
+    const packed = [];
+    for (const token of list) {
+      for (const row of slice) {
+        packed.push({
+          target: token.ca,
+          callData: ERC20.encodeFunctionData('balanceOf', [row.tba]),
+        });
+      }
+    }
+    const returned = await tryAggregate(mc, packed, signal);
+    let cursor = 0;
+    for (const token of list) {
+      for (const row of slice) {
+        const item = returned[cursor++];
+        addHolding(row, token, item?.success ? decodeUint(item.returnData) : 0n);
+      }
+    }
+    return [];
+  }, {
+    signal,
+    size: width,
+    onStep,
+  });
+}
+
+async function accountOnChain(mc, nftCa, tokenId, signal) {
+  const returned = await tryAggregate(mc, [{
+    target: DEFAULT_TBA.registry,
+    callData: ACCOUNT.encodeFunctionData('account', [
+      DEFAULT_TBA.implementation,
+      DEFAULT_TBA.salt,
+      DEFAULT_TBA.chainId,
+      nftCa,
+      tokenId,
+    ]),
+  }], signal);
+  const item = returned[0];
+  return item?.success ? decodeAddress(item.returnData) : null;
+}
+
 async function withDecimals(mc, tokens, signal) {
   const pending = tokens.filter((t) => t.decimals == null && !t.nft);
   if (!pending.length) return tokens;
@@ -369,7 +452,7 @@ async function attachWallStars(mc, rows, signal, report) {
   const ids = [];
   for (let id = wall.firstId; id < wall.firstId + wall.maxSupply; id++) ids.push(id);
   const matched = [];
-  await mapChunks(ids, async (slice) => {
+  await mapChunksPooled(ids, async (slice) => {
     const packed = slice.map((id) => ({
       target: wall.nftCa,
       callData: OWNER_OF.encodeFunctionData('ownerOf', [id]),
@@ -502,7 +585,7 @@ export async function scanAnvilVault(vaultId, data, { onProgress, onPartial, onP
   }
   const amm = vault.ammCa.toLowerCase();
   const ownedIds = [];
-  await mapChunks(ownerCalls, async (slice) => {
+  await mapChunksPooled(ownerCalls, async (slice) => {
     const returned = await tryAggregate(mc, slice.map((c) => ({ target: c.target, callData: c.callData })), signal);
     returned.forEach((item, i) => {
       if (!item.success) return;
@@ -518,26 +601,42 @@ export async function scanAnvilVault(vaultId, data, { onProgress, onPartial, onP
 
   mark('tba', 'run');
   const tbaById = new Map();
-  await mapChunks(ownedIds, async (slice) => {
-    const packed = slice.map((id) => ({
-      target: DEFAULT_TBA.registry,
-      callData: ACCOUNT.encodeFunctionData('account', [
-        DEFAULT_TBA.implementation,
-        DEFAULT_TBA.salt,
-        DEFAULT_TBA.chainId,
-        vault.nftCa,
-        id,
-      ]),
+  report('Resolving token-bound wallets…', 0, ownedIds.length || 1);
+  let tbaLocal = false;
+  if (ownedIds.length >= 2) {
+    const sample = [ownedIds[0], ownedIds[ownedIds.length - 1]];
+    const checks = await Promise.all(sample.map(async (id) => {
+      const onchain = await accountOnChain(mc, vault.nftCa, id, signal);
+      const local = predictTbaAddress(vault.nftCa, id);
+      return onchain && local && onchain.toLowerCase() === local.toLowerCase();
     }));
-    const returned = await tryAggregate(mc, packed, signal);
-    returned.forEach((item, i) => {
-      if (item.success) tbaById.set(slice[i], decodeAddress(item.returnData));
+    tbaLocal = checks.every(Boolean);
+  }
+  if (tbaLocal) {
+    for (const id of ownedIds) tbaById.set(id, predictTbaAddress(vault.nftCa, id));
+    report('Resolving token-bound wallets…', ownedIds.length, ownedIds.length);
+  } else {
+    await mapChunksPooled(ownedIds, async (slice) => {
+      const packed = slice.map((id) => ({
+        target: DEFAULT_TBA.registry,
+        callData: ACCOUNT.encodeFunctionData('account', [
+          DEFAULT_TBA.implementation,
+          DEFAULT_TBA.salt,
+          DEFAULT_TBA.chainId,
+          vault.nftCa,
+          id,
+        ]),
+      }));
+      const returned = await tryAggregate(mc, packed, signal);
+      returned.forEach((item, i) => {
+        if (item.success) tbaById.set(slice[i], decodeAddress(item.returnData));
+      });
+      return [];
+    }, {
+      signal,
+      onStep: (done, total) => report('Resolving token-bound wallets…', done, total),
     });
-    return [];
-  }, {
-    signal,
-    onStep: (done, total) => report('Resolving token-bound wallets…', done, total),
-  });
+  }
   mark('tba', 'done');
 
   const rows = ownedIds
@@ -554,17 +653,18 @@ export async function scanAnvilVault(vaultId, data, { onProgress, onPartial, onP
   mark('eth', 'run');
   if (eth > 0 && rows.length) {
     report('Reading ETH in token-bound wallets…', 0, rows.length);
-    const bals = [];
-    await mapChunks(rows, async (slice) => {
+    const ethIface = new ethers.Interface(['function getEthBalance(address) view returns (uint256)']);
+    const bals = await mapChunksPooled(rows, async (slice) => {
       const packed = slice.map((row) => ({
         target: MULTICALL,
-        callData: new ethers.Interface(['function getEthBalance(address) view returns (uint256)'])
-          .encodeFunctionData('getEthBalance', [row.tba]),
+        callData: ethIface.encodeFunctionData('getEthBalance', [row.tba]),
       }));
       const returned = await tryAggregate(mc, packed, signal);
-      returned.forEach((item) => bals.push(item.success ? decodeUint(item.returnData) : 0n));
-      return [];
-    }, { signal });
+      return returned.map((item) => (item.success ? decodeUint(item.returnData) : 0n));
+    }, {
+      signal,
+      onStep: (done, total) => report('Reading ETH in token-bound wallets…', done, total),
+    });
     bals.forEach((raw, i) => {
       if (raw <= 0n) return;
       const amount = Number(ethers.formatEther(raw));
@@ -586,20 +686,25 @@ export async function scanAnvilVault(vaultId, data, { onProgress, onPartial, onP
 
   await withDecimals(mc, fungible, signal);
   const ownCa = vault.tokenCa.toLowerCase();
-  for (let i = 0; i < fungible.length; i++) {
-    mark(`tok:${fungible[i].ca}`, 'run');
-    report(`Reading ${fungible[i].symbol}…`, i, fungible.length);
-    await applyToken(mc, rows, fungible[i], signal);
-    mark(`tok:${fungible[i].ca}`, 'done');
-    if (fungible[i].ca === ownCa) publish();
+  const own = fungible.find((token) => token.ca === ownCa);
+  const restFungible = fungible.filter((token) => token !== own);
+  if (own) {
+    mark(`tok:${own.ca}`, 'run');
+    await applyTokenGroup(mc, rows, [own], signal, (done, total) => report(`Reading ${own.symbol}…`, done, total));
+    mark(`tok:${own.ca}`, 'done');
+    publish();
   }
+  for (const token of restFungible) mark(`tok:${token.ca}`, 'run');
+  if (restFungible.length) {
+    await applyTokenGroup(mc, rows, restFungible, signal, (done, total) => report('Reading Anvil tokens…', done, total));
+  }
+  for (const token of restFungible) mark(`tok:${token.ca}`, 'done');
 
-  for (let i = 0; i < nfts.length; i++) {
-    mark(`nft:${nfts[i].ca}`, 'run');
-    report(`Reading ${nfts[i].symbol}…`, i, nfts.length);
-    await applyToken(mc, rows, nfts[i], signal);
-    mark(`nft:${nfts[i].ca}`, 'done');
+  for (const token of nfts) mark(`nft:${token.ca}`, 'run');
+  if (nfts.length) {
+    await applyTokenGroup(mc, rows, nfts, signal, (done, total) => report('Reading Anvil NFTs…', done, total));
   }
+  for (const token of nfts) mark(`nft:${token.ca}`, 'done');
 
   mark('stars', 'run');
   await attachWallStars(mc, rows, signal, report);

@@ -14,9 +14,9 @@ import {
   OAKMONT_ACTIONS, OAKMONT_BASKET, OAKMONT_DOCS, OAKMONT_DAPP, OAKMONT_SITE, OAKMONT_FEES,
   fetchGeckoTokenHolders,
 } from '../../lib/oakmont';
-import { baseChartOptions, compactTick, compactUsdTick, cumulativeBurnDataset, dualAxisOptions, percentTick } from '../../lib/charts';
+import { baseChartOptions, compactTick, compactUsdTick, cumulativeBurnDataset, percentTick } from '../../lib/charts';
 import { useChartView } from '../../lib/chartWindow';
-import { YieldUsdPricePanel, HolderRevenuePanel } from '../HistoryCharts';
+import { YieldUsdPricePanel, HolderRevenuePanel, FlywheelPanel } from '../HistoryCharts';
 import { DisclaimerCopy } from '../Disclaimer';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler);
@@ -330,35 +330,16 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
             </div>
           </div>
 
-          <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
-            <h3 className="text-sm font-bold text-white mb-1">Deflationary flywheel</h3>
-            <p className="text-xs text-slate-400 mb-4">Daily burn against ${ticker} spot.</p>
-            <div className="relative h-52 sm:h-64 md:h-80 w-full">
-              {flywheel.labels.length > 0 ? (
-                <Bar
-                  key={`flywheel-${timeframe}`}
-                  data={{
-                    labels: flywheel.labels,
-                    datasets: [
-                      { type: 'line', label: `$${ticker} price`, data: flywheel.prices, borderColor: '#00a804', borderDash: [5, 4], borderWidth: 1.75, tension: 0, pointRadius: 0, yAxisID: 'y1' },
-                      { type: 'bar', label: 'Daily burn', data: flywheel.burn, backgroundColor: 'rgba(249, 115, 22, 0.8)', borderRadius: 4, yAxisID: 'y' },
-                    ],
-                  }}
-                  options={dualAxisOptions({
-                    leftTick: compactTick,
-                    rightTick: compactUsdTick,
-                    rightColor: '#00a804',
-                    leftMax: flywheel.burnAxisMax,
-                    leftUnit: 'Tokens / day',
-                    leftValues: flywheel.burn,
-                    rightValues: flywheel.prices,
-                  })}
-                />
-              ) : (
-                <div className="h-full flex items-center justify-center text-sm text-slate-500">No burn history recorded yet</div>
-              )}
-            </div>
-          </div>
+          <FlywheelPanel
+            frame="legacy"
+            title="Deflationary flywheel"
+            labels={flywheel.labels}
+            burn={flywheel.burn}
+            prices={flywheel.prices}
+            priceColor="#00a804"
+            burnColor="rgba(249, 115, 22, 0.8)"
+            leftMax={flywheel.burnAxisMax}
+          />
         </div>
       </ShareSection>
 

@@ -382,6 +382,7 @@ const RAIN_LOOKBACK_DAYS = 30;
 const { GgIndex } = require("./lib/ggindex.cjs");
 const { Rpc, TOPIC, addrTopic, decodeUint, decodeAddr, encodeUint, topicAddr } = require("./lib/rpc.cjs");
 const { fetchLogsWithTimestamps, erc20Transfers } = require("./lib/chain.cjs");
+const { advanceUnderwater } = require("./lib/underwater.cjs");
 const { BlockTime } = require("./lib/blocktime.cjs");
 const { buildSpecialProject, isSpecial } = require("./lib/specials.cjs");
 const yieldDays = require("./lib/yieldDays.cjs");
@@ -4193,6 +4194,32 @@ async function run() {
   }
   if (projectsFailed) {
     console.warn(`[warn] ${projectsFailed} project(s) carried forward; ${projectsOk} rebuilt`);
+  }
+
+  try {
+    const uw = [];
+    const pushUw = (key, conf, project, tokenLeg, priceProject) => {
+      if (!project || !conf?.nftCa) return;
+      uw.push({
+        key,
+        conf,
+        project,
+        tokenLeg,
+        priceProject: priceProject || project,
+        nftCache: conf.deactivateOnTransfer ? `cache_${key}_nft_logs.json` : "",
+      });
+    };
+    pushUw("stonk", PROJECTS.stonk, finalJson.projects.stonk, true);
+    pushUw("mancer", PROJECTS.mancer, finalJson.projects.mancer, true);
+    pushUw("tickeryard", PROJECTS.tickeryard, finalJson.projects.tickeryard, true);
+    pushUw("cardwall", PROJECTS.cardwall, finalJson.projects.cardwall, true);
+    pushUw("interns", PROJECTS.interns, finalJson.projects.interns, false, finalJson.projects.stonk);
+    for (const id of Object.keys(NIGHTSHADES_FACTIONS)) {
+      pushUw(id, NIGHTSHADES_FACTIONS[id], finalJson.projects.nightshades?.factions?.[id], true);
+    }
+    await advanceUnderwater({ rpc, blockTime, jobs: uw, budgetMs: 3 * 60 * 1000 });
+  } catch (e) {
+    console.warn(`[warn] underwater: ${e.message}`);
   }
 
   try {
