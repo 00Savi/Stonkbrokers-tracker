@@ -78,9 +78,12 @@ function sanitizeDailySnapshots(snaps, livePrice) {
   });
   // Do not drop rows whose ROI is 4× the latest. Realized yield actually
   // moved that much in the first weeks; the filter ate 8/20–8/25 of STONK
-  // and left the yield chart starting on 8/26.
+  // and left the yield chart starting on 8/26. A leading day that already
+  // has a real token price is the project's start, and it stays.
   if (out.some(snapshotRoi)) {
-    while (out.length && !snapshotRoi(out[0])) out.shift();
+    while (out.length && !snapshotRoi(out[0]) && !(Number(out[0].tokenPriceUsd) > 0 && Number(out[0].tokenPriceUsd) !== 0.03)) {
+      out.shift();
+    }
   }
   return out;
 }
@@ -1498,6 +1501,9 @@ async function getOwnershipStats(conf, equivBurnt, previousData) {
   // the next hourly run.
   if (previousData?.ownership?.priceHistory) {
     ownership.priceHistory = previousData.ownership.priceHistory;
+  }
+  if (Array.isArray(previousData?.ownership?.holderMix)) {
+    ownership.holderMix = previousData.ownership.holderMix;
   }
   return ownership;
 }
@@ -4192,6 +4198,12 @@ async function run() {
   if (!projectsOk) {
     throw new Error(`every project failed (${projectsFailed}); refusing to rewrite data.json`);
   }
+
+  try {
+    await overlayIndexPrices(finalJson);
+  } catch (e) {
+    console.warn(`[warn] index prices: ${e.message}`);
+  }
   if (projectsFailed) {
     console.warn(`[warn] ${projectsFailed} project(s) carried forward; ${projectsOk} rebuilt`);
   }
@@ -4248,6 +4260,7 @@ async function run() {
         });
         job.project.ownership = job.project.ownership || {};
         job.project.ownership.underwater = summary;
+        noteHolderMix(job.project, summary);
         console.log(
           `  underwater ${job.key}: ${summary.pct}% of ${summary.wallets} ` +
           `(nft ${summary.nftOnly}, token ${summary.tokenOnly}, both ${summary.both})`,
@@ -4274,13 +4287,90 @@ async function run() {
 
   for (const [key, proj] of Object.entries(finalJson.projects)) {
     if (!proj) continue;
-    const livePx = markets[key]?.tokenPriceUsd || proj.market?.tokenPriceUsd || 0;
-    proj.dailySnapshots = sanitizeDailySnapshots(proj.dailySnapshots, livePx);
-    priceDays.applyToProject(proj, priceDays.loadCache()[key]);
+    if (key === "nightshades") {
+      for (const [id, fac] of Object.entries(proj.factions || {})) stampPriceHistory(id, fac, markets);
+    }
+    stampPriceHistory(key, proj, markets);
   }
 
   const written = writeData(finalJson);
   console.log(`\n✓ Complete dashboard payload generated successfully -> ${written.join(", ")}`);
+}
+
+function noteHolderMix(project, summary) {
+  const date = new Date().toISOString().slice(0, 10);
+  const prev = Array.isArray(project.ownership?.holderMix) ? project.ownership.holderMix : [];
+  const mix = prev.filter((row) => row?.date !== date);
+  mix.push({
+    date,
+    nftOnly: summary.nftOnly,
+    tokenOnly: summary.tokenOnly,
+    both: summary.both,
+    wallets: summary.wallets,
+  });
+  project.ownership.holderMix = mix.slice(-400);
+}
+
+async function overlayIndexPrices(payload) {
+  const cache = priceDays.loadCache();
+  const specs = [];
+  for (const [key, conf] of Object.entries(PROJECTS)) {
+    if (key === "interns" || key === "nightshades" || !conf?.tokenCa) continue;
+    specs.push([key, conf.tokenCa, Number(conf.unitValue) || 0]);
+  }
+  for (const [key, conf] of Object.entries(NIGHTSHADES_FACTIONS)) {
+    if (conf?.tokenCa) specs.push([key, conf.tokenCa, Number(conf.unitValue) || 0]);
+  }
+  for (const [key, token] of specs) {
+    try {
+      const body = await gg.dailyPrices(token, 365);
+      const merged = priceDays.mergeCloses(cache[key], body?.prices);
+      cache[key] = merged.byDate;
+      if (merged.added) console.log(`  index prices ${key}: +${merged.added} days`);
+    } catch (e) {
+      console.warn(`[warn] index prices ${key}: ${e.message}`);
+    }
+  }
+  priceDays.saveCache(cache);
+
+  const apply = (key, project, unit, prepend) => {
+    if (!project) return;
+    const byDate = key === "interns" ? cache.stonk : cache[key];
+    if (!byDate) return;
+    const n = priceDays.ensureSnapshotDays(project, byDate, {
+      unitValue: prepend ? unit : 0,
+      prepend,
+    });
+    if (n) console.log(`  price days ${key}: ${n}`);
+  };
+  for (const [key, project] of Object.entries(payload.projects || {})) {
+    if (key === "nightshades") {
+      for (const [id, fac] of Object.entries(project?.factions || {})) {
+        apply(id, fac, NIGHTSHADES_FACTIONS[id]?.unitValue || 0, true);
+      }
+    } else {
+      apply(key, project, PROJECTS[key]?.unitValue || 0, key !== "interns");
+    }
+  }
+}
+
+function stampPriceHistory(key, proj, markets) {
+  if (!proj) return;
+  const livePx = markets?.[key]?.tokenPriceUsd || proj.market?.tokenPriceUsd || 0;
+  proj.dailySnapshots = sanitizeDailySnapshots(proj.dailySnapshots, livePx);
+  const cache = priceDays.loadCache();
+  const byDate = key === "interns" ? cache.stonk : cache[key];
+  if (!byDate || !Object.values(byDate).some((px) => Number(px) > 0)) return;
+  if (key === "interns") {
+    const days = new Set((proj.dailySnapshots || []).map((s) => String(s.date || "").slice(0, 10)));
+    const filtered = {};
+    for (const [day, px] of Object.entries(byDate)) {
+      if (days.has(day)) filtered[day] = px;
+    }
+    priceDays.applyToProject(proj, filtered);
+    return;
+  }
+  priceDays.applyToProject(proj, byDate);
 }
 
 async function rebuildActivations(keys) {

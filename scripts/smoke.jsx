@@ -33,6 +33,7 @@ import CardWallDetailView from '../src/components/views/CardWallDetailView';
 import BonusDetailView from '../src/components/views/BonusDetailView';
 import SpecialDetailView from '../src/components/views/SpecialDetailView';
 import NightshadesDetailView from '../src/components/views/NightshadesDetailView';
+import { UnderwaterCard } from '../src/components/UnderwaterCard';
 import { protocolRevenueChart } from '../src/lib/yieldHistory';
 import { applyLiveMachines, dropsForMachine, freshAlleyDrops } from '../src/lib/cardwallDrops';
 import { dateKey } from '../src/lib/dates';
@@ -802,6 +803,34 @@ for (const [name, View, props] of VIEWS) {
     console.error(`FAIL  wall floors ${wallFloorEth(5, starMarket)} ${wallFloorEth(2, starMarket)}`);
   } else {
     console.log('ok    wall floor follows the star rating');
+  }
+}
+
+{
+  const hidden = renderToString(<UnderwaterCard ownership={{ underwater: { caughtUp: false, wallets: 3 } }} />);
+  const shown = renderToString(
+    <UnderwaterCard
+      ownership={{
+        underwater: {
+          caughtUp: true,
+          wallets: 4,
+          underwater: 1,
+          pct: 25,
+          nftOnly: 2,
+          tokenOnly: 1,
+          both: 1,
+          byWeek: [{ week: '2026-08-17', wallets: 4, underwater: 1, pct: 25 }],
+          payback: [{ tier: 'T1', nfts: 2, cost: 200, yield: 40, pct: 20 }],
+        },
+        holderMix: [{ date: '2026-09-30', nftOnly: 2, tokenOnly: 1, both: 1, wallets: 4 }],
+      }}
+    />
+  );
+  if (hidden !== '' || !shown.includes('Underwater by the week') || !shown.includes('Payback by tier') || !shown.includes('saved each hour')) {
+    failed++;
+    console.error('FAIL  underwater charts');
+  } else {
+    console.log('ok    underwater week, payback, and holder mix');
   }
 }
 
