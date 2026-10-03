@@ -40,9 +40,11 @@ function starMarks(stars) {
 function holdingText(holding, compact) {
   const base = `${formatAmount(holding)} ${holding.symbol}`;
   if (!holding.pieces?.length) return base;
-  const bits = holding.pieces.map((piece) => (
-    compact ? starMarks(piece.stars) : `#${piece.tokenId} ${starMarks(piece.stars)}`
-  ));
+  const bits = holding.pieces.map((piece) => {
+    const stars = starMarks(piece.stars);
+    const priced = piece.floorEth > 0 ? ` ${Number(piece.floorEth).toFixed(3)}` : '';
+    return compact ? `${stars}${priced}` : `#${piece.tokenId} ${stars}${priced}`;
+  });
   const shown = compact ? bits.slice(0, 3) : bits;
   const extra = compact && bits.length > 3 ? ` +${bits.length - 3}` : '';
   return `${base} · ${shown.join(', ')}${extra}`;
