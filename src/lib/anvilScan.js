@@ -94,6 +94,8 @@ const WETH = '0x0bd7d308f8e1639fab988df18a8011f41eacad73';
 const SLAB = '0x8565507566c6a79b57e4eaa70b8232a64003d352';
 const MULTICALL = '0xcA11bde05977b3631167028862bE2a173976CA11';
 const CHUNK = 800;
+// One balance multicall can cover a whole vault. Owner scans stay at CHUNK.
+const BALANCE_CHUNK = 2500;
 const READ_POOL = 6;
 
 const OWNER_OF = new ethers.Interface(['function ownerOf(uint256) view returns (address)']);
@@ -447,12 +449,12 @@ function snapshot(rows) {
 
 async function readBalances(mc, rows, token, signal) {
   const dataFor = (row) => ERC20.encodeFunctionData('balanceOf', [row.tba]);
-  const amounts = await mapChunks(rows, async (slice) => {
+  const amounts = await mapChunksPooled(rows, async (slice) => {
     const packed = slice.map((row) => ({ target: token.ca, callData: dataFor(row) }));
     const returned = await tryAggregate(mc, packed, signal);
     return returned.map((item) => (item.success ? decodeUint(item.returnData) : 0n));
-  }, { signal });
-  return amounts;
+  }, { signal, size: BALANCE_CHUNK });
+  return amounts.flat();
 }
 
 function addHolding(row, token, raw) {
@@ -1027,6 +1029,7 @@ export async function scanAnvilVault(vaultId, data, { onProgress, onPartial, onP
       return returned.map((item) => (item.success ? decodeUint(item.returnData) : 0n));
     }, {
       signal,
+      size: BALANCE_CHUNK,
       onStep: (done, total) => report('Reading ETH in token-bound wallets…', done, total),
     });
     bals.forEach((raw, i) => {
