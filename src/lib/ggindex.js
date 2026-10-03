@@ -199,3 +199,48 @@ export function applyOverlay(base, overlay) {
 
   return { ...base, projects };
 }
+
+/**
+ * One wallet's open date, from the position fold.
+ *
+ * `null` when the fold is not ready or the index is unreachable — the caller
+ * falls back to the explorer. An empty `positions` list with `complete: true`
+ * means the wallet is under one whole token, which is a real answer.
+ */
+export async function loadHolderPosition(address, wallet) {
+  if (!address || !wallet) return null;
+  try {
+    return await get(`/tokens/${address}/positions?holder=${wallet}`);
+  } catch {
+    return null;
+  }
+}
+
+async function optional(path) {
+  try {
+    return await get(path);
+  } catch {
+    return null;
+  }
+}
+
+/** Structure, flow, effective activation, cohorts, and daily revenue streams. */
+export function loadProjectAnalysis(slug) {
+  const id = encodeURIComponent(slug);
+  return Promise.all([
+    optional(`/projects/${id}/structure`),
+    optional(`/projects/${id}/activity?days=180`),
+    optional(`/projects/${id}/effective`),
+    optional(`/projects/${id}/cohorts`),
+    optional(`/projects/${id}/revenue/daily?days=180`),
+  ]).then(([structure, activity, effective, cohorts, revenue]) => ({
+    structure, activity, effective, cohorts, revenue,
+  }));
+}
+
+export function loadOverlap(slugs) {
+  const q = slugs?.length
+    ? `?slugs=${slugs.map((s) => encodeURIComponent(s)).join(',')}`
+    : '';
+  return optional(`/analytics/overlap${q}`);
+}

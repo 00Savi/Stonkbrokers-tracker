@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { copyChart, copyElement } from '../lib/share';
+import { SectionInsights } from './SectionInsights';
 
 export function copySectionEl(el, id) {
   const node = el || (id ? document.getElementById(id) : null);
@@ -52,6 +53,7 @@ export function ShareSection({ id, title, className = '', children }) {
         />
       </div>
       {children}
+      <SectionInsights sectionId={id} />
     </section>
   );
 }

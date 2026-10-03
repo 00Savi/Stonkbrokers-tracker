@@ -25359,48 +25359,54 @@
         },
         "underwater": {
           "caughtUp": true,
-          "wallets": 7720,
-          "underwater": 6672,
-          "pct": 86.4,
+          "wallets": 7717,
+          "underwater": 6674,
+          "pct": 86.5,
           "nftOnly": 171,
-          "tokenOnly": 7435,
+          "tokenOnly": 7432,
           "both": 114,
+          "nftWallets": 285,
+          "nftUnder": 184,
+          "nftPct": 64.6,
+          "tokenWallets": 7546,
+          "tokenUnder": 6570,
+          "tokenPct": 87.1,
           "byWeek": [
             {
               "week": "2026-08-17",
-              "wallets": 187,
+              "wallets": 184,
               "underwater": 16,
-              "pct": 8.6
+              "pct": 8.7
             },
             {
               "week": "2026-08-24",
               "wallets": 2456,
-              "underwater": 2331,
+              "underwater": 2330,
               "pct": 94.9
             },
             {
               "week": "2026-08-31",
-              "wallets": 1444,
-              "underwater": 1444,
+              "wallets": 1448,
+              "underwater": 1448,
               "pct": 100
             },
             {
               "week": "2026-09-07",
-              "wallets": 1312,
-              "underwater": 1143,
+              "wallets": 1319,
+              "underwater": 1149,
               "pct": 87.1
             },
             {
               "week": "2026-09-14",
-              "wallets": 908,
-              "underwater": 906,
-              "pct": 99.8
+              "wallets": 901,
+              "underwater": 900,
+              "pct": 99.9
             },
             {
               "week": "2026-09-21",
-              "wallets": 900,
-              "underwater": 832,
-              "pct": 92.4
+              "wallets": 896,
+              "underwater": 831,
+              "pct": 92.7
             },
             {
               "week": "2026-09-28",
@@ -25412,16 +25418,16 @@
           "payback": [
             {
               "tier": "T0",
-              "nfts": 50,
-              "cost": 6619.15,
-              "yield": 634.97,
-              "pct": 9.6
+              "nfts": 49,
+              "cost": 6353.2,
+              "yield": 622.04,
+              "pct": 9.8
             },
             {
               "tier": "T1",
-              "nfts": 119,
-              "cost": 31366.99,
-              "yield": 1585.34,
+              "nfts": 120,
+              "cost": 31629.67,
+              "yield": 1601.51,
               "pct": 5.1
             },
             {
@@ -25446,7 +25452,21 @@
               "pct": 1.2
             }
           ]
-        }
+        },
+        "underwaterHistory": [
+          {
+            "at": "2026-10-03T01:00",
+            "pct": 86.5,
+            "nftPct": 64.6,
+            "tokenPct": 87.1,
+            "underwater": 6674,
+            "wallets": 7717,
+            "nftUnder": 184,
+            "nftWallets": 285,
+            "tokenUnder": 6570,
+            "tokenWallets": 7546
+          }
+        ]
       },
       "tiers": [
         {
@@ -31299,11 +31319,17 @@
           "nftOnly": 40,
           "tokenOnly": 4208,
           "both": 37,
+          "nftWallets": 77,
+          "nftUnder": 77,
+          "nftPct": 100,
+          "tokenWallets": 4245,
+          "tokenUnder": 4245,
+          "tokenPct": 100,
           "byWeek": [
             {
               "week": "2026-08-17",
-              "wallets": 248,
-              "underwater": 248,
+              "wallets": 249,
+              "underwater": 249,
               "pct": 100
             },
             {
@@ -31314,8 +31340,8 @@
             },
             {
               "week": "2026-08-31",
-              "wallets": 209,
-              "underwater": 209,
+              "wallets": 208,
+              "underwater": 208,
               "pct": 100
             },
             {
@@ -31346,10 +31372,10 @@
           "payback": [
             {
               "tier": "T0",
-              "nfts": 4,
-              "cost": 244.64,
-              "yield": 31.62,
-              "pct": 12.9
+              "nfts": 3,
+              "cost": 192.44,
+              "yield": 23.71,
+              "pct": 12.3
             },
             {
               "tier": "T1",
@@ -31380,7 +31406,21 @@
               "pct": 4.7
             }
           ]
-        }
+        },
+        "underwaterHistory": [
+          {
+            "at": "2026-10-03T01:00",
+            "pct": 100,
+            "nftPct": 100,
+            "tokenPct": 100,
+            "underwater": 4285,
+            "wallets": 4285,
+            "nftUnder": 77,
+            "nftWallets": 77,
+            "tokenUnder": 4245,
+            "tokenWallets": 4245
+          }
+        ]
       },
       "tiers": [
         {
@@ -49973,23 +50013,29 @@
           "nftOnly": 97,
           "tokenOnly": 4633,
           "both": 211,
+          "nftWallets": 308,
+          "nftUnder": 0,
+          "nftPct": 0,
+          "tokenWallets": 4844,
+          "tokenUnder": 4844,
+          "tokenPct": 100,
           "byWeek": [
             {
               "week": "2026-08-10",
-              "wallets": 630,
-              "underwater": 584,
-              "pct": 92.7
+              "wallets": 636,
+              "underwater": 589,
+              "pct": 92.6
             },
             {
               "week": "2026-08-17",
-              "wallets": 324,
-              "underwater": 291,
-              "pct": 89.8
+              "wallets": 320,
+              "underwater": 288,
+              "pct": 90
             },
             {
               "week": "2026-08-24",
-              "wallets": 2410,
-              "underwater": 2405,
+              "wallets": 2408,
+              "underwater": 2403,
               "pct": 99.8
             },
             {
@@ -50012,19 +50058,33 @@
             },
             {
               "week": "2026-09-21",
-              "wallets": 339,
-              "underwater": 337,
+              "wallets": 341,
+              "underwater": 339,
               "pct": 99.4
             },
             {
               "week": "2026-09-28",
-              "wallets": 179,
-              "underwater": 178,
+              "wallets": 177,
+              "underwater": 176,
               "pct": 99.4
             }
           ],
           "payback": []
-        }
+        },
+        "underwaterHistory": [
+          {
+            "at": "2026-10-03T01:00",
+            "pct": 98,
+            "nftPct": 0,
+            "tokenPct": 100,
+            "underwater": 4844,
+            "wallets": 4941,
+            "nftUnder": 0,
+            "nftWallets": 308,
+            "tokenUnder": 4844,
+            "tokenWallets": 4844
+          }
+        ]
       },
       "tiers": [
         {
@@ -73220,6 +73280,12 @@
               "nftOnly": 113,
               "tokenOnly": 121,
               "both": 115,
+              "nftWallets": 228,
+              "nftUnder": 226,
+              "nftPct": 99.1,
+              "tokenWallets": 236,
+              "tokenUnder": 227,
+              "tokenPct": 96.2,
               "byWeek": [
                 {
                   "week": "2026-09-14",
@@ -73243,17 +73309,17 @@
               "payback": [
                 {
                   "tier": "T0",
-                  "nfts": 30,
-                  "cost": 326.64,
-                  "yield": 37.31,
-                  "pct": 11.4
+                  "nfts": 33,
+                  "cost": 358.2,
+                  "yield": 41.04,
+                  "pct": 11.5
                 },
                 {
                   "tier": "T1",
                   "nfts": 9,
-                  "cost": 128.12,
-                  "yield": 13.5,
-                  "pct": 10.5
+                  "cost": 145.42,
+                  "yield": 13.99,
+                  "pct": 9.6
                 },
                 {
                   "tier": "T2",
@@ -73271,13 +73337,27 @@
                 },
                 {
                   "tier": "T4",
-                  "nfts": 19,
-                  "cost": 3725.83,
-                  "yield": 75.4,
-                  "pct": 2
+                  "nfts": 18,
+                  "cost": 3473.35,
+                  "yield": 71.26,
+                  "pct": 2.1
                 }
               ]
-            }
+            },
+            "underwaterHistory": [
+              {
+                "at": "2026-10-03T01:00",
+                "pct": 98.6,
+                "nftPct": 99.1,
+                "tokenPct": 96.2,
+                "underwater": 344,
+                "wallets": 349,
+                "nftUnder": 226,
+                "nftWallets": 228,
+                "tokenUnder": 227,
+                "tokenWallets": 236
+              }
+            ]
           },
           "tiers": [
             {
@@ -76646,11 +76726,17 @@
             "underwater": {
               "caughtUp": true,
               "wallets": 585,
-              "underwater": 574,
-              "pct": 98.1,
+              "underwater": 575,
+              "pct": 98.3,
               "nftOnly": 232,
               "tokenOnly": 191,
               "both": 162,
+              "nftWallets": 394,
+              "nftUnder": 388,
+              "nftPct": 98.5,
+              "tokenWallets": 353,
+              "tokenUnder": 345,
+              "tokenPct": 97.7,
               "byWeek": [
                 {
                   "week": "2026-09-14",
@@ -76661,8 +76747,8 @@
                 {
                   "week": "2026-09-21",
                   "wallets": 33,
-                  "underwater": 27,
-                  "pct": 81.8
+                  "underwater": 28,
+                  "pct": 84.8
                 },
                 {
                   "week": "2026-09-28",
@@ -76674,41 +76760,55 @@
               "payback": [
                 {
                   "tier": "T0",
-                  "nfts": 8,
-                  "cost": 61.97,
-                  "yield": 7.28,
-                  "pct": 11.8
+                  "nfts": 13,
+                  "cost": 108.37,
+                  "yield": 11.84,
+                  "pct": 10.9
                 },
                 {
                   "tier": "T1",
-                  "nfts": 16,
-                  "cost": 216.71,
-                  "yield": 17.29,
-                  "pct": 8
+                  "nfts": 18,
+                  "cost": 257.54,
+                  "yield": 19.57,
+                  "pct": 7.6
                 },
                 {
                   "tier": "T2",
-                  "nfts": 18,
-                  "cost": 377.49,
-                  "yield": 20.28,
-                  "pct": 5.4
+                  "nfts": 19,
+                  "cost": 419.25,
+                  "yield": 21.73,
+                  "pct": 5.2
                 },
                 {
                   "tier": "T3",
-                  "nfts": 18,
-                  "cost": 1088.69,
-                  "yield": 31.04,
-                  "pct": 2.9
+                  "nfts": 22,
+                  "cost": 1360.69,
+                  "yield": 38.32,
+                  "pct": 2.8
                 },
                 {
                   "tier": "T4",
-                  "nfts": 30,
-                  "cost": 4023.62,
-                  "yield": 86.8,
+                  "nfts": 27,
+                  "cost": 3454.03,
+                  "yield": 77.71,
                   "pct": 2.2
                 }
               ]
-            }
+            },
+            "underwaterHistory": [
+              {
+                "at": "2026-10-03T01:00",
+                "pct": 98.3,
+                "nftPct": 98.5,
+                "tokenPct": 97.7,
+                "underwater": 575,
+                "wallets": 585,
+                "nftUnder": 388,
+                "nftWallets": 394,
+                "tokenUnder": 345,
+                "tokenWallets": 353
+              }
+            ]
           },
           "tiers": [
             {
@@ -80574,6 +80674,12 @@
               "nftOnly": 232,
               "tokenOnly": 147,
               "both": 202,
+              "nftWallets": 434,
+              "nftUnder": 434,
+              "nftPct": 100,
+              "tokenWallets": 349,
+              "tokenUnder": 344,
+              "tokenPct": 98.6,
               "byWeek": [
                 {
                   "week": "2026-09-14",
@@ -80598,15 +80704,15 @@
                 {
                   "tier": "T0",
                   "nfts": 40,
-                  "cost": 298.93,
+                  "cost": 296.93,
                   "yield": 9.62,
                   "pct": 3.2
                 },
                 {
                   "tier": "T1",
-                  "nfts": 21,
-                  "cost": 299.9,
-                  "yield": 5.66,
+                  "nfts": 20,
+                  "cost": 278.81,
+                  "yield": 5.36,
                   "pct": 1.9
                 },
                 {
@@ -80618,20 +80724,34 @@
                 },
                 {
                   "tier": "T3",
-                  "nfts": 13,
-                  "cost": 729.35,
-                  "yield": 5.26,
+                  "nfts": 15,
+                  "cost": 901.97,
+                  "yield": 6.23,
                   "pct": 0.7
                 },
                 {
                   "tier": "T4",
-                  "nfts": 71,
-                  "cost": 8805.62,
-                  "yield": 56.45,
-                  "pct": 0.6
+                  "nfts": 68,
+                  "cost": 8030.18,
+                  "yield": 54.05,
+                  "pct": 0.7
                 }
               ]
-            }
+            },
+            "underwaterHistory": [
+              {
+                "at": "2026-10-03T01:00",
+                "pct": 99.8,
+                "nftPct": 100,
+                "tokenPct": 98.6,
+                "underwater": 580,
+                "wallets": 581,
+                "nftUnder": 434,
+                "nftWallets": 434,
+                "tokenUnder": 344,
+                "tokenWallets": 349
+              }
+            ]
           },
           "tiers": [
             {
@@ -83889,6 +84009,12 @@
               "nftOnly": 103,
               "tokenOnly": 136,
               "both": 100,
+              "nftWallets": 203,
+              "nftUnder": 203,
+              "nftPct": 100,
+              "tokenWallets": 236,
+              "tokenUnder": 234,
+              "tokenPct": 99.2,
               "byWeek": [
                 {
                   "week": "2026-09-14",
@@ -83912,10 +84038,10 @@
               "payback": [
                 {
                   "tier": "T0",
-                  "nfts": 13,
-                  "cost": 89.5,
-                  "yield": 10.07,
-                  "pct": 11.3
+                  "nfts": 15,
+                  "cost": 109.6,
+                  "yield": 11.84,
+                  "pct": 10.8
                 },
                 {
                   "tier": "T1",
@@ -83933,10 +84059,10 @@
                 },
                 {
                   "tier": "T3",
-                  "nfts": 11,
-                  "cost": 436.17,
-                  "yield": 17.59,
-                  "pct": 4
+                  "nfts": 12,
+                  "cost": 526.62,
+                  "yield": 19.36,
+                  "pct": 3.7
                 },
                 {
                   "tier": "T4",
@@ -83946,7 +84072,21 @@
                   "pct": 2.2
                 }
               ]
-            }
+            },
+            "underwaterHistory": [
+              {
+                "at": "2026-10-03T01:00",
+                "pct": 99.4,
+                "nftPct": 100,
+                "tokenPct": 99.2,
+                "underwater": 337,
+                "wallets": 339,
+                "nftUnder": 203,
+                "nftWallets": 203,
+                "tokenUnder": 234,
+                "tokenWallets": 236
+              }
+            ]
           },
           "tiers": [
             {

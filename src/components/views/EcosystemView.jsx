@@ -20,6 +20,7 @@ import { baseChartOptions, compactTick, compactUsdTick, PROJECT_COLORS, levelAxi
 import { EmptyChart, OnboardClusterPanel } from '../HistoryCharts';
 import { MethodologyCard } from '../Disclaimer';
 import { CopyControl, shareSlug, ShareSection } from '../CopyControl';
+import { OverlapPanel } from '../SectionInsights';
 import { copyElement } from '../../lib/share';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
@@ -908,6 +909,7 @@ export default function EcosystemView({ data, pending = false }) {
             return concOverlay.datasets.length ? `${v.toFixed(2)}%` : compactNum(v);
           }}
         />
+        <OverlapPanel />
       </ShareSection>
 
       <ShareSection id="rankings" className="scroll-mt-32">

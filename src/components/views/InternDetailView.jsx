@@ -390,7 +390,6 @@ export default function InternDetailView({ data, activeTab }) {
       <ShareSection id="ownership" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-lg md:text-xl font-bold text-white">Intern ownership</h2>
-          <UnderwaterCard ownership={ownership} />
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5"><p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Collection</p><p className="text-2xl font-extrabold text-white">{formatNumber(ownership.currentMaxSupply || INTERNS_MAX_SUPPLY)}</p></div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5"><p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Live released</p><p className="text-2xl font-extrabold text-amber-300">{dash(awaitingContracts, liveInterns)}</p></div>
@@ -422,6 +421,7 @@ export default function InternDetailView({ data, activeTab }) {
             live={{ tokenHolders: 0, nftHolders: ownership.nftHolders, ownershipRatio: ownership.ownershipRatio }}
           />
           <OnboardLinePanel data={data} projectKey="interns" timeframe={timeframe} interval={interval} name="Interns" />
+          <UnderwaterCard ownership={ownership} tokenLeg={false} />
         </div>
       </ShareSection>
 

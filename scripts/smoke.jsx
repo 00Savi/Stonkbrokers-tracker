@@ -819,16 +819,51 @@ for (const [name, View, props] of VIEWS) {
           nftOnly: 2,
           tokenOnly: 1,
           both: 1,
+          nftWallets: 3,
+          nftUnder: 1,
+          nftPct: 33.3,
+          tokenWallets: 2,
+          tokenUnder: 1,
+          tokenPct: 50,
           byWeek: [{ week: '2026-08-17', wallets: 4, underwater: 1, pct: 25 }],
-          payback: [{ tier: 'T1', nfts: 2, cost: 200, yield: 40, pct: 20 }],
         },
-        holderMix: [{ date: '2026-09-30', nftOnly: 2, tokenOnly: 1, both: 1, wallets: 4 }],
+        holderMix: [
+          { date: '2026-09-30', nftOnly: 2, tokenOnly: 1, both: 1, wallets: 4 },
+          { date: '2026-10-01', nftOnly: 2, tokenOnly: 1, both: 1, wallets: 4 },
+        ],
+        underwaterHistory: [
+          { at: '2026-09-30T17:00', pct: 30, nftPct: 40, tokenPct: 20 },
+          { at: '2026-09-30T18:00', pct: 25, nftPct: 33.3, tokenPct: 50 },
+        ],
       }}
     />
   );
-  if (hidden !== '' || !shown.includes('Underwater by the week') || !shown.includes('Payback by tier') || !shown.includes('saved each hour')) {
+  const nftOnly = renderToString(
+    <UnderwaterCard
+      tokenLeg={false}
+      ownership={{
+        underwater: {
+          caughtUp: true,
+          wallets: 4,
+          underwater: 1,
+          pct: 25,
+          nftOnly: 4,
+          tokenOnly: 0,
+          both: 0,
+          nftWallets: 4,
+          nftUnder: 1,
+          nftPct: 25,
+        },
+        holderMix: [{ date: '2026-09-30', nftOnly: 4, tokenOnly: 0, both: 0, wallets: 4 }],
+      }}
+    />
+  );
+  if (hidden !== '' || !shown.includes('Holders underwater') || !shown.includes('saved each hour') || !shown.includes('Underwater by the week') || !shown.includes('NFT wallets') || !shown.includes('token wallets') || !shown.includes('Holder mix') || !shown.includes('largest cohort') || shown.includes('Payback by tier')) {
     failed++;
     console.error('FAIL  underwater charts');
+  } else if (nftOnly.includes('Holder mix') || nftOnly.includes('token only') || nftOnly.includes('token wallets') || !nftOnly.includes('Token bags stay on StonkBrokers')) {
+    failed++;
+    console.error('FAIL  intern underwater is nft only');
   } else {
     console.log('ok    underwater week, payback, and holder mix');
   }

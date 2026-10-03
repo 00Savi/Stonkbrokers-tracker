@@ -732,8 +732,6 @@ export default function StonkDetailView({ data, activeTab }) {
             <Stat label="Activated wallets" value={activation.activeHolders == null ? '—' : formatNumber(activation.activeHolders)} />
           </KpiStrip>
         </Card>
-          <UnderwaterCard ownership={ownership} />
-
           <OwnershipHistoryPanels
             snaps={roiSnaps}
             live={{
@@ -749,6 +747,7 @@ export default function StonkDetailView({ data, activeTab }) {
             interval={interval}
             name="StonkBrokers"
           />
+          <UnderwaterCard ownership={ownership} />
       </ShareSection>
 
       <MethodologyCard>

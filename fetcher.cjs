@@ -1505,6 +1505,9 @@ async function getOwnershipStats(conf, equivBurnt, previousData) {
   if (Array.isArray(previousData?.ownership?.holderMix)) {
     ownership.holderMix = previousData.ownership.holderMix;
   }
+  if (Array.isArray(previousData?.ownership?.underwaterHistory)) {
+    ownership.underwaterHistory = previousData.ownership.underwaterHistory;
+  }
   return ownership;
 }
 
@@ -4224,6 +4227,8 @@ async function run() {
     pushUw("mancer", PROJECTS.mancer, finalJson.projects.mancer, true);
     pushUw("tickeryard", PROJECTS.tickeryard, finalJson.projects.tickeryard, true);
     pushUw("cardwall", PROJECTS.cardwall, finalJson.projects.cardwall, true);
+    // NFT only. Interns lock parent $STONKBROKER to activate, but the bag itself
+    // is a StonkBrokers position and is scored on that project.
     pushUw("interns", PROJECTS.interns, finalJson.projects.interns, false, finalJson.projects.stonk);
     for (const id of Object.keys(NIGHTSHADES_FACTIONS)) {
       pushUw(id, NIGHTSHADES_FACTIONS[id], finalJson.projects.nightshades?.factions?.[id], true);
@@ -4261,6 +4266,7 @@ async function run() {
         job.project.ownership = job.project.ownership || {};
         job.project.ownership.underwater = summary;
         noteHolderMix(job.project, summary);
+        noteUnderwaterHistory(job.project, summary);
         console.log(
           `  underwater ${job.key}: ${summary.pct}% of ${summary.wallets} ` +
           `(nft ${summary.nftOnly}, token ${summary.tokenOnly}, both ${summary.both})`,
@@ -4309,6 +4315,25 @@ function noteHolderMix(project, summary) {
     wallets: summary.wallets,
   });
   project.ownership.holderMix = mix.slice(-400);
+}
+
+function noteUnderwaterHistory(project, summary) {
+  const at = `${new Date().toISOString().slice(0, 13)}:00`;
+  const prev = Array.isArray(project.ownership?.underwaterHistory) ? project.ownership.underwaterHistory : [];
+  const series = prev.filter((row) => row?.at !== at);
+  series.push({
+    at,
+    pct: summary.pct,
+    nftPct: summary.nftPct,
+    tokenPct: summary.tokenPct,
+    underwater: summary.underwater,
+    wallets: summary.wallets,
+    nftUnder: summary.nftUnder,
+    nftWallets: summary.nftWallets,
+    tokenUnder: summary.tokenUnder,
+    tokenWallets: summary.tokenWallets,
+  });
+  project.ownership.underwaterHistory = series.slice(-720);
 }
 
 async function overlayIndexPrices(payload) {

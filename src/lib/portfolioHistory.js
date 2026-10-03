@@ -1,5 +1,6 @@
 import { ethers } from 'ethers';
 import { dateKey, utcIso, utcIsoFromTs } from './dates';
+import { loadHolderPosition } from './ggindex';
 
 /** Interns (and similar companions) activate in the parent token. */
 export function priceSource(pData, data) {
@@ -246,6 +247,12 @@ export function earnedUsdForTokenPosition(pData, amount, startTs) {
 }
 
 export async function fetchTokenHoldStartTs(tokenCa, wallet) {
+  const indexed = await loadHolderPosition(tokenCa, wallet);
+  if (indexed?.kind === 'token' && indexed.complete && (indexed.positions || []).length <= 1) {
+    const row = indexed.positions?.[0];
+    return Number(row?.opened_at) || 0;
+  }
+
   let page = 1;
   let bal = 0;
   let holdStart = 0;
@@ -283,6 +290,29 @@ export async function fetchTokenHoldStartTs(tokenCa, wallet) {
     page += 1;
   }
   return holdStart;
+}
+
+/** Current NFT holds for one wallet, from the open-date fold. Null when it is not ready. */
+export async function fetchIndexedNftHolds(nftCa, wallet) {
+  const body = await loadHolderPosition(nftCa, wallet);
+  if (!body || body.kind !== 'nft' || !body.complete) return null;
+  const holds = body.holds || [];
+  const walletLower = wallet.toLowerCase();
+  if (holds.some((h) => (h.owner || '').toLowerCase() !== walletLower)) return null;
+  const ownedIds = new Set();
+  const inbound = new Map();
+  for (const hold of body.holds || []) {
+    const id = Number(hold.token_id);
+    if (!Number.isFinite(id)) continue;
+    ownedIds.add(id);
+    inbound.set(id, {
+      ts: Number(hold.received_at) || 0,
+      hash: '',
+      from: '',
+      valueWei: '0',
+    });
+  }
+  return { ownedIds, inbound };
 }
 
 function includeDropDate(date, startTs, startLabel, snapTs) {

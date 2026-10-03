@@ -1,98 +1,189 @@
 import React from 'react';
 import { Bar, Line } from 'react-chartjs-2';
-import { baseChartOptions } from '../lib/charts';
-import { compactUsd } from './kit';
+import { baseChartOptions, percentTick } from '../lib/charts';
+import { ChartPanel, EmptyChart } from './HistoryCharts';
 
-function pctOptions(labels) {
-  return baseChartOptions(labels, 'daily', {
-    yUnit: '%',
-    yTick: (v) => `${v}%`,
-  });
+function finite(n) {
+  return Number.isFinite(Number(n));
 }
 
-function moneyOptions(labels) {
-  return baseChartOptions(labels, 'daily', {
-    yTick: (v) => compactUsd(v),
-  });
+function historyPoints(ownership, row) {
+  const stored = Array.isArray(ownership?.underwaterHistory) ? ownership.underwaterHistory : [];
+  if (stored.length) return stored;
+  return [{
+    at: 'Now',
+    pct: row.pct,
+    nftPct: row.nftPct,
+    tokenPct: row.tokenPct,
+  }];
 }
 
-/** Hidden until position folds have reached the backfill and a wallet was scored. */
-export function UnderwaterCard({ ownership }) {
+function pointLabel(at) {
+  const s = String(at || '');
+  if (s === 'Now') return s;
+  return s.replace('T', ' ').slice(5, 16);
+}
+
+function percentOptions(labels) {
+  const base = baseChartOptions(labels, 'daily', { yUnit: '%', yTick: percentTick });
+  return {
+    ...base,
+    scales: {
+      ...base.scales,
+      y: {
+        ...base.scales.y,
+        min: 0,
+        max: 100,
+        unit: '%',
+        title: base.scales.y.title,
+      },
+    },
+  };
+}
+
+function stackedCountOptions(labels) {
+  const base = baseChartOptions(labels, 'daily');
+  return {
+    ...base,
+    scales: {
+      ...base.scales,
+      x: { ...base.scales.x, stacked: true },
+      y: { ...base.scales.y, stacked: true },
+    },
+  };
+}
+
+function weekNote(weeks) {
+  if (!weeks.length) return '';
+  const latest = weeks[weeks.length - 1];
+  const biggest = weeks.reduce((a, b) => (b.wallets > a.wallets ? b : a));
+  const label = (w) => String(w.week).slice(5);
+  return `Wallets that opened that week, scored at today's price. ${label(biggest)} is the largest cohort, ${biggest.underwater} of ${biggest.wallets} underwater. The latest week, ${label(latest)}, is ${latest.underwater} of ${latest.wallets}. A bar of all red can be a small cohort.`;
+}
+
+/** Hidden until position folds have reached the backfill and a wallet was scored.
+ *  `tokenLeg` is the token bag. Interns are the NFT only; that bag is scored
+ *  on StonkBrokers. */
+export function UnderwaterCard({ ownership, tokenLeg = true }) {
   const row = ownership?.underwater;
   if (!row?.caughtUp || !(row.wallets > 0)) return null;
+  const series = historyPoints(ownership, row);
+  const labels = series.map((p) => pointLabel(p.at || p.date));
+  const nftPcts = series.map((p) => (finite(p.nftPct) ? Number(p.nftPct) : null));
+  const tokenPcts = series.map((p) => (finite(p.tokenPct) ? Number(p.tokenPct) : null));
+  const combined = series.map((p) => (finite(p.pct) ? Number(p.pct) : null));
+  const hasNftLine = nftPcts.some(finite);
+  const hasTokenLine = tokenLeg && tokenPcts.some(finite);
   const weeks = Array.isArray(row.byWeek) ? row.byWeek : [];
-  const payback = Array.isArray(row.payback) ? row.payback : [];
   const mix = Array.isArray(ownership.holderMix) ? ownership.holderMix : [];
+  const lastMix = mix.length ? mix[mix.length - 1] : null;
+
+  const lineSets = [];
+  if (hasNftLine) {
+    lineSets.push({
+      label: 'NFT holders',
+      data: nftPcts,
+      borderColor: '#38bdf8',
+      backgroundColor: 'transparent',
+      tension: 0.3,
+      pointRadius: nftPcts.length < 8 ? 3 : 0,
+      spanGaps: true,
+    });
+  }
+  if (hasTokenLine) {
+    lineSets.push({
+      label: 'Token holders',
+      data: tokenPcts,
+      borderColor: '#f5b700',
+      backgroundColor: 'transparent',
+      tension: 0.3,
+      pointRadius: tokenPcts.length < 8 ? 3 : 0,
+      spanGaps: true,
+    });
+  }
+  if (!lineSets.length && combined.some(finite)) {
+    lineSets.push({
+      label: 'All holders',
+      data: combined,
+      borderColor: '#fb7185',
+      backgroundColor: 'transparent',
+      tension: 0.3,
+      pointRadius: combined.length < 8 ? 3 : 0,
+      spanGaps: true,
+    });
+  }
+
+  const splitNote = hasNftLine
+    ? `${row.nftUnder ?? '—'} of ${row.nftWallets ?? '—'} NFT wallets (${Number(row.nftPct).toFixed(1)}%)`
+      + (hasTokenLine
+        ? ` and ${row.tokenUnder ?? '—'} of ${row.tokenWallets ?? '—'} token wallets (${Number(row.tokenPct).toFixed(1)}%) are underwater. A wallet that holds both is counted on both lines.`
+        : ' are underwater.')
+    : `${row.underwater} of ${row.wallets} wallets (${Number(row.pct).toFixed(1)}%) are underwater. NFT and token lines start on the next hourly score.`;
 
   return (
-    <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 space-y-6">
-      <div>
-        <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Holders underwater</p>
-        <p className="text-2xl font-extrabold text-rose-400">{Number(row.pct).toFixed(1)}%</p>
-        <p className="text-xs text-slate-500 mt-1">
-          {row.underwater} of {row.wallets} wallets. NFT only {row.nftOnly} · token only {row.tokenOnly} · both {row.both}. Cost is the floor and the token price on the day the position opened. An activation this owner paid is included, and so is the revenue since.
-        </p>
-      </div>
+    <div className="space-y-6">
+      <ChartPanel
+        title="Holders underwater"
+        note={`${splitNote} Cost is the floor or the token price on the day the position opened. The lines are that share of today's holders, saved each hour.${tokenLeg ? '' : ' Token bags stay on StonkBrokers.'}`}
+      >
+        {lineSets.length ? (
+          <Line data={{ labels, datasets: lineSets }} options={percentOptions(labels)} />
+        ) : (
+          <EmptyChart>Underwater history starts on the next hourly score</EmptyChart>
+        )}
+      </ChartPanel>
 
       {weeks.length > 0 && (
-        <div>
-          <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-2">Underwater by the week the position opened</p>
-          <div className="h-44">
-            <Bar
-              data={{
-                labels: weeks.map((w) => String(w.week).slice(5)),
-                datasets: [{
+        <ChartPanel title="Underwater by the week the position opened" note={weekNote(weeks)}>
+          <Bar
+            data={{
+              labels: weeks.map((w) => String(w.week).slice(5)),
+              datasets: [
+                {
                   label: 'Underwater',
-                  data: weeks.map((w) => w.pct),
+                  data: weeks.map((w) => w.underwater),
                   backgroundColor: '#fb7185',
+                  stack: 'week',
                   borderRadius: 3,
-                }],
-              }}
-              options={pctOptions(weeks.map((w) => w.week))}
-            />
-          </div>
-        </div>
+                },
+                {
+                  label: 'Above water',
+                  data: weeks.map((w) => Math.max(0, w.wallets - w.underwater)),
+                  backgroundColor: '#00a804',
+                  stack: 'week',
+                  borderRadius: 3,
+                },
+              ],
+            }}
+            options={stackedCountOptions(weeks.map((w) => w.week))}
+          />
+        </ChartPanel>
       )}
 
-      {payback.length > 0 && (
-        <div>
-          <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-2">Payback by tier</p>
-          <p className="text-xs text-slate-500 mb-2">Cumulative yield against the tokens this owner locked to activate.</p>
-          <div className="h-44">
+      {tokenLeg && (
+        <ChartPanel
+          title="Holder mix"
+          note={lastMix
+            ? `Token only ${lastMix.tokenOnly} · NFT only ${lastMix.nftOnly} · both ${lastMix.both}. Token wallets are most of the set, so the NFT bands stay thin. Saved once a day.`
+            : 'NFT only, token only, and both.'}
+        >
+          {mix.length < 2 ? (
+            <EmptyChart>The bars start once two days are on record.</EmptyChart>
+          ) : (
             <Bar
-              data={{
-                labels: payback.map((p) => p.tier),
-                datasets: [
-                  { label: 'Locked', data: payback.map((p) => p.cost), backgroundColor: '#f5b700', borderRadius: 3 },
-                  { label: 'Yield', data: payback.map((p) => p.yield), backgroundColor: '#00a804', borderRadius: 3 },
-                ],
-              }}
-              options={moneyOptions(payback.map((p) => p.tier))}
-            />
-          </div>
-        </div>
-      )}
-
-      <div>
-        <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-2">Holder mix</p>
-        {mix.length < 2 ? (
-          <p className="text-xs text-slate-500">NFT only, token only, and both are saved each hour. The line starts once two hours are on record.</p>
-        ) : (
-          <div className="h-44">
-            <Line
               data={{
                 labels: mix.map((m) => String(m.date).slice(5)),
                 datasets: [
-                  { label: 'NFT only', data: mix.map((m) => m.nftOnly), borderColor: '#38bdf8', backgroundColor: '#38bdf8', tension: 0.3, pointRadius: 0 },
-                  { label: 'Token only', data: mix.map((m) => m.tokenOnly), borderColor: '#f5b700', backgroundColor: '#f5b700', tension: 0.3, pointRadius: 0 },
-                  { label: 'Both', data: mix.map((m) => m.both), borderColor: '#00a804', backgroundColor: '#00a804', tension: 0.3, pointRadius: 0 },
+                  { label: 'Token only', data: mix.map((m) => m.tokenOnly), backgroundColor: '#f5b700', stack: 'mix' },
+                  { label: 'NFT only', data: mix.map((m) => m.nftOnly), backgroundColor: '#38bdf8', stack: 'mix' },
+                  { label: 'Both', data: mix.map((m) => m.both), backgroundColor: '#00a804', stack: 'mix' },
                 ],
               }}
-              options={baseChartOptions(mix.map((m) => m.date))}
+              options={stackedCountOptions(mix.map((m) => m.date))}
             />
-          </div>
-        )}
-      </div>
+          )}
+        </ChartPanel>
+      )}
     </div>
   );
 }

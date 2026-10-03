@@ -18,6 +18,8 @@ import MemesTokensView from './components/views/MemesTokensView';
 import SpecialDetailView from './components/views/SpecialDetailView';
 import NightshadesDetailView, { NightshadesFactionBar } from './components/views/NightshadesDetailView';
 import { useDashboard } from './lib/useDashboard';
+import { AnalysisProvider } from './components/SectionInsights';
+import { NIGHTSHADES_FACTIONS } from './lib/nightshades';
 import { PROJECT_BY_SLUG, TAB_BY_SLUG, DEFAULT_TAB, BONUS_LIVE, PROJECTS, isProjectLive, tabsForProject } from './lib/routes';
 import { useProjectScrollSpy } from './lib/projectScroll';
 import { SkeletonCard } from './components/kit';
@@ -73,6 +75,26 @@ function ProjectPage({ data }) {
   const View = DETAIL_VIEWS[key];
   if (!View) return <Navigate to="/" replace />;
 
+  const faction = (searchParams.get('faction') || 'all').toLowerCase();
+  const nightshadeFaction = key === 'nightshades' && NIGHTSHADES_FACTIONS.includes(faction);
+  const insight = nightshadeFaction
+    ? {
+        slug: faction,
+        project: data?.projects?.nightshades?.factions?.[faction] || null,
+        overlapSlugs: null,
+      }
+    : key === 'nightshades'
+      ? {
+          slug: null,
+          project: data?.projects?.nightshades || null,
+          overlapSlugs: NIGHTSHADES_FACTIONS,
+        }
+      : {
+          slug: key,
+          project: data?.projects?.[key] || null,
+          overlapSlugs: null,
+        };
+
   return (
     <>
       <div className="sticky top-[var(--header-h,5.5rem)] z-20 -mx-3 bg-[#08090b] px-3">
@@ -81,7 +103,9 @@ function ProjectPage({ data }) {
       </div>
       <div className="pt-5 pb-10" id="project-share">
         {data ? (
-          <View data={data} activeTab={activeTab} />
+          <AnalysisProvider slug={insight.slug} project={insight.project} overlapSlugs={insight.overlapSlugs}>
+            <View data={data} activeTab={activeTab} />
+          </AnalysisProvider>
         ) : (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <SkeletonCard />

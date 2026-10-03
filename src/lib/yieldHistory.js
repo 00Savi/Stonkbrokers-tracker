@@ -673,3 +673,44 @@ export function ownershipHistory(snaps, live = {}) {
     }),
   };
 }
+
+/**
+ * Cumulative implied cash versus the change in entry cost.
+ *
+ * `yieldUsd` on a snapshot is an annualized run-rate, so a day's cash is that
+ * rate divided by 365. Mark is the floor plus the tier's token cost, minus the
+ * same cost on the first day of the window. The two lines are both USD, so a
+ * floor rally and collected cash stop looking like the same ROI.
+ */
+export function cashVsMarkSeries(snaps, tier) {
+  if (!tier || !snaps?.length) return null;
+  const rows = [];
+  for (const s of snaps) {
+    const floor = Number(s.nftFloorUsd);
+    const px = Number(s.tokenPriceUsd);
+    const y = Number(s.tiers?.find((t) => t.tier === tier.tier)?.yieldUsd);
+    const floorOk = Number.isFinite(floor) && floor > 0;
+    const pxOk = Number.isFinite(px) && px >= 0;
+    if (!floorOk && !pxOk) continue;
+    const cost = (floorOk ? floor : 0) + (Number(tier.reqTokens) || 0) * (pxOk ? px : 0);
+    if (!(cost > 0)) continue;
+    rows.push({
+      date: s.date,
+      cost,
+      dailyCash: Number.isFinite(y) && y > 0 ? y / 365 : 0,
+    });
+  }
+  if (rows.length < 2) return null;
+  const base = rows[0].cost;
+  let cum = 0;
+  const labels = [];
+  const cash = [];
+  const mark = [];
+  for (const r of rows) {
+    cum += r.dailyCash;
+    labels.push(r.date);
+    cash.push(cum);
+    mark.push(r.cost - base);
+  }
+  return { labels, cash, mark, tier: tier.tier || tier.name || 'Tier' };
+}

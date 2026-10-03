@@ -31,6 +31,7 @@ import {
   fetchNftImage,
   normalizeNftImageUrl,
   fetchNftTransferLog,
+  fetchIndexedNftHolds,
   fetchOwnedNftIdsV2,
   enumerateOwnedIds,
   fetchTokenHoldStartTs,
@@ -343,12 +344,30 @@ export default function PortfolioView({ data }) {
             let ownedTokenIds = new Set();
             let inbound = new Map();
             let idsPartial = false;
+            let indexed = null;
             try {
-              const log = await fetchNftTransferLog(pData.config.nftCa, wallet);
-              inbound = log.inbound;
-              ownedTokenIds = log.ownedIds;
+              indexed = await fetchIndexedNftHolds(pData.config.nftCa, wallet);
             } catch {
-              /* explorer rate-limit — try other ID sources */
+              indexed = null;
+            }
+            if (indexed && indexed.ownedIds.size === bal) {
+              ownedTokenIds = indexed.ownedIds;
+              inbound = indexed.inbound;
+            } else {
+              try {
+                const log = await fetchNftTransferLog(pData.config.nftCa, wallet);
+                inbound = log.inbound;
+                ownedTokenIds = log.ownedIds;
+              } catch {
+                /* explorer rate-limit — try other ID sources */
+              }
+              if (indexed) {
+                for (const [id, row] of indexed.inbound) {
+                  ownedTokenIds.add(id);
+                  const prev = inbound.get(id);
+                  if (!prev?.ts && row.ts) inbound.set(id, { ...(prev || {}), ...row, hash: prev?.hash || '' });
+                }
+              }
             }
             if (ownedTokenIds.size !== bal) {
               try {

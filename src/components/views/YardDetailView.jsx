@@ -514,7 +514,6 @@ export default function YardDetailView({ data, activeTab }) {
       <ShareSection id="ownership" className="scroll-mt-32">
         <div className="space-y-6">
           <h2 className="text-lg md:text-xl font-bold text-white mb-6">Protocol Ownership & Distribution</h2>
-          <UnderwaterCard ownership={ownership} />
           
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner"><p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Current Max Supply</p><p className="text-xl md:text-3xl font-extrabold text-white">{formatNumber(ownership.currentMaxSupply || 0, 2)}</p></div>
@@ -553,6 +552,7 @@ export default function YardDetailView({ data, activeTab }) {
             live={{ tokenHolders: yardHolders, nftHolders: ownership.nftHolders, ownershipRatio: ownership.ownershipRatio }}
           />
           <OnboardLinePanel data={data} projectKey="tickeryard" timeframe={timeframe} interval={interval} name="TickerYard" />
+          <UnderwaterCard ownership={ownership} />
         </div>
       </ShareSection>
 
