@@ -6,8 +6,9 @@ import {
 import { loadOverlap, loadProjectAnalysis } from '../lib/ggindex';
 import { cashVsMarkSeries } from '../lib/yieldHistory';
 import { formatLabels } from '../lib/dates';
-import { baseChartOptions, barThickness, compactTick, compactUsdTick, STREAM_COLORS } from '../lib/charts';
+import { baseChartOptions, barThickness, categoryBarOptions, compactTick, compactUsdTick, STREAM_COLORS } from '../lib/charts';
 import { explorerAddressUrl } from '../lib/tba';
+import { walletName } from '../lib/wallets';
 import { compactNum, compactUsd, Card, KpiStrip, Stat } from './kit';
 import { ChartPanel } from './HistoryCharts';
 
@@ -230,7 +231,7 @@ function HolderLeg({ title, leg, noun }) {
         </ChartPanel>
       )}
       {leg.top?.length > 0 && (
-        <Card eyebrow={`${title} top holders`} sub="Share of the float after burn addresses and catalog contracts are removed.">
+        <Card eyebrow={`${title} top holders`} sub="Share of the float after burn addresses and catalog contracts are removed. A named row is a contract we recognize.">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-[13px]">
               <thead>
@@ -241,17 +242,22 @@ function HolderLeg({ title, leg, noun }) {
                 </tr>
               </thead>
               <tbody>
-                {leg.top.map((row) => (
+                {leg.top.map((row) => {
+                  const named = walletName(row.holder);
+                  return (
                   <tr key={row.holder} className="border-t border-line">
                     <td className="py-2 pr-3">
-                      <a className="font-mono text-ink hover:underline" href={explorerAddressUrl(row.holder)} target="_blank" rel="noreferrer">
-                        {shortAddr(row.holder)}
+                      <a className="hover:underline" href={explorerAddressUrl(row.holder)} target="_blank" rel="noreferrer">
+                        {named ? <span className="text-ink">{named.name}</span> : null}
+                        <span className={named ? 'ml-2 font-mono text-faint' : 'font-mono text-ink'}>{shortAddr(row.holder)}</span>
                       </a>
+                      {named?.note ? <div className="font-mono text-[11px] text-faint">{named.note}</div> : null}
                     </td>
                     <td className="py-2 pr-3 text-right num text-muted">{compactNum(Number(row.balance))}</td>
                     <td className="py-2 text-right num text-ink">{pct(row.share)}</td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -445,7 +451,17 @@ export function OverlapPanel({ slugs }) {
   return (
     <ChartPanel
       title="Wallets in more than one collection"
-      note="NFT holders with at least one piece, excluding burn addresses and every contract in the catalog. The bar is shared wallets. Share of each side is in the row."
+      note="NFT holders with at least one piece, excluding burn addresses and every contract in the catalog. The bar is shared wallets. Share of each side is under the chart."
+      frameClass="h-[28rem]"
+      footer={(
+        <div className="space-y-1">
+          {shown.map((p) => (
+            <p key={`${p.a}-${p.b}`} className="font-mono text-[11px] text-faint">
+              {p.a} ∩ {p.b}: {compactNum(p.shared)} · {pct(p.share_of_a)} of {p.a} · {pct(p.share_of_b)} of {p.b}
+            </p>
+          ))}
+        </div>
+      )}
     >
       <Bar
         data={{
@@ -454,21 +470,11 @@ export function OverlapPanel({ slugs }) {
             label: 'Shared wallets',
             data: shown.map((p) => p.shared),
             backgroundColor: '#818cf8',
-            maxBarThickness: 28,
+            maxBarThickness: 22,
           }],
         }}
-        options={{
-          ...baseChartOptions(labels, 'daily', { yUnit: 'wallets', yTick: compactTick }),
-          indexAxis: 'y',
-        }}
+        options={categoryBarOptions(labels, { unit: 'wallets', tick: compactTick })}
       />
-      <div className="mt-3 space-y-1">
-        {shown.map((p) => (
-          <p key={`${p.a}-${p.b}`} className="font-mono text-[11px] text-faint">
-            {p.a} ∩ {p.b}: {compactNum(p.shared)} · {pct(p.share_of_a)} of {p.a} · {pct(p.share_of_b)} of {p.b}
-          </p>
-        ))}
-      </div>
     </ChartPanel>
   );
 }

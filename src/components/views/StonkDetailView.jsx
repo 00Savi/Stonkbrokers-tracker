@@ -716,7 +716,7 @@ export default function StonkDetailView({ data, activeTab }) {
           <KpiStrip>
             <Stat label="Circulating" value={formatNumber(ownership.circulatingNftSupply || 0)} />
             <Stat label="NFT holders" value={formatNumber(ownership.nftHolders || 0)} />
-            <Stat label="Holder breadth" value={`${(ownership.ownershipRatio || 0).toFixed(2)}%`} tone="accent" />
+            <Stat label="Wallets per 100 NFTs" value={`${(ownership.ownershipRatio || 0).toFixed(2)}`} tone="accent" />
             <Stat label="Token holders" value={formatNumber(stonkHolders)} />
             <Stat
               label="Chain onboard"

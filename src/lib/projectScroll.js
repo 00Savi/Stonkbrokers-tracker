@@ -8,7 +8,25 @@ import { tabsForProject } from './routes';
  */
 export function useSectionScrollSpy({ sectionIds, activeId, onActiveId, ready }) {
   const skip = useRef(false);
+  const lock = useRef(false);
+  const releaseRef = useRef(null);
   const idsKey = (sectionIds || []).join('|');
+
+  const armLock = () => {
+    if (releaseRef.current) {
+      window.removeEventListener('scrollend', releaseRef.current);
+      clearTimeout(releaseRef.current.timer);
+    }
+    lock.current = true;
+    const release = () => {
+      lock.current = false;
+      clearTimeout(release.timer);
+      releaseRef.current = null;
+    };
+    releaseRef.current = release;
+    window.addEventListener('scrollend', release, { once: true });
+    release.timer = setTimeout(release, 2500);
+  };
 
   useEffect(() => {
     if (!ready || !activeId) return;
@@ -18,7 +36,9 @@ export function useSectionScrollSpy({ sectionIds, activeId, onActiveId, ready })
     }
     const el = document.getElementById(activeId);
     if (!el) return;
-    // After ScrollToTop, which resets the window once the route mounts.
+    // A click starts a smooth scroll. The spy must not retarget the URL
+    // while that scroll is still moving past other sections.
+    armLock();
     const frame = requestAnimationFrame(() => {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
@@ -33,6 +53,7 @@ export function useSectionScrollSpy({ sectionIds, activeId, onActiveId, ready })
 
     const obs = new IntersectionObserver(
       (entries) => {
+        if (lock.current) return;
         const hit = entries
           .filter((e) => e.isIntersecting)
           .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];

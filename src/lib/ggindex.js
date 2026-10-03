@@ -244,3 +244,36 @@ export function loadOverlap(slugs) {
     : '';
   return optional(`/analytics/overlap${q}`);
 }
+
+export function loadStructures(slugs) {
+  return Promise.all((slugs || []).map(async (slug) => {
+    const structure = await optional(`/projects/${encodeURIComponent(slug)}/structure`);
+    return [slug, structure];
+  })).then((rows) => Object.fromEntries(rows.filter(([, v]) => v)));
+}
+
+export function loadRetentions(slugs) {
+  return Promise.all((slugs || []).map(async (slug) => {
+    const row = await optional(`/projects/${encodeURIComponent(slug)}/retention`);
+    return [slug, row];
+  })).then((rows) => Object.fromEntries(rows.filter(([, v]) => v)));
+}
+
+export function loadFlows(days = 90) {
+  return optional(`/analytics/flows?days=${days}`);
+}
+
+export function loadVaultCensus() {
+  return optional('/analytics/vaults');
+}
+
+/** Price-free AMM vault book. Null when the index is down or the project is unknown. */
+export async function loadVaultBook(slug, signal) {
+  if (!slug) return null;
+  try {
+    return await get(`/projects/${encodeURIComponent(slug)}/vault`, signal, 1);
+  } catch (err) {
+    if (signal?.aborted || err?.name === 'AbortError') throw err;
+    return null;
+  }
+}

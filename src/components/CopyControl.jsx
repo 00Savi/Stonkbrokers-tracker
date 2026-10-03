@@ -28,6 +28,8 @@ const SECTION_COPY_LABEL = {
   activation: 'Activation',
   ownership: 'Ownership',
   rankings: 'All tiers',
+  seats: 'Seats',
+  history: 'History',
   wrap: 'Wrap',
   holders: 'Holders',
 };

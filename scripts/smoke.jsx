@@ -44,13 +44,15 @@ import { attributedStonkBurn, dailyAttributedBurnSeries, firstInternActivationDa
 import { navNftScanTargets } from '../src/lib/portfolioScan';
 import { windowLen } from '../src/lib/yieldHistory';
 import { CHART_WINDOWS, CHART_INTERVALS, DEFAULT_CHART_WINDOW, DEFAULT_CHART_INTERVAL } from '../src/lib/chartWindow';
-import { activityDatasets, divergingAxis, levelAxis, xTicksFor } from '../src/lib/charts';
+import { activityDatasets, divergingAxis, levelAxis, pointValue, xTicksFor } from '../src/lib/charts';
+import { walletName } from '../src/lib/wallets';
 import { tierRoiDatasets } from '../src/lib/yieldHistory';
 import { buildTopicShareCard } from '../src/lib/projectShare';
 import { copySectionEl } from '../src/components/CopyControl';
 import { internIdsForBroker } from '../src/lib/interns';
 import { parseBrokerId } from '../src/lib/brokerScan';
-import { ANVIL_VAULTS, internRowState, internStatusLine, predictTbaAddress, rankVaultRows, snipeCostFor, wallFloorEth, wallStars } from '../src/lib/anvilScan';
+import { ANVIL_VAULTS, internRowState, internStatusLine, predictTbaAddress, rankVaultRows, rowsFromVaultBook, snipeCostFor, wallFloorEth, wallStars } from '../src/lib/anvilScan';
+import { cheapestWallEth, listedSeat, mixUsd, revenueRows, snipeSeatUsd } from '../src/lib/seats';
 import { isProjectLive } from '../src/lib/routes';
 import { typicalNightshadesSeat } from '../src/lib/nightshades';
 
@@ -355,11 +357,11 @@ for (const [name, View, props] of VIEWS) {
       <OverviewView data={stripped} />
     </StaticRouter>
   );
-  if (withGacha === without) {
+  if (withGacha !== without) {
     failed++;
-    console.error('FAIL  overview protocol revenue ignored gacha');
+    console.error('FAIL  overview protocol revenue still includes gacha');
   } else {
-    console.log('ok    overview protocol revenue includes gacha');
+    console.log('ok    overview protocol revenue leaves gacha out');
   }
 }
 
@@ -614,6 +616,14 @@ for (const [name, View, props] of VIEWS) {
   } else {
     console.log(`ok    30D daily axis labels every 3rd day (${daily30Shown.length} headings)`);
   }
+  const named = walletName('0x799ae26fa515cef145e8bc8636f7fff87b05cf62');
+  const lp = walletName('0x8366a39cc670b4001a1121b8f6a443a643e40951');
+  if (pointValue({ x: 1461, y: 0 }, 'y') !== 1461 || pointValue({ y: 12 }, 'x') !== 12 || named?.name !== 'TokenEscrowReserve' || lp?.name !== 'PoolManager') {
+    failed++;
+    console.error('FAIL  horizontal bar value or wallet names');
+  } else {
+    console.log('ok    horizontal bars read the width; escrow and PoolManager are named');
+  }
   const act = activityDatasets({ net: [10], ins: [4], outs: [3] });
   const div = divergingAxis({}, [4, -3]);
   if (act[2].data[0] !== -3 || !(div.min < 0) || !(div.max > 0)) {
@@ -714,20 +724,23 @@ for (const [name, View, props] of VIEWS) {
   } else if (!ecoHtml.includes('Copy section')) {
     failed++;
     console.error('FAIL  ecosystem Copy section missing');
-  } else if (!ecoHtml.includes('Copy protocol revenue mix for X') || !ecoHtml.includes('Copy protocol revenue rank for X')) {
+  } else if (!ecoHtml.includes('Copy protocol revenue mix for X')) {
     failed++;
     console.error('FAIL  ecosystem protocol revenue cards missing Copy');
   } else {
     console.log('ok    ecosystem heading Copy is Copy section');
   }
-  if (ecoHtml.includes('Ecosystem Dominance') || ecoHtml.includes('Daily protocol revenue')) {
+  if (ecoHtml.includes('Ecosystem Dominance') || ecoHtml.includes('Daily protocol revenue') || ecoHtml.includes('Ownership Concentration')) {
     failed++;
     console.error('FAIL  ecosystem still overlays incomparable series');
-  } else if (!ecoHtml.includes('own scale') || !ecoHtml.includes('Base-seat CoC')) {
+  } else if (!ecoHtml.includes('Own scale') || !ecoHtml.includes('Last sync') || !ecoHtml.includes('Wallets per 100 NFTs')) {
     failed++;
     console.error('FAIL  ecosystem comparison board missing');
+  } else if (!ecoHtml.includes('Snipe')) {
+    failed++;
+    console.error('FAIL  ecosystem seat table missing the snipe cost');
   } else {
-    console.log('ok    ecosystem ranks and sparklines instead of overlays');
+    console.log('ok    ecosystem seats, fees, and wallets per 100');
   }
   if (!ecoHtml.includes('Chain onboard') || !/first 10/i.test(ecoHtml)) {
     failed++;
@@ -796,6 +809,17 @@ for (const [name, View, props] of VIEWS) {
   } else {
     console.log('ok    snipe cost is 666,666 tokens plus 15% ETH');
   }
+  const wallSeat = listedSeat(
+    { key: 'cardwall' },
+    { market: { starFloorEth: [0.85, 0.2, null, null, null], nftFloorEth: 0.85, ethPriceUsd: 1000, tokenPriceUsd: 0.001 }, tiers: [{ name: 'Foundation', reqTokens: 50000, trackedAnnualYieldUsd: 100 }], config: {} },
+  );
+  const kept = revenueRows({ gacha: { historyUsd: [50, 50] }, ledger: { historyDelivered: [10] } }, 'all');
+  if (cheapestWallEth({ starFloorEth: [0.85, 0.2], nftFloorEth: 0.85 }) !== 0.2 || Math.abs(wallSeat.listed - 250) > 0.001 || snipeSeatUsd(100, 50) !== 150 || mixUsd(kept) !== 0) {
+    failed++;
+    console.error(`FAIL  seat floor ${wallSeat.listed} mix ${mixUsd(kept)}`);
+  } else {
+    console.log('ok    wall seat uses the cheapest star and gacha stays out of the mix');
+  }
   const anvilHtml = renderToString(
     <StaticRouter location="/anvil">
       <AnvilScanView data={snapshot} />
@@ -827,8 +851,49 @@ for (const [name, View, props] of VIEWS) {
   if (!/^0x[0-9a-fA-F]{40}$/.test(tbaA) || tbaA.toLowerCase() === tbaB.toLowerCase()) {
     failed++;
     console.error(`FAIL  tba predict ${tbaA} ${tbaB}`);
+  } else if (tbaA.toLowerCase() !== '0x062dafba7cd8e475f313376cbd0692c254edd744') {
+    failed++;
+    console.error(`FAIL  tba fixture ${tbaA}`);
   } else {
     console.log('ok    tba address is deterministic');
+  }
+  const wallVault = ANVIL_VAULTS.find((v) => v.id === 'cardwall');
+  const bookRows = rowsFromVaultBook(ANVIL_VAULTS[0], {
+    membership_complete: true,
+    count: 1,
+    ready_tokens: [ANVIL_VAULTS[0].tokenCa],
+    ready_collections: [wallVault.nftCa],
+    pieces: [{
+      token_id: 1,
+      tba: tbaA,
+      tokens: [{ address: ANVIL_VAULTS[0].tokenCa, raw: '1000000000000000000' }],
+      nfts: [{ collection: wallVault.nftCa, token_ids: [9] }],
+    }],
+  }, [
+    { ca: ANVIL_VAULTS[0].tokenCa, symbol: 'STONK', price: 2, decimals: 18 },
+  ], [
+    { ca: wallVault.nftCa, symbol: 'Wall', price: 0, nft: true },
+  ]);
+  const booked = bookRows?.rows?.[0];
+  const bookedToken = booked?.holdings?.find((h) => h.symbol === 'STONK');
+  const bookedWall = booked?.holdings?.find((h) => h.symbol === 'Wall');
+  const rejected = rowsFromVaultBook(ANVIL_VAULTS[0], {
+    membership_complete: true,
+    count: 1,
+    ready_tokens: [ANVIL_VAULTS[0].tokenCa],
+    ready_collections: [],
+    pieces: [{ token_id: 1, tba: '0x' + '11'.repeat(20), tokens: [], nfts: [] }],
+  }, [], []);
+  const incomplete = rowsFromVaultBook(ANVIL_VAULTS[0], {
+    membership_complete: false,
+    count: 0,
+    pieces: [],
+  }, [], []);
+  if (!booked || booked.tba.toLowerCase() !== tbaA.toLowerCase() || bookedToken?.amount !== 1 || bookedToken?.usd !== 2 || bookedWall?.pieces?.[0]?.tokenId !== 9 || bookedWall?.pieces?.[0]?.stars != null || rejected || incomplete) {
+    failed++;
+    console.error('FAIL  vault book rows', bookedToken, bookedWall, rejected, incomplete);
+  } else {
+    console.log('ok    vault book keeps ready balances and rejects a bad TBA');
   }
   if (wallStars(0) !== 1 || wallStars(3) !== 4 || wallStars(4) !== 5 || wallStars(6) != null) {
     failed++;

@@ -44,7 +44,8 @@ export function EmptyChart({ children = 'No series recorded yet' }) {
   );
 }
 
-export function ChartPanel({ title, note, children, className = '', tall = false, corner = null, fit = false, toolbar = null }) {
+export function ChartPanel({ title, note, children, className = '', tall = false, corner = null, fit = false, toolbar = null, footer = null, frameClass = '' }) {
+  const frame = frameClass || (fit ? '' : (tall ? 'h-72 sm:h-[28rem]' : 'h-52 sm:h-64 md:h-80'));
   return (
     <section className={`card ${className}`}>
       {(title || note || corner || toolbar) ? (
@@ -57,9 +58,10 @@ export function ChartPanel({ title, note, children, className = '', tall = false
           {corner}
         </header>
       ) : null}
-      <div className={`relative w-full px-4 pb-4 sm:px-5 sm:pb-5 ${fit ? '' : (tall ? 'h-72 sm:h-[28rem]' : 'h-52 sm:h-64 md:h-80')}`}>
+      <div className={`relative w-full overflow-hidden px-4 pb-4 sm:px-5 sm:pb-5 ${frame}`}>
         {children}
       </div>
+      {footer ? <div className="px-4 pb-4 sm:px-5 sm:pb-5">{footer}</div> : null}
     </section>
   );
 }
@@ -741,26 +743,26 @@ export function OwnershipHistoryPanels({ snaps, live, onboard = null }) {
     },
     {
       id: 'breadth',
-      label: 'Breadth',
-      title: 'Holder breadth',
-      note: 'Unique NFT wallets ÷ (collection size − AMM vault).',
+      label: 'Per 100',
+      title: 'Wallets per 100 NFTs',
+      note: 'Unique NFT wallets for every 100 in circulation. The AMM vault is not in the supply.',
       body: hasConc ? (
         <Line
           data={{
             labels: hist.labels,
             datasets: [{
-              label: 'Holder breadth',
+              label: 'Wallets per 100',
               data: hist.concentration,
               borderColor: '#14b8a6',
               tension: 0.3,
               spanGaps: true,
               pointRadius: 0,
               labelEnd: true,
-              endLabel: latestBreadth == null ? '' : `${Number(latestBreadth).toFixed(1)}%`,
+              endLabel: latestBreadth == null ? '' : Number(latestBreadth).toFixed(1),
             }],
           }}
           options={(() => {
-            const conc = baseChartOptions(hist.labels, 'daily', { yUnit: '%', yTick: percentTick });
+            const conc = baseChartOptions(hist.labels, 'daily', { yUnit: 'per 100', yTick: compactTick });
             return {
               ...conc,
               plugins: { ...conc.plugins, legend: { display: false } },
@@ -768,8 +770,8 @@ export function OwnershipHistoryPanels({ snaps, live, onboard = null }) {
                 ...conc.scales,
                 y: {
                   ...conc.scales.y,
-                  ...levelAxis({ color: '#94a3b8', callback: percentTick }, hist.concentration),
-                  unit: '%',
+                  ...levelAxis({ color: '#94a3b8', callback: compactTick }, hist.concentration),
+                  unit: 'per 100',
                   title: conc.scales.y.title,
                 },
               },
@@ -777,7 +779,7 @@ export function OwnershipHistoryPanels({ snaps, live, onboard = null }) {
           })()}
         />
       ) : (
-        <EmptyChart>Holder breadth starts after the next snapshot write</EmptyChart>
+        <EmptyChart>Wallets per 100 NFTs starts after the next snapshot write</EmptyChart>
       ),
     },
   ];

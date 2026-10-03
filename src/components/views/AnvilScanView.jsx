@@ -136,13 +136,14 @@ export default function AnvilScanView({ data }) {
           if (ticket !== runRef.current) return;
           setSteps((prev) => prev.map((step) => (step.id === id ? { ...step, status } : step)));
         },
-        onPartial: (rows, vaultBalance, snipe) => {
+        onPartial: (rows, vaultBalance, snipe, book) => {
           if (ticket !== runRef.current) return;
           setResult({
             vault: anvilVaultById(id),
             vaultBalance,
             rows,
             snipe,
+            book,
             partial: true,
           });
         },
@@ -245,6 +246,11 @@ export default function AnvilScanView({ data }) {
       </fieldset>
 
       {steps.length > 0 && <ScanChecklist steps={steps} label={progress} />}
+      {result?.book?.throughBlock ? (
+        <p className="mb-4 font-mono text-[11px] text-slate-500">
+          Holdings from the index at block {Number(result.book.throughBlock).toLocaleString('en-US')}. ETH, stocks, memes, and the snipe quote are live.
+        </p>
+      ) : null}
       {error ? (
         <p className="mb-4 font-mono text-[12px] text-rose-400">{error}</p>
       ) : steps.length === 0 ? (

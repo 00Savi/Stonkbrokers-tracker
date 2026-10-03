@@ -2,6 +2,7 @@ import { ethers } from 'ethers';
 import { ROBINHOOD_RPC } from './bonusTokenomics';
 import { DEFAULT_TBA } from './airdropCommunities';
 import { internIdsForBroker } from './interns';
+import { loadVaultBook } from './ggindex';
 
 /**
  * Anvil AMM vaults. These collections are not enumerable, so a vault's NFTs
@@ -607,7 +608,116 @@ async function attachWallStars(mc, rows, signal, report) {
  * Sigma (#N) and Divergent (#N+4444) still sitting in this broker's TBA.
  * A dormant intern under an activated broker is priced at the Intern floor.
  */
-async function attachInterns(mc, rows, data, signal, report) {
+/**
+ * Star ratings for Wall ids the vault book already placed in these wallets.
+ * rarityOf only — the collection owner scan stays on the live path.
+ */
+async function fillWallStars(mc, rows, signal, report) {
+  const wall = anvilVaultById('cardwall');
+  const wallCa = wall.nftCa.toLowerCase();
+  const jobs = [];
+  for (const row of rows) {
+    const holding = row.holdings.find((h) => h.contract === wallCa && h.nft);
+    for (const piece of holding?.pieces || []) {
+      if (piece.stars == null) jobs.push(piece);
+    }
+  }
+  if (!jobs.length) return;
+  const rarities = await mapChunks(jobs, async (slice) => {
+    const packed = slice.map((piece) => ({
+      target: wall.nftCa,
+      callData: RARITY_OF.encodeFunctionData('rarityOf', [piece.tokenId]),
+    }));
+    const returned = await tryAggregate(mc, packed, signal);
+    return returned.map((item) => (item.success ? wallStars(decodeUint(item.returnData)) : null));
+  }, {
+    signal,
+    onStep: (done, total) => report('Reading Wall star ratings…', done, total),
+  });
+  jobs.forEach((piece, i) => {
+    if (rarities[i] != null) piece.stars = rarities[i];
+  });
+  for (const row of rows) {
+    const holding = row.holdings.find((h) => h.contract === wallCa && h.nft);
+    if (!holding?.pieces?.length) continue;
+    holding.pieces.sort((a, b) => (b.stars || 0) - (a.stars || 0) || a.tokenId - b.tokenId);
+    holding.stars = holding.pieces.map((p) => p.stars).filter((n) => n != null);
+  }
+}
+
+/**
+ * Vault membership and the catalog balances gg-index has already folded.
+ * Null when the book is incomplete, the TBA math disagrees, or a raw balance
+ * is not an integer. Ready tokens with no row are zero. Pending tokens are
+ * left for the live multicall.
+ */
+export function rowsFromVaultBook(vault, book, fungible, nfts) {
+  if (!book?.membership_complete || !Array.isArray(book.pieces)) return null;
+  if (book.pieces.length !== Number(book.count)) return null;
+  const readyTokens = new Set((book.ready_tokens || []).map((a) => String(a).toLowerCase()));
+  const readyCols = new Set((book.ready_collections || []).map((a) => String(a).toLowerCase()));
+  const tokenBy = new Map((fungible || []).map((t) => [String(t.ca).toLowerCase(), t]));
+  const nftBy = new Map((nfts || []).map((t) => [String(t.ca).toLowerCase(), t]));
+  const wallCa = anvilVaultById('cardwall').nftCa.toLowerCase();
+  const rows = [];
+  for (const piece of book.pieces) {
+    const tokenId = Number(piece.token_id);
+    if (!Number.isInteger(tokenId)) return null;
+    const tba = predictTbaAddress(vault.nftCa, tokenId);
+    if (!piece.tba || piece.tba.toLowerCase() !== tba.toLowerCase()) return null;
+    const row = { tokenId, tba, usd: 0, nftCount: 0, holdings: [] };
+    for (const bal of piece.tokens || []) {
+      const token = tokenBy.get(String(bal.address || '').toLowerCase());
+      if (!token || !readyTokens.has(String(token.ca).toLowerCase())) continue;
+      let raw;
+      try {
+        raw = BigInt(bal.raw);
+      } catch {
+        return null;
+      }
+      addHolding(row, token, raw);
+    }
+    for (const group of piece.nfts || []) {
+      const ca = String(group.collection || '').toLowerCase();
+      const token = nftBy.get(ca);
+      if (!token || !readyCols.has(ca)) continue;
+      const ids = [];
+      for (const id of group.token_ids || []) {
+        const n = Number(id);
+        if (!Number.isInteger(n)) return null;
+        ids.push(n);
+      }
+      addHolding(row, token, BigInt(ids.length));
+      if (ca === wallCa) {
+        const holding = row.holdings.find((h) => h.contract === token.ca);
+        if (holding) holding.pieces = ids.map((id) => ({ tokenId: id, stars: null }));
+      }
+    }
+    rows.push(row);
+  }
+  rows.sort((a, b) => a.tokenId - b.tokenId);
+  return { rows, readyTokens, readyCols };
+}
+
+function internMapFromBook(book, internCa) {
+  const ready = new Set((book?.ready_collections || []).map((a) => String(a).toLowerCase()));
+  if (!ready.has(String(internCa).toLowerCase())) return null;
+  const map = new Map();
+  for (const piece of book.pieces || []) {
+    const ids = new Set();
+    for (const group of piece.nfts || []) {
+      if (String(group.collection || '').toLowerCase() !== String(internCa).toLowerCase()) continue;
+      for (const id of group.token_ids || []) {
+        const n = Number(id);
+        if (Number.isInteger(n)) ids.add(n);
+      }
+    }
+    map.set(Number(piece.token_id), ids);
+  }
+  return map;
+}
+
+async function attachInterns(mc, rows, data, signal, report, known) {
   const stonk = anvilVaultById('stonk');
   const intern = anvilVaultById('interns');
   const floor = internFloorUsd(data);
@@ -617,23 +727,29 @@ async function attachInterns(mc, rows, data, signal, report) {
   }
   if (!pairs.length) return;
 
-  const owners = await mapChunksPooled(pairs, async (slice) => {
-    const packed = slice.map((pair) => ({
-      target: intern.nftCa,
-      callData: OWNER_OF.encodeFunctionData('ownerOf', [pair.id]),
-    }));
-    const returned = await tryAggregate(mc, packed, signal);
-    return returned.map((item) => (item.success ? decodeAddress(item.returnData) : null));
-  }, {
-    signal,
-    onStep: (done, total) => report('Reading interns…', done, total),
-  });
+  let held;
+  if (known) {
+    report('Reading interns…', pairs.length, pairs.length);
+    held = pairs.filter((pair) => known.get(pair.row.tokenId)?.has(pair.id));
+  } else {
+    const owners = await mapChunksPooled(pairs, async (slice) => {
+      const packed = slice.map((pair) => ({
+        target: intern.nftCa,
+        callData: OWNER_OF.encodeFunctionData('ownerOf', [pair.id]),
+      }));
+      const returned = await tryAggregate(mc, packed, signal);
+      return returned.map((item) => (item.success ? decodeAddress(item.returnData) : null));
+    }, {
+      signal,
+      onStep: (done, total) => report('Reading interns…', done, total),
+    });
 
-  const held = [];
-  pairs.forEach((pair, i) => {
-    const owner = owners[i];
-    if (owner && owner.toLowerCase() === pair.row.tba.toLowerCase()) held.push(pair);
-  });
+    held = [];
+    pairs.forEach((pair, i) => {
+      const owner = owners[i];
+      if (owner && owner.toLowerCase() === pair.row.tba.toLowerCase()) held.push(pair);
+    });
+  }
 
   const dormantFlags = await mapChunksPooled(held, async (slice) => {
     if (!slice.length) return [];
@@ -744,6 +860,7 @@ export async function scanAnvilVault(vaultId, data, { onProgress, onPartial, onP
   const provider = new ethers.JsonRpcProvider(ROBINHOOD_RPC);
   const mc = new ethers.Contract(MULTICALL, MULTICALL_ABI, provider);
   const nft = new ethers.Contract(vault.nftCa, ['function balanceOf(address) view returns (uint256)'], provider);
+  const bookPromise = loadVaultBook(vault.faction || vault.key, signal);
   const vaultBalance = Number(await nft.balanceOf(vault.ammCa));
 
   const report = (label, done, total) => {
@@ -774,95 +891,127 @@ export async function scanAnvilVault(vaultId, data, { onProgress, onPartial, onP
   if (onPlan) onPlan(steps);
 
   if (!(vaultBalance > 0)) {
+    bookPromise.catch(() => {});
     mark('vault', 'done');
     return { vault, vaultBalance: 0, rows: [], include: parts, snipe: null };
   }
 
   mark('vault', 'run');
-  report(`Finding NFTs in the ${vault.name} vault…`, 0, vault.maxSupply);
-  const ownerCalls = [];
-  for (let id = vault.firstId; id < vault.firstId + vault.maxSupply; id++) {
-    ownerCalls.push({
-      id,
-      target: vault.nftCa,
-      callData: OWNER_OF.encodeFunctionData('ownerOf', [id]),
-    });
+  let rows = null;
+  let readyTokens = new Set();
+  let readyCols = new Set();
+  let bookMeta = null;
+  let internKnown = null;
+  try {
+    const book = await bookPromise;
+    if (book?.membership_complete && Number(book.count) === vaultBalance) {
+      await withDecimals(mc, fungible, signal);
+      const built = rowsFromVaultBook(vault, book, fungible, nfts);
+      if (built && built.rows.length === vaultBalance) {
+        rows = built.rows;
+        readyTokens = built.readyTokens;
+        readyCols = built.readyCols;
+        bookMeta = {
+          throughBlock: book.through_block,
+          headBlock: book.head_block,
+        };
+        if (readInterns) internKnown = internMapFromBook(book, internCa);
+        const block = Number(book.through_block).toLocaleString('en-US');
+        report(`Vault book at block ${block}`, vaultBalance, vaultBalance);
+      }
+    }
+  } catch (err) {
+    if (signal?.aborted || err?.name === 'AbortError') throw err;
   }
-  const amm = vault.ammCa.toLowerCase();
-  const ownedIds = [];
-  await mapChunksPooled(ownerCalls, async (slice) => {
-    const returned = await tryAggregate(mc, slice.map((c) => ({ target: c.target, callData: c.callData })), signal);
-    returned.forEach((item, i) => {
-      if (!item.success) return;
-      const owner = decodeAddress(item.returnData);
-      if (owner && owner.toLowerCase() === amm) ownedIds.push(slice[i].id);
+
+  if (!rows) {
+    report(`Finding NFTs in the ${vault.name} vault…`, 0, vault.maxSupply);
+    const ownerCalls = [];
+    for (let id = vault.firstId; id < vault.firstId + vault.maxSupply; id++) {
+      ownerCalls.push({
+        id,
+        target: vault.nftCa,
+        callData: OWNER_OF.encodeFunctionData('ownerOf', [id]),
+      });
+    }
+    const amm = vault.ammCa.toLowerCase();
+    const ownedIds = [];
+    await mapChunksPooled(ownerCalls, async (slice) => {
+      const returned = await tryAggregate(mc, slice.map((c) => ({ target: c.target, callData: c.callData })), signal);
+      returned.forEach((item, i) => {
+        if (!item.success) return;
+        const owner = decodeAddress(item.returnData);
+        if (owner && owner.toLowerCase() === amm) ownedIds.push(slice[i].id);
+      });
+      return [];
+    }, {
+      signal,
+      onStep: (done, total) => report(`Finding NFTs in the ${vault.name} vault…`, done, total),
     });
-    return [];
-  }, {
-    signal,
-    onStep: (done, total) => report(`Finding NFTs in the ${vault.name} vault…`, done, total),
-  });
+
+    mark('tba', 'run');
+    const tbaById = new Map();
+    report('Resolving token-bound wallets…', 0, ownedIds.length || 1);
+    let tbaLocal = false;
+    if (ownedIds.length >= 2) {
+      const sample = [ownedIds[0], ownedIds[ownedIds.length - 1]];
+      const checks = await Promise.all(sample.map(async (id) => {
+        const onchain = await accountOnChain(mc, vault.nftCa, id, signal);
+        const local = predictTbaAddress(vault.nftCa, id);
+        return onchain && local && onchain.toLowerCase() === local.toLowerCase();
+      }));
+      tbaLocal = checks.every(Boolean);
+    }
+    if (tbaLocal) {
+      for (const id of ownedIds) tbaById.set(id, predictTbaAddress(vault.nftCa, id));
+      report('Resolving token-bound wallets…', ownedIds.length, ownedIds.length);
+    } else {
+      await mapChunksPooled(ownedIds, async (slice) => {
+        const packed = slice.map((id) => ({
+          target: DEFAULT_TBA.registry,
+          callData: ACCOUNT.encodeFunctionData('account', [
+            DEFAULT_TBA.implementation,
+            DEFAULT_TBA.salt,
+            DEFAULT_TBA.chainId,
+            vault.nftCa,
+            id,
+          ]),
+        }));
+        const returned = await tryAggregate(mc, packed, signal);
+        returned.forEach((item, i) => {
+          if (item.success) tbaById.set(slice[i], decodeAddress(item.returnData));
+        });
+        return [];
+      }, {
+        signal,
+        onStep: (done, total) => report('Resolving token-bound wallets…', done, total),
+      });
+    }
+    mark('tba', 'done');
+    rows = ownedIds
+      .filter((id) => tbaById.get(id))
+      .map((tokenId) => ({
+        tokenId,
+        tba: tbaById.get(tokenId),
+        usd: 0,
+        nftCount: 0,
+        holdings: [],
+      }));
+  }
+
   mark('vault', 'done');
+  if (bookMeta) mark('tba', 'done');
 
   let snipe = null;
-  if (ownedIds.length) {
+  const quoteId = rows[0]?.tokenId;
+  if (quoteId) {
     try {
-      snipe = await quoteAnvilSnipe(provider, vault.ammCa, ownedIds[0]);
+      snipe = await quoteAnvilSnipe(provider, vault.ammCa, quoteId);
     } catch (err) {
       if (signal?.aborted || err?.name === 'AbortError') throw err;
       snipe = null;
     }
   }
-
-  mark('tba', 'run');
-  const tbaById = new Map();
-  report('Resolving token-bound wallets…', 0, ownedIds.length || 1);
-  let tbaLocal = false;
-  if (ownedIds.length >= 2) {
-    const sample = [ownedIds[0], ownedIds[ownedIds.length - 1]];
-    const checks = await Promise.all(sample.map(async (id) => {
-      const onchain = await accountOnChain(mc, vault.nftCa, id, signal);
-      const local = predictTbaAddress(vault.nftCa, id);
-      return onchain && local && onchain.toLowerCase() === local.toLowerCase();
-    }));
-    tbaLocal = checks.every(Boolean);
-  }
-  if (tbaLocal) {
-    for (const id of ownedIds) tbaById.set(id, predictTbaAddress(vault.nftCa, id));
-    report('Resolving token-bound wallets…', ownedIds.length, ownedIds.length);
-  } else {
-    await mapChunksPooled(ownedIds, async (slice) => {
-      const packed = slice.map((id) => ({
-        target: DEFAULT_TBA.registry,
-        callData: ACCOUNT.encodeFunctionData('account', [
-          DEFAULT_TBA.implementation,
-          DEFAULT_TBA.salt,
-          DEFAULT_TBA.chainId,
-          vault.nftCa,
-          id,
-        ]),
-      }));
-      const returned = await tryAggregate(mc, packed, signal);
-      returned.forEach((item, i) => {
-        if (item.success) tbaById.set(slice[i], decodeAddress(item.returnData));
-      });
-      return [];
-    }, {
-      signal,
-      onStep: (done, total) => report('Resolving token-bound wallets…', done, total),
-    });
-  }
-  mark('tba', 'done');
-
-  const rows = ownedIds
-    .filter((id) => tbaById.get(id))
-    .map((tokenId) => ({
-      tokenId,
-      tba: tbaById.get(tokenId),
-      usd: 0,
-      nftCount: 0,
-      holdings: [],
-    }));
 
   const eth = ethPrice(data);
   mark('eth', 'run');
@@ -896,35 +1045,49 @@ export async function scanAnvilVault(vaultId, data, { onProgress, onPartial, onP
 
   const publish = () => {
     rows.forEach(priceRow);
-    if (onPartial) onPartial(snapshot(rows), vaultBalance, snipe);
+    if (onPartial) onPartial(snapshot(rows), vaultBalance, snipe, bookMeta);
   };
+  if (bookMeta) publish();
 
+  const covered = (token, ready) => ready.has(String(token.ca).toLowerCase());
   await withDecimals(mc, fungible, signal);
   const ownCa = vault.tokenCa.toLowerCase();
   const own = fungible.find((token) => token.ca === ownCa);
   const restFungible = fungible.filter((token) => token !== own);
-  if (own) {
-    mark(`tok:${own.ca}`, 'run');
-    await applyTokenGroup(mc, rows, [own], signal, (done, total) => report(`Reading ${own.symbol}…`, done, total));
-    mark(`tok:${own.ca}`, 'done');
+  const liveOwn = own && !covered(own, readyTokens) ? own : null;
+  const liveRest = restFungible.filter((token) => !covered(token, readyTokens));
+  const liveNfts = nfts.filter((token) => !covered(token, readyCols));
+  if (own && !liveOwn) mark(`tok:${own.ca}`, 'done');
+  for (const token of restFungible) {
+    if (!liveRest.includes(token)) mark(`tok:${token.ca}`, 'done');
+  }
+  for (const token of nfts) {
+    if (!liveNfts.includes(token)) mark(`nft:${token.ca}`, 'done');
+  }
+  if (liveOwn) {
+    mark(`tok:${liveOwn.ca}`, 'run');
+    await applyTokenGroup(mc, rows, [liveOwn], signal, (done, total) => report(`Reading ${liveOwn.symbol}…`, done, total));
+    mark(`tok:${liveOwn.ca}`, 'done');
     publish();
   }
-  for (const token of restFungible) mark(`tok:${token.ca}`, 'run');
-  if (restFungible.length) {
-    await applyTokenGroup(mc, rows, restFungible, signal, (done, total) => report('Reading Anvil tokens…', done, total));
+  for (const token of liveRest) mark(`tok:${token.ca}`, 'run');
+  if (liveRest.length) {
+    await applyTokenGroup(mc, rows, liveRest, signal, (done, total) => report('Reading Anvil tokens…', done, total));
   }
-  for (const token of restFungible) mark(`tok:${token.ca}`, 'done');
+  for (const token of liveRest) mark(`tok:${token.ca}`, 'done');
 
-  for (const token of nfts) mark(`nft:${token.ca}`, 'run');
-  if (nfts.length) {
-    await applyTokenGroup(mc, rows, nfts, signal, (done, total) => report('Reading Anvil NFTs…', done, total));
+  for (const token of liveNfts) mark(`nft:${token.ca}`, 'run');
+  if (liveNfts.length) {
+    await applyTokenGroup(mc, rows, liveNfts, signal, (done, total) => report('Reading Anvil NFTs…', done, total));
   }
-  for (const token of nfts) mark(`nft:${token.ca}`, 'done');
+  for (const token of liveNfts) mark(`nft:${token.ca}`, 'done');
 
   if (parts.nfts) {
     if (parts.stars) {
       mark('stars', 'run');
-      await attachWallStars(mc, rows, signal, report);
+      const wallCa = anvilVaultById('cardwall').nftCa.toLowerCase();
+      if (readyCols.has(wallCa)) await fillWallStars(mc, rows, signal, report);
+      else await attachWallStars(mc, rows, signal, report);
       mark('stars', 'done');
     }
     applyWallFloors(rows, data);
@@ -933,7 +1096,7 @@ export async function scanAnvilVault(vaultId, data, { onProgress, onPartial, onP
 
   if (readInterns) {
     mark('interns', 'run');
-    await attachInterns(mc, rows, data, signal, report);
+    await attachInterns(mc, rows, data, signal, report, internKnown);
     mark('interns', 'done');
     publish();
   }
@@ -951,5 +1114,5 @@ export async function scanAnvilVault(vaultId, data, { onProgress, onPartial, onP
   }, signal);
 
   rows.forEach(priceRow);
-  return { vault, vaultBalance, rows: snapshot(rows), include: parts, snipe };
+  return { vault, vaultBalance, rows: snapshot(rows), include: parts, snipe, book: bookMeta };
 }

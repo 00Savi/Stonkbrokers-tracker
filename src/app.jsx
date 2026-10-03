@@ -155,7 +155,7 @@ export default function App() {
       <main className="mx-auto w-full max-w-[1500px] px-3 sm:px-4">
         <Routes>
           <Route path="/" element={<HomeView data={data} />} />
-          <Route path="/rankings" element={<Navigate to="/ecosystem?tab=rankings" replace />} />
+          <Route path="/rankings" element={<Navigate to="/ecosystem" replace />} />
           <Route
             path="/ecosystem"
             element={

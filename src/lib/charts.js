@@ -190,6 +190,13 @@ function stackParts(ctx) {
   return parts;
 }
 
+/** The number on a point. Horizontal bars store it on x, vertical charts on y. */
+export function pointValue(parsed, indexAxis = 'x') {
+  const raw = indexAxis === 'y' ? parsed?.x : parsed?.y;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
 function chartTooltip() {
   return {
     backgroundColor: '#0e1013',
@@ -199,19 +206,20 @@ function chartTooltip() {
     bodyColor: '#8b929b',
     footerColor: '#e7e9ec',
     padding: 10,
-    itemSort: (a, b) => (Number(b.parsed?.y) || 0) - (Number(a.parsed?.y) || 0),
+    itemSort: (a, b) => (pointValue(b.parsed, b.chart?.options?.indexAxis) || 0) - (pointValue(a.parsed, a.chart?.options?.indexAxis) || 0),
     filter(item) {
       if (item.dataset?.guide || item.dataset?.totalLine) return false;
-      const y = item.parsed?.y;
-      if (y == null || !Number.isFinite(Number(y))) return false;
+      const y = pointValue(item.parsed, item.chart?.options?.indexAxis);
+      if (y == null) return false;
       const multi = (item.chart?.data?.datasets || []).filter((d) => !d.guide).length > 1;
       if (multi && Number(y) === 0) return false;
       return true;
     },
     callbacks: {
       label(ctx) {
-        const axisId = ctx.dataset.yAxisID || 'y';
-        let v = Number(ctx.parsed?.y);
+        const horizontal = ctx.chart?.options?.indexAxis === 'y';
+        const axisId = horizontal ? (ctx.dataset.xAxisID || 'x') : (ctx.dataset.yAxisID || 'y');
+        let v = pointValue(ctx.parsed, ctx.chart?.options?.indexAxis);
         if (ctx.dataset.absTooltip && Number.isFinite(v)) v = Math.abs(v);
         const rendered = renderTick(ctx.chart, axisId, v);
         let name = ctx.dataset.label || '';
@@ -309,6 +317,44 @@ export function baseChartOptions(labels, interval = 'daily', { yUnit, yTick } = 
       },
       x: {
         ticks: { color: '#575e67', ...xt, ...(n > 0 ? { density: 'set' } : {}) },
+        grid: { display: false },
+        border: { display: false },
+      },
+    },
+  };
+}
+
+/** Ranked horizontal bars. Categories stay on the left; the number is the width. */
+export function categoryBarOptions(labels, { unit = 'wallets', tick = compactTick } = {}) {
+  const n = Array.isArray(labels) ? labels.length : 0;
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    indexAxis: 'y',
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { display: false },
+      tooltip: chartTooltip(),
+    },
+    scales: {
+      x: {
+        beginAtZero: true,
+        ticks: { color: '#575e67', callback: tick },
+        grid: { color: '#171a1f' },
+        border: { display: false },
+        unit,
+        title: axisTitle(unit),
+      },
+      y: {
+        ticks: {
+          color: '#575e67',
+          autoSkip: false,
+          maxTicksLimit: Math.max(n, 1),
+          density: 'set',
+          callback(value) {
+            return this.getLabelForValue(value);
+          },
+        },
         grid: { display: false },
         border: { display: false },
       },

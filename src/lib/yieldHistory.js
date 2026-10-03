@@ -290,9 +290,9 @@ function streamOnLabels(labels, snaps, r, meta) {
  * Launch bonding volume is not a series here — it is swap notional, not
  * protocol-kept revenue.
  */
-export function protocolRevenueChart(project) {
+export function protocolRevenueChart(project, { skipLedger = false } = {}) {
   const ledger = project?.ledger;
-  if (ledger?.historyDates?.length) {
+  if (!skipLedger && ledger?.historyDates?.length) {
     const filled = fillCalendar(ledger.historyDates, [
       ledger.historyDelivered,
       ledger.historyVaulted,

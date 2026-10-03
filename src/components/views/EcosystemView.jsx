@@ -1,23 +1,26 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { ethers } from 'ethers';
 import { projectPath, RANKING_PROJECTS, isProjectLive, PROJECTS } from '../../lib/routes';
+import { ANVIL_VAULTS, quoteAnvilSnipe } from '../../lib/anvilScan';
+import { ROBINHOOD_RPC } from '../../lib/bonusTokenomics';
+import { listedSeat, mixUsd, nightshadesSnipeUsd, protocolFeeSeries, revenueRows, snipeSeatUsd } from '../../lib/seats';
+import { NIGHTSHADES_FACTIONS } from '../../lib/nightshades';
+import { loadFlows, loadRetentions, loadStructures, loadVaultCensus } from '../../lib/ggindex';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
-import OverviewView from './OverviewView';
 import {
-  compactUsd, compactNum, WindowBar, IntervalBar, YieldPeriodToggle,
-  scaleAnnualYield, yieldSuffix, yieldPeriodLabel, Card, Stat, Tag, KpiStrip,
+  compactUsd, compactNum, WindowBar, IntervalBar, Card, Stat, Tag, KpiStrip,
 } from '../kit';
 import { dateKey, formatLabels } from '../../lib/dates';
 import { burnSeries } from '../../lib/burn';
-import { cashflowRoiByDate, protocolFeeCols, protocolRevenueChart, seriesHasInk, bucketKey, windowLen, windowPeriodLabel } from '../../lib/yieldHistory';
-import { typicalNightshadesSeat } from '../../lib/nightshades';
+import { cashflowRoiByDate, seriesHasInk, bucketKey, windowLen, windowPeriodLabel } from '../../lib/yieldHistory';
 import { useChartView } from '../../lib/chartWindow';
 import { useSectionScrollSpy } from '../../lib/projectScroll';
 import { baseChartOptions, compactTick, compactUsdTick, PROJECT_COLORS, levelAxis } from '../../lib/charts';
-import { EmptyChart, OnboardClusterPanel } from '../HistoryCharts';
+import { OnboardClusterPanel } from '../HistoryCharts';
 import { MethodologyCard } from '../Disclaimer';
 import { CopyControl, shareSlug, ShareSection } from '../CopyControl';
 import { OverlapPanel } from '../SectionInsights';
@@ -26,14 +29,20 @@ import { copyElement } from '../../lib/share';
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
 const ECO_TABS = [
-  { id: 'roi', label: 'ROI' },
-  { id: 'historical', label: 'Yield' },
+  { id: 'seats', label: 'Seats' },
   { id: 'revenue', label: 'Revenue' },
-  { id: 'burn', label: 'Burn' },
-  { id: 'activation', label: 'Activation' },
   { id: 'ownership', label: 'Ownership' },
-  { id: 'rankings', label: 'All tiers' },
+  { id: 'history', label: 'History' },
 ];
+
+const TAB_ALIAS = {
+  roi: 'seats',
+  historical: 'history',
+  yield: 'history',
+  rankings: 'seats',
+  burn: 'history',
+  activation: 'history',
+};
 
 const FALLBACK_LOGO = {
   stonk: 'Stonkbroker.png',
@@ -253,21 +262,43 @@ function SparkGrid({ overlay, hrefFor, formatValue, tick, noteFor }) {
   );
 }
 
+function pct1(n) {
+  return Number.isFinite(n) ? `${n.toFixed(1)}%` : '—';
+}
+
+function retentionOf(row) {
+  const weeks = row?.nft?.built ? row.nft.weeks : (row?.token?.built ? row.token.weeks : null);
+  if (!weeks?.length) return null;
+  const entered = weeks.reduce((s, w) => s + (Number(w.entered) || 0), 0);
+  const still = weeks.reduce((s, w) => s + (Number(w.still) || 0), 0);
+  if (!(entered > 0)) return null;
+  return { entered, still, pct: (still / entered) * 100 };
+}
+
+function top10Pct(structure) {
+  const raw = structure?.nft?.top10_share ?? structure?.token?.top10_share;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n * 100 : null;
+}
+
 export default function EcosystemView({ data, pending = false }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabFromUrl = searchParams.get('tab');
-  const activeTab = ECO_TABS.some((t) => t.id === tabFromUrl) ? tabFromUrl : 'roi';
-  const [expandedProject, setExpandedProject] = useState(null);
-  const [yieldPeriod, setYieldPeriod] = useState('Y');
+  const aliased = TAB_ALIAS[tabFromUrl] || tabFromUrl;
+  const activeTab = ECO_TABS.some((t) => t.id === aliased) ? aliased : 'seats';
   const { range: timeframe, setRange, interval, setInterval } = useChartView();
-  const onboardCardRef = useRef(null);
+  const [quotes, setQuotes] = useState({});
+  const [structures, setStructures] = useState(null);
+  const [retentions, setRetentions] = useState(null);
+  const [flows, setFlows] = useState(null);
+  const [vaults, setVaults] = useState(null);
   const revMixRef = useRef(null);
-  const revRankRef = useRef(null);
+  const onboardCardRef = useRef(null);
 
   const selectTab = useCallback((id) => {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
-      if (id === 'roi') next.delete('tab');
+      if (id === 'seats') next.delete('tab');
       else next.set('tab', id);
       return next;
     }, { replace: true });
@@ -280,27 +311,66 @@ export default function EcosystemView({ data, pending = false }) {
     onActiveId: selectTab,
   });
 
+  const hidden = useMemo(
+    () => new Set(PROJECTS.filter((p) => !isProjectLive(p)).map((p) => p.key)),
+    [],
+  );
+  const board = useMemo(
+    () => (data?.projects ? RANKING_PROJECTS.filter((m) => data.projects[m.key] && !hidden.has(m.key)) : []),
+    [data, hidden],
+  );
+  const order = board.map((m) => m.key);
+  const orderKey = order.join(',');
+
+  useEffect(() => {
+    if (!order.length) return undefined;
+    let live = true;
+    const provider = new ethers.JsonRpcProvider(ROBINHOOD_RPC);
+    const vaultsToQuote = ANVIL_VAULTS.filter((v) => order.includes(v.key));
+    Promise.all(vaultsToQuote.map(async (vault) => {
+      try {
+        const quote = await quoteAnvilSnipe(provider, vault.ammCa, vault.firstId || 1);
+        const tokenUsd = Number(
+          vault.faction
+            ? data.projects.nightshades?.factions?.[vault.faction]?.market?.tokenPriceUsd
+            : data.projects[vault.key]?.market?.tokenPriceUsd,
+        ) || 0;
+        const ethUsd = Number(
+          vault.faction
+            ? data.projects.nightshades?.factions?.[vault.faction]?.market?.ethPriceUsd
+            : data.projects[vault.key]?.market?.ethPriceUsd,
+        ) || Number(data.projects.stonk?.market?.ethPriceUsd) || 0;
+        if (!(tokenUsd > 0) || !(ethUsd > 0)) return [vault.id, null];
+        return [vault.id, { usd: quote.tokens * tokenUsd + quote.eth * ethUsd, tokens: quote.tokens, eth: quote.eth, feeBps: quote.feeBps }];
+      } catch {
+        return [vault.id, null];
+      }
+    })).then((rows) => {
+      if (live) setQuotes(Object.fromEntries(rows));
+    });
+    return () => { live = false; };
+  }, [orderKey, data]);
+
+  useEffect(() => {
+    if (!order.length) return undefined;
+    let live = true;
+    const slugs = order.flatMap((key) => (key === 'nightshades' ? NIGHTSHADES_FACTIONS : [key]));
+    loadStructures(slugs).then((next) => { if (live) setStructures(next); });
+    loadRetentions(slugs).then((next) => { if (live) setRetentions(next); });
+    loadFlows(90).then((next) => { if (live) setFlows(next); });
+    loadVaultCensus().then((next) => { if (live) setVaults(next); });
+    return () => { live = false; };
+  }, [orderKey]);
+
   if (!data || !data.projects) return <div className="text-center text-slate-400 p-12">Loading Ecosystem...</div>;
 
-  const hidden = new Set(PROJECTS.filter((p) => !isProjectLive(p)).map((p) => p.key));
-  const board = RANKING_PROJECTS.filter((m) => data.projects[m.key] && !hidden.has(m.key));
-  const order = board.map((m) => m.key);
-  const activationBoard = board.filter((m) => m.kind !== 'cashflow' && m.kind !== 'vault');
-  const activationOrder = activationBoard.map((m) => m.key);
   const projectNames = Object.fromEntries(board.map((m) => [m.key, m.name]));
   const projectColors = PROJECT_COLORS;
   const period = windowPeriodLabel(timeframe);
-  const scaleYield = (annual) => scaleAnnualYield(annual, yieldPeriod);
-  const yieldLabel = yieldPeriodLabel(yieldPeriod);
-  const yieldUnit = yieldSuffix(yieldPeriod);
-
-  const chartOptions = baseChartOptions();
 
   const overlayFromMaps = (maps, { keys = order, fill = false } = {}) => {
     const labelSet = new Set();
-    for (const map of Object.values(maps)) {
-      Object.keys(map || {}).forEach((d) => labelSet.add(dateKey(d)));
-    }
+    for (const map of Object.values(maps)) Object.keys(map || {}).forEach((d) => labelSet.add(dateKey(d)));
     const raw = [...labelSet].filter(Boolean).sort();
     const sliced = raw.slice(-windowLen(timeframe, raw.length));
     let axis = sliced;
@@ -350,86 +420,101 @@ export default function EcosystemView({ data, pending = false }) {
 
   const seriesToMap = (labels, dataPts) => {
     const map = {};
-    (labels || []).forEach((lab, i) => {
-      map[dateKey(lab)] = dataPts?.[i];
-    });
+    (labels || []).forEach((lab, i) => { map[dateKey(lab)] = dataPts?.[i]; });
     return map;
   };
 
-  const burnCaps = (p) => {
-    const kind = p?.config?.kind;
-    const tokenOnly = kind === 'cashflow' || kind === 'vault';
-    const nftSupply = Number(p?.ownership?.currentMaxSupply || p?.config?.maxSupply || 0);
-    const circ = Number(p?.ownership?.circulatingSupply || 0);
-    const burntTok = Math.max(
-      Number(p?.activation?.dualBurn?.totalBurnTokens || 0),
-      Number(p?.ownership?.permanentlyBurntTokens || 0)
-    );
-    let maxToken = Number(p?.config?.maxTokenSupply) || 0;
-    if (!maxToken) {
-      if (tokenOnly) maxToken = nftSupply || circ + burntTok;
-      else {
-        const unit = Number(p?.config?.unitValue);
-        if ((kind === 'machines' || kind === 'brokers') && (circ > 0 || burntTok > 0)) maxToken = circ + burntTok;
-        else if (unit > 0 && nftSupply > 0) maxToken = nftSupply * unit;
-        else maxToken = nftSupply * 1000000;
-      }
+  const seatRows = board.map((meta) => {
+    const p = data.projects[meta.key];
+    const seat = listedSeat(meta, p);
+    let snipe = null;
+    if (meta.key === 'nightshades') {
+      const by = Object.fromEntries(NIGHTSHADES_FACTIONS.map((id) => [id, quotes[`nightshades:${id}`]?.usd]));
+      snipe = nightshadesSnipeUsd(p?.factions, by);
+    } else if (seat.act != null && quotes[meta.key]) {
+      snipe = snipeSeatUsd(quotes[meta.key].usd, seat.act);
     }
-    const tokenPct = maxToken > 0 ? Math.min(100, (burntTok / maxToken) * 100) : 0;
-    let nftPct = null;
-    if (!tokenOnly && nftSupply > 0) {
-      const realNft = Number(p?.ownership?.burntNfts || 0);
-      const units = Number(p?.ownership?.permanentlyBurntUnits || 0);
-      const equiv = Number(p?.activation?.dualBurn?.equivalentBrokersBurnt || 0);
-      const nftBurned = (kind === 'machines' || kind === 'brokers') ? realNft : Math.max(realNft, units, equiv);
-      nftPct = Math.min(100, (nftBurned / nftSupply) * 100);
-    }
-    return { tokenPct, nftPct, maxToken, burntTok, tokenOnly };
-  };
+    const snipeRoi = snipe > 0 ? (seat.annual / snipe) * 100 : 0;
+    return { meta, p, seat, snipe, snipeRoi };
+  }).sort((a, b) => (b.seat.roi || 0) - (a.seat.roi || 0));
 
-  const projectRevenueSeries = (p) => {
-    const gacha = p?.gacha;
-    if (gacha?.historyDates?.length && (gacha.historyUsd || []).some((v) => Number(v) > 0)) {
-      return {
-        labels: formatLabels(gacha.historyDates),
-        data: gacha.historyUsd.map((v) => Number(v) || 0),
-        source: 'gacha',
-      };
-    }
-    const chart = protocolRevenueChart(p);
-    if (chart.labels?.length) {
-      const fees = protocolFeeCols(chart.cols);
-      const dataPts = chart.labels.map((_, i) =>
-        fees.reduce((s, c) => s + (Number(c.data?.[i]) || 0), 0)
-      );
-      if (dataPts.some((v) => v > 0)) return { labels: chart.labels, data: dataPts, source: 'protocol' };
-    }
-    const snaps = Array.isArray(p?.dailySnapshots) ? p.dailySnapshots : [];
-    if (snaps.some((s) => Number(s.annualYield) > 0)) {
-      return {
-        labels: formatLabels(snaps.map((s) => s.date)),
-        data: snaps.map((s) => Number(s.annualYield) / 365),
-        source: 'snapshot-est',
-      };
-    }
-    return { labels: [], data: [], source: null };
-  };
+  const best = seatRows.find((r) => r.seat.roi > 0);
+  const bestSnipe = [...seatRows].filter((r) => r.snipeRoi > 0).sort((a, b) => b.snipeRoi - a.snipeRoi)[0];
 
-  const getProjectRev = (projKey) => {
-    const p = data.projects[projKey];
-    if (!p) return 0;
-    const series = projectRevenueSeries(p);
-    if (series.data.length) {
-      const n = windowLen(timeframe, series.data.length);
-      return series.data.slice(-n).reduce((s, v) => s + (Number(v) || 0), 0);
-    }
-    const cf = p.cashflow || {};
-    if (timeframe === '7d') return Number(cf.revenue7d || cf.holders7d || cf.fees7d) || 0;
-    if (timeframe === '30d') return Number(cf.revenue30d || cf.holders30d || cf.fees30d) || 0;
-    return Number(cf.revenueAllTime || cf.feesAllTime || cf.revenueAnnualized) || 0;
-  };
+  const revParts = board.map((meta) => {
+    const parts = revenueRows(data.projects[meta.key], '30d');
+    return { meta, parts, mix: mixUsd(parts), outside: parts.filter((r) => !r.inMix) };
+  });
+  const mixRows = revParts
+    .map((r) => ({
+      key: r.meta.key,
+      name: r.meta.name,
+      color: projectColors[r.meta.key],
+      value: r.mix,
+      href: projectPath(r.meta.key, r.meta.key === 'nightshades' ? 'night' : 'revenue'),
+    }))
+    .filter((r) => r.value > 0)
+    .sort((a, b) => b.value - a.value);
+  const mixTotal = mixRows.reduce((s, r) => s + r.value, 0);
+  const outsideRows = revParts.flatMap((r) => r.outside.map((part) => ({
+    key: `${r.meta.key}-${part.source}`,
+    name: r.meta.name,
+    note: part.note,
+    value: part.usd,
+    href: projectPath(r.meta.key, 'revenue'),
+  }))).filter((r) => r.value > 0);
+
+  const breadthRows = board.map((meta) => {
+    const p = data.projects[meta.key];
+    const ratio = Number(p?.ownership?.ownershipRatio);
+    return {
+      key: meta.key,
+      name: meta.name,
+      color: projectColors[meta.key],
+      value: Number.isFinite(ratio) ? ratio : 0,
+      href: projectPath(meta.key, 'ownership'),
+      note: `NFT ${compactNum(p?.ownership?.nftHolders || 0)} · token ${compactNum(p?.ownership?.tokenHolders || p?.ownership?.stonkHolders || p?.ownership?.erc20Holders || 0)}`,
+    };
+  }).sort((a, b) => b.value - a.value);
+
+  const holdRows = board.map((meta) => {
+    const slugs = meta.key === 'nightshades' ? NIGHTSHADES_FACTIONS : [meta.key];
+    const shares = slugs.map((slug) => retentionOf(retentions?.[slug])).filter(Boolean);
+    const entered = shares.reduce((s, r) => s + r.entered, 0);
+    const still = shares.reduce((s, r) => s + r.still, 0);
+    return {
+      key: meta.key,
+      name: meta.name,
+      color: projectColors[meta.key],
+      value: entered > 0 ? (still / entered) * 100 : 0,
+      href: projectPath(meta.key, 'ownership'),
+      pending: retentions == null,
+      note: entered > 0 ? `${compactNum(still)} of ${compactNum(entered)} still hold` : (retentions ? 'Fold has not run' : null),
+    };
+  }).filter((r) => r.value > 0 || r.note);
+
+  const concRows = board.flatMap((meta) => {
+    const slugs = meta.key === 'nightshades'
+      ? NIGHTSHADES_FACTIONS.map((id) => ({ slug: id, name: id }))
+      : [{ slug: meta.key, name: meta.name }];
+    return slugs.map((row) => {
+      const pct = top10Pct(structures?.[row.slug]);
+      if (pct == null) return null;
+      return {
+        key: row.slug,
+        name: row.name,
+        color: projectColors[meta.key],
+        value: pct,
+        href: projectPath(meta.key, 'ownership'),
+      };
+    }).filter(Boolean);
+  }).sort((a, b) => b.value - a.value);
 
   const roiMaps = {};
+  const feeMaps = {};
+  const tokenMaps = {};
+  const actMaps = {};
+  const concMaps = {};
   for (const k of order) {
     const p = data.projects[k];
     const t0 = p?.tiers?.[0];
@@ -443,133 +528,21 @@ export default function EcosystemView({ data, pending = false }) {
       if (Number.isFinite(roi)) map[dateKey(s.date)] = roi;
     }
     roiMaps[k] = map;
-  }
-  const hist = overlayFromMaps(roiMaps, { fill: true });
-
-  const revMaps = {};
-  for (const k of order) {
-    const series = projectRevenueSeries(data.projects[k]);
-    revMaps[k] = seriesToMap(series.labels, series.data);
-  }
-  const revOverlay = overlayFromMaps(revMaps);
-
-  const tokenMaps = {};
-  const nftMaps = {};
-  const nftKeys = [];
-  for (const k of order) {
-    const p = data.projects[k];
-    const { maxToken } = burnCaps(p);
+    const fees = protocolFeeSeries(p);
+    feeMaps[k] = seriesToMap(fees.labels, fees.data);
     const series = burnSeries(p, timeframe, interval);
     const days = series.rawLabels || [];
-    tokenMaps[k] = seriesToMap(
-      days,
-      (series.data || []).map((burn) => (
-        maxToken > 0 ? +Math.min(100, ((Number(burn) || 0) / maxToken) * 100).toFixed(2) : null
-      )),
-    );
-    if (burnCaps(p).nftPct == null) continue;
-    nftKeys.push(k);
-    const maxNft = Number(p?.ownership?.currentMaxSupply || p?.config?.maxSupply || 0);
-    const unit = Number(p?.config?.unitValue) || 0;
-    nftMaps[k] = seriesToMap(
-      days,
-      (series.data || []).map((burn) => {
-        if (!(maxNft > 0) || !(unit > 0)) return null;
-        return +Math.min(100, (((Number(burn) || 0) / unit) / maxNft) * 100).toFixed(2);
-      }),
-    );
-  }
-  const tokenBurn = overlayFromMaps(tokenMaps, { fill: true });
-  const nftBurn = overlayFromMaps(nftMaps, { keys: nftKeys, fill: true });
-
-  const actMaps = {};
-  for (const k of activationOrder) {
-    const histAct = data.projects[k]?.activation?.history || {};
+    const caps = burnCap(p);
+    tokenMaps[k] = seriesToMap(days, (series.data || []).map((burn) => (
+      caps.maxToken > 0 ? +Math.min(100, ((Number(burn) || 0) / caps.maxToken) * 100).toFixed(2) : null
+    )));
+    const histAct = p?.activation?.history || {};
     actMaps[k] = seriesToMap(histAct.labels, histAct.cumulative);
-  }
-  const actOverlay = overlayFromMaps(actMaps, { keys: activationOrder });
-
-  const nftHolderMaps = {};
-  const concMaps = {};
-  for (const k of order) {
-    const p = data.projects[k];
-    const snaps = p?.dailySnapshots || [];
-    const nft = snaps.map((s) => (s.nftHolders == null ? null : Number(s.nftHolders)));
-    const liveNft = Number(p?.ownership?.nftHolders) || 0;
-    if (nft.length && liveNft > 0 && nft[nft.length - 1] == null) nft[nft.length - 1] = liveNft;
-    nftHolderMaps[k] = seriesToMap(snaps.map((s) => s.date), nft);
     concMaps[k] = seriesToMap(
-      snaps.map((s) => s.date),
-      snaps.map((s) => (s.ownershipRatio == null ? null : Number(s.ownershipRatio))),
+      (p?.dailySnapshots || []).map((s) => s.date),
+      (p?.dailySnapshots || []).map((s) => (s.ownershipRatio == null ? null : Number(s.ownershipRatio))),
     );
   }
-  const nftHolders = overlayFromMaps(nftHolderMaps);
-  const concOverlay = overlayFromMaps(concMaps);
-
-  const roiRows = board.map((meta) => {
-    const p = data.projects[meta.key];
-    const t0 = p?.tiers?.[0];
-    const night = (meta.key === 'nightshades' || p?.config?.kind === 'factions')
-      ? typicalNightshadesSeat(p?.factions, t0?.tier || 'T0')
-      : null;
-    const floorCost = (p?.market?.nftFloorEth || 0) * (p?.market?.ethPriceUsd || 0);
-    const actCost = (t0?.reqTokens || 0) * (p?.market?.tokenPriceUsd || 0);
-    const totalCost = night?.cost || (t0?.entryUsd > 0 ? t0.entryUsd : floorCost + actCost);
-    const annual = night ? night.annual : (Number(t0?.trackedAnnualYieldUsd) || 0);
-    const roi = night ? night.roi : (totalCost > 0 && annual > 0 ? (annual / totalCost) * 100 : 0);
-    return { meta, p, t0, floorCost, actCost, totalCost, annual, roi, typicalNight: !!night };
-  }).sort((a, b) => (b.roi || 0) - (a.roi || 0));
-
-  const revRows = board.map((meta) => ({
-    key: meta.key,
-    name: meta.name,
-    color: projectColors[meta.key],
-    value: getProjectRev(meta.key),
-    href: projectPath(meta.key, meta.key === 'nightshades' ? 'night' : 'revenue'),
-  })).sort((a, b) => b.value - a.value);
-  const revTotal = revRows.reduce((s, r) => s + r.value, 0);
-
-  const burnRows = board.map((meta) => {
-    const caps = burnCaps(data.projects[meta.key]);
-    return {
-      key: meta.key,
-      name: meta.name,
-      color: projectColors[meta.key],
-      value: caps.tokenPct,
-      href: meta.key === 'interns' ? projectPath(meta.key, 'activation') : projectPath(meta.key, 'burn'),
-      note: caps.nftPct == null ? 'Token supply' : `NFT ${caps.nftPct.toFixed(2)}%`,
-    };
-  }).sort((a, b) => b.value - a.value);
-
-  const actRows = activationBoard.map((meta) => {
-    const p = data.projects[meta.key];
-    const active = Number(p?.activation?.activeCount) || 0;
-    const pctAct = Number(p?.activation?.percentActivated) || 0;
-    return {
-      key: meta.key,
-      name: meta.name,
-      color: projectColors[meta.key],
-      value: pctAct,
-      href: projectPath(meta.key, 'activation'),
-      note: `${compactNum(active)} active`,
-    };
-  }).sort((a, b) => b.value - a.value);
-
-  const ownRows = board.map((meta) => {
-    const p = data.projects[meta.key];
-    const conc = Number(p?.ownership?.ownershipRatio);
-    return {
-      key: meta.key,
-      name: meta.name,
-      color: projectColors[meta.key],
-      value: Number.isFinite(conc) ? conc : 0,
-      href: projectPath(meta.key, 'ownership'),
-      note: `NFT ${compactNum(p?.ownership?.nftHolders || 0)} · token ${compactNum(p?.ownership?.tokenHolders || p?.ownership?.stonkHolders || p?.ownership?.erc20Holders || 0)}`,
-    };
-  }).sort((a, b) => b.value - a.value);
-
-  const bestRoi = roiRows.find((r) => r.roi > 0);
-  const hrefFor = (tab) => (ds) => projectPath(ds.key, tab);
 
   const onboard = data.onboarding || {};
   const onboardBy = onboard.byProject || {};
@@ -596,188 +569,94 @@ export default function EcosystemView({ data, pending = false }) {
     ? `Still folding ${compactNum(onboard.pending)} txs`
     : 'NFT or AMM buy · nonce 0–9';
 
+  const hrefFor = (tab) => (ds) => projectPath(ds.key, tab);
+  const flowPairs = (flows?.pairs || []).slice(0, 8);
+  const vaultRows = vaults?.vaults || [];
+
   return (
     <div className="relative space-y-6 pt-4">
       <div className="sticky top-[var(--header-h,5.5rem)] z-20 -mx-3 bg-[#08090b] px-3" data-share-omit>
-        <div className="-mx-1 flex flex-col gap-2 overflow-x-auto border-b border-line px-1 pb-3 pt-4 sm:mx-0 sm:flex-row sm:items-center sm:gap-2 sm:px-0">
-          <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {ECO_TABS.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => selectTab(tab.id)}
-                className={`shrink-0 whitespace-nowrap rounded-lg px-2.5 py-2 text-[12px] transition-colors sm:px-3 sm:py-1.5 sm:text-[13px] ${
-                  activeTab === tab.id ? 'bg-panel-2 text-ink' : 'text-muted hover:text-ink'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-          <div className="flex shrink-0 items-center justify-end gap-2">
-            <div className="flex items-center gap-1">
-              <WindowBar compact value={timeframe} onChange={setRange} />
-              <IntervalBar compact value={interval} onChange={setInterval} />
-            </div>
-          </div>
+        <div className="flex items-center gap-1 overflow-x-auto border-b border-line px-1 pb-3 pt-4 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {ECO_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => selectTab(tab.id)}
+              className={`shrink-0 whitespace-nowrap rounded-lg px-2.5 py-2 text-[12px] transition-colors sm:px-3 sm:py-1.5 sm:text-[13px] ${
+                activeTab === tab.id ? 'bg-panel-2 text-ink' : 'text-muted hover:text-ink'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      <ShareSection id="roi" className="scroll-mt-32 space-y-4">
+      <ShareSection id="seats" className="scroll-mt-32 space-y-4">
         <Card
-          eyebrow="Base-seat CoC"
-          sub="Each project’s cheapest live seat, ranked. This is not one combined yield — cost basis and payouts differ, so the table is a comparison, not a rollup."
+          eyebrow="Last sync"
+          sub="Cheapest live seat. Floor is the OpenSea listing plus the tokens that seat must hold. Snipe replaces the listing with the AMM specific-buy quote. A Wall uses its cheapest star, not the collection floor for every rarity."
         >
           <KpiStrip>
-            <Stat
-              label="Best T0 CoC"
-              value={bestRoi ? `${bestRoi.roi.toFixed(1)}%` : '—'}
-              tone="accent"
-              note={bestRoi?.meta.name}
-            />
+            <Stat label="Best floor CoC" value={best ? pct1(best.seat.roi) : '—'} tone="accent" note={best?.meta.name} />
+            <Stat label="Best snipe CoC" value={bestSnipe ? pct1(bestSnipe.snipeRoi) : '—'} note={bestSnipe?.meta.name || 'Quoting'} />
             <Stat label="Projects" value={String(board.length)} />
-            <Stat
-              label={`${period} protocol rev`}
-              value={compactUsd(revTotal)}
-              note="Kept fees only"
-            />
-            <Stat
-              label="Chain onboard"
-              value={compactNum(onboard.wallets || 0)}
-              note={onboard.complete === false && !(onboard.wallets > 0) ? 'Counting' : 'First 10 txs'}
-            />
+            <Stat label="30D fees kept" value={compactUsd(mixTotal)} note="Protocol revenue" />
           </KpiStrip>
         </Card>
-
-        <Card eyebrow="Cash-on-cash" sub="T0 expected yield ÷ (floor + activation) at last sync.">
-          <RankBar
-            rows={roiRows.map((r) => ({
-              key: r.meta.key,
-              name: r.meta.name,
-              color: projectColors[r.meta.key],
-              value: r.roi,
-              href: projectPath(r.meta.key, 'roi'),
-              pending: r.p?.underConstruction,
-            }))}
-            format={(v) => `${Number(v).toFixed(1)}%`}
-          />
-        </Card>
-
-        <Card flush eyebrow="T0 seats" corner={<YieldPeriodToggle value={yieldPeriod} onChange={setYieldPeriod} />}>
+        <Card flush eyebrow="Seats" sub="Cash-on-cash is trailing yield divided by that cost. The snipe column fills in as each vault answers.">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-left">
+            <table className="w-full min-w-[720px] text-left">
               <thead>
                 <tr className="eyebrow border-b border-line text-faint">
                   <th className="px-5 py-3 font-normal">Project</th>
                   <th className="px-3 py-3 font-normal">Seat</th>
-                  <th className="px-3 py-3 font-normal">Cost</th>
-                  <th className="px-3 py-3 font-normal">Yield {yieldLabel !== 'Annualized' ? `(${yieldLabel})` : ''}</th>
-                  <th className="px-5 py-3 text-right font-normal">CoC</th>
+                  <th className="px-3 py-3 font-normal">Floor</th>
+                  <th className="px-3 py-3 font-normal">Snipe</th>
+                  <th className="px-3 py-3 font-normal">Yield</th>
+                  <th className="px-3 py-3 font-normal">Floor CoC</th>
+                  <th className="px-5 py-3 text-right font-normal">Snipe CoC</th>
                 </tr>
               </thead>
               <tbody>
-                {roiRows.map(({ meta, p, t0, actCost, totalCost, annual, roi, typicalNight }) => {
-                  const isExpanded = expandedProject === meta.key;
-                  const leader = bestRoi?.meta.key === meta.key && roi > 0;
-                  return (
-                    <React.Fragment key={meta.key}>
-                      <tr
-                        onClick={() => setExpandedProject(isExpanded ? null : meta.key)}
-                        className="cursor-pointer border-b border-line-soft transition-colors hover:bg-panel-2"
-                      >
-                        <td className="px-5 py-3">
-                          <Link
-                            to={projectPath(meta.key, 'roi')}
-                            onClick={(e) => e.stopPropagation()}
-                            className="flex items-center gap-3"
-                          >
-                            <img src={logoSrc(meta, p)} alt="" className="h-8 w-8 rounded-md border border-line object-cover bg-panel" />
-                            <span className="text-[13px] text-ink underline-offset-2 hover:underline">{meta.name}</span>
-                            {leader && <Tag tone="good">best</Tag>}
-                            {p?.underConstruction && <Tag tone="warn">pre-launch</Tag>}
-                          </Link>
-                        </td>
-                        <td className="px-3 py-3">
-                          <div className="text-[13px] text-ink">{t0?.name || '—'}</div>
-                          <div className="font-mono text-[11px] text-faint">{compactNum(t0?.reqTokens || 0)} {p?.config?.ticker || meta.ticker}</div>
-                        </td>
-                        <td className="px-3 py-3">
-                          <div className="num text-[13px] text-ink">{compactUsd(totalCost)}</div>
-                          <div className="font-mono text-[11px] text-faint">
-                            {typicalNight ? 'Typical Shade · 4 factions' : `Floor + ${compactUsd(actCost)}`}
-                          </div>
-                        </td>
-                        <td className="num px-3 py-3 text-[13px] text-ink">
-                          {p?.underConstruction ? (
-                            <span className="text-faint">TBD</span>
-                          ) : (
-                            <>{compactUsd(scaleYield(annual))} <span className="font-mono text-[11px] text-muted">{yieldUnit}</span></>
-                          )}
-                        </td>
-                        <td className="px-5 py-3 text-right">
-                          <span className={`num text-[13px] ${roi > 0 ? 'text-accent' : 'text-faint'}`}>
-                            {p?.underConstruction || !(roi > 0) ? '—' : `${roi.toFixed(1)}%`}
-                          </span>
-                        </td>
-                      </tr>
-                      {isExpanded && !p?.underConstruction && (
-                        <tr className="border-b border-line-soft bg-panel-2/40">
-                          <td colSpan="5" className="px-5 py-4">
-                            <p className="mb-2 text-[13px] text-muted">
-                              {t0?.rainWeight ? 'VaultLedger rain (annualized)' : 'Trailing 7-day realized yield'} · {t0?.name}
-                            </p>
-                            <div className="relative h-32 w-full">
-                              {seriesHasInk(t0?.dailyYields) ? (
-                                <Line
-                                  data={{
-                                    labels: formatLabels(t0?.dailyDates || []),
-                                    datasets: [{
-                                      label: 'Daily yield (USD)',
-                                      data: t0.dailyYields,
-                                      borderColor: projectColors[meta.key],
-                                      borderWidth: 2,
-                                      tension: 0.3,
-                                      pointRadius: 0,
-                                    }],
-                                  }}
-                                  options={{ ...chartOptions, plugins: { ...chartOptions.plugins, legend: { display: false } } }}
-                                />
-                              ) : (
-                                <EmptyChart>No daily yield recorded for this seat</EmptyChart>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
+                {seatRows.map(({ meta, p, seat, snipe, snipeRoi }) => (
+                  <tr key={meta.key} className="border-b border-line-soft">
+                    <td className="px-5 py-3">
+                      <Link to={projectPath(meta.key, 'roi')} className="flex items-center gap-3">
+                        <img src={logoSrc(meta, p)} alt="" className="h-8 w-8 rounded-md border border-line object-cover bg-panel" />
+                        <span className="text-[13px] text-ink">{meta.name}</span>
+                        {best?.meta.key === meta.key && seat.roi > 0 && <Tag tone="good">best</Tag>}
+                        {p?.underConstruction && <Tag tone="warn">pre-launch</Tag>}
+                      </Link>
+                    </td>
+                    <td className="px-3 py-3">
+                      <div className="text-[13px] text-ink">{seat.name}</div>
+                      <div className="font-mono text-[11px] text-faint">{seat.note}</div>
+                    </td>
+                    <td className="num px-3 py-3 text-[13px] text-ink">{p?.underConstruction ? '—' : compactUsd(seat.listed)}</td>
+                    <td className="num px-3 py-3 text-[13px] text-ink">
+                      {snipe > 0 ? compactUsd(snipe) : (ANVIL_VAULTS.some((v) => v.key === meta.key) && !Object.keys(quotes).length ? '…' : '—')}
+                    </td>
+                    <td className="num px-3 py-3 text-[13px] text-ink">{p?.underConstruction ? 'TBD' : compactUsd(seat.annual)}</td>
+                    <td className={`num px-3 py-3 text-[13px] ${seat.roi > 0 ? 'text-accent' : 'text-faint'}`}>
+                      {p?.underConstruction || !(seat.roi > 0) ? '—' : pct1(seat.roi)}
+                    </td>
+                    <td className={`num px-5 py-3 text-right text-[13px] ${snipeRoi > 0 ? 'text-accent' : 'text-faint'}`}>
+                      {snipeRoi > 0 ? pct1(snipeRoi) : '—'}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         </Card>
       </ShareSection>
 
-      <ShareSection id="historical" className="scroll-mt-32 space-y-4">
-        <p className="max-w-2xl text-[13px] leading-relaxed text-muted">
-          T0 CoC over time. One sparkline per project, on its own scale — overlaying them hid every tape except the largest.
-        </p>
-        <SparkGrid
-          overlay={hist}
-          hrefFor={hrefFor('historical')}
-          tick={(v) => `${compactTick(v)}%`}
-          formatValue={(ds) => {
-            const v = lastInk(ds.data);
-            return v == null ? '—' : `${v.toFixed(1)}%`;
-          }}
-        />
-      </ShareSection>
-
       <ShareSection id="revenue" className="scroll-mt-32 space-y-4">
         <Card
           ref={revMixRef}
-          eyebrow={`${period} protocol revenue`}
-          sub="Fees the protocol charged or kept in this window. Stonk dwarfs the rest in dollars, so the mix is a share bar — daily shape is each project’s own sparkline."
+          eyebrow="Trailing 30 days"
+          sub="Fees the protocol kept. Holder payouts, gacha pulls, and yield divided by 365 are listed under the bar and are not in the total."
           corner={(
             <CopyControl
               heading
@@ -789,87 +668,81 @@ export default function EcosystemView({ data, pending = false }) {
             />
           )}
         >
-          <FigureStrip total={revTotal} leader={revRows[0]} />
+          <KpiStrip>
+            <Stat label="Fees kept" value={compactUsd(mixTotal)} />
+            <Stat label="Leader" value={mixRows[0]?.name || '—'} note={mixRows[0] ? compactUsd(mixRows[0].value) : null} />
+            <Stat label="Leader share" value={mixTotal > 0 ? `${((mixRows[0].value / mixTotal) * 100).toFixed(0)}%` : '—'} />
+          </KpiStrip>
           <div className="mt-5">
-            <ShareBar parts={revRows} />
+            <ShareBar parts={mixRows} />
           </div>
         </Card>
-        <Card
-          ref={revRankRef}
-          eyebrow="Ranked"
-          sub={`${period} totals, same unit (USD).`}
-          corner={(
-            <CopyControl
-              heading
-              alwaysLabel
-              idleLabel="Copy"
-              title="Copy protocol revenue rank for X"
-              className="bg-[#08090b]"
-              onCopy={() => copyElement(revRankRef.current, { filename: 'savi-protocol-revenue-ranked.png' })}
-            />
-          )}
-        >
-          <RankBar rows={revRows} />
+        <Card eyebrow="Ranked" sub="Same 30 days, fees kept only.">
+          <RankBar rows={mixRows} />
         </Card>
-        <SparkGrid
-          overlay={revOverlay}
-          hrefFor={(ds) => projectPath(ds.key, ds.key === 'nightshades' ? 'night' : 'revenue')}
-          tick={compactUsdTick}
-          formatValue={(ds) => compactUsd(sumInk(ds.data))}
-          noteFor={() => `${period} in view`}
-        />
-      </ShareSection>
-
-      <ShareSection id="burn" className="scroll-mt-32 space-y-4">
-        <Card
-          eyebrow="Share of own supply burnt"
-          sub="Normalized to each token’s cap, so a 3k collection is comparable to a million-supply ERC-20. Raw token counts are not."
-        >
-          <RankBar rows={burnRows} format={(v) => `${Number(v).toFixed(2)}%`} />
-        </Card>
-        <SparkGrid
-          overlay={tokenBurn}
-          hrefFor={(ds) => ds.key === 'interns' ? projectPath(ds.key, 'activation') : projectPath(ds.key, 'burn')}
-          tick={(v) => `${compactTick(v)}%`}
-          formatValue={(ds) => {
-            const v = lastInk(ds.data);
-            return v == null ? '—' : `${v.toFixed(2)}%`;
-          }}
-        />
-        {nftBurn.datasets.length ? (
-          <>
-            <p className="max-w-2xl text-[13px] leading-relaxed text-muted">
-              Equivalent NFT supply removed — percent of that collection, not stacked units.
-            </p>
-            <SparkGrid
-              overlay={nftBurn}
-              hrefFor={hrefFor('burn')}
-              tick={(v) => `${compactTick(v)}%`}
-              formatValue={(ds) => {
-                const v = lastInk(ds.data);
-                return v == null ? '—' : `${v.toFixed(2)}%`;
-              }}
-            />
-          </>
+        {outsideRows.length ? (
+          <Card eyebrow="Outside the mix" sub="Real money, different meaning. Not added to the bar.">
+            <div className="space-y-2">
+              {outsideRows.map((row) => (
+                <Link key={row.key} to={row.href} className="flex items-baseline justify-between gap-3 text-[13px]">
+                  <span className="text-ink">{row.name} <span className="font-mono text-[11px] text-faint">{row.note}</span></span>
+                  <span className="num text-muted">{compactUsd(row.value)}</span>
+                </Link>
+              ))}
+            </div>
+          </Card>
         ) : null}
       </ShareSection>
 
-      <ShareSection id="activation" className="scroll-mt-32 space-y-4">
-        <Card
-          eyebrow="% of own collection earning"
-          sub="A doughnut of raw active units called Stonk ‘dominant’ because the collection is larger. The fair rank is percent activated on each supply."
-        >
-          <RankBar rows={actRows} format={(v) => `${Number(v).toFixed(1)}%`} />
-        </Card>
-        <SparkGrid
-          overlay={actOverlay}
-          hrefFor={hrefFor('activation')}
-          formatValue={(ds) => compactNum(lastInk(ds.data) || 0)}
-          noteFor={() => 'Net active · own scale'}
-        />
-      </ShareSection>
-
       <ShareSection id="ownership" className="scroll-mt-32 space-y-4">
+        <Card
+          eyebrow="Wallets per 100 NFTs"
+          sub="Unique NFT wallets divided by circulating supply, times 100. A higher bar is a collection more people hold, not a collection one wallet controls."
+        >
+          <RankBar rows={breadthRows} format={(v) => Number(v).toFixed(2)} />
+        </Card>
+        {concRows.length ? (
+          <Card
+            eyebrow="Top 10 wallets"
+            sub="Share of the included float held by the ten largest wallets. gg-index structure, excluding dust, burn addresses, and catalog contracts."
+          >
+            <RankBar rows={concRows} format={(v) => `${Number(v).toFixed(1)}%`} />
+          </Card>
+        ) : null}
+        {holdRows.length ? (
+          <Card
+            eyebrow="Still holding"
+            sub="Of the wallets who entered this collection, the share that still hold. A wallet who left and came back counts on the later week. Empty until the activity rebuild writes the book."
+          >
+            <RankBar rows={holdRows} format={(v) => `${Number(v).toFixed(1)}%`} />
+          </Card>
+        ) : null}
+        {vaultRows.length ? (
+          <Card eyebrow="NFTs in the AMM" sub="Counted from current holders in gg-index. What is inside each token-bound wallet is the Anvil scan.">
+            <RankBar
+              rows={vaultRows.map((row) => ({
+                key: row.slug,
+                name: row.name || row.slug,
+                color: projectColors[row.slug] || '#94a3b8',
+                value: Number(row.nfts) || 0,
+                href: '/anvil',
+              }))}
+              format={compactNum}
+            />
+          </Card>
+        ) : null}
+        {flowPairs.length ? (
+          <Card eyebrow="Sold one, bought another" sub="NFT wallets who sent one collection and received a different one inside 14 days, over the last 90. Overlap below is who holds both right now.">
+            <div className="space-y-2">
+              {flowPairs.map((pair) => (
+                <p key={`${pair.from}-${pair.to}`} className="flex items-baseline justify-between font-mono text-[12px] text-muted">
+                  <span>{pair.from} → {pair.to}</span>
+                  <span className="text-ink">{compactNum(pair.wallets)} wallets</span>
+                </p>
+              ))}
+            </div>
+          </Card>
+        ) : null}
         <Card
           ref={onboardCardRef}
           eyebrow="Robinhood Chain onboard"
@@ -892,47 +765,84 @@ export default function EcosystemView({ data, pending = false }) {
           </KpiStrip>
           <RankBar rows={onboardRows} format={compactNum} />
         </Card>
-        <OnboardClusterPanel data={data} timeframe={timeframe} interval={interval} />
-        <Card
-          eyebrow="Concentration"
-          sub="Unique NFT wallets ÷ circulating supply. Holder headcount is not comparable across collections of different size, so it sits as a note, not the axis."
-        >
-          <RankBar rows={ownRows} format={(v) => `${Number(v).toFixed(2)}%`} />
-        </Card>
-        <SparkGrid
-          overlay={concOverlay.datasets.length ? concOverlay : nftHolders}
-          hrefFor={hrefFor('ownership')}
-          tick={concOverlay.datasets.length ? (v) => `${compactTick(v)}%` : compactTick}
-          formatValue={(ds) => {
-            const v = lastInk(ds.data);
-            if (v == null) return '—';
-            return concOverlay.datasets.length ? `${v.toFixed(2)}%` : compactNum(v);
-          }}
-        />
+        <OnboardClusterPanel data={data} timeframe="30d" interval="daily" />
         <OverlapPanel />
       </ShareSection>
 
-      <ShareSection id="rankings" className="scroll-mt-32">
-        <OverviewView data={data} pending={pending} compact />
+      <ShareSection id="history" className="scroll-mt-32 space-y-4">
+        <div className="flex items-center justify-end gap-2" data-share-omit>
+          <WindowBar compact value={timeframe} onChange={setRange} />
+          <IntervalBar compact value={interval} onChange={setInterval} />
+        </div>
+        <p className="max-w-2xl text-[13px] leading-relaxed text-muted">
+          {period} on each project’s own scale. The seat table above stays at last sync.
+        </p>
+        <p className="font-mono text-[11px] text-faint">T0 cash-on-cash</p>
+        <SparkGrid
+          overlay={overlayFromMaps(roiMaps, { fill: true })}
+          hrefFor={hrefFor('historical')}
+          tick={(v) => `${compactTick(v)}%`}
+          formatValue={(ds) => { const v = lastInk(ds.data); return v == null ? '—' : `${v.toFixed(1)}%`; }}
+        />
+        <p className="font-mono text-[11px] text-faint">Fees kept</p>
+        <SparkGrid
+          overlay={overlayFromMaps(feeMaps)}
+          hrefFor={(ds) => projectPath(ds.key, ds.key === 'nightshades' ? 'night' : 'revenue')}
+          tick={compactUsdTick}
+          formatValue={(ds) => compactUsd(sumInk(ds.data))}
+          noteFor={() => `${period} in view`}
+        />
+        <p className="font-mono text-[11px] text-faint">Share of own token supply burnt</p>
+        <SparkGrid
+          overlay={overlayFromMaps(tokenMaps, { fill: true })}
+          hrefFor={(ds) => (ds.key === 'interns' ? projectPath(ds.key, 'activation') : projectPath(ds.key, 'burn'))}
+          tick={(v) => `${compactTick(v)}%`}
+          formatValue={(ds) => { const v = lastInk(ds.data); return v == null ? '—' : `${v.toFixed(2)}%`; }}
+        />
+        <p className="font-mono text-[11px] text-faint">Net active</p>
+        <SparkGrid
+          overlay={overlayFromMaps(actMaps)}
+          hrefFor={hrefFor('activation')}
+          formatValue={(ds) => compactNum(lastInk(ds.data) || 0)}
+          noteFor={() => 'Own scale'}
+        />
+        <p className="font-mono text-[11px] text-faint">Wallets per 100 NFTs</p>
+        <SparkGrid
+          overlay={overlayFromMaps(concMaps)}
+          hrefFor={hrefFor('ownership')}
+          tick={compactTick}
+          formatValue={(ds) => { const v = lastInk(ds.data); return v == null ? '—' : v.toFixed(2); }}
+        />
       </ShareSection>
 
       <MethodologyCard>
-        <p><strong className="text-white">What this board is for:</strong> Compare projects. It does not add them into one protocol. Each series is fetched on its own contracts. Overlaying raw units or dollars on one axis hid every tape except the largest, so ranks use a shared unit (CoC %, burn % of own cap, % activated) and history is a sparkline per project on its own scale.</p>
-        <p><strong className="text-white">Chain onboard:</strong> Unique EOAs that sent a transaction with nonce 0–9 which received or minted a StonkBrokers, Mancer, Card Wall, TickerYard, or Interns NFT, or bought STONK / MANCER / YARD / WALL off that project’s AMM. Airdrops and peer transfers do not count. Token-bound accounts are skipped; a mint-to-TBA still counts the minter. Interns share STONK, so those buys sit on StonkBrokers. Token buys are AMM-outflows only — not a walk of every holder. The hourly job folds new transfers, so the figure may still be counting up.</p>
-        <p><strong className="text-white">Revenue:</strong> Protocol-kept fees only. StonkBrokers StonkBooster is the mix on that project page. Nightshades Night vault WETH is not copied here. Bonding volume is notional.</p>
-        <p><strong className="text-white">All tiers:</strong> Cost repriced on each load. Yield is the same trailing sample as the project ROI tab. Cross-project APY is not comparable 1:1 because cost basis and payout mechanics differ.</p>
+        <p><strong className="text-white">Seats:</strong> Floor cost is the cheapest listing plus the T0 token requirement, at the last sync. For The Card Wall that listing is the cheapest star, and the row lists the rest. Snipe cost is the AMM specific-buy quote for one NFT plus those same activation tokens. Nightshades is one typical faction, weighted by how many are active, not the sum of four.</p>
+        <p><strong className="text-white">Revenue:</strong> The bar is protocol-kept fees over the trailing 30 days. Paid-to-members, gacha pulls, and a yield divided by 365 stay on the page and out of the total. The window control on History is the only one that changes a chart.</p>
+        <p><strong className="text-white">Ownership:</strong> Wallets per 100 NFTs is unique wallets divided by circulating supply, times 100. Top 10 is the share those wallets hold. Still holding is written when the activity rebuild records who entered and who left. NFTs in the AMM are a count. The Anvil scan is where a vault’s contents are priced.</p>
+        <p><strong className="text-white">Chain onboard:</strong> Unique EOAs that sent a transaction with nonce 0–9 which received or minted a StonkBrokers, Mancer, Card Wall, TickerYard, or Interns NFT, or bought that project’s token off its AMM. Airdrops and peer transfers do not count.</p>
       </MethodologyCard>
     </div>
   );
 }
 
-function FigureStrip({ total, leader }) {
-  const share = total > 0 && leader ? (leader.value / total) * 100 : 0;
-  return (
-    <KpiStrip>
-      <Stat label="Window total" value={compactUsd(total)} />
-      <Stat label="Leader" value={leader?.name || '—'} note={leader ? compactUsd(leader.value) : null} />
-      <Stat label="Leader share" value={total > 0 ? `${share.toFixed(0)}%` : '—'} />
-    </KpiStrip>
+function burnCap(p) {
+  const kind = p?.config?.kind;
+  const tokenOnly = kind === 'cashflow' || kind === 'vault';
+  const nftSupply = Number(p?.ownership?.currentMaxSupply || p?.config?.maxSupply || 0);
+  const circ = Number(p?.ownership?.circulatingSupply || 0);
+  const burntTok = Math.max(
+    Number(p?.activation?.dualBurn?.totalBurnTokens || 0),
+    Number(p?.ownership?.permanentlyBurntTokens || 0),
   );
+  let maxToken = Number(p?.config?.maxTokenSupply) || 0;
+  if (!maxToken) {
+    if (tokenOnly) maxToken = nftSupply || circ + burntTok;
+    else {
+      const unit = Number(p?.config?.unitValue);
+      if ((kind === 'machines' || kind === 'brokers') && (circ > 0 || burntTok > 0)) maxToken = circ + burntTok;
+      else if (unit > 0 && nftSupply > 0) maxToken = nftSupply * unit;
+      else maxToken = nftSupply * 1000000;
+    }
+  }
+  return { maxToken };
 }

@@ -3884,6 +3884,7 @@ async function run() {
         const stakeAnnualPool = staking && staking.usd30 > 0 ? staking.usd30 * (365 / 30) : 0;
 
         const starFloors = markets[projectKey].starFloorEth || [];
+        const listedStars = starFloors.map(Number).filter((n) => n > 0);
         mappedTiers = [];
         for (const t of conf.tiers) {
           const rainAnnual = rainYieldByTier
@@ -3891,8 +3892,7 @@ async function run() {
             : t.weight * yieldPerWeightUnitAnnual;
           const stakeAnnual = stakeWeight > 0 ? stakeAnnualPool * (t.weight / stakeWeight) : 0;
           const annual = rainAnnual + stakeAnnual;
-          const rarityIdx = Number(String(t.id).replace("T", ""));
-          const floorEth = (starFloors[rarityIdx] > 0 ? starFloors[rarityIdx] : markets[projectKey].nftFloorEth) || 0;
+          const floorEth = (listedStars.length ? Math.min(...listedStars) : markets[projectKey].nftFloorEth) || 0;
           const share = (t.rainWeight || 0) / rainNetworkForDaily;
           mappedTiers.push({
             tier: t.id,
@@ -3921,6 +3921,7 @@ async function run() {
             tokenPriceUsd: px,
             nftFloorEth: floorEth,
             nftFloorUsd: floorEth * ethUsd,
+            ...(projectKey === "cardwall" && listedStars.length ? { starFloorEth: starFloors.map((v) => (Number(v) > 0 ? Number(v) : null)) } : {}),
             totalBurn: (activationStats.dualBurn || {}).totalBurnTokens || 0,
             tokenHolders: ownershipStats.stonkHolders || ownershipStats.tokenHolders || 0,
             nftHolders: ownershipStats.nftHolders || 0,
@@ -4067,9 +4068,11 @@ async function run() {
       overlayDailyStreams(dailySnapshots, revenueBreakdown, mappedTiers?.[0]?.dailyDates);
       mergeLiveTodayHistory(revenueBreakdown);
       const modeTvl = tvlByMode(revenueBreakdown?.smartLp?.vaults);
+      const liveStars = (markets[projectKey].starFloorEth || []).map(Number).filter((n) => n > 0);
       stampLiveSnapshot(dailySnapshots, todayStamp, carrySnapshotTvl({
         nftFloorEth: markets[projectKey].nftFloorEth || 0,
         nftFloorUsd: (markets[projectKey].nftFloorEth || 0) * (markets[projectKey].ethPriceUsd || 0),
+        ...(projectKey === "cardwall" && liveStars.length ? { starFloorEth: (markets[projectKey].starFloorEth || []).map((v) => (Number(v) > 0 ? Number(v) : null)) } : {}),
         tokenHolders: ownershipStats.stonkHolders || ownershipStats.tokenHolders || 0,
         nftHolders: ownershipStats.nftHolders || 0,
         ammVaultNfts: ownershipStats.ammVaultNfts || 0,

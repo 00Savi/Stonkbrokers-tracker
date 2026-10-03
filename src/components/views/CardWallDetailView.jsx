@@ -114,9 +114,10 @@ export default function CardWallDetailView({ data, activeTab }) {
 
   const floorCostUsd = (market.nftFloorEth || 0) * (market.ethPriceUsd || 0);
 
-  const tierFloorUsd = (t, i) => {
-    const eth = t.floorEth > 0 ? t.floorEth : (market.starFloorEth?.[i] > 0 ? market.starFloorEth[i] : market.nftFloorEth);
-    return (eth || 0) * (market.ethPriceUsd || 0);
+  const tierFloorUsd = () => {
+    const stars = (market.starFloorEth || []).map(Number).filter((n) => n > 0);
+    const eth = stars.length ? Math.min(...stars) : (market.nftFloorEth || 0);
+    return eth * (market.ethPriceUsd || 0);
   };
 
   const hasSnaps = Array.isArray(dailySnapshots) && dailySnapshots.length > 0 && dailySnapshots[0].date;
@@ -868,7 +869,7 @@ export default function CardWallDetailView({ data, activeTab }) {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Unique NFT Holders</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-purple-400">{formatNumber(ownership.nftHolders || 0)} Wallets</p></div>
             <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm ring-1 ring-amber-500/20"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Wallets with an activated Card Wall</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-amber-300">{activation.activeHolders == null ? '—' : `${formatNumber(activation.activeHolders)} Wallets`}</p></div>
-            <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm ring-1 ring-emerald-500/20"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Ownership Concentration</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-emerald-400">{(ownership.ownershipRatio || 0).toFixed(2)}%</p></div>
+            <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm ring-1 ring-emerald-500/20"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Wallets per 100 NFTs</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-emerald-400">{(ownership.ownershipRatio || 0).toFixed(2)}%</p></div>
             <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Unique ${config.ticker} Holders</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-purple-400">{formatNumber(wallHolders)} Wallets</p></div>
             <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm ring-1 ring-violet-500/20">
               <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Chain onboard</p>
@@ -976,7 +977,7 @@ export default function CardWallDetailView({ data, activeTab }) {
           <p><strong className="text-white">Yield &amp; ROI:</strong> Each row is a wall level, Foundation through Fortress. Cost is the membership floor plus the $WALL to reach that level. Expected yield is two holder streams: RewardPaid staking over the last 30 days, annualized and split by that level&apos;s weight, plus slab-rain landed cost since the vault opened, split by the level&apos;s rain points. Gacha pull receipts restock the vault and are not added on top of slabs already delivered. The early-build bonus and the extra rain points from star rarity are not in this table.</p>
           <p><strong className="text-white">Payback:</strong> Entry cost ÷ annualized trailing yield, repriced at the last sync.</p>
           <p><strong className="text-white">Revenue:</strong> Gacha pull revenue is the USD price charged on The Alley till (0x6686…5676) and The Claw pool (0xC004…6b33, the crane). Alley USD is the quote&apos;s reference cents. Claw USD is the USDG received, plus $WALL at that day&apos;s close and WETH at the ETH price. Credit pulls are excluded from money in. Card value out is the insured price on The Alley and the fair-market value on The Claw, joined from each pull result. Spread is money in minus that posted value. It is not the protocol&apos;s purchase cost. Alley buyback cash is shown separately: those slabs were sold back and stayed with the house. The slab chart under it is VaultLedger landed cost (delivered vs still on the wall), not AMM swap fees. Activations are a live SoftStakingVault scan by rarityOf, not a log replay of Anvil Activated events.</p>
-          <p><strong className="text-white">Ownership:</strong> Circulating NFTs are collection size minus AMM vault inventory. Concentration is unique NFT wallets (vault and burn addresses excluded) divided by that circulating number. Activated-wallet count is unique vault stakers, not the NFT contract (the wall holds the memberships). Chain onboard is unique EOAs whose first cluster buy or mint of this project was one of their first 10 txs.</p>
+          <p><strong className="text-white">Ownership:</strong> Circulating NFTs are collection size minus AMM vault inventory. Wallets per 100 NFTs is unique NFT wallets (vault and burn addresses excluded) divided by that circulating number, times 100. Activated-wallet count is unique vault stakers, not the NFT contract (the wall holds the memberships). Chain onboard is unique EOAs whose first cluster buy or mint of this project was one of their first 10 txs.</p>
       </MethodologyCard>
 
     </div>

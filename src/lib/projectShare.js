@@ -49,13 +49,15 @@ function tokenUsd(market = {}) {
   return Number(market.tokenPriceUsd) || 0;
 }
 
-function tierFloorUsd(project, tier, index) {
+function tierFloorUsd(project, tier) {
   const market = project?.market || {};
   const ethP = Number(market.ethPriceUsd) || 0;
+  const stars = (Array.isArray(market.starFloorEth) ? market.starFloorEth : [])
+    .map(Number)
+    .filter((n) => n > 0);
+  // A Wall's star is which NFT you buy, not which membership tier you activate.
+  if (stars.length) return Math.min(...stars) * ethP;
   if (Number(tier?.floorEth) > 0) return Number(tier.floorEth) * ethP;
-  if (Array.isArray(market.starFloorEth) && Number(market.starFloorEth[index]) > 0) {
-    return Number(market.starFloorEth[index]) * ethP;
-  }
   return floorUsd(market);
 }
 
