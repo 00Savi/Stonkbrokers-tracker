@@ -17,6 +17,7 @@ import { renderToString } from 'react-dom/server';
 // `react-router-dom/server` subpath of v6 no longer exists.
 import { StaticRouter } from 'react-router-dom';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import App from '../src/app.jsx';
 import HomeView from '../src/components/views/HomeView';
 import OverviewView from '../src/components/views/OverviewView';
@@ -38,7 +39,7 @@ import { protocolRevenueChart } from '../src/lib/yieldHistory';
 import { applyLiveMachines, dropsForMachine, freshAlleyDrops } from '../src/lib/cardwallDrops';
 import { dateKey } from '../src/lib/dates';
 import { PROJECTS, tabsForProject } from '../src/lib/routes';
-import { activationTokenCostUsd, tokenPriceAtTs } from '../src/lib/portfolioHistory';
+import { activationTokenCostUsd, nftArtFromUri, tokenPriceAtTs } from '../src/lib/portfolioHistory';
 import { attributedStonkBurn, dailyAttributedBurnSeries, firstInternActivationDay } from '../src/lib/burn';
 import { navNftScanTargets } from '../src/lib/portfolioScan';
 import { windowLen } from '../src/lib/yieldHistory';
@@ -49,7 +50,7 @@ import { buildTopicShareCard } from '../src/lib/projectShare';
 import { copySectionEl } from '../src/components/CopyControl';
 import { internIdsForBroker } from '../src/lib/interns';
 import { parseBrokerId } from '../src/lib/brokerScan';
-import { ANVIL_VAULTS, predictTbaAddress, rankVaultRows, wallFloorEth, wallStars } from '../src/lib/anvilScan';
+import { ANVIL_VAULTS, internRowState, internStatusLine, predictTbaAddress, rankVaultRows, snipeCostFor, wallFloorEth, wallStars } from '../src/lib/anvilScan';
 import { isProjectLive } from '../src/lib/routes';
 import { typicalNightshadesSeat } from '../src/lib/nightshades';
 
@@ -283,7 +284,7 @@ for (const [name, View, props] of VIEWS) {
   );
   const banned = ['>Token<', '>NFT<', '>Both<'];
   const leftover = banned.filter((s) => burnHtml.includes(s));
-  if (!burnHtml.includes('The Deflationary Flywheel') || leftover.length) {
+  if (!burnHtml.includes('>Flywheel<') || leftover.length) {
     failed++;
     console.error(`FAIL  flywheel toggle still present ${leftover.join(', ')}`);
   } else {
@@ -510,7 +511,7 @@ for (const [name, View, props] of VIEWS) {
   } else if (html.includes('Intern activations (amber)')) {
     failed++;
     console.error('FAIL  intern overlay still on the total burn chart');
-  } else if (!html.includes('Daily intern vs StonkBrokers burn') || !html.includes('The Deflationary Flywheel')) {
+  } else if (!html.includes('>Daily split<') || !html.includes('>Flywheel<') || !html.includes('>Cumulative<')) {
     failed++;
     console.error('FAIL  daily intern vs broker burn chart missing under flywheel');
   } else if (!(split.total > 0) || !(split.intern > 0) || split.brokers + split.intern !== split.total && Math.abs(split.brokers + split.intern - split.total) > 1) {
@@ -679,7 +680,7 @@ for (const [name, View, props] of VIEWS) {
   } else {
     console.log('ok    stonk heading sections ready for Copy all');
   }
-  if (!stonkHtml.includes('Chain onboard') || !stonkHtml.includes('StonkBrokers onboard')) {
+  if (!stonkHtml.includes('Chain onboard') || !stonkHtml.includes('>Onboard<')) {
     failed++;
     console.error('FAIL  stonk ownership missing chain onboard');
   } else {
@@ -783,6 +784,44 @@ for (const [name, View, props] of VIEWS) {
   } else {
     console.log('ok    anvil scan ranks vault NFTs by TBA value');
   }
+  const snipe = snipeCostFor(
+    { projects: { stonk: { market: { tokenPriceUsd: 0.006, ethPriceUsd: 2000 } } } },
+    ANVIL_VAULTS[0],
+    { tokens: 666666, eth: 0.2, feeBps: 1500 },
+  );
+  const net = 1317 - snipe.usd;
+  if (!snipe || Math.abs(snipe.usd - 4399.996) > 0.001 || Math.abs(snipe.eth - 2.199998) > 0.000001 || Math.abs(net - (1317 - 4399.996)) > 0.001) {
+    failed++;
+    console.error(`FAIL  snipe cost ${JSON.stringify(snipe)} net ${net}`);
+  } else {
+    console.log('ok    snipe cost is 666,666 tokens plus 15% ETH');
+  }
+  const anvilHtml = renderToString(
+    <StaticRouter location="/anvil">
+      <AnvilScanView data={snapshot} />
+    </StaticRouter>,
+  );
+  if (!anvilHtml.includes('vault NFT') || !anvilHtml.includes('scrolls into view')) {
+    failed++;
+    console.error('FAIL  anvil scan picture note');
+  } else {
+    console.log('ok    anvil scan offers the vault NFT picture');
+  }
+  const brokerUri = `data:application/json;base64,${Buffer.from(JSON.stringify({
+    name: 'Stonk Broker #34',
+    image: 'data:image/svg+xml;base64,PHN2Zw==',
+  })).toString('base64')}`;
+  const yardUri = `data:application/json;base64,${Buffer.from(JSON.stringify({
+    image: 'ipfs://bafyart/34.png',
+  })).toString('base64')}`;
+  const brokerArt = nftArtFromUri(brokerUri);
+  const yardArt = nftArtFromUri(yardUri);
+  if (brokerArt !== 'data:image/svg+xml;base64,PHN2Zw==' || yardArt !== 'https://gateway.pinata.cloud/ipfs/bafyart/34.png') {
+    failed++;
+    console.error(`FAIL  tokenURI art ${brokerArt} ${yardArt}`);
+  } else {
+    console.log('ok    nft picture comes from tokenURI, not the collection icon');
+  }
   const tbaA = predictTbaAddress(ANVIL_VAULTS[0].nftCa, 1);
   const tbaB = predictTbaAddress(ANVIL_VAULTS[0].nftCa, 2);
   if (!/^0x[0-9a-fA-F]{40}$/.test(tbaA) || tbaA.toLowerCase() === tbaB.toLowerCase()) {
@@ -801,8 +840,90 @@ for (const [name, View, props] of VIEWS) {
   if (wallFloorEth(5, starMarket) !== 0.75 || wallFloorEth(2, starMarket) !== 0.23 || wallFloorEth(3, { nftFloorEth: 0.23 }) !== 0.23) {
     failed++;
     console.error(`FAIL  wall floors ${wallFloorEth(5, starMarket)} ${wallFloorEth(2, starMarket)}`);
+  } else if (wallFloorEth(4, { starFloorEth: [null, null, null, null, null], nftFloorEth: 0.2 }) !== 0.2) {
+    failed++;
+    console.error('FAIL  missing star floors should use the collection floor');
   } else {
     console.log('ok    wall floor follows the star rating');
+  }
+  const sigma = internRowState({ inWallet: true, dormant: true, parentActive: true });
+  const off = internRowState({ inWallet: true, dormant: true, parentActive: false });
+  const live = internRowState({ inWallet: true, dormant: false, parentActive: true });
+  const gone = internRowState({ inWallet: false, dormant: true, parentActive: true });
+  const line = internStatusLine([
+    { klass: 'sigma', state: sigma },
+    { klass: 'divergent', state: live },
+  ]);
+  if (sigma !== 'canActivate' || off !== 'dormant' || live !== 'activated' || gone != null || line !== 'Σ can activate · Δ activated') {
+    failed++;
+    console.error(`FAIL  intern scan state ${sigma} ${off} ${live} ${gone} ${line}`);
+  } else {
+    console.log('ok    dormant intern under an active broker is priced');
+  }
+}
+
+{
+  const { scoreHolders, scoreTape } = createRequire(process.cwd() + '/package.json')('./lib/underwater.cjs');
+  const ts = Date.parse('2026-01-02T00:00:00Z') / 1000;
+  const scored = scoreHolders({
+    market: { nftFloorEth: 1, ethPriceUsd: 1, tokenPriceUsd: 0.002 },
+    dailySnapshots: [{ date: '2026-01-01', nftFloorUsd: 10, tokenPriceUsd: 0.002 }],
+    tiers: [],
+    activation: { activeTokenTiers: {} },
+  }, {
+    nft: {
+      1: ['0xaaa', ts],
+      2: ['0xddd', ts],
+      3: ['0xeee', ts],
+    },
+    tok: {
+      '0xbbb': [100, ts],
+      '0xccc': [1000, ts],
+      '0xddd': [2000, ts],
+      '0xeee': [100, ts],
+    },
+  });
+  if (scored.nftOnly !== 2 || scored.tokenOnly !== 1 || scored.both !== 1 || scored.tokenWallets !== 2 || scored.wallets !== 5) {
+    failed++;
+    console.error(`FAIL  $1 holder mix nft ${scored.nftOnly} token ${scored.tokenOnly} both ${scored.both} tokWallets ${scored.tokenWallets} wallets ${scored.wallets}`);
+  } else {
+    console.log('ok    holder mix and token line drop bags under $1');
+  }
+
+  const tape = scoreTape({
+    dailySnapshots: [
+      { date: '2026-08-01', nftFloorUsd: 100, tokenPriceUsd: 0.01 },
+      { date: '2026-08-02', nftFloorUsd: 40, tokenPriceUsd: 0.002 },
+    ],
+    tiers: [{ tier: 'T0', dailyDates: ['2026-08-01', '2026-08-02'], dailyYields: [1, 1] }],
+  }, {
+    token: {
+      days: [{
+        day: '2026-08-02',
+        complete: true,
+        cohorts: [{ opened: '2026-08-01', balances: ['100', '1000'] }],
+      }],
+    },
+    nft: {
+      days: [{
+        day: '2026-08-02',
+        complete: true,
+        cohorts: [{
+          wallets: 1,
+          days: ['2026-08-01'],
+          acts: [{ day: '2026-08-01', tier: 'T0', tokens: '1000' }],
+        }],
+      }],
+    },
+  });
+  const point = tape[0] || {};
+  // 100 tokens * $0.002 = $0.20, under the $1 line. 1000 * $0.002 = $2, opened at $0.01, so underwater.
+  // NFT floor fell 100 -> 40, plus 1000 tokens * $0.01 activation, and $2 of yield does not cover it.
+  if (tape.length !== 1 || point.tokenWallets !== 1 || point.tokenUnder !== 1 || point.nftWallets !== 1 || point.nftUnder !== 1) {
+    failed++;
+    console.error(`FAIL  tape backfill ${JSON.stringify(tape)}`);
+  } else {
+    console.log('ok    daily holder tape prices each close on its own day');
   }
 }
 
@@ -829,7 +950,7 @@ for (const [name, View, props] of VIEWS) {
         },
         holderMix: [
           { date: '2026-09-30', nftOnly: 2, tokenOnly: 1, both: 1, wallets: 4 },
-          { date: '2026-10-01', nftOnly: 2, tokenOnly: 1, both: 1, wallets: 4 },
+          { date: '2026-10-01', nftOnly: 2, tokenOnly: 1, both: 1, wallets: 4, minUsd: 1 },
         ],
         underwaterHistory: [
           { at: '2026-09-30T17:00', pct: 30, nftPct: 40, tokenPct: 20 },
@@ -858,7 +979,7 @@ for (const [name, View, props] of VIEWS) {
       }}
     />
   );
-  if (hidden !== '' || !shown.includes('Holders underwater') || !shown.includes('saved each hour') || !shown.includes('Underwater by the week') || !shown.includes('NFT wallets') || !shown.includes('token wallets') || !shown.includes('Holder mix') || !shown.includes('largest cohort') || shown.includes('Payback by tier')) {
+  if (hidden !== '' || !shown.includes('Holders underwater') || !shown.includes('saved each hour') || !shown.includes('>Week<') || !shown.includes('>Mix<') || !shown.includes('NFT wallets') || !shown.includes('at least $1') || shown.includes('Payback by tier')) {
     failed++;
     console.error('FAIL  underwater charts');
   } else if (nftOnly.includes('Holder mix') || nftOnly.includes('token only') || nftOnly.includes('token wallets') || !nftOnly.includes('Token bags stay on StonkBrokers')) {

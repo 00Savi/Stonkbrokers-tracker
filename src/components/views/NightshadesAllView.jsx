@@ -20,7 +20,7 @@ import {
     factionNightRecord,
     nightLpPoints,
 } from '../../lib/nightshades';
-import { ChartPanel, EmptyChart } from '../HistoryCharts';
+import { ChartPanel, ChartSwitch, EmptyChart } from '../HistoryCharts';
 import { MethodologyCard } from '../Disclaimer';
 import { SliceChart } from '../SliceChart';
 import { explorerTxUrl, explorerAddressUrl } from '../../lib/tba';
@@ -39,15 +39,15 @@ function formatPrice(val) {
   return compactUsd(n);
 }
 
-function Together({ title, note, labels, datasets, options }) {
+function togetherBody({ labels, datasets, options }) {
   const ink = (datasets || []).filter((d) => seriesHasInk(d.data));
+  return ink.length ? <Line data={{ labels, datasets: ink }} options={options} /> : <EmptyChart />;
+}
+
+function Together({ title, note, labels, datasets, options }) {
   return (
     <ChartPanel title={title} note={note}>
-      {ink.length ? (
-        <Line data={{ labels, datasets: ink }} options={options} />
-      ) : (
-        <EmptyChart />
-      )}
+      {togetherBody({ labels, datasets, options })}
     </ChartPanel>
   );
 }
@@ -295,40 +295,51 @@ function NightLiquidity({ night, timeframe, interval, faction }) {
   }
 
   return (
-    <div className="space-y-6">
-      <Together
-        title="Pool liquidity by faction"
-        note="Each Anvil pair on its own line. Not stacked — Ghosts is not added into Knights here."
-        labels={labels}
-        datasets={NIGHTSHADES_FACTION_META.map((f) => ({
-          label: `${f.label} pool`,
-          data: sliced.map((r) => Number(r.pools?.[f.id]?.weth) || 0),
-          borderColor: FACTION_COLORS[f.id],
-          borderWidth: 2,
-          tension: 0.3,
-          pointRadius: dots,
-          spanGaps: true,
-        }))}
-        options={ethAxis}
-      />
-      <Together
-        title="Total Nightshades pool liquidity"
-        note="All four faction pools added together. This is system health: after a night, total WETH should dip on the struck side and then stick."
-        labels={labels}
-        datasets={[{
-          label: 'All four pools',
-          data: sliced.map((r) => Number(r.totalWeth) || 0),
-          borderColor: '#818cf8',
-          backgroundColor: '#818cf815',
-          borderWidth: 3,
-          tension: 0.3,
-          pointRadius: dots,
-          spanGaps: true,
-          fill: true,
-        }]}
-        options={ethAxis}
-      />
-    </div>
+    <ChartSwitch
+      initial="split"
+      views={[
+        {
+          id: 'split',
+          label: 'By faction',
+          title: 'Pool liquidity by faction',
+          note: 'Each Anvil pair on its own line. Not stacked — Ghosts is not added into Knights here.',
+          body: togetherBody({
+            labels,
+            datasets: NIGHTSHADES_FACTION_META.map((f) => ({
+              label: `${f.label} pool`,
+              data: sliced.map((r) => Number(r.pools?.[f.id]?.weth) || 0),
+              borderColor: FACTION_COLORS[f.id],
+              borderWidth: 2,
+              tension: 0.3,
+              pointRadius: dots,
+              spanGaps: true,
+            })),
+            options: ethAxis,
+          }),
+        },
+        {
+          id: 'total',
+          label: 'Total',
+          title: 'Total Nightshades pool liquidity',
+          note: 'All four faction pools added together. This is system health: after a night, total WETH should dip on the struck side and then stick.',
+          body: togetherBody({
+            labels,
+            datasets: [{
+              label: 'All four pools',
+              data: sliced.map((r) => Number(r.totalWeth) || 0),
+              borderColor: '#818cf8',
+              backgroundColor: '#818cf815',
+              borderWidth: 3,
+              tension: 0.3,
+              pointRadius: dots,
+              spanGaps: true,
+              fill: true,
+            }],
+            options: ethAxis,
+          }),
+        },
+      ]}
+    />
   );
 }
 
@@ -711,19 +722,32 @@ export default function NightshadesAllView({ project, setFaction }) {
               );
             })}
           </div>
-          <Together
-            title="Cumulative tokens burnt"
-            note="Each faction’s own token. Quiet days carry the last cumulative — a burn cannot reset."
-            labels={burnOverlay.labels}
-            datasets={burnOverlay.datasets}
-            options={countChartOptions('Tokens')}
-          />
-          <Together
-            title="Share of each faction’s token supply burnt (%)"
-            note="Percent of that market’s cap, so a 3,000-NFT collection is comparable to the others."
-            labels={burnPctOverlay.labels}
-            datasets={burnPctOverlay.datasets}
-            options={percentChartOptions}
+          <ChartSwitch
+            initial="tokens"
+            views={[
+              {
+                id: 'tokens',
+                label: 'Cumulative',
+                title: 'Cumulative tokens burnt',
+                note: 'Each faction’s own token. Quiet days carry the last cumulative — a burn cannot reset.',
+                body: togetherBody({
+                  labels: burnOverlay.labels,
+                  datasets: burnOverlay.datasets,
+                  options: countChartOptions('Tokens'),
+                }),
+              },
+              {
+                id: 'share',
+                label: 'Share',
+                title: 'Share of each faction’s token supply burnt (%)',
+                note: 'Percent of that market’s cap, so a 3,000-NFT collection is comparable to the others.',
+                body: togetherBody({
+                  labels: burnPctOverlay.labels,
+                  datasets: burnPctOverlay.datasets,
+                  options: percentChartOptions,
+                }),
+              },
+            ]}
           />
         </div>
       </ShareSection>
@@ -803,19 +827,32 @@ export default function NightshadesAllView({ project, setFaction }) {
               );
             })}
           </div>
-          <Together
-            title="NFT holders"
-            note="Snapshot nftHolders when present; otherwise the live count as the latest point."
-            labels={nftOverlay.labels}
-            datasets={nftOverlay.datasets}
-            options={countChartOptions('Wallets')}
-          />
-          <Together
-            title="Token holders"
-            note="hourly historicalGrowth when it exists; else snapshot tokenHolders."
-            labels={tokOverlay.labels}
-            datasets={tokOverlay.datasets}
-            options={countChartOptions('Wallets')}
+          <ChartSwitch
+            initial="nft"
+            views={[
+              {
+                id: 'nft',
+                label: 'NFT',
+                title: 'NFT holders',
+                note: 'Snapshot nftHolders when present; otherwise the live count as the latest point.',
+                body: togetherBody({
+                  labels: nftOverlay.labels,
+                  datasets: nftOverlay.datasets,
+                  options: countChartOptions('Wallets'),
+                }),
+              },
+              {
+                id: 'token',
+                label: 'Token',
+                title: 'Token holders',
+                note: 'hourly historicalGrowth when it exists; else snapshot tokenHolders.',
+                body: togetherBody({
+                  labels: tokOverlay.labels,
+                  datasets: tokOverlay.datasets,
+                  options: countChartOptions('Wallets'),
+                }),
+              },
+            ]}
           />
         </div>
       </ShareSection>

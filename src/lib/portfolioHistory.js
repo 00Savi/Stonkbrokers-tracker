@@ -1,4 +1,5 @@
 import { ethers } from 'ethers';
+import { ROBINHOOD_RPC } from './bonusTokenomics';
 import { dateKey, utcIso, utcIsoFromTs } from './dates';
 import { loadHolderPosition } from './ggindex';
 
@@ -175,7 +176,7 @@ export function parseMachineMeta(json) {
     ink,
     multiplier,
     status,
-    imageUrl: normalizeNftImageUrl(json?.image_url || json?.metadata?.image || '') || null,
+    imageUrl: normalizeNftImageUrl(json?.metadata?.image || '') || null,
   };
 }
 
@@ -444,19 +445,96 @@ export function earnedUsdForNft(pData, tierId, startTs) {
   return sum;
 }
 
+const IPFS_GATEWAY = 'https://gateway.pinata.cloud/ipfs/';
+const TOKEN_URI = new ethers.Interface(['function tokenURI(uint256) view returns (string)']);
+
 /** Point IPFS URLs at a public gateway so <img> and canvas can load them. */
 export function normalizeNftImageUrl(src) {
   if (!src) return '';
   const s = String(src).trim();
-  if (s.startsWith('ipfs://')) {
-    return `https://dweb.link/ipfs/${s.replace(/^ipfs:\/\//, '').replace(/^ipfs\//, '')}`;
-  }
+  if (s.startsWith('data:') || s.startsWith('blob:') || s.startsWith('/')) return s;
+  const path = ipfsPath(s);
+  if (path) return `${IPFS_GATEWAY}${path}`;
   return s;
 }
 
+function ipfsPath(src) {
+  if (src.startsWith('ipfs://')) return src.replace(/^ipfs:\/\//, '').replace(/^ipfs\//, '');
+  const hosted = src.match(/\/ipfs\/(.+)$/);
+  return hosted ? hosted[1] : '';
+}
+
+/**
+ * The picture in `tokenURI`. Brokers, interns, and mancers keep an SVG in the
+ * data URI. Other collections point at a JSON file whose `image` field is the art.
+ * The explorer's `image_url` is the collection icon, so every row looked like a briefcase.
+ */
+export function nftArtFromUri(uri) {
+  const raw = String(uri || '').trim();
+  if (!raw) return '';
+  if (/^data:image\//i.test(raw)) return raw;
+  if (/^data:application\/json/i.test(raw)) {
+    const meta = decodeDataJson(raw);
+    return normalizeNftImageUrl(meta?.image || meta?.image_url || '');
+  }
+  return '';
+}
+
+export async function imageFromTokenUri(uri) {
+  const inline = nftArtFromUri(uri);
+  if (inline) return inline;
+  const raw = String(uri || '').trim();
+  const url = normalizeNftImageUrl(raw);
+  if (!/^https?:\/\//i.test(url)) return '';
+  const res = await fetch(url);
+  if (!res.ok) return '';
+  const type = res.headers.get('content-type') || '';
+  if (type.startsWith('image/')) return url;
+  const meta = await res.json();
+  return normalizeNftImageUrl(meta?.image || meta?.image_url || '');
+}
+
+function decodeDataJson(uri) {
+  const comma = uri.indexOf(',');
+  const head = uri.slice(0, comma);
+  const payload = uri.slice(comma + 1);
+  const text = /;base64/i.test(head)
+    ? new TextDecoder().decode(Uint8Array.from(atob(payload), (c) => c.charCodeAt(0)))
+    : decodeURIComponent(payload);
+  return JSON.parse(text);
+}
+
+async function readTokenUri(nftCa, tokenId) {
+  const data = TOKEN_URI.encodeFunctionData('tokenURI', [tokenId]);
+  const res = await fetch(ROBINHOOD_RPC, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'eth_call',
+      params: [{ to: nftCa, data }, 'latest'],
+    }),
+  });
+  if (!res.ok) return '';
+  const body = await res.json();
+  if (!body?.result || body.error) return '';
+  try {
+    return TOKEN_URI.decodeFunctionResult('tokenURI', body.result)[0] || '';
+  } catch {
+    return '';
+  }
+}
+
 export async function fetchNftImage(nftCa, tokenId) {
+  try {
+    const image = await imageFromTokenUri(await readTokenUri(nftCa, tokenId));
+    if (image) return image;
+  } catch {
+    // A missing token reverts. Leave the frame empty rather than the collection icon.
+  }
   const json = await fetchNftInstance(nftCa, tokenId);
-  return normalizeNftImageUrl(json?.image_url || json?.animation_url || json?.metadata?.image || null);
+  return normalizeNftImageUrl(json?.metadata?.image || '') || '';
 }
 
 export async function fetchNftInstance(nftCa, tokenId) {
@@ -470,9 +548,15 @@ export async function fetchNftInstance(nftCa, tokenId) {
 }
 
 export async function fetchMachineMeta(nftCa, tokenId) {
-  const json = await fetchNftInstance(nftCa, tokenId);
-  if (!json) return { inked: false, weight: 0, ink: 0, multiplier: 0, status: '', imageUrl: null };
-  return parseMachineMeta(json);
+  const [json, imageUrl] = await Promise.all([
+    fetchNftInstance(nftCa, tokenId),
+    fetchNftImage(nftCa, tokenId).catch(() => ''),
+  ]);
+  const parsed = json
+    ? parseMachineMeta(json)
+    : { inked: false, weight: 0, ink: 0, multiplier: 0, status: '', imageUrl: null };
+  if (imageUrl) parsed.imageUrl = imageUrl;
+  return parsed;
 }
 
 function transferTokenCa(t) {

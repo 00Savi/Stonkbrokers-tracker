@@ -458,9 +458,9 @@ function ipfsCandidates(src) {
     : s.match(/\/ipfs\/(.+)$/)?.[1];
   if (!cid) return [s];
   return [
+    `https://gateway.pinata.cloud/ipfs/${cid}`,
     `https://dweb.link/ipfs/${cid}`,
     `https://ipfs.io/ipfs/${cid}`,
-    `https://cf-ipfs.com/ipfs/${cid}`,
   ];
 }
 

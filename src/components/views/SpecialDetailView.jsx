@@ -16,7 +16,7 @@ import {
 } from '../../lib/oakmont';
 import { baseChartOptions, compactTick, compactUsdTick, cumulativeBurnDataset, percentTick } from '../../lib/charts';
 import { useChartView } from '../../lib/chartWindow';
-import { YieldUsdPricePanel, HolderRevenuePanel, FlywheelPanel } from '../HistoryCharts';
+import { YieldHistorySwitch, ChartSwitch, BurnHistorySwitch, EmptyChart } from '../HistoryCharts';
 import { DisclaimerCopy } from '../Disclaimer';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler);
@@ -187,29 +187,24 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <h2 className="text-xl font-bold text-white">Historical yield & payback</h2>
           </div>
-          <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
-            <h3 className="text-sm font-bold text-white mb-4">ROI trajectory</h3>
-            <div className="relative h-52 sm:h-64 md:h-72 w-full">
-              {histLabels.length && (histRoi.length || cashflow.dailyRevenue?.length) ? (
-                <Line
-                  data={{
-                    labels: histLabels,
-                    datasets: histRoi.length
-                      ? [{ label: 'CoC ROI %', data: histRoi, borderColor: MARK.green, tension: 0.3, borderWidth: 2 }]
-                      : [{ label: 'Holders revenue (USD)', data: cashflow.dailyRevenue, borderColor: MARK.green, tension: 0.3, borderWidth: 2 }],
-                  }}
-                  options={histRoi.length
-                    ? baseChartOptions(histLabels, interval, { yUnit: 'CoC %', yTick: percentTick })
-                    : baseChartOptions(histLabels, interval, { yUnit: 'USD', yTick: compactUsdTick })}
-                />
-              ) : (
-                <div className="h-full flex items-center justify-center text-sm text-slate-500">Snapshots start after the first hourly run.</div>
-              )}
-            </div>
-          </div>
-          {snaps.length > 0 && (
-            <YieldUsdPricePanel snaps={snaps} tiers={tiers} />
-          )}
+          <YieldHistorySwitch
+            labels={histLabels}
+            datasets={histRoi.length
+              ? [{ label: 'CoC ROI %', data: histRoi, borderColor: MARK.green, tension: 0.3, borderWidth: 2 }]
+              : [{ label: 'Holders revenue (USD)', data: cashflow.dailyRevenue, borderColor: MARK.green, tension: 0.3, borderWidth: 2 }]}
+            options={histRoi.length
+              ? baseChartOptions(histLabels, interval, { yUnit: 'CoC %', yTick: percentTick })
+              : baseChartOptions(histLabels, interval, { yUnit: 'USD', yTick: compactUsdTick })}
+            snaps={snaps}
+            tiers={tiers}
+            showUsd={snaps.length > 0}
+            cocLabel={histRoi.length ? 'CoC %' : 'Holders'}
+            cocTitle={histRoi.length ? 'ROI trajectory' : 'Holders revenue'}
+            cocNote={histRoi.length
+              ? 'Cash-on-cash over the selected window.'
+              : 'Revenue that reached holders. Protocol-kept fees are on the Revenue tab.'}
+            empty="Snapshots start after the first hourly run."
+          />
         </div>
       </ShareSection>
 
@@ -232,32 +227,53 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
               <p className="text-2xl font-extrabold" style={{ color: MARK.violet }}>{fmt(annual)}</p>
             </div>
           </div>
-          <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
-            <h3 className="text-sm font-bold text-white mb-4">Protocol rev vs holders revenue</h3>
-            <div className="relative h-52 sm:h-64 md:h-72 w-full">
-              {revDates.length ? (
-                <Bar
-                  data={{
-                    labels: revDates,
-                    datasets: (revCols || []).map((c) => ({
-                      label: c.label,
-                      data: c.data,
-                      backgroundColor: c.color,
-                    })),
-                  }}
-                  options={{ ...chartOpts, scales: { ...chartOpts.scales, x: { ...chartOpts.scales.x, stacked: false }, y: { ...chartOpts.scales.y, stacked: false, unit: 'USD', ticks: { ...chartOpts.scales.y.ticks, callback: compactUsdTick } } } }}
-                />
-              ) : (
-                <div className="h-72 flex items-center justify-center text-sm text-slate-500">
-                  {kind === 'machines' ? `24h stock-pot estimate ${fmt(cashflow.revenue24h)}. Daily series starts after Llama or on-chain drops are wired.` : kind === 'brokers' ? 'Purchase series from coattail.cash/api/stats (CDN, up to 1h).' : 'No daily series yet.'}
-                </div>
-              )}
-            </div>
-          </div>
-          <HolderRevenuePanel
-            labels={revDates}
-            data={revCols[1]?.data || []}
-            note="Revenue that reached token / NFT holders. Protocol-kept fees stay in the chart above."
+          <ChartSwitch
+            initial="dollars"
+            views={[
+              {
+                id: 'dollars',
+                label: 'Dollars',
+                title: 'Protocol rev vs holders revenue',
+                note: 'Protocol-kept fees beside what reached holders.',
+                body: revDates.length ? (
+                  <Bar
+                    data={{
+                      labels: revDates,
+                      datasets: (revCols || []).map((c) => ({
+                        label: c.label,
+                        data: c.data,
+                        backgroundColor: c.color,
+                      })),
+                    }}
+                    options={{ ...chartOpts, scales: { ...chartOpts.scales, x: { ...chartOpts.scales.x, stacked: false }, y: { ...chartOpts.scales.y, stacked: false, unit: 'USD', ticks: { ...chartOpts.scales.y.ticks, callback: compactUsdTick } } } }}
+                  />
+                ) : (
+                  <EmptyChart>
+                    {kind === 'machines' ? `24h stock-pot estimate ${fmt(cashflow.revenue24h)}. Daily series starts after Llama or on-chain drops are wired.` : kind === 'brokers' ? 'Purchase series from coattail.cash/api/stats (CDN, up to 1h).' : 'No daily series yet.'}
+                  </EmptyChart>
+                ),
+              },
+              {
+                id: 'holder',
+                label: 'Holder',
+                title: 'Holder revenue (USD)',
+                note: 'Revenue that reached token / NFT holders. Protocol-kept fees stay on Dollars.',
+                body: (
+                  <Bar
+                    data={{
+                      labels: revDates,
+                      datasets: [{
+                        label: 'Holder revenue',
+                        data: revCols[1]?.data || [],
+                        backgroundColor: '#f7931a',
+                        borderRadius: 3,
+                      }],
+                    }}
+                    options={{ ...chartOpts, scales: { ...chartOpts.scales, x: { ...chartOpts.scales.x, stacked: false }, y: { ...chartOpts.scales.y, stacked: false, unit: 'USD', ticks: { ...chartOpts.scales.y.ticks, callback: compactUsdTick } } } }}
+                  />
+                ),
+              },
+            ]}
           />
         </div>
       </ShareSection>
@@ -304,11 +320,11 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
             </div>
           </div>
 
-          <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
-            <h3 className="text-sm font-bold text-white mb-1">Cumulative token burn</h3>
-            <p className="text-xs text-slate-500 mb-4">From the first recorded day through today. Quiet days keep the last cumulative burn.</p>
-            <div className="relative h-52 sm:h-64 md:h-80 w-full">
-              {burn.data.length > 0 ? (
+          <BurnHistorySwitch
+            cumulative={{
+              title: 'Cumulative token burn',
+              note: 'From the first recorded day through today. Quiet days keep the last cumulative burn.',
+              body: burn.data.length > 0 ? (
                 <Line
                   data={{
                     labels: burn.labels,
@@ -325,20 +341,18 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
                   }}
                 />
               ) : (
-                <div className="h-full flex items-center justify-center text-sm text-slate-500">No burn history recorded yet</div>
-              )}
-            </div>
-          </div>
-
-          <FlywheelPanel
-            frame="legacy"
-            title="Deflationary flywheel"
-            labels={flywheel.labels}
-            burn={flywheel.burn}
-            prices={flywheel.prices}
-            priceColor="#00a804"
-            burnColor="rgba(249, 115, 22, 0.8)"
-            leftMax={flywheel.burnAxisMax}
+                <EmptyChart>No burn history recorded yet</EmptyChart>
+              ),
+            }}
+            flywheel={{
+              title: 'Deflationary flywheel',
+              labels: flywheel.labels,
+              burn: flywheel.burn,
+              prices: flywheel.prices,
+              priceColor: '#00a804',
+              burnColor: 'rgba(249, 115, 22, 0.8)',
+              leftMax: flywheel.burnAxisMax,
+            }}
           />
         </div>
       </ShareSection>
@@ -699,29 +713,51 @@ function VaultView({
             <Panel label="Tracked LP" value={fmt(lockedLp?.totalLpUsd)} color={MARK.sky} />
             <Panel label="24h wraps / unwraps" value={`${num(market.wraps24h)} / ${num(market.unwraps24h)}`} color={MARK.amber} />
           </div>
-          {revDates.length > 0 && (
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
-              <h3 className="text-sm font-bold text-white mb-4">ETH protocol rev into the vault</h3>
-              <p className="text-xs text-slate-500 mb-4">Oakmont’s indexer publishes monthly totals, not daily. Aug and Sep are the full series they expose.</p>
-              <div className="relative h-52 sm:h-64 md:h-72 w-full">
-                <Bar
-                  data={{
-                    labels: revDates,
-                    datasets: (revCols || []).slice(0, 1).map((c) => ({
-                      label: c.label,
-                      data: c.data,
-                      backgroundColor: c.color,
-                    })),
-                  }}
-                  options={{ ...chartOpts, scales: { ...chartOpts.scales, y: { ...chartOpts.scales.y, unit: 'USD', ticks: { ...chartOpts.scales.y.ticks, callback: compactUsdTick } } } }}
-                />
-              </div>
-            </div>
-          )}
-          <HolderRevenuePanel
-            labels={revDates}
-            data={revCols[1]?.data || []}
-            note="Holder / wrap-side cash-flow from the same Oakmont series. Monthly buckets, not daily."
+          <ChartSwitch
+            initial="dollars"
+            views={[
+              {
+                id: 'dollars',
+                label: 'Dollars',
+                title: 'ETH protocol rev into the vault',
+                note: 'Oakmont’s indexer publishes monthly totals, not daily. Aug and Sep are the full series they expose.',
+                body: revDates.length ? (
+                  <Bar
+                    data={{
+                      labels: revDates,
+                      datasets: (revCols || []).slice(0, 1).map((c) => ({
+                        label: c.label,
+                        data: c.data,
+                        backgroundColor: c.color,
+                      })),
+                    }}
+                    options={{ ...chartOpts, scales: { ...chartOpts.scales, y: { ...chartOpts.scales.y, unit: 'USD', ticks: { ...chartOpts.scales.y.ticks, callback: compactUsdTick } } } }}
+                  />
+                ) : (
+                  <EmptyChart>No monthly fee series yet</EmptyChart>
+                ),
+              },
+              {
+                id: 'holder',
+                label: 'Holder',
+                title: 'Holder revenue (USD)',
+                note: 'Holder / wrap-side cash-flow from the same Oakmont series. Monthly buckets, not daily.',
+                body: (
+                  <Bar
+                    data={{
+                      labels: revDates,
+                      datasets: [{
+                        label: 'Holder revenue',
+                        data: revCols[1]?.data || [],
+                        backgroundColor: '#f7931a',
+                        borderRadius: 3,
+                      }],
+                    }}
+                    options={{ ...chartOpts, scales: { ...chartOpts.scales, y: { ...chartOpts.scales.y, unit: 'USD', ticks: { ...chartOpts.scales.y.ticks, callback: compactUsdTick } } } }}
+                  />
+                ),
+              },
+            ]}
           />
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 overflow-x-auto">
             <h3 className="text-sm font-bold text-white mb-3">Fee schedule</h3>

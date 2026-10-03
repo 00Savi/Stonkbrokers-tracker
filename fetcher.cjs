@@ -385,7 +385,7 @@ const RAIN_LOOKBACK_DAYS = 30;
 const { GgIndex } = require("./lib/ggindex.cjs");
 const { Rpc, TOPIC, addrTopic, decodeUint, decodeAddr, encodeUint, topicAddr } = require("./lib/rpc.cjs");
 const { fetchLogsWithTimestamps, erc20Transfers } = require("./lib/chain.cjs");
-const { scoreFromPositions } = require("./lib/underwater.cjs");
+const { scoreFromPositions, scoreTape } = require("./lib/underwater.cjs");
 const { BlockTime } = require("./lib/blocktime.cjs");
 const { buildSpecialProject, isSpecial } = require("./lib/specials.cjs");
 const yieldDays = require("./lib/yieldDays.cjs");
@@ -1098,9 +1098,17 @@ async function loadMarketPrices() {
     markets.cardwall.starFloorEth = os.byRarity;
     try {
       const stars = await fetchStarFloorsGraphql(PROJECTS.cardwall.openseaSlug);
-      if (stars.some((v) => v > 0)) markets.cardwall.starFloorEth = stars;
+      if (stars.some((v) => Number(v) > 0)) markets.cardwall.starFloorEth = stars;
     } catch (e) {
       console.warn(`[warn] cardwall star floors: ${e.message}`);
+    }
+    const prevStars = previous.projects?.cardwall?.market?.starFloorEth;
+    if (
+      !(markets.cardwall.starFloorEth || []).some((v) => Number(v) > 0) &&
+      Array.isArray(prevStars) &&
+      prevStars.some((v) => Number(v) > 0)
+    ) {
+      markets.cardwall.starFloorEth = prevStars;
     }
   }
 
@@ -1116,11 +1124,15 @@ async function loadMarketPrices() {
   // activation-cost tiles reuse the parent token's DexScreener print.
   if (PROJECTS.interns) {
     let internFloor = 0;
-    try {
-      internFloor = await fetchCollectionFloorGraphql("interns");
-    } catch (e) {
-      console.warn(`[warn] intern floor: ${e.message}`);
+    for (let attempt = 0; attempt < 3 && !(internFloor > 0); attempt++) {
+      try {
+        internFloor = await fetchCollectionFloorGraphql("interns");
+      } catch (e) {
+        console.warn(`[warn] intern floor: ${e.message}`);
+        if (attempt < 2) await sleep(800 * (attempt + 1));
+      }
     }
+    if (!(internFloor > 0)) internFloor = Number(previous.projects?.interns?.market?.nftFloorEth) || 0;
     markets.interns = {
       ethPriceUsd,
       tokenPriceUsd: markets.stonk?.tokenPriceUsd || 0,
@@ -2182,15 +2194,26 @@ function listedEth(node) {
 
 /** Cheapest OpenSea listing at each Card Wall star rating. rarityOf 0 is one star. */
 async function fetchStarFloorsGraphql(slug) {
-  const parts = STAR_MARKS.map((marks, i) => `
+  let last = new Error("empty star floors");
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      const parts = STAR_MARKS.map((marks, i) => `
     s${i}: collectionItems(
       collectionSlug: "${slug}",
       sort: { by: PRICE, direction: ASC },
       limit: 1,
       filter: { isListed: true, attributes: [{ traitType: "Rarity", values: ["${marks}"] }] }
     ) { items { bestListing { pricePerItem { token { unit symbol } } } } }`).join("\n");
-  const data = await fetchOpenSeaGraphql(`query { ${parts} }`);
-  return STAR_MARKS.map((_, i) => listedEth(data[`s${i}`]));
+      const data = await fetchOpenSeaGraphql(`query { ${parts} }`);
+      const stars = STAR_MARKS.map((_, i) => listedEth(data[`s${i}`]));
+      if (stars.some((v) => Number(v) > 0)) return stars;
+      last = new Error("star floors came back empty");
+    } catch (e) {
+      last = e;
+    }
+    if (attempt < 3) await sleep(800 * (attempt + 1));
+  }
+  throw last;
 }
 
 async function fetchCollectionFloorGraphql(slug) {
@@ -4266,6 +4289,7 @@ async function run() {
         job.project.ownership = job.project.ownership || {};
         job.project.ownership.underwater = summary;
         noteHolderMix(job.project, summary);
+        await noteUnderwaterTape(gg, job);
         noteUnderwaterHistory(job.project, summary);
         console.log(
           `  underwater ${job.key}: ${summary.pct}% of ${summary.wallets} ` +
@@ -4307,21 +4331,47 @@ function noteHolderMix(project, summary) {
   const date = new Date().toISOString().slice(0, 10);
   const prev = Array.isArray(project.ownership?.holderMix) ? project.ownership.holderMix : [];
   const mix = prev.filter((row) => row?.date !== date);
+  const nftOnly = summary.nftOnly || 0;
+  const tokenOnly = summary.tokenOnly || 0;
+  const both = summary.both || 0;
   mix.push({
     date,
-    nftOnly: summary.nftOnly,
-    tokenOnly: summary.tokenOnly,
-    both: summary.both,
-    wallets: summary.wallets,
+    nftOnly,
+    tokenOnly,
+    both,
+    wallets: nftOnly + tokenOnly + both,
+    minUsd: summary.mixMinUsd || 1,
   });
   project.ownership.holderMix = mix.slice(-400);
 }
 
+async function noteUnderwaterTape(gg, job) {
+  let tape = null;
+  try {
+    tape = await gg.holderCloses(job.key);
+  } catch (e) {
+    console.warn(`[warn] underwater tape ${job.key}: ${e.message}`);
+    return;
+  }
+  const daily = scoreTape(job.project, tape, {
+    tokenLeg: job.tokenLeg,
+    priceProject: job.priceProject,
+  });
+  if (!daily.length) return;
+  const today = new Date().toISOString().slice(0, 10);
+  const prev = Array.isArray(job.project.ownership?.underwaterHistory) ? job.project.ownership.underwaterHistory : [];
+  const todayHours = prev.filter((row) => String(row.at || "").startsWith(today));
+  job.project.ownership.underwaterHistory = [...daily.filter((row) => row.at < today), ...todayHours].slice(-800);
+  console.log(`  underwater tape ${job.key}: ${daily.length} days`);
+}
+
 function noteUnderwaterHistory(project, summary) {
   const at = `${new Date().toISOString().slice(0, 13)}:00`;
+  const today = at.slice(0, 10);
   const prev = Array.isArray(project.ownership?.underwaterHistory) ? project.ownership.underwaterHistory : [];
-  const series = prev.filter((row) => row?.at !== at);
-  series.push({
+  const daily = prev.filter((row) => /^\d{4}-\d{2}-\d{2}$/.test(String(row?.at || "")));
+  const hours = prev.filter((row) => row?.at && row.at !== at && !/^\d{4}-\d{2}-\d{2}$/.test(String(row.at)));
+  hours.push({
     at,
     pct: summary.pct,
     nftPct: summary.nftPct,
@@ -4333,7 +4383,10 @@ function noteUnderwaterHistory(project, summary) {
     tokenUnder: summary.tokenUnder,
     tokenWallets: summary.tokenWallets,
   });
-  project.ownership.underwaterHistory = series.slice(-720);
+  // Once the daily tape is in, only today still needs an hourly point. Until
+  // then the hour series is the whole line, so it keeps its month of points.
+  const hourKeep = daily.length ? hours.filter((row) => String(row.at).startsWith(today)) : hours.slice(-720);
+  project.ownership.underwaterHistory = [...daily.slice(-800), ...hourKeep];
 }
 
 async function overlayIndexPrices(payload) {

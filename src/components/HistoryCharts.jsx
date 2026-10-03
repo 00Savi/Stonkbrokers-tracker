@@ -44,14 +44,15 @@ export function EmptyChart({ children = 'No series recorded yet' }) {
   );
 }
 
-export function ChartPanel({ title, note, children, className = '', tall = false, corner = null, fit = false }) {
+export function ChartPanel({ title, note, children, className = '', tall = false, corner = null, fit = false, toolbar = null }) {
   return (
     <section className={`card ${className}`}>
-      {(title || note || corner) ? (
+      {(title || note || corner || toolbar) ? (
         <header className={`flex items-start justify-between gap-3 pt-4 pl-4 sm:pl-5 ${corner ? 'pr-14' : 'pr-4 sm:pr-5'}`}>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             {title ? <h3 className="eyebrow text-muted">{title}</h3> : null}
             {note ? <p className="mt-1.5 max-w-3xl text-[13px] leading-relaxed text-muted">{note}</p> : null}
+            {toolbar}
           </div>
           {corner}
         </header>
@@ -63,41 +64,115 @@ export function ChartPanel({ title, note, children, className = '', tall = false
   );
 }
 
+/** One chart card. Chips pick an alternate view of the same subject. The window control still applies to whichever chip is showing. */
+export function ChartSwitch({ views, initial }) {
+  const available = (views || []).filter((view) => view && view.body != null);
+  const fallback = available[0]?.id || '';
+  const [picked, setPicked] = useState(initial || fallback);
+  const active = available.find((view) => view.id === picked) || available[0];
+  if (!active) return null;
+  const toolbar = available.length > 1 ? (
+    <div
+      role="tablist"
+      className="mt-3 flex max-w-full gap-1 overflow-x-auto rounded-lg border border-line p-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
+      {available.map((view) => (
+        <button
+          key={view.id}
+          type="button"
+          role="tab"
+          aria-selected={view.id === active.id}
+          onClick={() => setPicked(view.id)}
+          className={`shrink-0 rounded-md px-2.5 py-1 text-[12px] font-medium normal-case tracking-normal ${
+            view.id === active.id ? 'bg-panel-2 text-ink' : 'text-muted hover:text-ink'
+          }`}
+        >
+          {view.label}
+        </button>
+      ))}
+    </div>
+  ) : null;
+  return (
+    <ChartPanel title={active.title} note={active.note} fit={!!active.fit} toolbar={toolbar}>
+      {active.body}
+    </ChartPanel>
+  );
+}
 
-export function YieldUsdPricePanel({ snaps, tiers }) {
+
+function yieldUsdBody(snaps, tiers) {
   const yieldSets = tierYieldUsdDatasets(snaps, tiers);
   const price = tokenPriceDataset(snaps);
   const has = seriesHasInk(yieldSets.flatMap((d) => d.data)) || seriesHasInk(price.data);
+  if (!has) return <EmptyChart />;
+  return (
+    <Line
+      data={{ labels: formatLabels(snaps.map((s) => s.date)), datasets: [...yieldSets, price] }}
+      options={dualAxisOptions({
+        leftTick: compactUsdTick,
+        rightTick: compactUsdTick,
+        rightColor: '#94a3b8',
+        labels: snaps.map((s) => s.date),
+        leftKind: 'level',
+        rightKind: 'level',
+        leftValues: yieldSets.flatMap((d) => d.data),
+        rightValues: price.data,
+        leftUnit: 'USD / yr',
+        rightUnit: 'USD',
+      })}
+    />
+  );
+}
+
+export function YieldUsdPricePanel({ snaps, tiers }) {
   return (
     <ChartPanel
       title="Annualized yield (USD) vs token price"
       note="ROI % moves when the token price moves. This is the payout leg on the left, spot price on the right."
     >
-      {has ? (
-        <Line
-          data={{ labels: formatLabels(snaps.map((s) => s.date)), datasets: [...yieldSets, price] }}
-          options={dualAxisOptions({
-            leftTick: compactUsdTick,
-            rightTick: compactUsdTick,
-            rightColor: '#94a3b8',
-            labels: snaps.map((s) => s.date),
-            leftKind: 'level',
-            rightKind: 'level',
-            leftValues: yieldSets.flatMap((d) => d.data),
-            rightValues: price.data,
-            leftUnit: 'USD / yr',
-            rightUnit: 'USD',
-          })}
-        />
-      ) : (
-        <EmptyChart />
-      )}
+      {yieldUsdBody(snaps, tiers)}
     </ChartPanel>
   );
 }
 
-export function FlywheelPanel({
-  title = 'The Deflationary Flywheel',
+/** CoC % and yield-vs-price are the same yield history. Default is CoC %. */
+export function YieldHistorySwitch({
+  labels,
+  datasets,
+  options,
+  snaps,
+  tiers,
+  empty = null,
+  cocLabel = 'CoC %',
+  cocTitle = 'Tier ROI',
+  cocNote = 'Cash-on-cash for each tier over the selected window.',
+  showUsd = true,
+}) {
+  const ink = seriesHasInk((datasets || []).flatMap((d) => d.data));
+  const views = [
+    {
+      id: 'coc',
+      label: cocLabel,
+      title: cocTitle,
+      note: cocNote,
+      body: ink || empty == null
+        ? <Line data={{ labels, datasets }} options={options} />
+        : <EmptyChart>{empty}</EmptyChart>,
+    },
+  ];
+  if (showUsd) {
+    views.push({
+      id: 'usd',
+      label: 'Yield vs price',
+      title: 'Annualized yield (USD) vs token price',
+      note: 'ROI % moves when the token price moves. This is the payout leg on the left, spot price on the right.',
+      body: yieldUsdBody(snaps, tiers),
+    });
+  }
+  return <ChartSwitch initial="coc" views={views} />;
+}
+
+function flywheelPlot({
   labels,
   burn,
   prices,
@@ -105,10 +180,9 @@ export function FlywheelPanel({
   burnColor = '#8b5cf6',
   burnLabel = 'Daily burn',
   leftMax,
-  frame = 'card',
 }) {
-  const note = 'Burn bars from zero. Token price is the dashed line.';
-  const plot = labels?.length ? (
+  if (!labels?.length) return <EmptyChart>No burn history recorded yet</EmptyChart>;
+  return (
     <Bar
       data={{
         labels,
@@ -148,52 +222,64 @@ export function FlywheelPanel({
         rightUnit: 'USD',
       })}
     />
-  ) : (
-    <EmptyChart>No burn history recorded yet</EmptyChart>
   );
+}
+
+const FLYWHEEL_NOTE = 'Burn bars from zero. Token price is the dashed line.';
+
+export function FlywheelPanel({
+  title = 'The Deflationary Flywheel',
+  labels,
+  burn,
+  prices,
+  priceColor = '#94a3b8',
+  burnColor = '#8b5cf6',
+  burnLabel = 'Daily burn',
+  leftMax,
+  frame = 'card',
+}) {
+  const plot = flywheelPlot({ labels, burn, prices, priceColor, burnColor, burnLabel, leftMax });
   if (frame === 'legacy') {
     return (
       <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
         <h3 className="mb-1 text-sm font-bold text-white">{title}</h3>
-        <p className="mb-4 text-xs text-slate-400">{note}</p>
+        <p className="mb-4 text-xs text-slate-400">{FLYWHEEL_NOTE}</p>
         <div className="relative h-52 w-full sm:h-64 md:h-80">{plot}</div>
       </div>
     );
   }
   return (
-    <ChartPanel title={title} note={note}>
+    <ChartPanel title={title} note={FLYWHEEL_NOTE}>
       {plot}
     </ChartPanel>
   );
 }
 
-export function HolderRevenuePanel({ labels, data, note, title, interval = 'daily' }) {
-  const has = seriesHasInk(data);
-  return (
-    <ChartPanel
-      title={title || 'Holder revenue (USD)'}
-      note={note || 'What flowed to NFT / token holders that day. This is the payout leg, not protocol-kept revenue.'}
-    >
-      {has ? (
-        <Bar
-          data={{
-            labels,
-            datasets: [{
-              label: 'Holder revenue',
-              data,
-              backgroundColor: STREAM_COLORS.holdersRev,
-              borderRadius: 3,
-              maxBarThickness: barThickness((data || []).length),
-              skipNull: true,
-            }],
-          }}
-          options={usdStackOptions(labels, interval)}
-        />
-      ) : (
-        <EmptyChart>No holder-revenue days in this window</EmptyChart>
-      )}
-    </ChartPanel>
-  );
+/** Cumulative burn, an optional daily split, and the flywheel share one card. */
+export function BurnHistorySwitch({ cumulative, flywheel, extras = [] }) {
+  const views = [];
+  if (cumulative) {
+    views.push({
+      id: 'cumulative',
+      label: 'Cumulative',
+      title: cumulative.title || 'Cumulative burn',
+      note: cumulative.note || 'Cumulative tokens burnt.',
+      body: cumulative.body,
+    });
+  }
+  for (const extra of extras) {
+    if (extra) views.push(extra);
+  }
+  if (flywheel) {
+    views.push({
+      id: 'flywheel',
+      label: 'Flywheel',
+      title: flywheel.title || 'The Deflationary Flywheel',
+      note: FLYWHEEL_NOTE,
+      body: flywheelPlot(flywheel),
+    });
+  }
+  return <ChartSwitch initial="cumulative" views={views} />;
 }
 
 function dailyTotals(cols) {
@@ -222,76 +308,98 @@ function totalNeedsLine(cols) {
   return seen >= 8 && mixed / seen > 0.4;
 }
 
-function MixToggle({ mix, onChange }) {
-  const btn = (on, label) => (
-    <button
-      type="button"
-      onClick={() => onChange(on)}
-      className={`rounded-md px-2 py-1 font-mono text-[10px] ${on === mix ? 'bg-panel-2 text-ink' : 'text-muted hover:text-ink'}`}
-    >
-      {label}
-    </button>
-  );
+function holderRevenueBody({ labels, data, interval = 'daily' }) {
+  if (!seriesHasInk(data)) return <EmptyChart>No holder-revenue days in this window</EmptyChart>;
   return (
-    <div className="flex shrink-0 rounded-lg border border-line p-0.5">
-      {btn(false, 'USD')}
-      {btn(true, 'Mix')}
-    </div>
+    <Bar
+      data={{
+        labels,
+        datasets: [{
+          label: 'Holder revenue',
+          data,
+          backgroundColor: STREAM_COLORS.holdersRev,
+          borderRadius: 3,
+          maxBarThickness: barThickness((data || []).length),
+          skipNull: true,
+        }],
+      }}
+      options={usdStackOptions(labels, interval)}
+    />
+  );
+}
+
+export function HolderRevenuePanel({ labels, data, note, title, interval = 'daily' }) {
+  return (
+    <ChartPanel
+      title={title || 'Holder revenue (USD)'}
+      note={note || 'What flowed to NFT / token holders that day. This is the payout leg, not protocol-kept revenue.'}
+    >
+      {holderRevenueBody({ labels, data, interval })}
+    </ChartPanel>
   );
 }
 
 export function ProtocolFeeVolumePanels({ labels, cols, kind, holder, note, title, interval = 'daily' }) {
-  const [mixOn, setMixOn] = useState(false);
   const holderInk = holder && seriesHasInk(holder.data);
-  const holderPanel = holderInk ? (
-    <HolderRevenuePanel labels={holder.labels || labels} data={holder.data} note={holder.note} title={holder.title} interval={interval} />
-  ) : null;
+  const holderView = holderInk ? {
+    id: 'holder',
+    label: 'Holder',
+    title: holder.title || 'Holder revenue (USD)',
+    note: holder.note || 'What flowed to NFT / token holders that day. This is the payout leg, not protocol-kept revenue.',
+    body: holderRevenueBody({ labels: holder.labels || labels, data: holder.data, interval }),
+  } : null;
 
-  if (kind === 'ledger' || kind === 'cashflow') return holderPanel;
+  if (kind === 'ledger' || kind === 'cashflow') {
+    return holderView ? <ChartSwitch views={[holderView]} /> : null;
+  }
 
   const fees = protocolFeeCols(cols).filter((c) => seriesHasInk(c.data));
   const mix = mixPercentCols(fees).filter((c) => seriesHasInk(c.data));
-  const showMix = mixOn && mix.length > 1;
   const totals = dailyTotals(fees);
-  const withTotal = !showMix && totalNeedsLine(fees);
-  const datasets = showMix
-    ? barDatasets(mix, { stacked: true })
-    : [
-      ...barDatasets(fees, { stacked: true }),
-      ...(withTotal ? [{
-        type: 'line',
-        label: 'Daily total',
-        data: totals,
-        borderColor: '#e7e9ec',
-        borderWidth: 1.5,
-        pointRadius: 0,
-        tension: 0,
-        order: 0,
-        totalLine: true,
-      }] : []),
-    ];
-  return (
-    <>
-      <ChartPanel
-        tall
-        title={title || 'Protocol revenue (USD)'}
-        note={note || (showMix
-          ? 'Share of protocol revenue that day. Days with no rev are blank.'
-          : 'What the protocol charged or kept that day. The tooltip total is the stack.')}
-        corner={mix.length > 1 ? <MixToggle mix={mixOn} onChange={setMixOn} /> : null}
-      >
-        {fees.length ? (
-          <Bar
-            data={{ labels, datasets }}
-            options={showMix ? percentStackOptions(labels, interval) : usdStackOptions(labels, interval)}
-          />
-        ) : (
-          <EmptyChart>No revenue days in this window</EmptyChart>
-        )}
-      </ChartPanel>
-      {holderPanel}
-    </>
-  );
+  const withTotal = totalNeedsLine(fees);
+  const dollarSets = [
+    ...barDatasets(fees, { stacked: true }),
+    ...(withTotal ? [{
+      type: 'line',
+      label: 'Daily total',
+      data: totals,
+      borderColor: '#e7e9ec',
+      borderWidth: 1.5,
+      pointRadius: 0,
+      tension: 0,
+      order: 0,
+      totalLine: true,
+    }] : []),
+  ];
+  const views = [
+    {
+      id: 'dollars',
+      label: 'Dollars',
+      title: title || 'Protocol revenue (USD)',
+      note: note || 'What the protocol charged or kept that day. The tooltip total is the stack.',
+      body: fees.length ? (
+        <Bar data={{ labels, datasets: dollarSets }} options={usdStackOptions(labels, interval)} />
+      ) : (
+        <EmptyChart>No revenue days in this window</EmptyChart>
+      ),
+    },
+  ];
+  if (mix.length > 1) {
+    views.push({
+      id: 'mix',
+      label: 'Mix',
+      title: 'Revenue mix',
+      note: 'Share of protocol revenue that day. Days with no rev are blank.',
+      body: (
+        <Bar
+          data={{ labels, datasets: barDatasets(mix, { stacked: true }) }}
+          options={percentStackOptions(labels, interval)}
+        />
+      ),
+    });
+  }
+  if (holderView) views.push(holderView);
+  return <ChartSwitch initial="dollars" views={views} />;
 }
 
 const MODE_FILL = {
@@ -351,82 +459,105 @@ export function SmartLpChartPanels({ snaps, smartLp, vaults }) {
     if (g == null && skim == null) return null;
     return Math.max(0, (Number(g) || 0) - (Number(skim) || 0));
   });
-  return (
-    <>
-      {hasMode ? (
-        <ChartPanel title="Smart LP TVL" note="Stacked by mode. The top edge is total vault TVL. A $0 hourly stamp is a missed read and is spanned.">
-          <Line
-            data={{
-              labels: hist.labels,
-              datasets: modeSeries.map((m) => ({
-                label: m.label,
-                data: m.data,
-                borderColor: m.color,
-                backgroundColor: MODE_FILL[m.label],
-                fill: true,
-                tension: 0.3,
-                spanGaps: true,
-                stack: 'tvl',
-                pointRadius: 0,
-              })),
-            }}
-            options={usdStackOptions(hist.labels)}
-          />
-        </ChartPanel>
-      ) : hasTvl ? (
-        <ChartPanel title="Smart LP TVL" note="Point-in-time vault TVL. A $0 hourly stamp is treated as a missed read and spanned, not a drained vault.">
-          <Line
-            data={{
-              labels: hist.labels,
-              datasets: [{
-                label: 'Vault TVL (USD)',
-                data: hist.tvl,
-                borderColor: '#fbbf24',
-                backgroundColor: 'rgba(251,191,36,0.12)',
-                fill: false,
-                tension: 0.3,
-                spanGaps: true,
-              }],
-            }}
-            options={dualAxisOptions({
-              leftTick: compactUsdTick,
-              labels: hist.labels,
-              leftKind: 'level',
-              leftValues: hist.tvl,
-              leftUnit: 'USD',
-            })}
-          />
-        </ChartPanel>
-      ) : null}
-      {hasFees ? (
-        <ChartPanel title="Daily depositor fees vs Smart LP protocol rev" note="Depositor net under the protocol skim. The skim’s share of the bar is that day’s take rate.">
-          <Bar
-            data={{
-              labels: hist.labels,
-              datasets: [
-                { label: 'Depositor net', data: depositorNet, backgroundColor: '#fbbf24', maxBarThickness: barThickness(hist.labels.length), skipNull: true, stack: 'fees' },
-                { label: 'Protocol skim', data: hist.skim, backgroundColor: '#38bdf8', maxBarThickness: barThickness(hist.labels.length), skipNull: true, stack: 'fees', shareIsTakeRate: true },
-              ],
-            }}
-            options={usdStackOptions(hist.labels)}
-          />
-        </ChartPanel>
-      ) : null}
-      {slices.length ? (
-        <ChartPanel fit title="TVL by pair" note="Live vault list. No extra fetch.">
-          <SliceChart
-            noun="TVL"
-            format={compactUsd}
-            slices={slices.map((s, i) => ({
-              label: s.label,
-              value: s.value,
-              color: PAIR_COLORS[i % PAIR_COLORS.length],
-            }))}
-          />
-        </ChartPanel>
-      ) : null}
-    </>
-  );
+  const views = [];
+  if (hasMode) {
+    views.push({
+      id: 'tvl',
+      label: 'TVL',
+      title: 'Smart LP TVL',
+      note: 'Stacked by mode. The top edge is total vault TVL. A $0 hourly stamp is a missed read and is spanned.',
+      body: (
+        <Line
+          data={{
+            labels: hist.labels,
+            datasets: modeSeries.map((m) => ({
+              label: m.label,
+              data: m.data,
+              borderColor: m.color,
+              backgroundColor: MODE_FILL[m.label],
+              fill: true,
+              tension: 0.3,
+              spanGaps: true,
+              stack: 'tvl',
+              pointRadius: 0,
+            })),
+          }}
+          options={usdStackOptions(hist.labels)}
+        />
+      ),
+    });
+  } else if (hasTvl) {
+    views.push({
+      id: 'tvl',
+      label: 'TVL',
+      title: 'Smart LP TVL',
+      note: 'Point-in-time vault TVL. A $0 hourly stamp is treated as a missed read and spanned, not a drained vault.',
+      body: (
+        <Line
+          data={{
+            labels: hist.labels,
+            datasets: [{
+              label: 'Vault TVL (USD)',
+              data: hist.tvl,
+              borderColor: '#fbbf24',
+              backgroundColor: 'rgba(251,191,36,0.12)',
+              fill: false,
+              tension: 0.3,
+              spanGaps: true,
+            }],
+          }}
+          options={dualAxisOptions({
+            leftTick: compactUsdTick,
+            labels: hist.labels,
+            leftKind: 'level',
+            leftValues: hist.tvl,
+            leftUnit: 'USD',
+          })}
+        />
+      ),
+    });
+  }
+  if (hasFees) {
+    views.push({
+      id: 'fees',
+      label: 'Fees',
+      title: 'Daily depositor fees vs Smart LP protocol rev',
+      note: 'Depositor net under the protocol skim. The skim’s share of the bar is that day’s take rate.',
+      body: (
+        <Bar
+          data={{
+            labels: hist.labels,
+            datasets: [
+              { label: 'Depositor net', data: depositorNet, backgroundColor: '#fbbf24', maxBarThickness: barThickness(hist.labels.length), skipNull: true, stack: 'fees' },
+              { label: 'Protocol skim', data: hist.skim, backgroundColor: '#38bdf8', maxBarThickness: barThickness(hist.labels.length), skipNull: true, stack: 'fees', shareIsTakeRate: true },
+            ],
+          }}
+          options={usdStackOptions(hist.labels)}
+        />
+      ),
+    });
+  }
+  if (slices.length) {
+    views.push({
+      id: 'pairs',
+      label: 'Pairs',
+      title: 'TVL by pair',
+      note: 'Live vault list. No extra fetch.',
+      fit: true,
+      body: (
+        <SliceChart
+          noun="TVL"
+          format={compactUsd}
+          slices={slices.map((s, i) => ({
+            label: s.label,
+            value: s.value,
+            color: PAIR_COLORS[i % PAIR_COLORS.length],
+          }))}
+        />
+      ),
+    });
+  }
+  return <ChartSwitch initial="tvl" views={views} />;
 }
 
 export function BlackHoleChartPanels({ snaps, lockedLp, ticker = 'STONK' }) {
@@ -434,74 +565,82 @@ export function BlackHoleChartPanels({ snaps, lockedLp, ticker = 'STONK' }) {
   const top = topPoolBars(lockedLp?.pools);
   const hasLock = seriesHasInk(hist.stonk);
   if (!hasLock && !top.data.length) return null;
-  return (
-    <>
-      {top.data.length ? (
-        <ChartPanel title="Top locked pools (USD)" note="Largest Black Hole pairs by pool reserves right now.">
-          <Bar
-            data={{
-              labels: top.labels,
-              datasets: [{ label: 'Pool liquidity (USD)', data: top.data, backgroundColor: '#fb923c', borderRadius: 4 }],
-            }}
-            options={{
-              ...usdStackOptions(),
-              indexAxis: 'y',
-              scales: {
-                ...usdStackOptions().scales,
-                x: { ...usdStackOptions().scales.y, stacked: false },
-                y: { ticks: { color: '#94a3b8' }, grid: { display: false } },
-              },
-            }}
-          />
-        </ChartPanel>
-      ) : null}
-      <ChartPanel title={`${ticker} locked over time`} note="Tokens sitting in Uniswap v4 PoolManager and DexScreener pool contracts. History is reconstructed from Transfer folds; the latest point is live.">
-        {hasLock ? (
-          <Line
-            data={{
-              labels: hist.labels,
-              datasets: [
-                {
-                  label: `${ticker} locked`,
-                  data: hist.stonk,
-                  borderColor: '#8b5cf6',
-                  backgroundColor: 'rgba(139,92,246,0.12)',
-                  fill: false,
-                  tension: 0.3,
-                  spanGaps: true,
-                  yAxisID: 'y',
-                },
-                {
-                  label: 'Pool reserves (USD)',
-                  data: hist.usd,
-                  borderColor: '#94a3b8',
-                  borderDash: [4, 4],
-                  tension: 0.3,
-                  pointRadius: 0,
-                  spanGaps: true,
-                  yAxisID: 'y1',
-                },
-              ],
-            }}
-            options={dualAxisOptions({
-              leftTick: compactTick,
-              rightTick: compactUsdTick,
-              rightColor: '#94a3b8',
-              labels: hist.labels,
-              leftKind: 'level',
-              rightKind: 'level',
-              leftValues: hist.stonk,
-              rightValues: hist.usd,
-              leftUnit: 'Tokens',
-              rightUnit: 'USD',
-            })}
-          />
-        ) : (
-          <EmptyChart />
-        )}
-      </ChartPanel>
-    </>
-  );
+  const views = [];
+  if (top.data.length) {
+    views.push({
+      id: 'pools',
+      label: 'Pools',
+      title: 'Top locked pools (USD)',
+      note: 'Largest Black Hole pairs by pool reserves right now.',
+      body: (
+        <Bar
+          data={{
+            labels: top.labels,
+            datasets: [{ label: 'Pool liquidity (USD)', data: top.data, backgroundColor: '#fb923c', borderRadius: 4 }],
+          }}
+          options={{
+            ...usdStackOptions(),
+            indexAxis: 'y',
+            scales: {
+              ...usdStackOptions().scales,
+              x: { ...usdStackOptions().scales.y, stacked: false },
+              y: { ticks: { color: '#94a3b8' }, grid: { display: false } },
+            },
+          }}
+        />
+      ),
+    });
+  }
+  views.push({
+    id: 'locked',
+    label: 'Locked',
+    title: `${ticker} locked over time`,
+    note: 'Tokens sitting in Uniswap v4 PoolManager and DexScreener pool contracts. History is reconstructed from Transfer folds; the latest point is live.',
+    body: hasLock ? (
+      <Line
+        data={{
+          labels: hist.labels,
+          datasets: [
+            {
+              label: `${ticker} locked`,
+              data: hist.stonk,
+              borderColor: '#8b5cf6',
+              backgroundColor: 'rgba(139,92,246,0.12)',
+              fill: false,
+              tension: 0.3,
+              spanGaps: true,
+              yAxisID: 'y',
+            },
+            {
+              label: 'Pool reserves (USD)',
+              data: hist.usd,
+              borderColor: '#94a3b8',
+              borderDash: [4, 4],
+              tension: 0.3,
+              pointRadius: 0,
+              spanGaps: true,
+              yAxisID: 'y1',
+            },
+          ],
+        }}
+        options={dualAxisOptions({
+          leftTick: compactTick,
+          rightTick: compactUsdTick,
+          rightColor: '#94a3b8',
+          labels: hist.labels,
+          leftKind: 'level',
+          rightKind: 'level',
+          leftValues: hist.stonk,
+          rightValues: hist.usd,
+          leftUnit: 'Tokens',
+          rightUnit: 'USD',
+        })}
+      />
+    ) : (
+      <EmptyChart />
+    ),
+  });
+  return <ChartSwitch initial="pools" views={views} />;
 }
 
 export function ActivationStackPanel({ snaps, tiers, breakdown }) {
@@ -541,7 +680,7 @@ function seriesPeak(data) {
   return peak;
 }
 
-export function OwnershipHistoryPanels({ snaps, live }) {
+export function OwnershipHistoryPanels({ snaps, live, onboard = null }) {
   const hist = ownershipHistory(snaps, live);
   const hasHolders = seriesHasInk(hist.token) || seriesHasInk(hist.nft);
   const hasConc = seriesHasInk(hist.concentration);
@@ -579,63 +718,71 @@ export function OwnershipHistoryPanels({ snaps, live }) {
       leftUnit: 'Wallets',
       rightUnit: 'Wallets',
     });
-  return (
-    <>
-      <ChartPanel title="NFT vs token holders" note="NFT wallets exclude the AMM vault. Token holders are addresses with at least one whole token. One axis when the two series are within 3×.">
-        {hasHolders ? (
-          <Line
-            data={{
-              labels: hist.labels,
-              datasets: [
-                { label: 'NFT holders', data: hist.nft, borderColor: '#8b5cf6', tension: 0.3, spanGaps: true, yAxisID: 'y' },
-                { label: 'Token holders', data: hist.token, borderColor: '#00a804', tension: 0.3, spanGaps: true, yAxisID: sharedAxis ? 'y' : 'y1' },
-              ],
-            }}
-            options={holderOptions}
-          />
-        ) : (
-          <EmptyChart />
-        )}
-      </ChartPanel>
-      <ChartPanel title="Holder breadth" note="Unique NFT wallets ÷ (collection size − AMM vault).">
-        {hasConc ? (
-          <Line
-            data={{
-              labels: hist.labels,
-              datasets: [{
-                label: 'Holder breadth',
-                data: hist.concentration,
-                borderColor: '#14b8a6',
-                tension: 0.3,
-                spanGaps: true,
-                pointRadius: 0,
-                labelEnd: true,
-                endLabel: latestBreadth == null ? '' : `${Number(latestBreadth).toFixed(1)}%`,
-              }],
-            }}
-            options={(() => {
-              const conc = baseChartOptions(hist.labels, 'daily', { yUnit: '%', yTick: percentTick });
-              return {
-                ...conc,
-                plugins: { ...conc.plugins, legend: { display: false } },
-                scales: {
-                  ...conc.scales,
-                  y: {
-                    ...conc.scales.y,
-                    ...levelAxis({ color: '#94a3b8', callback: percentTick }, hist.concentration),
-                    unit: '%',
-                    title: conc.scales.y.title,
-                  },
+  const views = [
+    {
+      id: 'holders',
+      label: 'Holders',
+      title: 'NFT vs token holders',
+      note: 'NFT wallets exclude the AMM vault. Token holders are addresses with at least one whole token. One axis when the two series are within 3×.',
+      body: hasHolders ? (
+        <Line
+          data={{
+            labels: hist.labels,
+            datasets: [
+              { label: 'NFT holders', data: hist.nft, borderColor: '#8b5cf6', tension: 0.3, spanGaps: true, yAxisID: 'y' },
+              { label: 'Token holders', data: hist.token, borderColor: '#00a804', tension: 0.3, spanGaps: true, yAxisID: sharedAxis ? 'y' : 'y1' },
+            ],
+          }}
+          options={holderOptions}
+        />
+      ) : (
+        <EmptyChart />
+      ),
+    },
+    {
+      id: 'breadth',
+      label: 'Breadth',
+      title: 'Holder breadth',
+      note: 'Unique NFT wallets ÷ (collection size − AMM vault).',
+      body: hasConc ? (
+        <Line
+          data={{
+            labels: hist.labels,
+            datasets: [{
+              label: 'Holder breadth',
+              data: hist.concentration,
+              borderColor: '#14b8a6',
+              tension: 0.3,
+              spanGaps: true,
+              pointRadius: 0,
+              labelEnd: true,
+              endLabel: latestBreadth == null ? '' : `${Number(latestBreadth).toFixed(1)}%`,
+            }],
+          }}
+          options={(() => {
+            const conc = baseChartOptions(hist.labels, 'daily', { yUnit: '%', yTick: percentTick });
+            return {
+              ...conc,
+              plugins: { ...conc.plugins, legend: { display: false } },
+              scales: {
+                ...conc.scales,
+                y: {
+                  ...conc.scales.y,
+                  ...levelAxis({ color: '#94a3b8', callback: percentTick }, hist.concentration),
+                  unit: '%',
+                  title: conc.scales.y.title,
                 },
-              };
-            })()}
-          />
-        ) : (
-          <EmptyChart>Holder breadth starts after the next snapshot write</EmptyChart>
-        )}
-      </ChartPanel>
-    </>
-  );
+              },
+            };
+          })()}
+        />
+      ) : (
+        <EmptyChart>Holder breadth starts after the next snapshot write</EmptyChart>
+      ),
+    },
+  ];
+  if (onboard) views.push(onboardView(onboard));
+  return <ChartSwitch initial="holders" views={views} />;
 }
 
 const ONBOARD_PROJECTS = [
@@ -662,42 +809,50 @@ function onboardWindow(data, key, timeframe, interval, trim = false) {
   return { labels: t.dates, data: t.vals };
 }
 
-/** One project's cumulative onboard line. */
-export function OnboardLinePanel({ data, projectKey, timeframe, interval, color, name }) {
+function onboardView({ data, projectKey, timeframe, interval, color, name }) {
   const sliced = onboardWindow(data, projectKey, timeframe, interval, true);
   const labels = formatLabels(sliced.labels);
   const opts = baseChartOptions(labels, interval, { yUnit: 'Wallets' });
+  return {
+    id: 'onboard',
+    label: 'Onboard',
+    title: `${name || 'Chain'} onboard`,
+    note: 'Wallets whose first cluster buy or mint of this project was one of their first 10 txs on Robinhood Chain.',
+    body: seriesHasInk(sliced.data) ? (
+      <Line
+        data={{
+          labels,
+          datasets: [{
+            label: 'Onboarded wallets',
+            data: sliced.data,
+            borderColor: color || PROJECT_COLORS[projectKey] || '#a78bfa',
+            backgroundColor: 'transparent',
+            tension: 0.3,
+            pointRadius: 0,
+            spanGaps: true,
+          }],
+        }}
+        options={{
+          ...opts,
+          plugins: { ...opts.plugins, legend: { display: false } },
+          scales: {
+            ...opts.scales,
+            y: { ...opts.scales.y, ...levelAxis(opts.scales.y.ticks, sliced.data) },
+          },
+        }}
+      />
+    ) : (
+      <EmptyChart>No onboard history yet</EmptyChart>
+    ),
+  };
+}
+
+/** One project's cumulative onboard line. */
+export function OnboardLinePanel(props) {
+  const view = onboardView(props);
   return (
-    <ChartPanel
-      title={`${name || 'Chain'} onboard`}
-      note="Wallets whose first cluster buy or mint of this project was one of their first 10 txs on Robinhood Chain."
-    >
-      {seriesHasInk(sliced.data) ? (
-        <Line
-          data={{
-            labels,
-            datasets: [{
-              label: 'Onboarded wallets',
-              data: sliced.data,
-              borderColor: color || PROJECT_COLORS[projectKey] || '#a78bfa',
-              backgroundColor: 'transparent',
-              tension: 0.3,
-              pointRadius: 0,
-              spanGaps: true,
-            }],
-          }}
-          options={{
-            ...opts,
-            plugins: { ...opts.plugins, legend: { display: false } },
-            scales: {
-              ...opts.scales,
-              y: { ...opts.scales.y, ...levelAxis(opts.scales.y.ticks, sliced.data) },
-            },
-          }}
-        />
-      ) : (
-        <EmptyChart>No onboard history yet</EmptyChart>
-      )}
+    <ChartPanel title={view.title} note={view.note}>
+      {view.body}
     </ChartPanel>
   );
 }

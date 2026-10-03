@@ -18,15 +18,14 @@ import { UnderwaterCard } from '../UnderwaterCard';
 import {
   EmptyChart,
   ChartPanel,
-  YieldUsdPricePanel,
-  FlywheelPanel,
+  YieldHistorySwitch,
+  BurnHistorySwitch,
   ActivityChart,
   ProtocolFeeVolumePanels,
   SmartLpChartPanels,
   BlackHoleChartPanels,
   ActivationStackPanel,
   OwnershipHistoryPanels,
-  OnboardLinePanel,
 } from '../HistoryCharts';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
@@ -356,10 +355,13 @@ export default function StonkDetailView({ data, activeTab }) {
           </KpiStrip>
         </Card>
 
-        <ChartPanel title="Tier ROI" tall>
-          <Line key={`yield-${timeframe}`} data={{ labels: histLabels, datasets: histDatasets }} options={baseChartOptions(histLabels, interval, { yUnit: 'CoC %', yTick: percentTick })} />
-        </ChartPanel>
-        <YieldUsdPricePanel snaps={roiSnaps} tiers={tiers} />
+        <YieldHistorySwitch
+          labels={histLabels}
+          datasets={histDatasets}
+          options={baseChartOptions(histLabels, interval, { yUnit: 'CoC %', yTick: percentTick })}
+          snaps={roiSnaps}
+          tiers={tiers}
+        />
       </ShareSection>
 
       {/* ==================== TAB 3: REVENUE & LPS ==================== */}
@@ -408,7 +410,6 @@ export default function StonkDetailView({ data, activeTab }) {
             kind={rawRev.kind}
             interval={interval}
             title="StonkBooster"
-            mixTitle="Mix"
             note="Protocol revenue that day. Swap volume is not included."
             holder={{
               labels: slicedHolder.labels,
@@ -606,54 +607,53 @@ export default function StonkDetailView({ data, activeTab }) {
           </KpiStrip>
         </Card>
 
-        <ChartPanel
-          tall
-          title="Cumulative burn"
-          note="Cumulative tokens burnt."
-        >
-          {slicedBurnData.length > 0 ? (
-            <Line
-              key={`burn-${timeframe}`}
-              data={{
-                labels: slicedBurnLabels,
-                datasets: [cumulativeBurnDataset(slicedBurnData, '#8b5cf6')],
-              }}
-              options={{ ...opts(slicedBurnLabels), plugins: { ...opts(slicedBurnLabels).plugins, legend: { display: false } }, scales: { ...opts(slicedBurnLabels).scales, y: { ...opts(slicedBurnLabels).scales.y, unit: 'Tokens', ticks: { ...opts(slicedBurnLabels).scales.y.ticks, callback: compactTick } } } }}
-            />
-          ) : (
-            <EmptyChart>No burn history recorded yet</EmptyChart>
-          )}
-        </ChartPanel>
-
-        <FlywheelPanel
-          labels={flywheel.labels}
-          burn={flywheel.burn}
-          prices={flywheel.prices}
-          priceColor="#00a804"
-          burnColor="#8b5cf6"
-          leftMax={flywheel.burnAxisMax}
+        <BurnHistorySwitch
+          cumulative={{
+            title: 'Cumulative burn',
+            note: 'Cumulative tokens burnt.',
+            body: slicedBurnData.length > 0 ? (
+              <Line
+                key={`burn-${timeframe}`}
+                data={{
+                  labels: slicedBurnLabels,
+                  datasets: [cumulativeBurnDataset(slicedBurnData, '#8b5cf6')],
+                }}
+                options={{ ...opts(slicedBurnLabels), plugins: { ...opts(slicedBurnLabels).plugins, legend: { display: false } }, scales: { ...opts(slicedBurnLabels).scales, y: { ...opts(slicedBurnLabels).scales.y, unit: 'Tokens', ticks: { ...opts(slicedBurnLabels).scales.y.ticks, callback: compactTick } } } }}
+              />
+            ) : (
+              <EmptyChart>No burn history recorded yet</EmptyChart>
+            ),
+          }}
+          extras={[{
+            id: 'daily',
+            label: 'Daily split',
+            title: 'Daily intern vs StonkBrokers burn',
+            note: `From the first intern activation${dailySplit.startDay ? ` (${dailySplit.startDay})` : ''}. Separate managers, same token. A stamped day uses the intern burn change; broker activations keep at least the floor tier.`,
+            body: dailySplit.rawLabels.length > 0 ? (
+              <Bar
+                key={`intern-broker-burn-${timeframe}`}
+                data={{
+                  labels: dailySplit.labels,
+                  datasets: [
+                    { type: 'bar', label: 'Interns', data: dailySplit.intern, backgroundColor: '#8b5cf6', borderRadius: 2, maxBarThickness: barThickness(dailySplit.labels.length), stack: dailySplit.labels.length > 40 ? 'burn' : undefined },
+                    { label: 'StonkBrokers', data: dailySplit.brokers, backgroundColor: '#00a804', borderRadius: 2, maxBarThickness: barThickness(dailySplit.labels.length), stack: dailySplit.labels.length > 40 ? 'burn' : undefined },
+                  ],
+                }}
+                options={{ ...opts(dailySplit.labels), scales: { ...opts(dailySplit.labels).scales, x: { ...opts(dailySplit.labels).scales.x, stacked: dailySplit.labels.length > 40 }, y: { ...opts(dailySplit.labels).scales.y, stacked: dailySplit.labels.length > 40, beginAtZero: true, unit: 'Tokens', ticks: { ...opts(dailySplit.labels).scales.y.ticks, callback: compactTick } } } }}
+              />
+            ) : (
+              <EmptyChart>Daily intern vs broker burn starts on the first intern activation</EmptyChart>
+            ),
+          }]}
+          flywheel={{
+            labels: flywheel.labels,
+            burn: flywheel.burn,
+            prices: flywheel.prices,
+            priceColor: '#00a804',
+            burnColor: '#8b5cf6',
+            leftMax: flywheel.burnAxisMax,
+          }}
         />
-
-        <ChartPanel
-          title="Daily intern vs StonkBrokers burn"
-          note={`From the first intern activation${dailySplit.startDay ? ` (${dailySplit.startDay})` : ''}. Separate managers, same token. A stamped day uses the intern burn change; broker activations keep at least the floor tier.`}
-        >
-          {dailySplit.rawLabels.length > 0 ? (
-            <Bar
-              key={`intern-broker-burn-${timeframe}`}
-              data={{
-                labels: dailySplit.labels,
-                datasets: [
-                  { type: 'bar', label: 'Interns', data: dailySplit.intern, backgroundColor: '#8b5cf6', borderRadius: 2, maxBarThickness: barThickness(dailySplit.labels.length), stack: dailySplit.labels.length > 40 ? 'burn' : undefined },
-                  { label: 'StonkBrokers', data: dailySplit.brokers, backgroundColor: '#00a804', borderRadius: 2, maxBarThickness: barThickness(dailySplit.labels.length), stack: dailySplit.labels.length > 40 ? 'burn' : undefined },
-                ],
-              }}
-              options={{ ...opts(dailySplit.labels), scales: { ...opts(dailySplit.labels).scales, x: { ...opts(dailySplit.labels).scales.x, stacked: dailySplit.labels.length > 40 }, y: { ...opts(dailySplit.labels).scales.y, stacked: dailySplit.labels.length > 40, beginAtZero: true, unit: 'Tokens', ticks: { ...opts(dailySplit.labels).scales.y.ticks, callback: compactTick } } } }}
-            />
-          ) : (
-            <EmptyChart>Daily intern vs broker burn starts on the first intern activation</EmptyChart>
-          )}
-        </ChartPanel>
       </ShareSection>
 
       {/* ========================================================================= */}
@@ -739,13 +739,7 @@ export default function StonkDetailView({ data, activeTab }) {
               nftHolders: ownership.nftHolders,
               ownershipRatio: ownership.ownershipRatio,
             }}
-          />
-          <OnboardLinePanel
-            data={data}
-            projectKey="stonk"
-            timeframe={timeframe}
-            interval={interval}
-            name="StonkBrokers"
+            onboard={{ data, projectKey: 'stonk', timeframe, interval, name: 'StonkBrokers' }}
           />
           <UnderwaterCard ownership={ownership} />
       </ShareSection>

@@ -1,7 +1,11 @@
 import React from 'react';
+import { Chart as ChartJS, ArcElement } from 'chart.js';
 import { Bar, Line } from 'react-chartjs-2';
 import { baseChartOptions, percentTick } from '../lib/charts';
-import { ChartPanel, EmptyChart } from './HistoryCharts';
+import { ChartSwitch, EmptyChart } from './HistoryCharts';
+import { SliceChart } from './SliceChart';
+
+ChartJS.register(ArcElement);
 
 function finite(n) {
   return Number.isFinite(Number(n));
@@ -75,7 +79,8 @@ export function UnderwaterCard({ ownership, tokenLeg = true }) {
   const hasNftLine = nftPcts.some(finite);
   const hasTokenLine = tokenLeg && tokenPcts.some(finite);
   const weeks = Array.isArray(row.byWeek) ? row.byWeek : [];
-  const mix = Array.isArray(ownership.holderMix) ? ownership.holderMix : [];
+  const mix = (Array.isArray(ownership.holderMix) ? ownership.holderMix : [])
+    .filter((row) => Number(row?.minUsd) === 1);
   const lastMix = mix.length ? mix[mix.length - 1] : null;
 
   const lineSets = [];
@@ -116,74 +121,77 @@ export function UnderwaterCard({ ownership, tokenLeg = true }) {
   const splitNote = hasNftLine
     ? `${row.nftUnder ?? '—'} of ${row.nftWallets ?? '—'} NFT wallets (${Number(row.nftPct).toFixed(1)}%)`
       + (hasTokenLine
-        ? ` and ${row.tokenUnder ?? '—'} of ${row.tokenWallets ?? '—'} token wallets (${Number(row.tokenPct).toFixed(1)}%) are underwater. A wallet that holds both is counted on both lines.`
+        ? ` and ${row.tokenUnder ?? '—'} of ${row.tokenWallets ?? '—'} token wallets holding at least $1 (${Number(row.tokenPct).toFixed(1)}%) are underwater. A wallet that holds both is counted on both lines. A leftover bag under $1 is not a token holder.`
         : ' are underwater.')
     : `${row.underwater} of ${row.wallets} wallets (${Number(row.pct).toFixed(1)}%) are underwater. NFT and token lines start on the next hourly score.`;
 
-  return (
-    <div className="space-y-6">
-      <ChartPanel
-        title="Holders underwater"
-        note={`${splitNote} Cost is the floor or the token price on the day the position opened. The lines are that share of today's holders, saved each hour.${tokenLeg ? '' : ' Token bags stay on StonkBrokers.'}`}
-      >
-        {lineSets.length ? (
-          <Line data={{ labels, datasets: lineSets }} options={percentOptions(labels)} />
-        ) : (
-          <EmptyChart>Underwater history starts on the next hourly score</EmptyChart>
-        )}
-      </ChartPanel>
-
-      {weeks.length > 0 && (
-        <ChartPanel title="Underwater by the week the position opened" note={weekNote(weeks)}>
-          <Bar
-            data={{
-              labels: weeks.map((w) => String(w.week).slice(5)),
-              datasets: [
-                {
-                  label: 'Underwater',
-                  data: weeks.map((w) => w.underwater),
-                  backgroundColor: '#fb7185',
-                  stack: 'week',
-                  borderRadius: 3,
-                },
-                {
-                  label: 'Above water',
-                  data: weeks.map((w) => Math.max(0, w.wallets - w.underwater)),
-                  backgroundColor: '#00a804',
-                  stack: 'week',
-                  borderRadius: 3,
-                },
-              ],
-            }}
-            options={stackedCountOptions(weeks.map((w) => w.week))}
-          />
-        </ChartPanel>
-      )}
-
-      {tokenLeg && (
-        <ChartPanel
-          title="Holder mix"
-          note={lastMix
-            ? `Token only ${lastMix.tokenOnly} · NFT only ${lastMix.nftOnly} · both ${lastMix.both}. Token wallets are most of the set, so the NFT bands stay thin. Saved once a day.`
-            : 'NFT only, token only, and both.'}
-        >
-          {mix.length < 2 ? (
-            <EmptyChart>The bars start once two days are on record.</EmptyChart>
-          ) : (
-            <Bar
-              data={{
-                labels: mix.map((m) => String(m.date).slice(5)),
-                datasets: [
-                  { label: 'Token only', data: mix.map((m) => m.tokenOnly), backgroundColor: '#f5b700', stack: 'mix' },
-                  { label: 'NFT only', data: mix.map((m) => m.nftOnly), backgroundColor: '#38bdf8', stack: 'mix' },
-                  { label: 'Both', data: mix.map((m) => m.both), backgroundColor: '#00a804', stack: 'mix' },
-                ],
-              }}
-              options={stackedCountOptions(mix.map((m) => m.date))}
-            />
-          )}
-        </ChartPanel>
-      )}
-    </div>
-  );
+  const views = [
+    {
+      id: 'share',
+      label: 'Share',
+      title: 'Holders underwater',
+      note: `${splitNote} Cost is the floor or the token price on the day the position opened. The lines are that share of today's holders, saved each hour.${tokenLeg ? '' : ' Token bags stay on StonkBrokers.'}`,
+      body: lineSets.length ? (
+        <Line data={{ labels, datasets: lineSets }} options={percentOptions(labels)} />
+      ) : (
+        <EmptyChart>Underwater history starts on the next hourly score</EmptyChart>
+      ),
+    },
+  ];
+  if (weeks.length > 0) {
+    views.push({
+      id: 'week',
+      label: 'Week',
+      title: 'Underwater by the week the position opened',
+      note: weekNote(weeks),
+      body: (
+        <Bar
+          data={{
+            labels: weeks.map((w) => String(w.week).slice(5)),
+            datasets: [
+              {
+                label: 'Underwater',
+                data: weeks.map((w) => w.underwater),
+                backgroundColor: '#fb7185',
+                stack: 'week',
+                borderRadius: 3,
+              },
+              {
+                label: 'Above water',
+                data: weeks.map((w) => Math.max(0, w.wallets - w.underwater)),
+                backgroundColor: '#00a804',
+                stack: 'week',
+                borderRadius: 3,
+              },
+            ],
+          }}
+          options={stackedCountOptions(weeks.map((w) => w.week))}
+        />
+      ),
+    });
+  }
+  if (tokenLeg) {
+    views.push({
+      id: 'mix',
+      label: 'Mix',
+      title: 'Holder mix',
+      fit: true,
+      note: lastMix
+        ? 'Wallets holding at least $1 of the token, or an NFT. A smaller token bag is left out, so an NFT wallet with one counts as NFT only.'
+        : 'NFT only, token only, and both. Token bags under $1 are left out.',
+      body: lastMix ? (
+        <SliceChart
+          noun="Wallets"
+          slices={[
+            { label: 'Token only', value: lastMix.tokenOnly, color: '#f5b700' },
+            { label: 'NFT only', value: lastMix.nftOnly, color: '#38bdf8' },
+            { label: 'Both', value: lastMix.both, color: '#00a804' },
+          ]}
+        />
+      ) : (
+        <EmptyChart>Holder mix starts once a day is on record with the $1 token floor.</EmptyChart>
+      ),
+    });
+  }
+  return <ChartSwitch initial="share" views={views} />;
 }

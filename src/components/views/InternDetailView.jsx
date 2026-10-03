@@ -18,12 +18,11 @@ import { projectPath } from '../../lib/routes';
 import { attributedStonkBurn } from '../../lib/burn';
 import {
   EmptyChart,
-  YieldUsdPricePanel,
+  YieldHistorySwitch,
   ActivityChart,
   ProtocolFeeVolumePanels,
   ActivationStackPanel,
   OwnershipHistoryPanels,
-  OnboardLinePanel,
 } from '../HistoryCharts';
 import { SliceChart } from '../SliceChart';
 import {
@@ -290,17 +289,14 @@ export default function InternDetailView({ data, activeTab }) {
               );
             })}
           </div>
-          <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
-            <h3 className="text-sm font-bold text-white mb-4">Tier ROI % Trajectory</h3>
-            <div className="relative h-52 sm:h-64 md:h-80 w-full">
-              {seriesHasInk(histDatasets.flatMap((d) => d.data)) ? (
-                <Line data={{ labels: histLabels, datasets: histDatasets }} options={baseChartOptions(histLabels, interval, { yUnit: 'CoC %', yTick: percentTick })} />
-              ) : (
-                <EmptyChart>Yield history starts after Intern Clock In writes a snapshot</EmptyChart>
-              )}
-            </div>
-          </div>
-          <YieldUsdPricePanel snaps={roiSnaps} tiers={tiers} />
+          <YieldHistorySwitch
+            labels={histLabels}
+            datasets={histDatasets}
+            options={baseChartOptions(histLabels, interval, { yUnit: 'CoC %', yTick: percentTick })}
+            snaps={roiSnaps}
+            tiers={tiers}
+            empty="Yield history starts after Intern Clock In writes a snapshot"
+          />
         </div>
       </ShareSection>
 
@@ -406,21 +402,11 @@ export default function InternDetailView({ data, activeTab }) {
               <p className="text-xs text-slate-500 mt-1">First 10 txs · NFT {formatNumber(data?.onboarding?.byProject?.interns?.nft || 0)}</p>
             </div>
           </div>
-          <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
-            <h3 className="text-sm font-bold text-white mb-4">Intern holders over time</h3>
-            <div className="relative h-52 sm:h-64 md:h-80 w-full">
-              {seriesHasInk(ownData) ? (
-                <Line data={{ labels: ownLabels, datasets: [{ label: 'NFT holders', data: ownData, borderColor: ACCENT, backgroundColor: 'rgba(251, 191, 36, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] }} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, unit: 'Wallets', ticks: { color: '#94a3b8', callback: compactTick } } } }} />
-              ) : (
-                <EmptyChart>Holder history starts after the collection CA is indexed</EmptyChart>
-              )}
-            </div>
-          </div>
           <OwnershipHistoryPanels
             snaps={roiSnaps}
             live={{ tokenHolders: 0, nftHolders: ownership.nftHolders, ownershipRatio: ownership.ownershipRatio }}
+            onboard={{ data, projectKey: 'interns', timeframe, interval, name: 'Interns' }}
           />
-          <OnboardLinePanel data={data} projectKey="interns" timeframe={timeframe} interval={interval} name="Interns" />
           <UnderwaterCard ownership={ownership} tokenLeg={false} />
         </div>
       </ShareSection>

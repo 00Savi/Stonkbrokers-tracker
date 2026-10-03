@@ -1,6 +1,7 @@
 import { ethers } from 'ethers';
 import { ROBINHOOD_RPC } from './bonusTokenomics';
 import { DEFAULT_TBA } from './airdropCommunities';
+import { internIdsForBroker } from './interns';
 
 /**
  * Anvil AMM vaults. These collections are not enumerable, so a vault's NFTs
@@ -17,6 +18,7 @@ export const ANVIL_VAULTS = [
     nftCa: '0x539cdd042c2f3d93ebc5be7dfff0c79f3b4fabf0',
     tokenCa: '0xe934e36a439c94017b64a3fece66af12099abf50',
     ammCa: '0xe302733accf4800146e55fc45b46b4e4ffc032d2',
+    activationCa: '0xacd5ae3c060c1137fe2ee86b0ab2ef697456f664',
     maxSupply: 4444,
     firstId: 1,
   },
@@ -30,6 +32,7 @@ export const ANVIL_VAULTS = [
     nftCa: '0xfc4b0c4f464dc3037cf013934648a8a726d565a5',
     tokenCa: '0xe934e36a439c94017b64a3fece66af12099abf50',
     ammCa: '0xdea32d8aee85b41a0f320ff823e4625aab01f518',
+    activationCa: '0x668ea9e44e0ceb5b203067873e0b9bcdf2214b37',
     maxSupply: 8888,
     firstId: 1,
   },
@@ -89,8 +92,8 @@ const USDG = '0x5fc5360d0400a0fd4f2af552add042d716f1d168';
 const WETH = '0x0bd7d308f8e1639fab988df18a8011f41eacad73';
 const SLAB = '0x8565507566c6a79b57e4eaa70b8232a64003d352';
 const MULTICALL = '0xcA11bde05977b3631167028862bE2a173976CA11';
-const CHUNK = 400;
-const READ_POOL = 3;
+const CHUNK = 800;
+const READ_POOL = 6;
 
 const OWNER_OF = new ethers.Interface(['function ownerOf(uint256) view returns (address)']);
 const RARITY_OF = new ethers.Interface(['function rarityOf(uint256) view returns (uint256)']);
@@ -100,6 +103,12 @@ const ACCOUNT = new ethers.Interface([
 const ERC20 = new ethers.Interface([
   'function balanceOf(address) view returns (uint256)',
   'function decimals() view returns (uint8)',
+]);
+const ACTIVATION_OF = new ethers.Interface([
+  'function activationOf(uint256) view returns (uint256 active, uint256 tier)',
+]);
+const IS_DORMANT = new ethers.Interface([
+  'function isDormant(uint256) view returns (bool)',
 ]);
 const MULTICALL_ABI = [
   'function tryAggregate(bool requireSuccess, tuple(address target, bytes callData)[] calls) public view returns (tuple(bool success, bytes returnData)[])',
@@ -137,6 +146,89 @@ export function wallFloorEth(stars, market) {
   const listed = Array.isArray(market?.starFloorEth) ? Number(market.starFloorEth[idx]) : 0;
   if (listed > 0) return listed;
   return Number(market?.nftFloorEth) || 0;
+}
+
+/** What the scan reads. Stocks and memes are the long tail. */
+export const SCAN_INCLUDE = {
+  tokens: true,
+  nfts: true,
+  stars: true,
+  interns: true,
+  stocks: true,
+  memes: true,
+};
+
+export function internFloorUsd(data) {
+  const market = data?.projects?.interns?.market || {};
+  const eth = Number(market.ethPriceUsd) || Number(data?.projects?.stonk?.market?.ethPriceUsd) || 0;
+  return (Number(market.nftFloorEth) || 0) * eth;
+}
+
+/**
+ * In the parent TBA and not yet activated, with an activated broker: the intern
+ * can still be turned on, so the wallet total includes the OpenSea floor.
+ * Already activated, or dormant under a broker that is off, is shown and not priced.
+ */
+export function internRowState({ inWallet, dormant, parentActive }) {
+  if (!inWallet) return null;
+  if (!dormant) return 'activated';
+  return parentActive ? 'canActivate' : 'dormant';
+}
+
+const INTERN_MARK = { sigma: 'Σ', divergent: 'Δ' };
+const INTERN_LABEL = { canActivate: 'can activate', activated: 'activated', dormant: 'dormant' };
+
+export function internStatusLine(interns) {
+  const shown = (interns || []).filter((row) => row.state);
+  if (!shown.length) return '';
+  return shown.map((row) => `${INTERN_MARK[row.klass] || 'Intern'} ${INTERN_LABEL[row.state] || row.state}`).join(' · ');
+}
+
+const SNIPE_QUOTE = new ethers.Interface([
+  'function quoteSpecificBuy(uint256 tokenId) view returns (uint256 tokens, uint256 eth)',
+  'function specificFeeBps() view returns (uint16)',
+]);
+
+/**
+ * What it costs to buy one specific NFT out of this vault.
+ *
+ * `tokens` is the whole-token amount (666,666 Stonkbroker). `eth` is the
+ * specific-buy leg, `specificFeeBps` of that token value, paid in ETH.
+ * A random buy is a cheaper fee and is not this quote.
+ */
+export async function quoteAnvilSnipe(provider, ammCa, tokenId) {
+  const data = SNIPE_QUOTE.encodeFunctionData('quoteSpecificBuy', [tokenId]);
+  const feeData = SNIPE_QUOTE.encodeFunctionData('specificFeeBps', []);
+  const [quotedRaw, feeRaw] = await Promise.all([
+    provider.call({ to: ammCa, data }),
+    provider.call({ to: ammCa, data: feeData }),
+  ]);
+  const [tokensRaw, ethRaw] = SNIPE_QUOTE.decodeFunctionResult('quoteSpecificBuy', quotedRaw);
+  const [feeBps] = SNIPE_QUOTE.decodeFunctionResult('specificFeeBps', feeRaw);
+  return {
+    tokens: Number(ethers.formatUnits(tokensRaw, 18)),
+    eth: Number(ethers.formatEther(ethRaw)),
+    feeBps: Number(feeBps),
+  };
+}
+
+/** Token leg at spot, plus the ETH leg the vault just quoted. */
+export function snipeCostFor(data, vault, quote) {
+  if (!vault || !quote || !(quote.tokens > 0) || !(quote.feeBps > 0)) return null;
+  const tokenUsd = tokenPrice(data, vault);
+  const ethUsd = Number(marketOf(data, vault).ethPriceUsd) || ethPrice(data);
+  if (!(tokenUsd > 0) || !(ethUsd > 0) || !(quote.eth >= 0)) return null;
+  const tokenLegUsd = quote.tokens * tokenUsd;
+  const ethLegUsd = quote.eth * ethUsd;
+  return {
+    usd: tokenLegUsd + ethLegUsd,
+    eth: tokenLegUsd / ethUsd + quote.eth,
+    tokens: quote.tokens,
+    ethLeg: quote.eth,
+    feeBps: quote.feeBps,
+    ticker: vault.ticker || '',
+    ethUsd,
+  };
 }
 
 export function rankVaultRows(rows, sort = 'value') {
@@ -193,8 +285,9 @@ function nftAssets(data) {
   const rows = ANVIL_VAULTS.map((vault) => ({
     ca: vault.nftCa,
     symbol: vault.nftSymbol || `${vault.ticker} NFT`,
-    // Wall value depends on the star rating of each membership, applied after those are known.
-    price: vault.id === 'cardwall' ? 0 : floorUsd(data, vault),
+    // Wall value depends on the star rating. Intern value depends on whether
+    // that intern can still be activated, applied after those reads.
+    price: vault.id === 'cardwall' || vault.id === 'interns' ? 0 : floorUsd(data, vault),
     nft: true,
     decimals: 0,
   }));
@@ -240,6 +333,17 @@ function decodeUint(data) {
   if (!data || data === '0x') return 0n;
   try {
     return BigInt(data);
+  } catch {
+    return 0n;
+  }
+}
+
+function decodeWord(data, index = 0) {
+  const body = String(data || '').replace(/^0x/, '');
+  const slice = body.slice(index * 64, (index + 1) * 64);
+  if (!slice) return 0n;
+  try {
+    return BigInt(`0x${slice}`);
   } catch {
     return 0n;
   }
@@ -499,6 +603,100 @@ async function attachWallStars(mc, rows, signal, report) {
   }
 }
 
+/**
+ * Sigma (#N) and Divergent (#N+4444) still sitting in this broker's TBA.
+ * A dormant intern under an activated broker is priced at the Intern floor.
+ */
+async function attachInterns(mc, rows, data, signal, report) {
+  const stonk = anvilVaultById('stonk');
+  const intern = anvilVaultById('interns');
+  const floor = internFloorUsd(data);
+  const pairs = [];
+  for (const row of rows) {
+    for (const spec of internIdsForBroker(row.tokenId)) pairs.push({ row, ...spec });
+  }
+  if (!pairs.length) return;
+
+  const owners = await mapChunksPooled(pairs, async (slice) => {
+    const packed = slice.map((pair) => ({
+      target: intern.nftCa,
+      callData: OWNER_OF.encodeFunctionData('ownerOf', [pair.id]),
+    }));
+    const returned = await tryAggregate(mc, packed, signal);
+    return returned.map((item) => (item.success ? decodeAddress(item.returnData) : null));
+  }, {
+    signal,
+    onStep: (done, total) => report('Reading interns…', done, total),
+  });
+
+  const held = [];
+  pairs.forEach((pair, i) => {
+    const owner = owners[i];
+    if (owner && owner.toLowerCase() === pair.row.tba.toLowerCase()) held.push(pair);
+  });
+
+  const dormantFlags = await mapChunksPooled(held, async (slice) => {
+    if (!slice.length) return [];
+    const packed = slice.map((pair) => ({
+      target: intern.nftCa,
+      callData: IS_DORMANT.encodeFunctionData('isDormant', [pair.id]),
+    }));
+    const returned = await tryAggregate(mc, packed, signal);
+    return returned.map((item) => (item.success ? decodeWord(item.returnData) > 0n : null));
+  }, { signal });
+
+  const parentIds = [...new Set(held.filter((pair, i) => dormantFlags[i]).map((pair) => pair.row.tokenId))];
+  const parentActive = new Map();
+  await mapChunksPooled(parentIds, async (slice) => {
+    if (!slice.length) return [];
+    const packed = slice.map((id) => ({
+      target: stonk.activationCa,
+      callData: ACTIVATION_OF.encodeFunctionData('activationOf', [id]),
+    }));
+    const returned = await tryAggregate(mc, packed, signal);
+    returned.forEach((item, i) => {
+      parentActive.set(slice[i], item.success && decodeWord(item.returnData) > 0n);
+    });
+    return [];
+  }, { signal });
+
+  const byRow = new Map();
+  held.forEach((pair, i) => {
+    if (dormantFlags[i] == null) return;
+    const state = internRowState({
+      inWallet: true,
+      dormant: dormantFlags[i],
+      parentActive: !!parentActive.get(pair.row.tokenId),
+    });
+    const entry = {
+      id: pair.id,
+      klass: pair.klass,
+      label: pair.label,
+      state,
+      usd: state === 'canActivate' ? floor : 0,
+    };
+    const list = byRow.get(pair.row) || [];
+    list.push(entry);
+    byRow.set(pair.row, list);
+  });
+
+  const internCa = intern.nftCa.toLowerCase();
+  for (const row of rows) {
+    const list = (byRow.get(row) || []).sort((a, b) => a.id - b.id);
+    row.interns = list;
+    row.holdings = row.holdings.filter((h) => h.contract !== internCa);
+    const priced = list.filter((entry) => entry.usd > 0);
+    if (!priced.length) continue;
+    row.holdings.push({
+      contract: internCa,
+      symbol: 'Intern',
+      amount: priced.length,
+      usd: priced.reduce((sum, entry) => sum + entry.usd, 0),
+      nft: true,
+    });
+  }
+}
+
 function applyWallFloors(rows, data) {
   const market = data?.projects?.cardwall?.market || {};
   const eth = Number(market.ethPriceUsd) || ethPrice(data);
@@ -537,9 +735,11 @@ function sleep(ms) {
  * token-bound wallet. Stocks are priced before memes. `onPlan` is the full
  * checklist; `onStep` flips each item to running, then done.
  */
-export async function scanAnvilVault(vaultId, data, { onProgress, onPartial, onPlan, onStep, signal } = {}) {
+export async function scanAnvilVault(vaultId, data, { onProgress, onPartial, onPlan, onStep, signal, include } = {}) {
   const vault = anvilVaultById(vaultId);
   if (!vault) throw new Error('Pick a supported project.');
+  const parts = { ...SCAN_INCLUDE, ...(include || {}) };
+  const readInterns = parts.interns && vault.id === 'stonk';
 
   const provider = new ethers.JsonRpcProvider(ROBINHOOD_RPC);
   const mc = new ethers.Contract(MULTICALL, MULTICALL_ABI, provider);
@@ -553,24 +753,29 @@ export async function scanAnvilVault(vaultId, data, { onProgress, onPartial, onP
     if (onStep) onStep({ id, status });
   };
 
-  const fungible = protocolTokens(data);
-  const nfts = nftAssets(data);
-  const { stocks, memes } = splitMarkets(data, fungible);
+  const fungible = parts.tokens ? protocolTokens(data) : [];
+  const internCa = anvilVaultById('interns').nftCa.toLowerCase();
+  let nfts = parts.nfts ? nftAssets(data) : [];
+  if (vault.id === 'stonk') nfts = nfts.filter((token) => token.ca !== internCa);
+  const { stocks, memes } = splitMarkets(data, protocolTokens(data));
+  const stockList = parts.stocks ? stocks : [];
+  const memeList = parts.memes ? memes : [];
   const steps = [
     { id: 'vault', label: 'Vault NFTs', group: 'Vault' },
     { id: 'tba', label: 'TBA wallets', group: 'Vault' },
     { id: 'eth', label: 'ETH', group: 'Anvil' },
     ...fungible.map((t) => ({ id: `tok:${t.ca}`, label: t.symbol, group: 'Anvil' })),
     ...nfts.map((t) => ({ id: `nft:${t.ca}`, label: t.symbol, group: 'Anvil' })),
-    { id: 'stars', label: 'Wall stars', group: 'Anvil' },
-    ...stocks.map((t) => ({ id: `stock:${t.ca}`, label: t.symbol, group: 'Stocks' })),
-    ...memes.map((t) => ({ id: `meme:${t.ca}`, label: t.symbol, group: 'Memes' })),
+    ...(parts.stars && parts.nfts ? [{ id: 'stars', label: 'Wall stars', group: 'Anvil' }] : []),
+    ...(readInterns ? [{ id: 'interns', label: 'Interns', group: 'Anvil' }] : []),
+    ...stockList.map((t) => ({ id: `stock:${t.ca}`, label: t.symbol, group: 'Stocks' })),
+    ...memeList.map((t) => ({ id: `meme:${t.ca}`, label: t.symbol, group: 'Memes' })),
   ];
   if (onPlan) onPlan(steps);
 
   if (!(vaultBalance > 0)) {
     mark('vault', 'done');
-    return { vault, vaultBalance: 0, rows: [] };
+    return { vault, vaultBalance: 0, rows: [], include: parts, snipe: null };
   }
 
   mark('vault', 'run');
@@ -598,6 +803,16 @@ export async function scanAnvilVault(vaultId, data, { onProgress, onPartial, onP
     onStep: (done, total) => report(`Finding NFTs in the ${vault.name} vault…`, done, total),
   });
   mark('vault', 'done');
+
+  let snipe = null;
+  if (ownedIds.length) {
+    try {
+      snipe = await quoteAnvilSnipe(provider, vault.ammCa, ownedIds[0]);
+    } catch (err) {
+      if (signal?.aborted || err?.name === 'AbortError') throw err;
+      snipe = null;
+    }
+  }
 
   mark('tba', 'run');
   const tbaById = new Map();
@@ -681,7 +896,7 @@ export async function scanAnvilVault(vaultId, data, { onProgress, onPartial, onP
 
   const publish = () => {
     rows.forEach(priceRow);
-    if (onPartial) onPartial(snapshot(rows), vaultBalance);
+    if (onPartial) onPartial(snapshot(rows), vaultBalance, snipe);
   };
 
   await withDecimals(mc, fungible, signal);
@@ -706,16 +921,27 @@ export async function scanAnvilVault(vaultId, data, { onProgress, onPartial, onP
   }
   for (const token of nfts) mark(`nft:${token.ca}`, 'done');
 
-  mark('stars', 'run');
-  await attachWallStars(mc, rows, signal, report);
-  applyWallFloors(rows, data);
-  mark('stars', 'done');
-  publish();
+  if (parts.nfts) {
+    if (parts.stars) {
+      mark('stars', 'run');
+      await attachWallStars(mc, rows, signal, report);
+      mark('stars', 'done');
+    }
+    applyWallFloors(rows, data);
+    publish();
+  }
 
-  const funded = rows.filter((row) => row.holdings.length > 0);
-  const queue = [...stocks, ...memes];
+  if (readInterns) {
+    mark('interns', 'run');
+    await attachInterns(mc, rows, data, signal, report);
+    mark('interns', 'done');
+    publish();
+  }
+
+  const funded = rows.filter((row) => row.holdings.length > 0 || (row.interns || []).length > 0);
+  const queue = [...stockList, ...memeList];
   await withDecimals(mc, queue, signal);
-  await mapPool(queue, 4, async (token) => {
+  await mapPool(queue, READ_POOL, async (token) => {
     const id = `${token.kind}:${token.ca}`;
     mark(id, 'run');
     report(token.kind === 'stock' ? `Stock ${token.symbol}` : `Meme ${token.symbol}`, 0, 1);
@@ -725,5 +951,5 @@ export async function scanAnvilVault(vaultId, data, { onProgress, onPartial, onP
   }, signal);
 
   rows.forEach(priceRow);
-  return { vault, vaultBalance, rows: snapshot(rows) };
+  return { vault, vaultBalance, rows: snapshot(rows), include: parts, snipe };
 }

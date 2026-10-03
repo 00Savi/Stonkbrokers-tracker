@@ -17,14 +17,13 @@ import { UnderwaterCard } from '../UnderwaterCard';
 import { YARD_WRAP, fetchYardWrap } from '../../lib/yardWrap';
 import {
   EmptyChart,
-  YieldUsdPricePanel,
-  FlywheelPanel,
+  YieldHistorySwitch,
+  BurnHistorySwitch,
   ActivityChart,
   ProtocolFeeVolumePanels,
   ActivationStackPanel,
   OwnershipHistoryPanels,
   BlackHoleChartPanels,
-  OnboardLinePanel,
 } from '../HistoryCharts';
 import { SliceChart } from '../SliceChart';
 
@@ -297,13 +296,13 @@ export default function YardDetailView({ data, activeTab }) {
             })}
           </div>
 
-          <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mt-6">
-            <h3 className="text-sm font-bold text-white mb-4">Tier ROI % Trajectory</h3>
-            <div className="relative h-52 sm:h-64 md:h-80 w-full">
-              <Line data={{ labels: histLabels, datasets: histDatasets }} options={baseChartOptions(histLabels, interval, { yUnit: 'CoC %', yTick: percentTick })} />
-            </div>
-          </div>
-          <YieldUsdPricePanel snaps={roiSnaps} tiers={tiers} />
+          <YieldHistorySwitch
+            labels={histLabels}
+            datasets={histDatasets}
+            options={baseChartOptions(histLabels, interval, { yUnit: 'CoC %', yTick: percentTick })}
+            snaps={roiSnaps}
+            tiers={tiers}
+          />
         </div>
       </ShareSection>
 
@@ -422,33 +421,29 @@ export default function YardDetailView({ data, activeTab }) {
             </div>
           </div>
 
-          <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
-            <h3 className="text-sm font-bold text-white mb-1">Cumulative Token Burn Over Time</h3>
-            <p className="text-xs text-slate-500 mb-4">Cumulative tokens burnt.</p>
-            <div className="relative h-52 sm:h-64 md:h-80 w-full">
-              {slicedBurnData.length > 0 ? (
+          <BurnHistorySwitch
+            cumulative={{
+              title: 'Cumulative burn',
+              note: 'Cumulative tokens burnt.',
+              body: slicedBurnData.length > 0 ? (
                 <Line
                   key={`burn-${timeframe}`}
                   data={{ labels: slicedBurnLabels, datasets: [cumulativeBurnDataset(slicedBurnData, '#fb923c')] }}
                   options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, unit: 'Tokens', ticks: { color: '#94a3b8', callback: compactTick } } } }}
                 />
               ) : (
-                <div className="h-full flex items-center justify-center text-sm text-slate-500">
-                  No burn history recorded yet
-                </div>
-              )}
-            </div>
-          </div>
-
-          <FlywheelPanel
-            frame="legacy"
-            labels={flywheel.labels}
-            burn={flywheel.burn}
-            prices={flywheel.prices}
-            priceColor="#38bdf8"
-            burnColor="rgba(249, 115, 22, 0.8)"
-            burnLabel="Daily Burn Velocity"
-            leftMax={flywheel.burnAxisMax}
+                <EmptyChart>No burn history recorded yet</EmptyChart>
+              ),
+            }}
+            flywheel={{
+              labels: flywheel.labels,
+              burn: flywheel.burn,
+              prices: flywheel.prices,
+              priceColor: '#38bdf8',
+              burnColor: 'rgba(249, 115, 22, 0.8)',
+              burnLabel: 'Daily Burn Velocity',
+              leftMax: flywheel.burnAxisMax,
+            }}
           />
         </div>
       </ShareSection>
@@ -534,24 +529,11 @@ export default function YardDetailView({ data, activeTab }) {
             </div>
           </div>
 
-          <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
-            <h3 className="text-sm font-bold text-white mb-4">True Active Token Holders Over Time</h3>
-            <div className="relative h-52 sm:h-64 md:h-80 w-full">
-              {seriesHasInk(ownData) ? (
-              <Line 
-                data={{ labels: ownLabels, datasets: [{ label: 'Active Holders', data: ownData, borderColor: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] }} 
-                options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, unit: 'Wallets', ticks: { color: '#94a3b8', callback: compactTick } } } }} 
-              />
-              ) : (
-                <EmptyChart>No holder history recorded</EmptyChart>
-              )}
-            </div>
-          </div>
           <OwnershipHistoryPanels
             snaps={roiSnaps}
             live={{ tokenHolders: yardHolders, nftHolders: ownership.nftHolders, ownershipRatio: ownership.ownershipRatio }}
+            onboard={{ data, projectKey: 'tickeryard', timeframe, interval, name: 'TickerYard' }}
           />
-          <OnboardLinePanel data={data} projectKey="tickeryard" timeframe={timeframe} interval={interval} name="TickerYard" />
           <UnderwaterCard ownership={ownership} />
         </div>
       </ShareSection>

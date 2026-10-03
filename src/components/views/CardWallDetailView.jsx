@@ -16,13 +16,12 @@ import { MethodologyCard } from '../Disclaimer';
 import { UnderwaterCard } from '../UnderwaterCard';
 import {
   EmptyChart,
-  YieldUsdPricePanel,
-  FlywheelPanel,
+  YieldHistorySwitch,
+  BurnHistorySwitch,
+  ChartSwitch,
   ActivityChart,
   ActivationStackPanel,
   OwnershipHistoryPanels,
-  HolderRevenuePanel,
-  OnboardLinePanel,
 } from '../HistoryCharts';
 import { SliceChart } from '../SliceChart';
 import { applyLiveMachines, dropsForMachine, freshAlleyDrops, loadLiveDrops } from '../../lib/cardwallDrops';
@@ -397,17 +396,14 @@ export default function CardWallDetailView({ data, activeTab }) {
               );
             })}
           </div>
-          <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mt-6">
-            <h3 className="text-sm font-bold text-white mb-4">Tier ROI % Trajectory</h3>
-            <div className="relative h-52 sm:h-64 md:h-80 w-full">
-              {histLabels.length ? (
-                <Line data={{ labels: histLabels, datasets: histDatasets }} options={baseChartOptions(histLabels, interval, { yUnit: 'CoC %', yTick: percentTick })} />
-              ) : (
-                <div className="h-full flex items-center justify-center text-sm text-slate-500">No rain-backed ROI days recorded yet</div>
-              )}
-            </div>
-          </div>
-          <YieldUsdPricePanel snaps={roiSnaps} tiers={tiers} />
+          <YieldHistorySwitch
+            labels={histLabels}
+            datasets={histDatasets}
+            options={baseChartOptions(histLabels, interval, { yUnit: 'CoC %', yTick: percentTick })}
+            snaps={roiSnaps}
+            tiers={tiers}
+            empty="No rain-backed ROI days recorded yet"
+          />
         </div>
       </ShareSection>
 
@@ -702,28 +698,43 @@ export default function CardWallDetailView({ data, activeTab }) {
             </div>
           </div>
 
-          <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-1">
-              <h3 className="text-sm font-bold text-white">Slab landed cost by day</h3>
-            </div>
-            <p className="text-xs text-slate-500 mb-4">From the first vault record through today. Quiet days are $0 so the range control still reaches now. The sticky range control slices this series.</p>
-            <div className="relative h-52 sm:h-64 md:h-80 w-full">
-              <Bar 
-                data={{
-                  labels: revDates,
-                  datasets: [
-                    { label: "Delivered to members", data: revData1, backgroundColor: "#00a804", borderRadius: 4 },
-                    { label: "Still on the wall", data: revData2, backgroundColor: "#f5b700", borderRadius: 4 }
-                  ]
-                }} 
-                options={{ responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true, grid: { color: '#1e2228', borderDash: [4, 4] } }, y: { stacked: true, unit: 'USD', grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactUsdTick } } }, plugins: { legend: { labels: { color: '#cbd5e1' } } } }} 
-              />
-            </div>
-          </div>
-          <HolderRevenuePanel
-            labels={revDates}
-            data={revData1}
-            note="Landed cost delivered to members that day — holder revenue for the wall."
+          <ChartSwitch
+            initial="dollars"
+            views={[
+              {
+                id: 'dollars',
+                label: 'Dollars',
+                title: 'Slab landed cost by day',
+                note: 'From the first vault record through today. Quiet days are $0 so the range control still reaches now.',
+                body: (
+                  <Bar
+                    data={{
+                      labels: revDates,
+                      datasets: [
+                        { label: 'Delivered to members', data: revData1, backgroundColor: '#00a804', borderRadius: 4 },
+                        { label: 'Still on the wall', data: revData2, backgroundColor: '#f5b700', borderRadius: 4 },
+                      ],
+                    }}
+                    options={{ responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true, grid: { color: '#1e2228', borderDash: [4, 4] } }, y: { stacked: true, unit: 'USD', grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactUsdTick } } }, plugins: { legend: { labels: { color: '#cbd5e1' } } } }}
+                  />
+                ),
+              },
+              {
+                id: 'holder',
+                label: 'Holder',
+                title: 'Holder revenue (USD)',
+                note: 'Landed cost delivered to members that day — holder revenue for the wall.',
+                body: (
+                  <Bar
+                    data={{
+                      labels: revDates,
+                      datasets: [{ label: 'Delivered to members', data: revData1, backgroundColor: '#00a804', borderRadius: 4 }],
+                    }}
+                    options={{ responsive: true, maintainAspectRatio: false, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] } }, y: { unit: 'USD', grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactUsdTick } } }, plugins: { legend: { display: false } } }}
+                  />
+                ),
+              },
+            ]}
           />
         </div>
       </ShareSection>
@@ -763,33 +774,29 @@ export default function CardWallDetailView({ data, activeTab }) {
             </div>
           </div>
 
-          <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
-            <h3 className="text-sm font-bold text-white mb-1">Cumulative Token Burn Over Time</h3>
-            <p className="text-xs text-slate-500 mb-4">From the first recorded day through today. Quiet days keep the last cumulative burn.</p>
-            <div className="relative h-52 sm:h-64 md:h-80 w-full">
-              {slicedBurnData.length > 0 ? (
+          <BurnHistorySwitch
+            cumulative={{
+              title: 'Cumulative burn',
+              note: 'From the first recorded day through today. Quiet days keep the last cumulative burn.',
+              body: slicedBurnData.length > 0 ? (
                 <Line
                   key={`burn-${timeframe}`}
                   data={{ labels: slicedBurnLabels, datasets: [cumulativeBurnDataset(slicedBurnData, '#fb923c')] }}
                   options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, unit: 'Tokens', ticks: { color: '#94a3b8', callback: compactTick } } } }}
                 />
               ) : (
-                <div className="h-full flex items-center justify-center text-sm text-slate-500">
-                  No burn history recorded yet
-                </div>
-              )}
-            </div>
-          </div>
-
-          <FlywheelPanel
-            frame="legacy"
-            labels={flywheel.labels}
-            burn={flywheel.burn}
-            prices={flywheel.prices}
-            priceColor="#f5b700"
-            burnColor="rgba(249, 115, 22, 0.8)"
-            burnLabel="Daily Burn Velocity"
-            leftMax={flywheel.burnAxisMax}
+                <EmptyChart>No burn history recorded yet</EmptyChart>
+              ),
+            }}
+            flywheel={{
+              labels: flywheel.labels,
+              burn: flywheel.burn,
+              prices: flywheel.prices,
+              priceColor: '#f5b700',
+              burnColor: 'rgba(249, 115, 22, 0.8)',
+              burnLabel: 'Daily Burn Velocity',
+              leftMax: flywheel.burnAxisMax,
+            }}
           />
         </div>
       </ShareSection>
@@ -870,24 +877,11 @@ export default function CardWallDetailView({ data, activeTab }) {
             </div>
           </div>
 
-          <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
-            <h3 className="text-sm font-bold text-white mb-4">True Active Token Holders Over Time</h3>
-            <div className="relative h-52 sm:h-64 md:h-80 w-full">
-              {seriesHasInk(ownData) ? (
-              <Line 
-                data={{ labels: ownLabels, datasets: [{ label: 'Active Holders', data: ownData, borderColor: '#f5b700', backgroundColor: 'rgba(245, 183, 0, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] }} 
-                options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, unit: 'Wallets', ticks: { color: '#94a3b8', callback: compactTick } } } }} 
-              />
-              ) : (
-                <EmptyChart>No holder history recorded</EmptyChart>
-              )}
-            </div>
-          </div>
           <OwnershipHistoryPanels
             snaps={roiSnaps}
             live={{ tokenHolders: wallHolders, nftHolders: ownership.nftHolders, ownershipRatio: ownership.ownershipRatio }}
+            onboard={{ data, projectKey: 'cardwall', timeframe, interval, name: 'The Card Wall' }}
           />
-          <OnboardLinePanel data={data} projectKey="cardwall" timeframe={timeframe} interval={interval} name="The Card Wall" />
           <UnderwaterCard ownership={ownership} />
         </div>
       </ShareSection>

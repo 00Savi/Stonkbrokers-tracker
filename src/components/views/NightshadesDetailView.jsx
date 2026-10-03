@@ -19,8 +19,8 @@ import { MethodologyCard } from '../Disclaimer';
 import { UnderwaterCard } from '../UnderwaterCard';
 import {
   EmptyChart,
-  YieldUsdPricePanel,
-  FlywheelPanel,
+  YieldHistorySwitch,
+  BurnHistorySwitch,
   ActivityChart,
   ActivationStackPanel,
   OwnershipHistoryPanels,
@@ -271,13 +271,13 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
             })}
           </div>
 
-          <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mt-6">
-            <h3 className="text-sm font-bold text-white mb-4">Tier ROI % Trajectory</h3>
-            <div className="relative h-52 sm:h-64 md:h-80 w-full">
-              <Line data={{ labels: histLabels, datasets: histDatasets }} options={baseChartOptions(histLabels, interval, { yUnit: 'CoC %', yTick: percentTick })} />
-            </div>
-          </div>
-          <YieldUsdPricePanel snaps={roiSnaps} tiers={tiers} />
+          <YieldHistorySwitch
+            labels={histLabels}
+            datasets={histDatasets}
+            options={baseChartOptions(histLabels, interval, { yUnit: 'CoC %', yTick: percentTick })}
+            snaps={roiSnaps}
+            tiers={tiers}
+          />
         </div>
       </ShareSection>
 
@@ -303,33 +303,29 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
             </div>
           </div>
 
-          <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
-            <h3 className="text-sm font-bold text-white mb-1">Cumulative Token Burn Over Time</h3>
-            <p className="text-xs text-slate-500 mb-4">Cumulative tokens burnt.</p>
-            <div className="relative h-52 sm:h-64 md:h-80 w-full">
-              {burn.data.length > 0 ? (
+          <BurnHistorySwitch
+            cumulative={{
+              title: 'Cumulative burn',
+              note: 'Cumulative tokens burnt.',
+              body: burn.data.length > 0 ? (
                 <Line
                   key={`burn-${timeframe}-${faction}`}
                   data={{ labels: burn.labels, datasets: [cumulativeBurnDataset(burn.data, '#fb923c')] }}
                   options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, unit: 'Tokens', ticks: { color: '#94a3b8', callback: compactTick } } } }}
                 />
               ) : (
-                <div className="h-full flex items-center justify-center text-sm text-slate-500">
-                  No burn history recorded yet
-                </div>
-              )}
-            </div>
-          </div>
-
-          <FlywheelPanel
-            frame="legacy"
-            labels={flywheel.labels}
-            burn={flywheel.burn}
-            prices={flywheel.prices}
-            priceColor={ACCENT}
-            burnColor="rgba(249, 115, 22, 0.8)"
-            burnLabel="Daily Burn Velocity"
-            leftMax={flywheel.burnAxisMax}
+                <EmptyChart>No burn history recorded yet</EmptyChart>
+              ),
+            }}
+            flywheel={{
+              labels: flywheel.labels,
+              burn: flywheel.burn,
+              prices: flywheel.prices,
+              priceColor: ACCENT,
+              burnColor: 'rgba(249, 115, 22, 0.8)',
+              burnLabel: 'Daily Burn Velocity',
+              leftMax: flywheel.burnAxisMax,
+            }}
           />
         </div>
       </ShareSection>
@@ -405,19 +401,6 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
             <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">{`Unique $${config.ticker} Holders`}</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-indigo-300">{formatNumber(tokenHolders)} Wallets</p></div>
           </div>
 
-          <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
-            <h3 className="text-sm font-bold text-white mb-4">True Active Token Holders Over Time</h3>
-            <div className="relative h-52 sm:h-64 md:h-80 w-full">
-              {seriesHasInk(ownData) ? (
-              <Line
-                data={{ labels: ownLabels, datasets: [{ label: 'Active Holders', data: ownData, borderColor: ACCENT, backgroundColor: 'rgba(129, 140, 248, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] }}
-                options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, unit: 'Wallets', ticks: { color: '#94a3b8', callback: compactTick } } } }}
-              />
-              ) : (
-                <EmptyChart>No holder history recorded</EmptyChart>
-              )}
-            </div>
-          </div>
           <OwnershipHistoryPanels
             snaps={roiSnaps}
             live={{ tokenHolders, nftHolders: ownership.nftHolders, ownershipRatio: ownership.ownershipRatio }}
