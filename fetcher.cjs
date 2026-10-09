@@ -1274,6 +1274,29 @@ function buildInternStub(conf, markets, prev = {}) {
   };
 }
 
+const LOG_CURSORS = path.join(__dirname, "cache", "log-cursors.json");
+
+function readLogCursors() {
+  try {
+    const saved = JSON.parse(fs.readFileSync(LOG_CURSORS, "utf8"));
+    return saved && typeof saved === "object" ? saved : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeLogCursor(key, block) {
+  const all = readLogCursors();
+  const n = Number(block);
+  if (!Number.isFinite(n) || n < 0) return;
+  if (all[key] === n) return;
+  all[key] = n;
+  fs.mkdirSync(path.dirname(LOG_CURSORS), { recursive: true });
+  const tmp = `${LOG_CURSORS}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(all));
+  fs.renameSync(tmp, LOG_CURSORS);
+}
+
 async function fetchAllLogs(projectKey, address, genesisBlock, topic0 = null) {
   if (!address || address === "0x0000000000000000000000000000000000000000") return [];
 
@@ -1300,6 +1323,12 @@ async function fetchAllLogs(projectKey, address, genesisBlock, topic0 = null) {
           }
       }
   } catch (e) {}
+
+  // A quiet contract whose last log is days behind head used to re-walk that
+  // whole empty tail every hour (tickeryard_nft: ~2M blocks, 0 new logs).
+  // The cursor is the last block fully scanned, not the last matching log.
+  const savedCursor = Number(readLogCursors()[projectKey]);
+  if (savedCursor > lastProcessedBlock) lastProcessedBlock = savedCursor;
 
   let allLogs = [...cachedLogs];
   const fromBlock = lastProcessedBlock === genesisBlock ? genesisBlock : lastProcessedBlock + 1;
@@ -1336,6 +1365,7 @@ async function fetchAllLogs(projectKey, address, genesisBlock, topic0 = null) {
       allLogs.push(...fresh);
       fetchedNewLogs = true;
     }
+    writeLogCursor(projectKey, latestBlock);
   }
 
   const parseNum = (val) => {
@@ -1946,7 +1976,12 @@ async function fetchCardWallLiveActivations(conf, prevActivation = {}) {
   const dualBurn = await getTrueDeflationStats(conf);
   const useCount = contractCount > 0 ? contractCount : active;
   const now = Math.floor(Date.now() / 1000);
-  const seedEvents = await cardWallActivationLogs(conf);
+  let seedEvents = [];
+  try {
+    seedEvents = await cardWallActivationLogs(conf);
+  } catch (e) {
+    console.warn(`[warn] cardwall activation logs: ${e.message}`);
+  }
   // The stored set used to be star rarity. Comparing it to wall level would
   // record a fake upgrade for every membership on the first run.
   let prevSet = prevActivation.activeTokenTiers || {};
@@ -1988,21 +2023,103 @@ async function fetchCardWallLiveActivations(conf, prevActivation = {}) {
   };
 }
 
+const CARDWALL_VAULT_LOGS = path.join(__dirname, "cache", "cardwall_vault_logs.json");
+const CARDWALL_LOG_TOPICS = [CARDWALL_ACTIVATED, CARDWALL_UPGRADED, CARDWALL_VOIDED, CARDWALL_REWARD_PAID];
+let cardWallVaultMemo = null;
+// run() arms this so a cold vault backfill cannot eat the whole job. Past the
+// deadline the cursor is kept and the next hour resumes; data.json still publishes.
+let fetchDeadline = Infinity;
+
+function readCardWallVaultCache() {
+  try {
+    const saved = JSON.parse(fs.readFileSync(CARDWALL_VAULT_LOGS, "utf8"));
+    if (saved && Array.isArray(saved.logs) && Number.isFinite(Number(saved.toBlock))) {
+      return { toBlock: Number(saved.toBlock), logs: saved.logs };
+    }
+  } catch {}
+  return { toBlock: 0, logs: [] };
+}
+
+function writeCardWallVaultCache(toBlock, logs) {
+  fs.mkdirSync(path.dirname(CARDWALL_VAULT_LOGS), { recursive: true });
+  const tmp = `${CARDWALL_VAULT_LOGS}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify({ toBlock, logs }));
+  fs.renameSync(tmp, CARDWALL_VAULT_LOGS);
+}
+
+/**
+ * Activation events and RewardPaid, one eth_getLogs, cached by block.
+ *
+ * Genesis is ~38M and head is ~84M, so an uncached walk is ~460 windows of
+ * 100k blocks — and this used to run twice (flow, then staking) with no
+ * progress line. The hourly job died in that silent stretch, before
+ * writeData, so nothing from the run was committed. Slices checkpoint into
+ * the Actions cache; the next hour resumes instead of starting over.
+ */
+async function loadCardWallVaultLogs(conf) {
+  // Staking reads the same logs as the vault flow. A failed slice must not
+  // be walked a second time in this process.
+  if (cardWallVaultMemo) return cardWallVaultMemo;
+  const saved = readCardWallVaultCache();
+  let logs = saved.logs;
+  let cursor = saved.toBlock >= conf.genesisBlock ? saved.toBlock : conf.genesisBlock - 1;
+  const head = await rpc.blockNumber();
+  await blockTime.ensureRange(rpc, Math.max(conf.genesisBlock, cursor), head);
+  let from = cursor + 1;
+  if (from > head) {
+    cardWallVaultMemo = { logs, cursor: head, head };
+    return cardWallVaultMemo;
+  }
+
+  if (saved.toBlock < conf.genesisBlock) {
+    console.log(`  cardwall vault logs: backfill ${from} → ${head}`);
+  }
+  const SLICE = 2_000_000;
+  while (from <= head) {
+    if (Date.now() > fetchDeadline) {
+      process.stdout.write("\n");
+      console.warn(`[warn] cardwall vault logs: pausing backfill at block ${cursor} so this hour can publish`);
+      break;
+    }
+    const to = Math.min(from + SLICE - 1, head);
+    try {
+      const fresh = await rpc.getLogs({
+        address: conf.activationCa,
+        fromBlock: from,
+        toBlock: to,
+        topics: [CARDWALL_LOG_TOPICS],
+      }, (at, _end, n) => {
+        process.stdout.write(`\r    cardwall vault: block ${at}/${head}, ${logs.length + n} logs   `);
+      });
+      logs = logs.concat(fresh);
+      cursor = to;
+      writeCardWallVaultCache(cursor, logs);
+      from = to + 1;
+    } catch (e) {
+      process.stdout.write("\n");
+      console.warn(`[warn] cardwall vault logs stopped at block ${cursor}: ${e.message}`);
+      break;
+    }
+  }
+  process.stdout.write(
+    `\r    cardwall vault: ${logs.length} logs through block ${cursor}`.padEnd(72) + "\n",
+  );
+  cardWallVaultMemo = { logs, cursor, head };
+  return cardWallVaultMemo;
+}
+
 /**
  * Activated, TierUpgraded, and ActivationVoided since genesis. Replay order
  * so a void knows the level being left. Transfers are not a stand-in: a sale
  * of a staked membership already emits the void, and a buy is not an upgrade.
  */
 async function cardWallActivationLogs(conf) {
-  const head = await rpc.blockNumber();
-  await blockTime.ensureRange(rpc, conf.genesisBlock, head);
-  const logs = await rpc.getLogs({
-    address: conf.activationCa,
-    fromBlock: conf.genesisBlock,
-    toBlock: head,
-    topics: [[CARDWALL_ACTIVATED, CARDWALL_UPGRADED, CARDWALL_VOIDED]],
+  const { logs } = await loadCardWallVaultLogs(conf);
+  const flowLogs = logs.filter((log) => {
+    const topic0 = (log.topics?.[0] || "").toLowerCase();
+    return topic0 === CARDWALL_ACTIVATED || topic0 === CARDWALL_UPGRADED || topic0 === CARDWALL_VOIDED;
   });
-  logs.sort((a, b) => {
+  flowLogs.sort((a, b) => {
     const ba = parseInt(a.blockNumber, 16) - parseInt(b.blockNumber, 16);
     if (ba) return ba;
     return logNum(a.logIndex) - logNum(b.logIndex);
@@ -2010,7 +2127,7 @@ async function cardWallActivationLogs(conf) {
 
   const stage = new Map();
   const events = [];
-  for (const log of logs) {
+  for (const log of flowLogs) {
     const topic0 = (log.topics?.[0] || "").toLowerCase();
     const id = BigInt(log.topics[1]).toString();
     const ts = blockTime.at(parseInt(log.blockNumber, 16));
@@ -2040,14 +2157,8 @@ async function cardWallActivationLogs(conf) {
  */
 async function fetchCardWallStaking(conf, tokenPriceUsd) {
   const price = Number(tokenPriceUsd) || 0;
-  const head = await rpc.blockNumber();
-  await blockTime.ensureRange(rpc, conf.genesisBlock, head);
-  const logs = await rpc.getLogs({
-    address: conf.activationCa,
-    fromBlock: conf.genesisBlock,
-    toBlock: head,
-    topics: [CARDWALL_REWARD_PAID],
-  });
+  const loaded = await loadCardWallVaultLogs(conf);
+  const logs = loaded.logs.filter((log) => (log.topics?.[0] || "").toLowerCase() === CARDWALL_REWARD_PAID);
   const now = Math.floor(Date.now() / 1000);
   const cut = now - 30 * 86400;
   const byDay = new Map();
@@ -2073,6 +2184,8 @@ async function fetchCardWallStaking(conf, tokenPriceUsd) {
     usdLife: +usdLife.toFixed(2),
     payments: n,
     byDay,
+    caughtUp: loaded.cursor >= loaded.head,
+    cursor: loaded.cursor,
   };
 }
 
@@ -3689,6 +3802,8 @@ function applyMancerShareToStonk(stonk, mancer) {
 
 async function run() {
   console.log("Starting Multi-Project Build...");
+  const runStarted = Date.now();
+  fetchDeadline = runStarted + 30 * 60 * 1000;
   let previousData = {};
   previousData = readPreviousData();
 
@@ -3843,6 +3958,27 @@ async function run() {
           } catch (e) {
             console.warn(`[warn] cardwall staking: ${e.message}`);
           }
+          if (staking && !staking.caughtUp) {
+            const prev30 = Number(prevProjData.revenue?.holderStaking30dUsd) || 0;
+            const prevLife = Number(prevProjData.revenue?.holderStakingLifeUsd) || 0;
+            console.warn(
+              `[warn] cardwall staking: log backfill through block ${staking.cursor}; keeping previous $${prev30.toFixed(0)}/30d`,
+            );
+            staking = {
+              usd30: prev30 || staking.usd30,
+              usdLife: prevLife || staking.usdLife,
+              payments: staking.payments,
+              byDay: new Map(),
+              carried: true,
+            };
+          } else if (!staking) {
+            const prev30 = Number(prevProjData.revenue?.holderStaking30dUsd) || 0;
+            const prevLife = Number(prevProjData.revenue?.holderStakingLifeUsd) || 0;
+            if (prev30 > 0 || prevLife > 0) {
+              staking = { usd30: prev30, usdLife: prevLife, payments: 0, byDay: new Map(), carried: true };
+              console.warn(`[warn] cardwall staking: using previous $${prev30.toFixed(0)}/30d`);
+            }
+          }
         }
 
         let rainYieldByTier = null;
@@ -3942,7 +4078,7 @@ async function run() {
         };
 
         const todayStr = dates.utcIso();
-        if (projectKey === "cardwall" && histDates.length && histDelivered.length) {
+        if (projectKey === "cardwall" && histDates.length && histDelivered.length && staking && !staking.carried) {
           const prevPxByDate = {};
           const prevByDate = {};
           for (const s of prevProjData.dailySnapshots || []) {
@@ -4237,6 +4373,29 @@ async function run() {
     console.warn(`[warn] ${projectsFailed} project(s) carried forward; ${projectsOk} rebuilt`);
   }
 
+  // The commit step never runs if this process is killed. Leave time for it.
+  // Underwater and onboarding are tail reads; yesterday's copy is still on
+  // the project until the next hour replaces it.
+  const publishByMs = 34 * 60 * 1000;
+  if (Date.now() - runStarted > publishByMs) {
+    console.warn(
+      `[warn] ${Math.round((Date.now() - runStarted) / 60000)}m elapsed; publishing snapshots before underwater/onboarding`,
+    );
+    const carryUw = (proj, prev) => {
+      if (!proj || !prev?.ownership?.underwater) return;
+      proj.ownership = proj.ownership || {};
+      if (!proj.ownership.underwater) proj.ownership.underwater = prev.ownership.underwater;
+    };
+    for (const [key, proj] of Object.entries(finalJson.projects)) {
+      if (key === "nightshades") {
+        for (const [id, fac] of Object.entries(proj.factions || {})) {
+          carryUw(fac, previousData.projects?.nightshades?.factions?.[id]);
+        }
+      }
+      carryUw(proj, previousData.projects?.[key]);
+    }
+    finalJson.onboarding = previousData.onboarding || emptySummary(previousData.onboarding);
+  } else {
   try {
     const uw = [];
     const pushUw = (key, conf, project, tokenLeg, priceProject) => {
@@ -4316,6 +4475,7 @@ async function run() {
   } catch (e) {
     finalJson.onboarding = emptySummary(previousData.onboarding);
     console.warn(`[warn] onboarding: ${e.message}; carrying previous`);
+  }
   }
 
   for (const [key, proj] of Object.entries(finalJson.projects)) {

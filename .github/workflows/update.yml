@@ -15,18 +15,20 @@ permissions:
 # window both commit a rewritten data.json against the same base, and
 # whichever pushes second is rejected as non-fast-forward.
 #
-# cancel-in-progress MUST NOT apply to the hourly schedule. GitHub cron is
-# often delayed, so a 1:00 run that is still going at 2:00 used to be killed
-# before it could commit -- that looked like "the fetcher skipped an hour".
-# Manual dispatch still cancels an in-flight scheduled run.
+# cancel-in-progress stays off for every trigger. GitHub cron is often
+# delayed, so a 1:00 run that is still going at 2:00 used to be killed before
+# it could commit. A manual dispatch did the same to whatever was in flight.
+# Either way the runner prints "The operation was canceled." and data.json
+# never updates. Queue the next run instead of killing the one that has the
+# fresh snapshot.
 concurrency:
   group: fetch-protocol-data
-  cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' }}
+  cancel-in-progress: false
 
 jobs:
   update-data:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
 
     steps:
       - name: Checkout Repository
