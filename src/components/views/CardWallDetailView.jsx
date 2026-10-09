@@ -24,7 +24,7 @@ import {
   OwnershipHistoryPanels,
 } from '../HistoryCharts';
 import { SliceChart } from '../SliceChart';
-import { applyLiveMachines, dropsForMachine, freshAlleyDrops, loadLiveDrops } from '../../lib/cardwallDrops';
+import { applyLiveMachines, dropsForMachine, freshAlleyDrops, loadLiveDrops, loadMachineCatalog, mergeMachineCatalog } from '../../lib/cardwallDrops';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
@@ -66,12 +66,23 @@ export default function CardWallDetailView({ data, activeTab }) {
   const [selectedSlab, setSelectedSlab] = useState(null);
   const [selectedDrop, setSelectedDrop] = useState(null);
   const [liveDrops, setLiveDrops] = useState(null);
+  const [machineCatalog, setMachineCatalog] = useState([]);
   const [machinePulls, setMachinePulls] = useState(undefined);
   const [openMachine, setOpenMachine] = useState(null);
   const [pullSort, setPullSort] = useState('recent');
   const [dropMachine, setDropMachine] = useState('');
   const dropsRef = useRef(null);
   const dropModalRef = useRef(null);
+
+  useEffect(() => {
+    const ac = new AbortController();
+    loadMachineCatalog(ac.signal)
+      .then((rows) => {
+        if (!ac.signal.aborted && rows.length) setMachineCatalog(rows);
+      })
+      .catch(() => {});
+    return () => ac.abort();
+  }, []);
 
   useEffect(() => {
     const ac = new AbortController();
@@ -146,7 +157,7 @@ export default function CardWallDetailView({ data, activeTab }) {
     : null;
   const edge = gacha?.edge || null;
   const freshMachines = freshAlleyDrops(gacha?.drops, liveDrops);
-  const alleyMachines = applyLiveMachines(gacha?.machines, freshMachines);
+  const alleyMachines = mergeMachineCatalog(applyLiveMachines(gacha?.machines, freshMachines), machineCatalog);
   const machineNames = [];
   const seenNames = new Set();
   for (const row of alleyMachines) {
@@ -488,6 +499,9 @@ export default function CardWallDetailView({ data, activeTab }) {
                                     <span className="inline-flex items-center gap-2">
                                       <span className="text-[10px] text-slate-500 w-3" aria-hidden="true">{open ? '▾' : '▸'}</span>
                                       {m.label}
+                                      {m.available === false ? (
+                                        <span className="text-[10px] uppercase tracking-wide text-slate-500">Restocking</span>
+                                      ) : null}
                                     </span>
                                   </td>
                                   <td className="py-2 text-right text-slate-400">{formatNumber(m.pulls)}</td>
