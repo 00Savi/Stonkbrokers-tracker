@@ -78,6 +78,14 @@ export default function MancerDetailView({ data, activeTab }) {
   const revDataDex = revCols[0]?.data || [];
   const revDataAmm = revCols[1]?.data || [];
   const revDataSec = revCols[2]?.data || [];
+  const volDates = revenue.historyDexVolume?.length ? (revenue.historyDates || []) : (revenue.dailyDates || []);
+  const volSeries = revenue.historyDexVolume?.length ? revenue.historyDexVolume : (revenue.dailyDexVolume || []);
+  const dexVolume = sliceCols(
+    formatLabels(volDates),
+    [{ key: 'dexVolume', data: volSeries }],
+    timeframe,
+    interval,
+  ).cols[0]?.total || 0;
 
   // 3. Burn Tracker Data (Dynamic Dates to Current Day)
   const realBurntTokens = Math.max(Number(activation.dualBurn?.totalBurnTokens || 0), Number(ownership.permanentlyBurntTokens || 0));
@@ -263,11 +271,15 @@ export default function MancerDetailView({ data, activeTab }) {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div>
               <h2 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">Protocol Revenue & Ecosystem Liquidity</h2>
-              <p className="text-xs text-slate-400 mt-1">Protocol-kept revenue only. Swap volume is not included.</p>
+              <p className="text-xs text-slate-400 mt-1">Routing rev is the fee kept plus vault rewards paid in WETH or USDG. Swap volume is the notional through the router, and is not revenue.</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
+              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">DEX Swap Volume ({revPeriod})</p>
+              <p className="text-2xl font-extrabold" style={{ color: STREAM_COLORS.dex }}>{formatCurrency(dexVolume)}</p>
+            </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
               <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">DEX Swap Routing Rev ({revPeriod})</p>
               <p className="text-2xl font-extrabold" style={{ color: STREAM_COLORS.dex }}>{formatCurrency(revCols[0]?.total || 0)}</p>
@@ -478,7 +490,7 @@ export default function MancerDetailView({ data, activeTab }) {
       <MethodologyCard accent="text-purple-500">
           <p><strong className="text-white">Yield &amp; ROI:</strong> Mancer is a SoftStakingVault, not the StonkBrokers T4 oracle. Cash-on-cash is annualized vault / protocol yield ÷ (NFT floor USD + activation tokens at DexScreener spot), split by Anvil tier weight (100 / 125 / 160 / 200 / 333). Live yield is a trailing sample, not a promised APY.</p>
           <p><strong className="text-white">Activation:</strong> Total Active Units is the live set after replaying vault events plus NFT transfers. Mancer emits no Deactivated event — a sale clears the position. The contract&apos;s <code>activeCount()</code> is an upper bound and is not what this page shows. Tier flow cards are gross activate/exit events in the window, not the live mix (that is the doughnut).</p>
-          <p><strong className="text-white">Revenue:</strong> Dex collector plus vault RewardPaid. 25% of Mancer dex tax is also credited to StonkBrokers Partner Revenue Share. This page still shows Mancer&apos;s full collector — do not add the two protocol totals together.</p>
+          <p><strong className="text-white">Revenue:</strong> Dex collector fees in WETH and USDG, plus vault RewardPaid. RewardPaid in WETH or USDG is swap-sourced and is included in DEX routing rev. Swap volume is the router fill notional and is not added to that rev. 25% of the Mancer dex tax (collector fees only, not rewards and not volume) is also credited to StonkBrokers Partner Revenue Share. This page still shows Mancer&apos;s full collector — do not add the two protocol totals together.</p>
           <p><strong className="text-white">Payback:</strong> Entry cost ÷ annualized trailing yield, repriced at the last sync.</p>
           <p><strong className="text-white">Burn:</strong> Days before hourly snapshots are reconstructed from token burns to dead/zero, scaled to the first trusted supply read.</p>
           <p><strong className="text-white">Ownership:</strong> Circulating NFTs are collection size minus AMM vault inventory. Wallets per 100 NFTs is unique NFT wallets (vault and burn addresses excluded) divided by that circulating number, times 100. Activated-wallet count is unique current owners of NFTs that still have an open activation. Chain onboard is unique EOAs whose first cluster buy or mint of this project was one of their first 10 txs.</p>

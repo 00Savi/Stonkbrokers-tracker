@@ -633,6 +633,9 @@ const PROJECTS = {
     teamWallets: 2,
     streams: {
       dexCollector: "0x5f3b7E837f2d5b6C38E78eE4f45BD140A226656e".toLowerCase(),
+      // MancerRouter (api.mancer.xyz/health swapRouter). Swap notional is the
+      // router's own fill event; the collector only receives the fee.
+      swapRouter: "0xa62858659c83095eb5e702f0af6a7bb7f370b3e7",
       vault: "0x47c2194cAacfC778c0Baa41E10008bb7D720Cd59".toLowerCase()
     },
     tiers: [
@@ -929,6 +932,11 @@ const PROTOCOL_CONTRACTS = [
 // InternExchange.FeeRouted(address indexed quote, address indexed pool,
 // uint256 toDesk, uint256 toEngine, uint256 toTreasury)
 const FEE_ROUTED_TOPIC = ethers.id("FeeRouted(address,address,uint256,uint256,uint256)");
+// MancerRouter fill. Indexed recipient / payer / tokenOut. Data words:
+// amountIn, amountOut, tokenIn, fee, feeBps. Confirmed against a live fill
+// whose fee word was exactly feeBps of amountIn and matched the WETH sent
+// to the dex collector.
+const MANCER_SWAP_TOPIC = "0x2c5df8715e2dd0c9883d8b499379d3dbcc6ee64174fed5d9e7be7b50319c75c5";
 
 const ACTIVATION_ABI = [
   "event ActivationUpgraded(uint256 indexed tokenId, address indexed owner, uint8 fromTier, uint8 toTier, uint256 feePaid)",
@@ -2533,6 +2541,7 @@ function persistStreamDays(projectKey, revenue) {
       volume: Number(revenue.dailyLaunchpad?.[i]) || 0,
       tax: Number(revenue.dailyBondingTax?.[i]) || 0,
       dex: Number(revenue.dailyDex?.[i]) || 0,
+      dexVolume: Number(revenue.dailyDexVolume?.[i]) || 0,
       smartLp: Number(revenue.dailySmartLp?.[i]) || 0,
       booster: Number(revenue.dailyBooster?.[i]) || 0,
     };
@@ -2558,6 +2567,7 @@ function ingestHistoryArrays(byIso, prev) {
     ["volume", prev.historyVolume],
     ["tax", prev.historyTax],
     ["dex", prev.historyDex],
+    ["dexVolume", prev.historyDexVolume],
     ["smartLp", prev.historySmartLp],
     ["booster", prev.historyBooster],
     ["holders", prev.historyHolder],
@@ -2654,6 +2664,7 @@ async function attachRevenueHistory(projectKey, revenue, scale, yieldMode, prevR
   revenue.historyVolume = col("volume");
   revenue.historyTax = col("tax");
   revenue.historyDex = col("dex");
+  revenue.historyDexVolume = col("dexVolume");
   revenue.historySmartLp = col("smartLp");
   revenue.historyBooster = col("booster");
   revenue.historyHolder = col("holders");
@@ -2859,6 +2870,7 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
     smartLpUsd: 0, boosterUsd: 0,
     dailyDates,
     dailyAmm: zeros(), dailySecurityBox: zeros(), dailyLaunchpad: zeros(), dailyDex: zeros(),
+    dailyDexReward: zeros(), dailyDexVolume: zeros(), dexRewardUsd: 0, dexVolumeUsd: 0,
     dailyBondingTax: zeros(), dailySmartLp: zeros(), dailyBooster: zeros(),
   };
 
@@ -3135,28 +3147,64 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
 
       if (hasActivation) {
         try {
-          const cumulative = [];
+          // Mancer's router update pays swap rewards in WETH (and sometimes
+          // USDG), not only in the project token. Those RewardPaid rows were
+          // dropped, so the DEX tile stayed on the collector drip.
+          const rewardLegs = [
+            { token: conf.tokenCa, decimals: 18, price: marketData.tokenPriceUsd, stream: "amm" },
+          ];
+          if (projectKey === "mancer") {
+            rewardLegs.push(
+              { token: WETH, decimals: 18, price: marketData.ethPriceUsd || 0, stream: "dex" },
+              { token: USDG, decimals: 6, price: 1, stream: "dex" },
+            );
+          }
+          const cumulative = rewardLegs.map(() => []);
           const paidWindowStart = yieldWindowStartSec();
           for (let i = 0; i <= nDays; i++) {
             const fromBlock = blockTime.blockAt(paidWindowStart + i * oneDay);
             const t = await gg.activations(projectKey, { fromBlock });
-            const paid = (t.totals || []).filter(
-              (x) => x.kind === "reward_paid" &&
-                     (x.reward_token || "").toLowerCase() === conf.tokenCa.toLowerCase(),
-            );
-            // Totals are base-unit strings; BigInt then scale, never a raw double.
-            const sum = paid.reduce((acc, x) => acc + BigInt(x.total || "0"), 0n);
-            cumulative.push(Number(sum) / 1e18);
+            const totals = t.totals || [];
+            rewardLegs.forEach((leg, legIdx) => {
+              if (!(leg.price > 0)) {
+                cumulative[legIdx].push(0);
+                return;
+              }
+              const want = leg.token.toLowerCase();
+              const paid = totals.filter(
+                (x) => x.kind === "reward_paid" && (x.reward_token || "").toLowerCase() === want,
+              );
+              // Totals are base-unit strings; BigInt then scale, never a raw double.
+              const sum = paid.reduce((acc, x) => acc + BigInt(x.total || "0"), 0n);
+              cumulative[legIdx].push(Number(sum) / 10 ** leg.decimals);
+            });
           }
 
           // cumulative[i] counts everything after dayBlocks[i], so day i is the
           // difference between consecutive reads.
-          for (let i = 0; i < nDays; i++) {
-            const amount = Math.max(0, cumulative[i] - cumulative[i + 1]);
-            if (amount <= 0) continue;
-            const usdVal = amount * marketData.tokenPriceUsd;
-            creditSample(usdVal, yieldSlotMidTs(i), { amm: true });
-          }
+          rewardLegs.forEach((leg, legIdx) => {
+            if (!(leg.price > 0)) return;
+            for (let i = 0; i < nDays; i++) {
+              const amount = Math.max(0, cumulative[legIdx][i] - cumulative[legIdx][i + 1]);
+              if (amount <= 0) continue;
+              const usdVal = amount * leg.price;
+              const ts = yieldSlotMidTs(i);
+              if (leg.stream === "dex") {
+                const before = revenueBreakdown.dexFeesUsd;
+                creditSample(usdVal, ts, { dex: true });
+                const booked = revenueBreakdown.dexFeesUsd - before;
+                if (booked > 0) {
+                  const dayIdx = yieldDayIdx(ts, sevenDaysAgo, oneDay);
+                  if (dayIdx != null) {
+                    revenueBreakdown.dailyDexReward[dayIdx] += booked;
+                    revenueBreakdown.dexRewardUsd += booked;
+                  }
+                }
+              } else {
+                creditSample(usdVal, ts, { amm: true });
+              }
+            }
+          });
         } catch (e) {
           const msg = String(e.message || e);
           if (!msg.includes("gg-index 404") && !msg.includes("gg-index 400")) throw e;
@@ -3177,24 +3225,80 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
           try {
             const fromBlock = blockTime.blockAt(sevenDaysAgo);
             const toBlock = await rpc.blockNumber();
-            const logs = await rpc.getLogs({
-              address: WETH,
-              fromBlock,
-              toBlock,
-              topics: [TOPIC.transfer, null, addrTopic(conf.streams.dexCollector)],
-            });
-            for (const log of logs) {
-              const amount = decodeUint(log.data, 0);
-              if (amount == null || amount <= 0n) continue;
-              const eth = Number(amount) / 1e18;
-              // The < 5 bound rejects outliers that are not fee flow.
-              if (!(eth > 0 && eth < 5)) continue;
-              const ts = blockTime.at(parseInt(log.blockNumber, 16));
-              if (ts < sevenDaysAgo) continue;
-              creditSample(eth * (marketData.ethPriceUsd || 0), ts, { dex: true });
+            // Fee asset is WETH on ETH pairs and USDG on dollar pairs. A single
+            // transfer above $50k is not a routing fee.
+            const feeTokens = [
+              { token: WETH, decimals: 18, price: marketData.ethPriceUsd || 0 },
+              { token: USDG, decimals: 6, price: 1 },
+            ];
+            for (const fee of feeTokens) {
+              if (!(fee.price > 0)) continue;
+              const logs = await rpc.getLogs({
+                address: fee.token,
+                fromBlock,
+                toBlock,
+                topics: [TOPIC.transfer, null, addrTopic(conf.streams.dexCollector)],
+              });
+              for (const log of logs) {
+                const amount = decodeUint(log.data, 0);
+                if (amount == null || amount <= 0n) continue;
+                const usd = (Number(amount) / 10 ** fee.decimals) * fee.price;
+                if (!(usd > 0 && usd < 50_000)) continue;
+                const ts = blockTime.at(parseInt(log.blockNumber, 16));
+                if (ts < sevenDaysAgo) continue;
+                creditSample(usd, ts, { dex: true });
+              }
             }
           } catch (e) {
             truncatedWalks.push(`dex collector logs: ${e.message || e}`);
+          }
+
+          // Swap notional is the router's fill, not the fee that lands on the
+          // collector. Kept off dailyDex so it does not enter protocol revenue
+          // or the 25% Stonk partner share.
+          if (conf.streams.swapRouter) {
+            try {
+              const fromBlock = blockTime.blockAt(sevenDaysAgo);
+              const toBlock = await rpc.blockNumber();
+              const logs = await rpc.getLogs({
+                address: conf.streams.swapRouter,
+                fromBlock,
+                toBlock,
+                topics: [MANCER_SWAP_TOPIC],
+              });
+              let n = 0;
+              for (const log of logs) {
+                const body = (log.data || "").slice(2);
+                if (body.length < 64 * 5) continue;
+                const amountIn = BigInt("0x" + body.slice(0, 64));
+                const tokenIn = ("0x" + body.slice(64 * 2 + 24, 64 * 3)).toLowerCase();
+                const fee = BigInt("0x" + body.slice(64 * 3, 64 * 4));
+                const bps = Number(BigInt("0x" + body.slice(64 * 4, 64 * 5)));
+                if (!(bps >= 0 && bps <= 100) || amountIn <= 0n) continue;
+                const expected = (amountIn * BigInt(bps)) / 10000n;
+                const diff = fee > expected ? fee - expected : expected - fee;
+                if (expected > 0n && diff * 5n > expected) continue;
+                const decimals = tokenIn === WETH ? 18 : tokenIn === USDG ? 6 : 0;
+                const price = tokenIn === WETH ? (marketData.ethPriceUsd || 0) : tokenIn === USDG ? 1 : 0;
+                if (!decimals || !(price > 0)) continue;
+                const usd = (Number(amountIn) / 10 ** decimals) * price;
+                if (!(usd > 0 && usd < 2_000_000)) continue;
+                const ts = blockTime.at(parseInt(log.blockNumber, 16));
+                if (ts < sevenDaysAgo) continue;
+                const dayIdx = yieldDayIdx(ts, sevenDaysAgo, oneDay);
+                if (dayIdx == null) continue;
+                revenueBreakdown.dailyDexVolume[dayIdx] += usd;
+                revenueBreakdown.dexVolumeUsd += usd;
+                n++;
+              }
+              console.log(
+                `  mancer router volume $${revenueBreakdown.dexVolumeUsd.toFixed(0)} ` +
+                `across ${n} fills; dex fees $${(revenueBreakdown.dexFeesUsd || 0).toFixed(0)} ` +
+                `(weth rewards $${(revenueBreakdown.dexRewardUsd || 0).toFixed(0)})`,
+              );
+            } catch (e) {
+              console.warn(`[warn] mancer router swaps: ${e.message || e}`);
+            }
           }
       }
   } else if (conf.yieldMode === "intern_clockin") {
@@ -3795,7 +3899,10 @@ function applyMancerShareToStonk(stonk, mancer) {
   dayLabels.forEach((d, i) => {
     const j = mIdx.get(dates.dateKey(d));
     if (j == null) return;
-    rev.dailyBooster[i] = (Number(rev.dailyBooster[i]) || 0) + (Number(mDex[j]) || 0) * MANCER_STONK_SHARE;
+    // Partner share is the dex tax, not holder rewards paid in WETH/USDG and
+    // not the router's swap notional.
+    const tax = Math.max(0, (Number(mDex[j]) || 0) - (Number(mancer?.revenue?.dailyDexReward?.[j]) || 0));
+    rev.dailyBooster[i] = (Number(rev.dailyBooster[i]) || 0) + tax * MANCER_STONK_SHARE;
   });
   rev.boosterUsd = rev.dailyBooster.reduce((s, v) => s + (Number(v) || 0), 0);
 }
