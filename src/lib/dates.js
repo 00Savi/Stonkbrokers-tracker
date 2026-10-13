@@ -80,3 +80,8 @@ export function formatLabels(labels) {
   const withYear = labelsNeedYear(labels);
   return (labels || []).map((label) => chartLabel(label, withYear));
 }
+
+/** ISO day rows are not guaranteed to arrive in order. Charts plot array order. */
+export function byDate(rows, field = 'date') {
+  return [...(rows || [])].sort((a, b) => String(a?.[field] || '').localeCompare(String(b?.[field] || '')));
+}

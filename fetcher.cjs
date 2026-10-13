@@ -1498,25 +1498,44 @@ async function getOwnershipStats(conf, equivBurnt, previousData) {
   }
 
   let rawNftHolders;
+  let nftHoldersCarried = false;
   try {
     rawNftHolders = await fetchTokenHoldersSafe(conf.nftCa);
   } catch (e) {
     // Intern NFT is not in gg-index until seeds + backfill land. Throwing
     // here used to abort the whole intern rebuild and republish the empty stub.
+    const prevHolders = Number(previousData?.ownership?.nftHolders);
     if (conf.yieldMode === "intern_clockin" && INDEX_NOT_READY.test(String(e.message))) {
       console.warn(`[warn] intern NFT holders via gg-index: ${e.message}`);
-      rawNftHolders = previousData?.ownership?.nftHolders || 0;
+      rawNftHolders = prevHolders || 0;
+      nftHoldersCarried = true;
+    } else if (prevHolders > 0) {
+      // A holder-fold blip used to abort the whole project. The carried
+      // snapshot then kept every series, including Card Wall pulls, on the
+      // last good day.
+      console.warn(`[warn] ${conf.ticker} NFT holders: ${e.message}; keeping ${prevHolders}`);
+      rawNftHolders = prevHolders;
+      nftHoldersCarried = true;
     } else {
       throw e;
     }
   }
   // The AMM vault is a holder in the index fold, but those NFTs are not
   // circulating. Concentration is wallets ÷ (maxSupply − vault), so the
-  // vault itself must not sit in the numerator.
-  if (ammVaultNfts > 0) rawNftHolders = Math.max(0, rawNftHolders - 1);
+  // vault itself must not sit in the numerator. A carried count is already
+  // vault-adjusted; subtracting again would drift it down on every failure.
+  if (ammVaultNfts > 0 && !nftHoldersCarried) rawNftHolders = Math.max(0, rawNftHolders - 1);
   const trueUniqueNftHolders = rawNftHolders;
 
-  const rawStonkHolders = await fetchTokenHoldersSafe(conf.tokenCa);
+  let rawStonkHolders;
+  try {
+    rawStonkHolders = await fetchTokenHoldersSafe(conf.tokenCa);
+  } catch (e) {
+    const prevHolders = Number(previousData?.ownership?.stonkHolders || previousData?.ownership?.tokenHolders);
+    if (!(prevHolders > 0)) throw e;
+    console.warn(`[warn] ${conf.ticker} holders: ${e.message}; keeping ${prevHolders}`);
+    rawStonkHolders = prevHolders;
+  }
   const trueUniqueStonkHolders = rawStonkHolders > (conf.teamWallets || 0) ? rawStonkHolders - (conf.teamWallets || 0) : 0;
 
   const circulatingNftSupply = Math.max(0, (conf.maxSupply || 0) - ammVaultNfts);
@@ -3107,7 +3126,13 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
           revenueBreakdown.dailyAmm[i] = dailyOracleAmmSample[i] * scaleMultiplier;
       }
 
-      if (projectKey === "stonk" && conf.streams?.securityBox) await fetchSecurityBoxYield(conf.streams.securityBox);
+      if (projectKey === "stonk" && conf.streams?.securityBox) {
+        try {
+          await fetchSecurityBoxYield(conf.streams.securityBox);
+        } catch (e) {
+          truncatedWalks.push(`security box: ${e.message || e}`);
+        }
+      }
       if (projectKey === "stonk") {
         try {
           await fetchLaunchpadRevenue();
@@ -3206,9 +3231,12 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
             }
           });
         } catch (e) {
-          const msg = String(e.message || e);
-          if (!msg.includes("gg-index 404") && !msg.includes("gg-index 400")) throw e;
-          console.warn(`[warn] ${projectKey}: gg-index activations unavailable; RewardPaid skipped`);
+          // A 404 used to be skipped. A timeout or 500 took the same path
+          // out of this function and the project catch republished the
+          // previous snapshot, so Card Wall pulls stopped on the last day
+          // the yield walk succeeded.
+          console.warn(`[warn] ${projectKey}: RewardPaid skipped (${e.message || e})`);
+          if (projectKey !== "cardwall") truncatedWalks.push(`reward paid: ${e.message || e}`);
         }
       } else {
         await fetchVaultTokenOutflows(conf, marketData, sevenDaysAgo, oneDay, {
@@ -3975,6 +4003,23 @@ async function run() {
     ...Object.entries(NIGHTSHADES_FACTIONS),
   ];
 
+  async function loadCardwallGacha(prev) {
+    const wallByDay = {};
+    for (const s of prev?.dailySnapshots || []) {
+      const k = dates.dateKey(s?.date);
+      if (k && Number(s.tokenPriceUsd) > 0) wallByDay[k] = Number(s.tokenPriceUsd);
+    }
+    const live = markets.cardwall || {};
+    return fetchGachaRevenue({
+      rpc,
+      blockTime,
+      wallByDay,
+      wallSpot: live.tokenPriceUsd || 0,
+      ethSpot: live.ethPriceUsd || 0,
+      deadline: fetchDeadline,
+    });
+  }
+
   for (const [projectKey, conf] of loopEntries) {
       console.log(`\n--- Processing ${projectKey.toUpperCase()} ---`);
       const isNsFaction = !!NIGHTSHADES_FACTIONS[projectKey];
@@ -4019,20 +4064,51 @@ async function run() {
         continue;
       }
 
-      const activationStats = projectKey === "cardwall"
-        ? await fetchCardWallLiveActivations(conf, prevProjData.activation || {})
-        : await fetchActivations(projectKey, conf);
-      const ownershipStats = await getOwnershipStats(conf, activationStats.dualBurn.equivalentBrokersBurnt, prevProjData);
+      let activationStats;
+      try {
+        activationStats = projectKey === "cardwall"
+          ? await fetchCardWallLiveActivations(conf, prevProjData.activation || {})
+          : await fetchActivations(projectKey, conf);
+      } catch (e) {
+        if (!prevProjData.activation || !Object.keys(prevProjData.activation).length) throw e;
+        console.warn(`[warn] ${projectKey}: activations: ${e.message}; using previous`);
+        activationStats = prevProjData.activation;
+      }
+      const ownershipStats = await getOwnershipStats(conf, activationStats.dualBurn?.equivalentBrokersBurnt, prevProjData);
       if (projectKey === "interns") await attachInternOwnership(conf, ownershipStats);
       ownershipStats.burnHistory = await fetchBurnHistory(projectKey, prevProjData?.ownership?.burnHistory);
 
-      const ledger = conf.vaultLedger ? await fetchVaultLedger(conf.vaultLedger, sevenDaysAgo) : null;
+      let ledger = null;
+      if (conf.vaultLedger) {
+        try {
+          ledger = await fetchVaultLedger(conf.vaultLedger, sevenDaysAgo);
+        } catch (e) {
+          console.warn(`[warn] ${projectKey}: vault ledger: ${e.message}`);
+        }
+      }
       if (ledger) {
         console.log(`  vault ledger: ${ledger.count} slabs, $${ledger.deliveredUsd} delivered, $${ledger.vaultedUsd} in vault`);
       }
 
-      const yieldData = await getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, markets[projectKey]);
-      const yieldCarried = !!(yieldData && yieldData.unavailable) && projectKey !== "cardwall";
+      let yieldData;
+      try {
+        yieldData = await getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, markets[projectKey]);
+      } catch (e) {
+        console.warn(`[warn] ${projectKey}: yield: ${e.message}`);
+        yieldData = { unavailable: true, launchpadSnapshot: null };
+      }
+      // Card Wall ROI is the slab ledger, not RewardPaid. A failed yield walk
+      // must not throw away that ledger or skip the pull scan.
+      if (projectKey === "cardwall" && yieldData?.unavailable && ledger) {
+        const rainDates = ledger.historyDates?.length ? ledger.historyDates : (ledger.dailyDates || []);
+        yieldData = {
+          globalAnnualYield: 0,
+          dailyDates: rainDates,
+          dailyUsdPerWeight: Array(Math.max(rainDates.length, 1)).fill(0),
+          revenueBreakdown: { ...(prevProjData.revenue || {}), dailyDates: rainDates },
+        };
+      }
+      const yieldCarried = !!(yieldData && yieldData.unavailable);
 
       let totalNetworkWeight = 0;
       for (const t of conf.tiers) totalNetworkWeight += ((activationStats.breakdown[t.id] || 0) * t.weight);
@@ -4045,7 +4121,12 @@ async function run() {
         console.warn(`[warn] ${projectKey}: using previous yield/revenue (window incomplete).`);
         mappedTiers = prevProjData.tiers;
         revenueBreakdown = { ...(prevProjData.revenue || {}) };
-        if (projectKey === "stonk") applyLaunchpadSnapshot(revenueBreakdown, yieldData.launchpadSnapshot);
+        if (projectKey === "stonk") {
+          applyLaunchpadSnapshot(
+            revenueBreakdown,
+            yieldData.launchpadSnapshot || snapshotLaunchpad(revenueBreakdown),
+          );
+        }
       } else {
         if (yieldCarried) {
           throw new Error(`${projectKey}: yield unavailable and no previous snapshot to carry forward.`);
@@ -4333,19 +4414,7 @@ async function run() {
       if (projectKey === "cardwall") {
         gacha = prevProjData.gacha || null;
         try {
-          const wallByDay = {};
-          for (const s of prevProjData.dailySnapshots || []) {
-            const k = dates.dateKey(s?.date);
-            if (k && Number(s.tokenPriceUsd) > 0) wallByDay[k] = Number(s.tokenPriceUsd);
-          }
-          const live = markets[projectKey] || {};
-          gacha = await fetchGachaRevenue({
-            rpc,
-            blockTime,
-            wallByDay,
-            wallSpot: live.tokenPriceUsd || 0,
-            ethSpot: live.ethPriceUsd || 0,
-          });
+          gacha = await loadCardwallGacha(prevProjData);
           console.log(
             `  gacha: ${gacha.pulls} pulls, $${gacha.usd.toFixed(0)} ` +
               `(alley $${gacha.alley.usd.toFixed(0)}, claw $${gacha.claw.usd.toFixed(0)})`,
@@ -4392,6 +4461,18 @@ async function run() {
         if (prevProjData && Object.keys(prevProjData).length) {
           finalJson.projects[projectKey] = prevProjData;
           console.warn(`[warn] ${projectKey}: carrying previous snapshot`);
+        }
+        if (projectKey === "cardwall" && finalJson.projects.cardwall) {
+          try {
+            const gacha = await loadCardwallGacha(prevProjData);
+            finalJson.projects.cardwall = { ...finalJson.projects.cardwall, gacha };
+            console.log(
+              `  gacha: ${gacha.pulls} pulls, $${gacha.usd.toFixed(0)} ` +
+                `(alley $${gacha.alley.usd.toFixed(0)}, claw $${gacha.claw.usd.toFixed(0)})`,
+            );
+          } catch (e2) {
+            console.warn(`[warn] gacha revenue: ${e2.message}`);
+          }
         }
       }
   }

@@ -5,7 +5,7 @@ import {
 } from 'chart.js';
 import { loadOverlap, loadProjectAnalysis } from '../lib/ggindex';
 import { cashVsMarkSeries } from '../lib/yieldHistory';
-import { formatLabels } from '../lib/dates';
+import { byDate, formatLabels } from '../lib/dates';
 import { baseChartOptions, barThickness, categoryBarOptions, compactTick, compactUsdTick, STREAM_COLORS } from '../lib/charts';
 import { explorerAddressUrl } from '../lib/tba';
 import { walletName } from '../lib/wallets';
@@ -119,7 +119,7 @@ function CashVsMark({ project }) {
 }
 
 function StreamQuality({ revenue }) {
-  const days = revenue?.daily || [];
+  const days = byDate(revenue?.daily);
   if (!days.length) return null;
   const labels = formatLabels(days.map((d) => d.date));
   const datasets = STREAMS.map((s) => ({
@@ -278,7 +278,7 @@ function HolderStructure({ structure }) {
 }
 
 function FlowChart({ title, note, daily, field }) {
-  const rows = (daily || []).filter((d) => d.entries || d.exits || (field && d[field]));
+  const rows = byDate(daily).filter((d) => d.entries || d.exits || (field && d[field]));
   if (rows.length < 2) return null;
   const labels = formatLabels(rows.map((d) => d.date));
   const incomplete = rows.some((d) => d.complete === false);
@@ -321,7 +321,7 @@ function ActivityPanels({ activity, project }) {
   const nft = activity.nft;
   const waiting = (token && !token.built) || (nft && !nft.built);
   const circ = Number(project?.ownership?.circulatingNftSupply) || 0;
-  const lastMoved = [...(nft?.daily || [])].reverse().find((d) => d.ids_moved > 0);
+  const lastMoved = byDate(nft?.daily).reverse().find((d) => d.ids_moved > 0);
   const turn = circ > 0 && lastMoved ? (lastMoved.ids_moved / circ) * 100 : null;
   return (
     <>
