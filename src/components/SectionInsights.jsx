@@ -354,8 +354,9 @@ function ActivityPanels({ activity, project }) {
 }
 
 function CohortChart({ title, note, weeks, noun }) {
-  if (!weeks?.length) return null;
-  const labels = formatLabels(weeks.map((w) => w.week));
+  const ordered = byDate(weeks, 'week');
+  if (!ordered.length) return null;
+  const labels = formatLabels(ordered.map((w) => w.week));
   return (
     <ChartPanel title={title} note={note}>
       <Bar
@@ -363,7 +364,7 @@ function CohortChart({ title, note, weeks, noun }) {
           labels,
           datasets: [{
             label: noun,
-            data: weeks.map((w) => w.wallets),
+            data: ordered.map((w) => w.wallets),
             backgroundColor: '#8b5cf6',
             maxBarThickness: barThickness(labels.length),
           }],

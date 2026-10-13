@@ -265,6 +265,8 @@ function applyLaunchpadSnapshot(revenue, snap) {
   revenue.dailyAmm = remap(revenue.dailyAmm);
   revenue.dailySecurityBox = remap(revenue.dailySecurityBox);
   revenue.dailyDex = remap(revenue.dailyDex);
+  if (Array.isArray(revenue.dailyDexReward)) revenue.dailyDexReward = remap(revenue.dailyDexReward);
+  if (Array.isArray(revenue.dailyDexVolume)) revenue.dailyDexVolume = remap(revenue.dailyDexVolume);
   revenue.dailySmartLp = remap(revenue.dailySmartLp);
   if (Array.isArray(revenue.dailySmartLpGross)) {
     revenue.dailySmartLpGross = remap(revenue.dailySmartLpGross);
@@ -283,6 +285,30 @@ function applyLaunchpadSnapshot(revenue, snap) {
   revenue.launchpadUsd = Number(snap.launchpadUsd) || 0;
   revenue.launchCreateUsd = Number(snap.launchCreateUsd) || 0;
   revenue.boosterUsd = Number(snap.boosterUsd) || 0;
+  const sum = (arr) => (arr || []).reduce((s, v) => s + (Number(v) || 0), 0);
+  if (Array.isArray(revenue.dailyDexReward)) revenue.dexRewardUsd = sum(revenue.dailyDexReward);
+  if (Array.isArray(revenue.dailyDexVolume)) revenue.dexVolumeUsd = sum(revenue.dailyDexVolume);
+}
+
+/** A carried 7-day tier window stays on the day the walk last succeeded. */
+function slideTierWindow(tiers) {
+  const days = [];
+  const start = yieldWindowStartSec();
+  for (let i = 0; i < YIELD_LOOKBACK_DAYS; i++) {
+    days.push(dates.utcIsoFromTs(start + i * 86400));
+  }
+  return (tiers || []).map((t) => {
+    const old = (t.dailyDates || []).map((d) => dates.dateKey(d) || d);
+    if (old.length < 2 || old.length > YIELD_LOOKBACK_DAYS + 1) return t;
+    return {
+      ...t,
+      dailyDates: days,
+      dailyYields: days.map((d) => {
+        const j = old.indexOf(dates.dateKey(d));
+        return j >= 0 ? Number(t.dailyYields?.[j]) || 0 : 0;
+      }),
+    };
+  });
 }
 
 function applySmartLp(revenueBreakdown, smart) {
@@ -1548,6 +1574,19 @@ async function getOwnershipStats(conf, equivBurnt, previousData) {
   let histData = previousData?.ownership?.historicalGrowth?.data || [];
 
   // Past points stay as recorded. Do not backfill today's count onto older days.
+  // Collapse days that were stored twice, once as M/D and again as ISO, or
+  // written out of order. Last value for a day wins.
+  {
+    const byDay = new Map();
+    for (let i = 0; i < histLabels.length; i++) {
+      const key = dates.dateKey(histLabels[i]);
+      if (!key) continue;
+      byDay.set(key, Number(histData[i]) || 0);
+    }
+    const keys = [...byDay.keys()].sort();
+    histLabels = keys;
+    histData = keys.map((k) => byDay.get(k));
+  }
 
   const dateStr = dates.utcIso();
   const seriesHolders = conf.yieldMode === "intern_clockin" ? trueUniqueNftHolders : trueUniqueStonkHolders;
@@ -4119,14 +4158,14 @@ async function run() {
 
       if (yieldCarried && Array.isArray(prevProjData.tiers) && prevProjData.tiers.length) {
         console.warn(`[warn] ${projectKey}: using previous yield/revenue (window incomplete).`);
-        mappedTiers = prevProjData.tiers;
+        mappedTiers = slideTierWindow(prevProjData.tiers);
         revenueBreakdown = { ...(prevProjData.revenue || {}) };
-        if (projectKey === "stonk") {
-          applyLaunchpadSnapshot(
-            revenueBreakdown,
-            yieldData.launchpadSnapshot || snapshotLaunchpad(revenueBreakdown),
-          );
-        }
+        applyLaunchpadSnapshot(
+          revenueBreakdown,
+          projectKey === "stonk" && yieldData.launchpadSnapshot
+            ? yieldData.launchpadSnapshot
+            : snapshotLaunchpad(revenueBreakdown),
+        );
       } else {
         if (yieldCarried) {
           throw new Error(`${projectKey}: yield unavailable and no previous snapshot to carry forward.`);

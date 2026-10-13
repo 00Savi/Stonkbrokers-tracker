@@ -1,4 +1,4 @@
-import { utcIso } from './dates';
+import { dateKey, utcIso } from './dates';
 
 // Which recorded daily snapshots can be trusted, and how far back to plot them.
 //
@@ -68,7 +68,15 @@ export function holderSeries(ownership, snapshots) {
   const labels = Array.isArray(hist?.labels) ? hist.labels : [];
   const data = Array.isArray(hist?.data) ? hist.data.map(Number) : [];
   if (labels.length > 0 && data.length === labels.length && data.some((n) => n > 0)) {
-    return { labels, data };
+    // Stored points were appended as M/D and later as ISO, and a couple of
+    // days were written twice out of order. Last value for a day wins.
+    const byDay = new Map();
+    labels.forEach((label, i) => {
+      const key = dateKey(label);
+      if (key) byDay.set(key, data[i]);
+    });
+    const keys = [...byDay.keys()].sort();
+    return { labels: keys, data: keys.map((k) => byDay.get(k)) };
   }
 
   const rows = (Array.isArray(snapshots) ? snapshots : []).filter((s) => Number(s.tokenHolders) > 0);

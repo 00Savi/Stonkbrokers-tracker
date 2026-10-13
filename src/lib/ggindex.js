@@ -19,6 +19,7 @@
 // refuses to replace the local count). Holders still come from the index.
 // Activation stays on the snapshot.
 
+import { byDate } from './dates';
 import { isNightshadesFaction, rollupNightshadesOwnership } from './nightshades';
 
 const BASE = (import.meta.env?.VITE_GG_INDEX_URL || 'https://index.ggservices.dev').replace(/\/+$/, '');
@@ -224,6 +225,18 @@ async function optional(path) {
   }
 }
 
+function orderActivity(activity) {
+  if (!activity) return activity;
+  const leg = (row) => (row?.daily ? { ...row, daily: byDate(row.daily) } : row);
+  return { ...activity, token: leg(activity.token), nft: leg(activity.nft) };
+}
+
+function orderCohorts(cohorts) {
+  if (!cohorts) return cohorts;
+  const leg = (row) => (row?.weeks ? { ...row, weeks: byDate(row.weeks, 'week') } : row);
+  return { ...cohorts, token: leg(cohorts.token), nft: leg(cohorts.nft) };
+}
+
 /** Structure, flow, effective activation, cohorts, and daily revenue streams. */
 export function loadProjectAnalysis(slug) {
   const id = encodeURIComponent(slug);
@@ -234,7 +247,11 @@ export function loadProjectAnalysis(slug) {
     optional(`/projects/${id}/cohorts`),
     optional(`/projects/${id}/revenue/daily?days=180`),
   ]).then(([structure, activity, effective, cohorts, revenue]) => ({
-    structure, activity, effective, cohorts, revenue,
+    structure,
+    activity: orderActivity(activity),
+    effective,
+    cohorts: orderCohorts(cohorts),
+    revenue: revenue?.daily ? { ...revenue, daily: byDate(revenue.daily) } : revenue,
   }));
 }
 
