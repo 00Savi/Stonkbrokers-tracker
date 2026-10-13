@@ -493,7 +493,9 @@ export default function NightshadesAllView({ project, setFaction }) {
     Object.fromEntries(slices.map((f) => {
       const p = f.slice;
       const unit = Number(p?.config?.unitValue) || 1_000_000;
-      const maxNft = Number(p?.ownership?.currentMaxSupply || p?.config?.maxSupply) || 3000;
+      const fromOwn = Number(p?.ownership?.currentMaxSupply);
+      const fromCfg = Number(p?.config?.maxSupply);
+      const maxNft = fromOwn > 0 ? fromOwn : (fromCfg > 0 ? fromCfg : 0);
       const maxToken = maxNft * unit;
       const series = burnSeries(p, timeframe, interval);
       const days = series.rawLabels || [];

@@ -18,6 +18,8 @@ import { renderToString } from 'react-dom/server';
 import { StaticRouter } from 'react-router-dom';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
+import { earnedUsdForNft, earnedUsdForTokenPosition, walletDailyDrops } from '../src/lib/portfolioHistory.js';
+import { applyPrices, pricesLanded } from '../src/lib/prices.js';
 import App from '../src/app.jsx';
 import HomeView from '../src/components/views/HomeView';
 import OverviewView from '../src/components/views/OverviewView';
@@ -35,7 +37,10 @@ import BonusDetailView from '../src/components/views/BonusDetailView';
 import SpecialDetailView from '../src/components/views/SpecialDetailView';
 import NightshadesDetailView from '../src/components/views/NightshadesDetailView';
 import { UnderwaterCard } from '../src/components/UnderwaterCard';
-import { protocolRevenueChart } from '../src/lib/yieldHistory';
+import { protocolRevenueChart, resampleSeries } from '../src/lib/yieldHistory';
+import { rollupNightshadesOwnership } from '../src/lib/nightshades';
+import { tokenValuation } from '../src/lib/valuation';
+import { compactUsd } from '../src/components/kit';
 import { applyLiveMachines, dropsForMachine, freshAlleyDrops } from '../src/lib/cardwallDrops';
 import { dateKey } from '../src/lib/dates';
 import { PROJECTS, tabsForProject } from '../src/lib/routes';
@@ -416,6 +421,9 @@ for (const [name, View, props] of VIEWS) {
   } else if (!html.includes(liveLabel) && !html.includes(String(live))) {
     failed++;
     console.error(`FAIL  intern live count ${live} not on the page`);
+  } else if (html.includes('NFT vs token holders')) {
+    failed++;
+    console.error('FAIL  intern ownership chart still plots the parent token');
   } else {
     console.log(`ok    intern page has no mint schedule; ${liveLabel} live`);
   }
@@ -1052,6 +1060,124 @@ for (const [name, View, props] of VIEWS) {
     console.error('FAIL  intern underwater is nft only');
   } else {
     console.log('ok    underwater week, payback, and holder mix');
+  }
+}
+
+{
+  const open = Date.parse('2026-10-11T00:00:00Z') / 1000;
+  const project = {
+    ownership: { circulatingSupply: 100 },
+    cashflow: {
+      dailyDates: ['2026-10-05', '2026-10-11', '2026-10-12'],
+      dailyRevenue: [50, 10, 20],
+    },
+    tiers: [{
+      tier: 'T0',
+      dailyDates: ['2026-10-05', '2026-10-11'],
+      dailyYields: [9, 3],
+    }],
+    dailySnapshots: [],
+  };
+  const earned = earnedUsdForTokenPosition(project, 10, open);
+  const nft = earnedUsdForNft({ ...project, dailySnapshots: [] }, 'T0', open);
+  const drops = walletDailyDrops([{
+    projectKey: 'index',
+    tokenPosition: true,
+    balance: 10,
+    holdStartTs: open,
+  }], { projects: { index: project } });
+  if (earned !== 3 || nft !== 3) {
+    failed++;
+    console.error(`FAIL  open-date filter token ${earned} nft ${nft}`);
+  } else if (drops.labels.join(',') !== '2026-10-11,2026-10-12') {
+    failed++;
+    console.error(`FAIL  token drop dates ${drops.labels.join(',')}`);
+  } else {
+    console.log('ok    portfolio yield starts on the open day');
+  }
+
+  const base = {
+    projects: {
+      oakmont: {
+        market: { tokenPriceUsd: 0.0004, ethPriceUsd: 2500 },
+        config: {},
+        tiers: [],
+      },
+    },
+  };
+  const usdOnly = { ethPriceUsd: null, tokens: { oakmont: { usd: 0.0005, eth: null, impliedEthUsd: null, trades: 3 } } };
+  const patched = applyPrices(base, usdOnly);
+  if (!pricesLanded(usdOnly) || patched.projects.oakmont.market.tokenPriceUsd !== 0.0005) {
+    failed++;
+    console.error('FAIL  USD price dropped without an ETH quote');
+  } else if (pricesLanded({ ethPriceUsd: null, tokens: {} })) {
+    failed++;
+    console.error('FAIL  empty price pull looked ready');
+  } else {
+    console.log('ok    token USD lands without an ETH quote');
+  }
+
+  const weekly = resampleSeries(
+    ['2026-10-12', '2026-10-13', '2026-10-14'],
+    [40, null, null],
+    'weekly',
+    'last',
+  );
+  if (weekly.data[0] !== 40) {
+    failed++;
+    console.error(`FAIL  weekly blank day became ${weekly.data[0]}`);
+  } else {
+    console.log('ok    weekly last keeps the previous finite value');
+  }
+
+  const emptyRoll = rollupNightshadesOwnership({
+    ghosts: { ownership: {} },
+    zombies: { ownership: {} },
+    knights: { ownership: {} },
+    watchers: { ownership: {} },
+  });
+  const partialRoll = rollupNightshadesOwnership({
+    ghosts: { ownership: { currentMaxSupply: 3000, nftHolders: 10, ammVaultNfts: 100 } },
+    zombies: { ownership: {} },
+    knights: { ownership: {} },
+    watchers: { ownership: {} },
+  });
+  if (emptyRoll !== null || partialRoll?.currentMaxSupply !== 3000 || partialRoll?.circulatingNftSupply !== 2900) {
+    failed++;
+    console.error(`FAIL  nightshades rollup invented supply ${JSON.stringify(emptyRoll)} ${JSON.stringify(partialRoll)}`);
+  } else {
+    console.log('ok    nightshades rollup skips factions with no supply');
+  }
+
+  const oak = snapshot.projects.oakmont;
+  const circ = oak.ownership.circulatingSupply;
+  const px = oak.market.tokenPriceUsd;
+  const valued = tokenValuation(circ, px, 100_000_000);
+  const holdersHtml = renderToString(
+    <StaticRouter location="/oakmont/ownership">
+      <SpecialDetailView data={snapshot} projectKey="oakmont" activeTab="ownership" />
+    </StaticRouter>
+  );
+  const supplyHtml = renderToString(
+    <StaticRouter location="/oakmont/burn">
+      <SpecialDetailView data={snapshot} projectKey="oakmont" activeTab="burn" />
+    </StaticRouter>
+  );
+  const mcapLabel = holdersHtml.includes('$STRIKE market cap');
+  const fdvLabel = holdersHtml.includes('$STRIKE FDV');
+  const mcapValue = holdersHtml.includes(compactUsd(valued.marketCapUsd));
+  const fdvValue = holdersHtml.includes(compactUsd(valued.fdvUsd));
+  if (valued.fdvUsd <= valued.marketCapUsd) {
+    failed++;
+    console.error('FAIL  strike FDV did not use the 100M cap');
+  } else if (!mcapLabel || !fdvLabel || !mcapValue || !fdvValue) {
+    failed++;
+    console.error(`FAIL  oakmont holders tile mcap=${mcapLabel}/${mcapValue} fdv=${fdvLabel}/${fdvValue} (${compactUsd(valued.marketCapUsd)} vs ${compactUsd(valued.fdvUsd)})`);
+  } else if (supplyHtml.includes('$RESERVE FDV') || holdersHtml.includes('$RESERVE FDV') || !supplyHtml.includes('$RESERVE mcap')) {
+    failed++;
+    console.error('FAIL  reserve outstanding × price is still labeled FDV');
+  } else {
+    console.log('ok    strike FDV uses the fixed cap');
   }
 }
 

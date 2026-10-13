@@ -137,6 +137,12 @@ export async function loadPrices(projects, signal, snapshot) {
   return { ethPriceUsd: implied ? +implied.toFixed(2) : null, tokens };
 }
 
+/** True when this pull has a token USD or an implied ETH price to write. */
+export function pricesLanded(prices) {
+  if (Number(prices?.ethPriceUsd) > 0) return true;
+  return Object.values(prices?.tokens || {}).some((t) => Number(t?.usd) > 0);
+}
+
 /**
  * Patch live prices onto a payload, recomputing the derived floor.
  *
@@ -146,19 +152,24 @@ export async function loadPrices(projects, signal, snapshot) {
  * fresher, it would make them wrong in a new way.
  */
 export function applyPrices(base, prices) {
-  if (!base?.projects || !(prices?.ethPriceUsd > 0)) return base;
+  if (!base?.projects || !pricesLanded(prices)) return base;
 
+  const ethLive = Number(prices.ethPriceUsd) > 0 ? Number(prices.ethPriceUsd) : 0;
   const projects = { ...base.projects };
   for (const [slug, p] of Object.entries(projects)) {
     const priced = prices.tokens[slug];
-    const tokenPrice = priced?.usd ?? p.market?.tokenPriceUsd;
-    if (!(tokenPrice > 0)) continue;
+    const liveUsd = Number(priced?.usd);
+    const tokenPrice = liveUsd > 0 ? liveUsd : p.market?.tokenPriceUsd;
+    // A project with neither a fresh token print nor a fresh ETH print stays
+    // on the snapshot. ETH is optional: a USD quote still replaces the hourly price.
+    if (!(tokenPrice > 0) || (!(liveUsd > 0) && !(ethLive > 0))) continue;
 
     const unitValue = p.config?.unitValue;
+    const ethPriceUsd = ethLive > 0 ? ethLive : Number(p.market?.ethPriceUsd) || 0;
     const market = {
       ...p.market,
-      ethPriceUsd: prices.ethPriceUsd,
       tokenPriceUsd: tokenPrice,
+      ...(ethPriceUsd > 0 ? { ethPriceUsd } : {}),
     };
 
     if (unitValue > 0 && p.config?.nftCa && p.market?.floorSource !== 'opensea' && p.market?.floorSource !== 'listing' && p.config?.kind !== 'brokers') {
@@ -167,7 +178,9 @@ export function applyPrices(base, prices) {
       // route and only differs in rounding.
       const floorEth = priced?.eth
         ? unitValue * priced.eth * 1.1
-        : (unitValue * tokenPrice * 1.1) / prices.ethPriceUsd;
+        : ethPriceUsd > 0
+          ? (unitValue * tokenPrice * 1.1) / ethPriceUsd
+          : 0;
 
       if (floorEth > 0 && Number.isFinite(floorEth)) {
         market.nftFloorEth = +floorEth.toFixed(3);
@@ -194,18 +207,22 @@ export function applyPrices(base, prices) {
       const fp = factions[fslug];
       if (!fp) continue;
       const priced = prices.tokens[fslug];
-      const tokenPrice = priced?.usd ?? fp.market?.tokenPriceUsd;
-      if (!(tokenPrice > 0)) continue;
+      const liveUsd = Number(priced?.usd);
+      const tokenPrice = liveUsd > 0 ? liveUsd : fp.market?.tokenPriceUsd;
+      if (!(tokenPrice > 0) || (!(liveUsd > 0) && !(ethLive > 0))) continue;
       const unitValue = fp.config?.unitValue;
+      const ethPriceUsd = ethLive > 0 ? ethLive : Number(fp.market?.ethPriceUsd) || 0;
       const market = {
         ...fp.market,
-        ethPriceUsd: prices.ethPriceUsd,
         tokenPriceUsd: tokenPrice,
+        ...(ethPriceUsd > 0 ? { ethPriceUsd } : {}),
       };
       if (unitValue > 0 && fp.config?.nftCa) {
         const floorEth = priced?.eth
           ? unitValue * priced.eth * 1.1
-          : (unitValue * tokenPrice * 1.1) / prices.ethPriceUsd;
+          : ethPriceUsd > 0
+            ? (unitValue * tokenPrice * 1.1) / ethPriceUsd
+            : 0;
         if (floorEth > 0 && Number.isFinite(floorEth)) {
           market.nftFloorEth = +floorEth.toFixed(3);
         }
@@ -223,7 +240,7 @@ export function applyPrices(base, prices) {
     }
     const allMarket = {
       ...ns.market,
-      ...rollupNightshadesMarket(factions, prices.ethPriceUsd),
+      ...rollupNightshadesMarket(factions, ethLive > 0 ? ethLive : null),
     };
     const allTiers = (ns.tiers || []).map((t) => {
       const seat = typicalNightshadesSeat(factions, t.tier);

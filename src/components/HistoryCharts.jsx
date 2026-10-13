@@ -682,17 +682,18 @@ function seriesPeak(data) {
   return peak;
 }
 
-export function OwnershipHistoryPanels({ snaps, live, onboard = null }) {
+export function OwnershipHistoryPanels({ snaps, live, onboard = null, tokenLeg = true }) {
   const hist = ownershipHistory(snaps, live);
-  const hasHolders = seriesHasInk(hist.token) || seriesHasInk(hist.nft);
+  const tokenSeries = tokenLeg ? hist.token : [];
+  const hasHolders = seriesHasInk(tokenSeries) || seriesHasInk(hist.nft);
   const hasConc = seriesHasInk(hist.concentration);
   const nftPeak = seriesPeak(hist.nft);
-  const tokenPeak = seriesPeak(hist.token);
+  const tokenPeak = seriesPeak(tokenSeries);
   const smaller = Math.min(nftPeak, tokenPeak);
   const larger = Math.max(nftPeak, tokenPeak);
-  const sharedAxis = !(smaller > 0) || larger / smaller <= 3;
+  const sharedAxis = tokenLeg && (!(smaller > 0) || larger / smaller <= 3);
   const latestBreadth = [...(hist.concentration || [])].reverse().find((v) => Number.isFinite(Number(v)));
-  const holderOptions = sharedAxis
+  const holderOptions = !tokenLeg || sharedAxis
     ? (() => {
       const base = baseChartOptions(hist.labels, 'daily', { yUnit: 'Wallets', yTick: compactTick });
       return {
@@ -701,7 +702,7 @@ export function OwnershipHistoryPanels({ snaps, live, onboard = null }) {
           ...base.scales,
           y: {
             ...base.scales.y,
-            ...levelAxis(base.scales.y.ticks, [hist.nft, hist.token]),
+            ...levelAxis(base.scales.y.ticks, tokenLeg ? [hist.nft, tokenSeries] : [hist.nft]),
             unit: 'Wallets',
             title: base.scales.y.title,
           },
@@ -716,7 +717,7 @@ export function OwnershipHistoryPanels({ snaps, live, onboard = null }) {
       leftKind: 'level',
       rightKind: 'level',
       leftValues: hist.nft,
-      rightValues: hist.token,
+      rightValues: tokenSeries,
       leftUnit: 'Wallets',
       rightUnit: 'Wallets',
     });
@@ -724,15 +725,17 @@ export function OwnershipHistoryPanels({ snaps, live, onboard = null }) {
     {
       id: 'holders',
       label: 'Holders',
-      title: 'NFT vs token holders',
-      note: 'NFT wallets exclude the AMM vault. Token holders are addresses with at least one whole token. One axis when the two series are within 3×.',
+      title: tokenLeg ? 'NFT vs token holders' : 'NFT holders',
+      note: tokenLeg
+        ? 'NFT wallets exclude the AMM vault. Token holders are addresses with at least one whole token. One axis when the two series are within 3×.'
+        : 'NFT wallets exclude the AMM vault. This collection has no separate token.',
       body: hasHolders ? (
         <Line
           data={{
             labels: hist.labels,
             datasets: [
               { label: 'NFT holders', data: hist.nft, borderColor: '#8b5cf6', tension: 0.3, spanGaps: true, yAxisID: 'y' },
-              { label: 'Token holders', data: hist.token, borderColor: '#00a804', tension: 0.3, spanGaps: true, yAxisID: sharedAxis ? 'y' : 'y1' },
+              ...(tokenLeg ? [{ label: 'Token holders', data: tokenSeries, borderColor: '#00a804', tension: 0.3, spanGaps: true, yAxisID: sharedAxis ? 'y' : 'y1' }] : []),
             ],
           }}
           options={holderOptions}

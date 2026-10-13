@@ -404,7 +404,8 @@ export default function InternDetailView({ data, activeTab }) {
           </div>
           <OwnershipHistoryPanels
             snaps={roiSnaps}
-            live={{ tokenHolders: 0, nftHolders: ownership.nftHolders, ownershipRatio: ownership.ownershipRatio }}
+            tokenLeg={false}
+            live={{ nftHolders: ownership.nftHolders, ownershipRatio: ownership.ownershipRatio }}
             onboard={{ data, projectKey: 'interns', timeframe, interval, name: 'Interns' }}
           />
           <UnderwaterCard ownership={ownership} tokenLeg={false} />

@@ -191,10 +191,11 @@ export function applyOverlay(base, overlay) {
         ownership: mergeOwnership(factions[slug].ownership, patch.ownership),
       };
     }
+    const rolled = rollupNightshadesOwnership(factions);
     projects.nightshades = {
       ...ns,
       factions,
-      ownership: { ...ns.ownership, ...rollupNightshadesOwnership(factions) },
+      ...(rolled ? { ownership: { ...ns.ownership, ...rolled } } : {}),
     };
   }
 

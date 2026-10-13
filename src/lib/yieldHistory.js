@@ -31,9 +31,17 @@ export function bucketKey(label, interval = 'daily') {
   return mon.toISOString().slice(0, 10);
 }
 
+/** A blank or non-numeric day stays missing. `Number(null)` is 0 and must not enter the bucket. */
+function finitePoint(v) {
+  if (v == null || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 /**
  * Compress a daily series after the range slice.
  * `last` for levels (price, ROI, cumulative burn). `sum` for flows (fees, daily burn).
+ * A missing day is skipped. `last` keeps the previous finite value in the bucket.
  */
 export function resampleSeries(labels, values, interval = 'daily', mode = 'last') {
   const labs = labels || [];
@@ -50,12 +58,13 @@ export function resampleSeries(labels, values, interval = 'daily', mode = 'last'
       buckets.set(key, []);
       order.push(key);
     }
-    buckets.get(key).push(Number(vals[i]));
+    const point = finitePoint(vals[i]);
+    if (point != null) buckets.get(key).push(point);
   });
   return {
     labels: order,
     data: order.map((key) => {
-      const nums = (buckets.get(key) || []).filter((n) => Number.isFinite(n));
+      const nums = buckets.get(key) || [];
       if (!nums.length) return null;
       if (mode === 'sum') return nums.reduce((s, n) => s + n, 0);
       if (mode === 'mean') return nums.reduce((s, n) => s + n, 0) / nums.length;

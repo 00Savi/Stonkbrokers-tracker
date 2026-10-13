@@ -18,6 +18,7 @@ import { baseChartOptions, compactTick, compactUsdTick, cumulativeBurnDataset, p
 import { useChartView } from '../../lib/chartWindow';
 import { YieldHistorySwitch, ChartSwitch, BurnHistorySwitch, EmptyChart } from '../HistoryCharts';
 import { DisclaimerCopy } from '../Disclaimer';
+import { tokenValuation } from '../../lib/valuation';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler);
 
@@ -43,7 +44,8 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
   const circulating = ownership.circulatingSupply || 0;
   const annual = cashflow.holdersAnnualized || cashflow.revenueAnnualized || 0;
   const perToken = circulating > 0 ? annual / circulating : 0;
-  const fdv = circulating * tokenUsd;
+  const cap = Number(config.maxSupply) > 0 ? Number(config.maxSupply) : (Number(meta?.maxSupply) > 0 ? Number(meta.maxSupply) : 0);
+  const { marketCapUsd: marketCap, fdvUsd: fdv } = tokenValuation(circulating, tokenUsd, cap);
   const tokenRoi = tokenUsd > 0 ? (perToken / tokenUsd) * 100 : 0;
   const brokerCost = kind === 'brokers' ? (tiers[0]?.entryUsd || 0) : 0;
   const brokerYield = kind === 'brokers' ? (tiers[0]?.trackedAnnualYieldUsd || 0) : 0;
@@ -89,6 +91,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
         fmt={fmt}
         num={num}
         tokenUsd={tokenUsd}
+        marketCap={marketCap}
         fdv={fdv}
         circulating={circulating}
         burnTokens={burnTokens}
@@ -409,6 +412,10 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
               </div>
             )}
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5">
+              <p className="text-xs uppercase text-slate-400 mb-1">Market cap</p>
+              <p className="text-2xl font-extrabold text-white">{fmt(marketCap)}</p>
+            </div>
+            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5">
               <p className="text-xs uppercase text-slate-400 mb-1">FDV</p>
               <p className="text-2xl font-extrabold text-white">{fmt(fdv)}</p>
             </div>
@@ -479,7 +486,7 @@ function Panel({ label, value, color }) {
 
 function VaultView({
   meta, market, ownership, activation, lockedLp, snaps, histLabels, chartOpts,
-  activeTab, fmt, num, tokenUsd, fdv, circulating, burnTokens, burnPct, wrapPct, poolVol,
+  activeTab, fmt, num, tokenUsd, marketCap, fdv, circulating, burnTokens, burnPct, wrapPct, poolVol,
   cashflow, tiers, vault, config,
 }) {
   const { range: timeframe, interval } = useChartView();
@@ -827,7 +834,7 @@ function VaultView({
             <Panel label="$STRIKE circulating (fixed cap 100M)" value={num(circulating, 0)} color={MARK.sky} />
             <Panel label="$STRIKE independently burned / missing" value={`${num(burnTokens)} STRIKE${burnPct != null ? ` · ${burnPct.toFixed(2)}% of supply` : ''}`} color="#fb923c" />
             <Panel label="$RESERVE outstanding" value={num(market.reserveSupply, 0)} color={MARK.lime} />
-            <Panel label="$RESERVE FDV" value={fmt(market.reserveFdvUsd)} />
+            <Panel label="$RESERVE mcap" value={fmt(market.reserveMcapUsd ?? market.reserveFdvUsd)} />
           </div>
         </div>
       </ShareSection>
@@ -853,8 +860,9 @@ function VaultView({
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <Panel label="$STRIKE holders" value={strikeHolders ? num(strikeHolders) : '—'} color={MARK.violet} />
             <Panel label="$RESERVE holders" value={reserveHolders ? num(reserveHolders) : '—'} color={MARK.lime} />
+            <Panel label="$STRIKE market cap" value={fmt(marketCap)} />
             <Panel label="$STRIKE FDV" value={fmt(fdv)} />
-            <Panel label="$RESERVE mcap" value={fmt(market.reserveFdvUsd)} />
+            <Panel label="$RESERVE mcap" value={fmt(market.reserveMcapUsd ?? market.reserveFdvUsd)} />
             <Panel label="Max LTV vs $RESERVE" value="75%" />
             <Panel label="Floor path" value="~7.5%" color={MARK.amber} />
           </div>

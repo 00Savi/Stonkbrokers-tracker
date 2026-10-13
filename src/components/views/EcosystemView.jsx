@@ -5,7 +5,7 @@ import { projectPath, RANKING_PROJECTS, isProjectLive, PROJECTS } from '../../li
 import { ANVIL_VAULTS, quoteAnvilSnipe } from '../../lib/anvilScan';
 import { ROBINHOOD_RPC } from '../../lib/bonusTokenomics';
 import { listedSeat, mixUsd, nightshadesSnipeUsd, protocolFeeSeries, revenueRows, snipeSeatUsd } from '../../lib/seats';
-import { NIGHTSHADES_FACTIONS } from '../../lib/nightshades';
+import { NIGHTSHADES_FACTIONS, NIGHTSHADES_FACTION_META } from '../../lib/nightshades';
 import { loadFlows, loadRetentions, loadStructures, loadVaultCensus } from '../../lib/ggindex';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler
@@ -267,11 +267,13 @@ function pct1(n) {
 }
 
 function retentionOf(row) {
-  const weeks = row?.nft?.built ? row.nft.weeks : (row?.token?.built ? row.token.weeks : null);
-  if (!weeks?.length) return null;
-  const entered = weeks.reduce((s, w) => s + (Number(w.entered) || 0), 0);
-  const still = weeks.reduce((s, w) => s + (Number(w.still) || 0), 0);
-  if (!(entered > 0)) return null;
+  // Week rows count a wallet again each time they re-enter. The index publishes
+  // the distinct wallets on the leg (`holders`, `still_holding`). Summing the
+  // weeks would put a returner in the denominator twice.
+  const leg = row?.nft?.built ? row.nft : (row?.token?.built ? row.token : null);
+  const entered = Number(leg?.holders);
+  const still = Number(leg?.still_holding);
+  if (!leg || !(entered > 0) || !Number.isFinite(still)) return null;
   return { entered, still, pct: (still / entered) * 100 };
 }
 
@@ -477,20 +479,24 @@ export default function EcosystemView({ data, pending = false }) {
     };
   }).sort((a, b) => b.value - a.value);
 
-  const holdRows = board.map((meta) => {
-    const slugs = meta.key === 'nightshades' ? NIGHTSHADES_FACTIONS : [meta.key];
-    const shares = slugs.map((slug) => retentionOf(retentions?.[slug])).filter(Boolean);
-    const entered = shares.reduce((s, r) => s + r.entered, 0);
-    const still = shares.reduce((s, r) => s + r.still, 0);
-    return {
-      key: meta.key,
-      name: meta.name,
-      color: projectColors[meta.key],
-      value: entered > 0 ? (still / entered) * 100 : 0,
-      href: projectPath(meta.key, 'ownership'),
-      pending: retentions == null,
-      note: entered > 0 ? `${compactNum(still)} of ${compactNum(entered)} still hold` : (retentions ? 'Fold has not run' : null),
-    };
+  const holdRows = board.flatMap((meta) => {
+    const parts = meta.key === 'nightshades'
+      ? NIGHTSHADES_FACTION_META.map((f) => ({ slug: f.id, name: f.label }))
+      : [{ slug: meta.key, name: meta.name }];
+    return parts.map((part) => {
+      const share = retentionOf(retentions?.[part.slug]);
+      const entered = share?.entered || 0;
+      const still = share?.still || 0;
+      return {
+        key: part.slug,
+        name: part.name,
+        color: projectColors[meta.key],
+        value: entered > 0 ? (still / entered) * 100 : 0,
+        href: projectPath(meta.key, 'ownership'),
+        pending: retentions == null,
+        note: entered > 0 ? `${compactNum(still)} of ${compactNum(entered)} still hold` : (retentions ? 'Fold has not run' : null),
+      };
+    });
   }).filter((r) => r.value > 0 || r.note);
 
   const concRows = board.flatMap((meta) => {
@@ -712,7 +718,7 @@ export default function EcosystemView({ data, pending = false }) {
         {holdRows.length ? (
           <Card
             eyebrow="Still holding"
-            sub="Of the wallets who entered this collection, the share that still hold. A wallet who left and came back counts on the later week. Empty until the activity rebuild writes the book."
+            sub="Distinct wallets who entered, and how many of those bags are still open. A returner counts once. Nightshades factions are separate. Empty until the activity book is rebuilt."
           >
             <RankBar rows={holdRows} format={(v) => `${Number(v).toFixed(1)}%`} />
           </Card>

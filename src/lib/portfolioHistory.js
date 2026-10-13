@@ -125,20 +125,24 @@ export function earningStartTs({ lastTransferTs, activationTs, isActive }) {
   return 0;
 }
 
-function parseMd(label) {
-  const m = String(label || '').match(/^(\d{1,2})\/(\d{1,2})$/);
-  if (!m) return null;
-  return { m: Number(m[1]), d: Number(m[2]) };
+/** True when `date` is on or after the open day. Both ISO and M/D labels compare as UTC days. An unreadable label is left out. */
+function onOrAfterOpen(date, startLabel) {
+  if (!startLabel) return true;
+  const day = dateKey(date);
+  const start = dateKey(startLabel);
+  if (!day || !start) return false;
+  return day >= start;
 }
 
-function sameOrAfterDateLabel(a, startLabel) {
-  const pa = parseMd(a);
-  const pb = parseMd(startLabel);
-  if (!pa || !pb) return true;
-  if (pa.m === pb.m) return pa.d >= pb.d;
-  if (pb.m === 12 && pa.m === 1) return true;
-  if (pa.m === 12 && pb.m === 1) return false;
-  return pa.m > pb.m;
+function snapshotSeconds(snaps) {
+  const out = {};
+  for (const snap of snaps || []) {
+    const t = Number(snap?.timestamp);
+    const sec = t > 1e12 ? t / 1000 : t;
+    const k = dateKey(snap?.date);
+    if (k && sec > 0) out[k] = sec;
+  }
+  return out;
 }
 
 /** Per-tier map of calendar date -> USD credited to one NFT that day. */
@@ -212,7 +216,7 @@ export function earnedUsdForAlwaysOnNft(pData, startTs) {
   if (dates.length && revs.length && supply > 0) {
     let sum = 0;
     dates.forEach((date, i) => {
-      if (!startLabel || sameOrAfterDateLabel(date, startLabel)) {
+      if (onOrAfterOpen(date, startLabel)) {
         sum += (Number(revs[i]) || 0) / supply;
       }
     });
@@ -236,7 +240,7 @@ export function earnedUsdForTokenPosition(pData, amount, startTs) {
     const startLabel = start ? dayKeyFromSeconds(start) : null;
     let sum = 0;
     dates.forEach((date, i) => {
-      if (!startLabel || sameOrAfterDateLabel(date, startLabel)) {
+      if (onOrAfterOpen(date, startLabel)) {
         sum += (Number(revs[i]) || 0) * share;
       }
     });
@@ -317,9 +321,9 @@ export async function fetchIndexedNftHolds(nftCa, wallet) {
 }
 
 function includeDropDate(date, startTs, startLabel, snapTs) {
-  const ts = snapTs?.[date];
+  const ts = snapTs?.[dateKey(date)];
   if (ts > 0) return ts >= startTs;
-  return !startLabel || sameOrAfterDateLabel(date, startLabel);
+  return onOrAfterOpen(date, startLabel);
 }
 
 function addDays(map, date, amount) {
@@ -357,7 +361,7 @@ export function walletDailyDrops(ownedAssets, data) {
       const revs = pData.cashflow?.dailyRevenue || pData.cashflow?.dailyFees || [];
       if (share > 0 && dates.length) {
         dates.forEach((date, i) => {
-          if (!startLabel || sameOrAfterDateLabel(date, startLabel)) {
+          if (onOrAfterOpen(date, startLabel)) {
             addDays(byDate, date, (Number(revs[i]) || 0) * share);
           }
         });
@@ -366,11 +370,7 @@ export function walletDailyDrops(ownedAssets, data) {
     }
 
     const maps = dailyDropMaps(pData);
-    const snapTs = {};
-    for (const snap of pData.dailySnapshots || []) {
-      const t = Number(snap.timestamp);
-      snapTs[snap.date] = t > 1e12 ? t / 1000 : t;
-    }
+    const snapTs = snapshotSeconds(pData.dailySnapshots);
 
     for (const nft of asset.nfts || []) {
       const start = Number(nft.activationTs || nft.lastTransferTs) > 0
@@ -428,19 +428,10 @@ export function earnedUsdForNft(pData, tierId, startTs) {
   if (!start) return 0;
   const startLabel = dayKeyFromSeconds(start);
   const map = dailyDropMaps(pData)[tierId] || {};
-  const snapTs = {};
-  for (const snap of pData?.dailySnapshots || []) {
-    const t = Number(snap.timestamp);
-    snapTs[snap.date] = t > 1e12 ? t / 1000 : t;
-  }
+  const snapTs = snapshotSeconds(pData?.dailySnapshots);
   let sum = 0;
   for (const [date, amount] of Object.entries(map)) {
-    const ts = snapTs[date];
-    if (ts > 0) {
-      if (ts >= start) sum += Number(amount) || 0;
-    } else if (!startLabel || sameOrAfterDateLabel(date, startLabel)) {
-      sum += Number(amount) || 0;
-    }
+    if (includeDropDate(date, start, startLabel, snapTs)) sum += Number(amount) || 0;
   }
   return sum;
 }

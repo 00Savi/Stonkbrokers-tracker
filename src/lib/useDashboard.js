@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { loadProjects, loadOverlay, applyOverlay } from './ggindex';
-import { loadPrices, applyPrices } from './prices';
+import { loadPrices, applyPrices, pricesLanded } from './prices';
 import { PROJECTS } from './routes';
 import { NIGHTSHADES_FACTIONS, NIGHTSHADES_FACTION_META } from './nightshades';
 
@@ -188,6 +188,12 @@ export function useDashboard() {
         try {
           const prices = await loadPrices(catalog, ac.signal, snapshot);
           if (ac.signal.aborted || mine !== seq.current) return;
+          // A pull that priced nothing must not clear the stale flag. Token
+          // USD still lands when no pool implied an ETH price.
+          if (!pricesLanded(prices)) {
+            mark('prices', 'stale');
+            return;
+          }
           setData((current) => applyPrices(current, prices));
           mark('prices', 'ready');
         } catch (err) {

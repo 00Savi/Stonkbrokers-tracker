@@ -142,9 +142,21 @@ function avgPositive(vals) {
   return xs.reduce((s, n) => s + n, 0) / xs.length;
 }
 
-/** Sum holder counts across factions for the All rollup. */
+function publishedMax(o) {
+  const n = Number(o?.currentMaxSupply);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/**
+ * Sum holder counts across factions for the All rollup.
+ * A faction with no published `currentMaxSupply` is left out. Four empty
+ * stubs are not a 12,000 collection. Returns null when none have published.
+ */
 export function rollupNightshadesOwnership(factions = {}) {
-  const list = NIGHTSHADES_FACTIONS.map((k) => factions[k]?.ownership || {});
+  const list = NIGHTSHADES_FACTIONS
+    .map((k) => factions[k]?.ownership)
+    .filter((o) => publishedMax(o) != null);
+  if (!list.length) return null;
   const nftHolders = list.reduce((s, o) => s + num(o.nftHolders), 0);
   const tokenHolders = list.reduce(
     (s, o) => s + num(o.tokenHolders || o.stonkHolders || o.erc20Holders),
@@ -152,7 +164,7 @@ export function rollupNightshadesOwnership(factions = {}) {
   );
   const ammVaultNfts = list.reduce((s, o) => s + num(o.ammVaultNfts), 0);
   const burntNfts = list.reduce((s, o) => s + num(o.burntNfts), 0);
-  const currentMaxSupply = list.reduce((s, o) => s + (num(o.currentMaxSupply) || 3000), 0) || 12000;
+  const currentMaxSupply = list.reduce((s, o) => s + publishedMax(o), 0);
   const circulatingNftSupply = Math.max(0, currentMaxSupply - ammVaultNfts);
   const ownershipRatio = circulatingNftSupply > 0
     ? Math.min(100, (nftHolders / circulatingNftSupply) * 100)
