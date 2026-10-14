@@ -154,16 +154,22 @@ function chartCopyMeta(canvas, root) {
     const sets = onLeft.length ? onLeft : allSets;
     const stacked = sets.length > 1 && sets.every((d) => d.stack);
     const n = Math.max(0, ...sets.map((d) => d.data?.length || 0));
-    let value = null;
-    for (let i = n - 1; i >= 0 && value == null; i--) {
+    const at = (i) => {
       if (stacked) {
         const parts = sets.map((d) => Number(d.data?.[i])).filter((v) => Number.isFinite(v));
-        if (parts.length) value = parts.reduce((s, v) => s + v, 0);
-      } else {
-        const v = Number(sets[0]?.data?.[i]);
-        if (Number.isFinite(v)) value = v;
+        return parts.length ? parts.reduce((s, v) => s + v, 0) : null;
       }
+      const v = Number(sets[0]?.data?.[i]);
+      return Number.isFinite(v) ? v : null;
+    };
+    // Today is appended before the indexer prints it, so the last bucket is
+    // often 0. Caption the latest day that actually has revenue.
+    let value = null;
+    for (let i = n - 1; i >= 0 && value == null; i--) {
+      const v = at(i);
+      if (v != null && v !== 0) value = v;
     }
+    if (value == null) value = at(n - 1);
     if (value != null) {
       const cb = scale?.ticks?.callback;
       if (typeof cb === 'function') {

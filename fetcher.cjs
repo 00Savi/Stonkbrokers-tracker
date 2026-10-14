@@ -2736,7 +2736,10 @@ function cachedYieldSample(projectKey, sevenDaysAgo) {
   for (let i = 0; i < YIELD_LOOKBACK_DAYS; i++) {
     const key = yieldDays.utcKey(yieldSlotMidTs(i));
     const usd = days[key];
-    const n = typeof usd === "number" ? usd : Number(usd?.amm);
+    // A bare number is the legacy unscaled sample. An object `amm` is the
+    // already-scaled network total from persistStreamDays — using it here
+    // multiplies Stonk by totalNetworkWeight/oracleWeight a second time.
+    const n = typeof usd === "number" ? usd : Number(usd?.sample);
     if (typeof n !== "number" || !Number.isFinite(n)) return null;
     out.push(n);
   }
