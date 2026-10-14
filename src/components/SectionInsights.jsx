@@ -118,16 +118,20 @@ function CashVsMark({ project }) {
   );
 }
 
+function streamUsd(day, key) {
+  const n = Number(day?.streams?.[key]?.usd);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
 function StreamQuality({ revenue }) {
-  const days = byDate(revenue?.daily);
+  // A day row with every stream null still arrived from the index. Plotting it
+  // as zero shoved 9/25 onto the axis after 9/8 and left a blank stretch.
+  const days = byDate(revenue?.daily).filter((d) => STREAMS.some((s) => streamUsd(d, s.key) > 0));
   if (!days.length) return null;
   const labels = formatLabels(days.map((d) => d.date));
   const datasets = STREAMS.map((s) => ({
     label: s.label,
-    data: days.map((d) => {
-      const usd = Number(d.streams?.[s.key]?.usd);
-      return Number.isFinite(usd) ? usd : 0;
-    }),
+    data: days.map((d) => streamUsd(d, s.key)),
     backgroundColor: s.color,
     stack: 'streams',
     maxBarThickness: barThickness(labels.length),
