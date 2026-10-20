@@ -2,6 +2,7 @@ import { ethers } from 'ethers';
 import { ROBINHOOD_RPC } from './bonusTokenomics';
 import { dateKey, utcIso, utcIsoFromTs } from './dates';
 import { loadHolderPosition } from './ggindex';
+import { seatCashByDate } from './yieldSample';
 
 /** Interns (and similar companions) activate in the parent token. */
 export function priceSource(pData, data) {
@@ -146,22 +147,29 @@ function snapshotSeconds(snaps) {
 }
 
 /** Per-tier map of calendar date -> USD credited to one NFT that day. */
+/** Floor in USD on or before `ts`. Later snapshots do not rewrite the entry price. */
+export function floorUsdOn(project, ts) {
+  const day = dayKeyFromSeconds(ts);
+  if (!day) return 0;
+  let bestKey = '';
+  let best = 0;
+  for (const snap of project?.dailySnapshots || []) {
+    const key = dateKey(snap?.date);
+    if (!key || key > day) continue;
+    const n = Number(snap.nftFloorUsd);
+    if (!(n > 0) || key < bestKey) continue;
+    bestKey = key;
+    best = n;
+  }
+  return best;
+}
+
 export function dailyDropMaps(pData) {
   const byTier = {};
-  for (const t of pData?.tiers || []) {
+  for (const tier of pData?.tiers || []) {
     const map = {};
-    const dates = t.dailyDates || [];
-    const yields = t.dailyYields || [];
-    dates.forEach((d, i) => {
-      map[d] = Number(yields[i]) || 0;
-    });
-    for (const snap of pData.dailySnapshots || []) {
-      if (!snap?.date || map[snap.date] != null) continue;
-      const row = snap.tiers?.find((x) => x.tier === t.tier);
-      const annual = Number(row?.yieldUsd);
-      if (annual > 0) map[snap.date] = annual / 365;
-    }
-    byTier[t.tier] = map;
+    for (const [day, value] of seatCashByDate(pData, tier)) map[day] = value;
+    byTier[tier.tier] = map;
   }
   return byTier;
 }

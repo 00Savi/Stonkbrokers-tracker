@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { loadProjects, loadOverlay, applyOverlay } from './ggindex';
+import { loadProjects, loadOverlay, applyOverlay, loadEarners, applyEarners } from './ggindex';
 import { loadPrices, applyPrices, pricesLanded } from './prices';
 import { PROJECTS } from './routes';
 import { NIGHTSHADES_FACTIONS, NIGHTSHADES_FACTION_META } from './nightshades';
@@ -181,6 +181,16 @@ export function useDashboard() {
           if (ac.signal.aborted) return;
           console.warn('overlay failed; snapshot figures stand', err);
           mark('overlay', 'stale');
+        });
+
+      loadEarners()
+        .then((earners) => {
+          if (ac.signal.aborted) return;
+          setData((current) => applyEarners(current, earners));
+        })
+        .catch((err) => {
+          if (ac.signal.aborted) return;
+          console.warn('earning-seat counts unavailable; contract active count stands', err);
         });
 
       const pullPrices = async () => {

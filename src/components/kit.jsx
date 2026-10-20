@@ -1,4 +1,5 @@
 import React from 'react';
+import { YIELD_SAMPLE_WINDOWS } from '../lib/yieldSample';
 
 /**
  * The shared vocabulary every page is built from.
@@ -317,6 +318,22 @@ export function IntervalBar({ value, onChange, compact = false }) {
       compact={compact}
       label="Chart interval"
     />
+  );
+}
+
+/** Trailing window the seat yield is annualized from. Separate from the chart range. */
+export function YieldSampleBar({ value, onChange, compact = false }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className={`font-mono text-faint ${compact ? 'text-[10px]' : 'text-[11px]'}`}>Run rate</span>
+      <WindowBar
+        value={value}
+        onChange={onChange}
+        windows={YIELD_SAMPLE_WINDOWS}
+        compact={compact}
+        label="Yield run rate"
+      />
+    </div>
   );
 }
 

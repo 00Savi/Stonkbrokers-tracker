@@ -9,6 +9,7 @@ import { formatLabels } from '../../lib/dates';
 import { windowSnapshots, protocolRevenueChart, sliceCols, windowPeriodLabel, windowChart } from '../../lib/yieldHistory';
 import { PROJECTS } from '../../lib/routes';
 import { BetaTag, compactUsd, compactNum, YieldPeriodToggle, scaleAnnualYield, yieldSuffix } from '../kit';
+import { yieldBasisText } from '../../lib/yieldSample';
 import { ShareSection } from '../CopyControl';
 import {
   OAKMONT_ACTIONS, OAKMONT_BASKET, OAKMONT_DOCS, OAKMONT_DAPP, OAKMONT_SITE, OAKMONT_FEES,
@@ -42,7 +43,16 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
   const floorUsd = (market.nftFloorEth || 0) * (market.ethPriceUsd || 0);
   const tokenUsd = market.tokenPriceUsd || 0;
   const circulating = ownership.circulatingSupply || 0;
-  const annual = cashflow.holdersAnnualized || cashflow.revenueAnnualized || 0;
+  const seat0 = Number(tiers[0]?.trackedAnnualYieldUsd) || 0;
+  const req0 = Number(tiers[0]?.reqTokens) || 0;
+  const publishedPool = cashflow.holdersAnnualized || cashflow.revenueAnnualized || 0;
+  let annual = publishedPool;
+  if (project.yieldSample?.applied && kind === 'cashflow' && req0 > 0 && circulating > 0 && seat0 > 0) {
+    annual = seat0 * (circulating / req0);
+  } else if (project.yieldSample?.applied && kind === 'brokers' && seat0 > 0) {
+    const earning = Number(activation.activeCount) || 0;
+    if (earning > 0) annual = seat0 * earning;
+  }
   const perToken = circulating > 0 ? annual / circulating : 0;
   const cap = Number(config.maxSupply) > 0 ? Number(config.maxSupply) : (Number(meta?.maxSupply) > 0 ? Number(meta.maxSupply) : 0);
   const { marketCapUsd: marketCap, fdvUsd: fdv } = tokenValuation(circulating, tokenUsd, cap);
@@ -115,9 +125,9 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
             {meta?.beta && <BetaTag />}
           </h3>
           <p className="text-xs text-slate-400 mb-6">
-            {kind === 'cashflow' && 'DefiLlama holders revenue annualized against circulating $INDEX. Eligible wallets hold at least 10,000 INDEX.'}
+            {kind === 'cashflow' && `Holders revenue against circulating $INDEX, for wallets with at least 10,000 INDEX. ${yieldBasisText(project)}`}
             {kind === 'machines' && 'Only awake (inked) Machines earn. Base ink is 4,250 $PRINTER to wake at 1× weight; more ink or a Proton fuse raises weight. The pot (fees → daily USDG+WETH during the test, else weekly stock) is split by weight across the awake fleet. See rhmachines.com/dashboard.'}
-            {kind === 'brokers' && 'One active Broker earns one equal share of Booster stock buys. Cost is NFT floor plus 36,750 $COAT burned on activate(). Transfer turns the Broker off; the buyer must burn again. Yield is volume-funded from the Uniswap v4 hook — not guaranteed. Unclaimed salary stays in the Booster by token id.'}
+            {kind === 'brokers' && `One active Broker earns one equal share of Booster stock buys. Cost is NFT floor plus 36,750 $COAT burned on activate(). Transfer turns the Broker off; the buyer must burn again. ${yieldBasisText(project)} Unclaimed salary stays in the Booster by token id.`}
           </p>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">

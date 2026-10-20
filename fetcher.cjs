@@ -387,10 +387,10 @@ const CHAIN_ID = 4663;
 const EXPLORER_API = "https://api.blockscout.com/v2/api";
 const BLOCKSCOUT_KEY = process.env.BLOCKSCOUT_API_KEY || "";
 
-// Anvil RewardPaid / oracle windows. Stay at 7 until cache/yield_days.json
-// covers a full month; then this constant is the only change for 30 (and
-// later 90). Card Wall rain uses RAIN_LOOKBACK_DAYS because slabs arrive in
-// bursts a 7-day walk will miss.
+// Live chain walk. The page annualizes 7D / 30D / quarter from the daily book
+// (tier yields plus revenue history), so widening this walk only refreshes
+// the latest week of that book. Card Wall rain uses RAIN_LOOKBACK_DAYS
+// because slabs arrive in bursts a 7-day walk will miss.
 const YIELD_LOOKBACK_DAYS = 7;
 const RAIN_LOOKBACK_DAYS = 30;
 
@@ -2621,6 +2621,8 @@ function ingestHistoryArrays(byIso, prev) {
   if (!dates.length) return;
   const cols = [
     ["amm", prev.historyAmm || prev.historyTotalUsd],
+    ["paid", prev.historyPaid],
+    ["float", prev.historyFloat],
     ["box", prev.historyBox],
     ["volume", prev.historyVolume],
     ["tax", prev.historyTax],
@@ -2679,6 +2681,8 @@ async function attachRevenueHistory(projectKey, revenue, scale, yieldMode, prevR
   const remoteMode = remote?.yield_mode || yieldMode;
   const streamMap = [
     ["amm", "amm"],
+    ["paid", "paid"],
+    ["float", "float"],
     ["box", "box"],
     ["volume", "volume"],
     ["tax", "tax"],
@@ -2695,6 +2699,13 @@ async function attachRevenueHistory(projectKey, revenue, scale, yieldMode, prevR
       if (!cell || cell.usd == null) continue;
       const usd = scaleOracleAmm(cell.usd, cell, remoteMode, scale);
       if (usd == null) continue;
+      // A day that priced one leg and missed the other is not a finished print.
+      // Leave a gap so it cannot beat a complete day or draw a short solid bar.
+      if (cell.complete === false) {
+        cur[`${localKey}Gap`] = true;
+        cur[localKey] = null;
+        continue;
+      }
       // gg-index often publishes 0 for the in-progress (and just-closed) UTC
       // day. That is "not printed yet", not a quiet day — keep the live walk.
       if (!(usd > 0) && Number(cur[localKey]) > 0) continue;
@@ -2713,11 +2724,16 @@ async function attachRevenueHistory(projectKey, revenue, scale, yieldMode, prevR
   const dates = [...byIso.keys()].sort();
   if (!dates.length) return;
   const col = (key) => dates.map((d) => {
-    const n = Number(byIso.get(d)?.[key]);
+    const row = byIso.get(d);
+    if (row?.[`${key}Gap`]) return null;
+    const n = Number(row?.[key]);
     return Number.isFinite(n) ? +n.toFixed(2) : 0;
   });
+  const gap = (key) => dates.map((d) => (byIso.get(d)?.[`${key}Gap`] ? 1 : 0));
   revenue.historyDates = dates;
   revenue.historyAmm = col("amm");
+  revenue.historyPaid = col("paid");
+  revenue.historyFloat = col("float");
   revenue.historyBox = col("box");
   revenue.historyVolume = col("volume");
   revenue.historyTax = col("tax");
@@ -2726,6 +2742,15 @@ async function attachRevenueHistory(projectKey, revenue, scale, yieldMode, prevR
   revenue.historySmartLp = col("smartLp");
   revenue.historyBooster = col("booster");
   revenue.historyHolder = col("holders");
+  revenue.historyGapAmm = gap("amm");
+  revenue.historyGapPaid = gap("paid");
+  revenue.historyGapFloat = gap("float");
+  revenue.historyGapBox = gap("box");
+  revenue.historyGapVolume = gap("volume");
+  revenue.historyGapTax = gap("tax");
+  revenue.historyGapDex = gap("dex");
+  revenue.historyGapSmartLp = gap("smartLp");
+  revenue.historyGapBooster = gap("booster");
   revenue.historyTotalUsd = revenue.historyAmm;
 }
 
@@ -3770,7 +3795,7 @@ function nsSumRevenue(list) {
   for (const k of ["dailyAmm", "dailySecurityBox", "dailyLaunchpad", "dailyDex", "dailyBondingTax"]) {
     rev[k] = nsSumTail(list.map((p) => p.revenue?.[k]));
   }
-  for (const k of ["historyAmm", "historyDex", "historyBox", "historyLaunchpad", "historyTotalUsd", "historyDates"]) {
+  for (const k of ["historyAmm", "historyPaid", "historyFloat", "historyDex", "historyBox", "historyLaunchpad", "historyTotalUsd", "historyDates"]) {
     if (k === "historyDates") {
       const merged = nsMergeDated(list.map((p) => ({
         labels: p.revenue?.historyDates,

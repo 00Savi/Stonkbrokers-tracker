@@ -226,6 +226,37 @@ async function optional(path) {
   }
 }
 
+const EARNER_SLUGS = [
+  'stonk', 'mancer', 'tickeryard', 'cardwall', 'interns',
+  'ghosts', 'zombies', 'knights', 'watchers',
+];
+
+/** Seats the contract still counts, and seats that are still with the activator. */
+export async function loadEarners() {
+  const rows = await Promise.all(EARNER_SLUGS.map(async (slug) => {
+    const row = await optional(`/projects/${encodeURIComponent(slug)}/effective`);
+    return [slug, row];
+  }));
+  return Object.fromEntries(rows.filter(([, row]) => row && row.holds_ready));
+}
+
+export function applyEarners(base, earners) {
+  if (!base?.projects || !earners) return base;
+  const projects = { ...base.projects };
+  for (const [slug, row] of Object.entries(earners)) {
+    if (projects[slug]) projects[slug] = { ...projects[slug], effective: row };
+  }
+  const parent = projects.nightshades;
+  if (parent?.factions) {
+    const factions = { ...parent.factions };
+    for (const id of ['ghosts', 'zombies', 'knights', 'watchers']) {
+      if (earners[id] && factions[id]) factions[id] = { ...factions[id], effective: earners[id] };
+    }
+    projects.nightshades = { ...parent, factions };
+  }
+  return { ...base, projects };
+}
+
 function orderActivity(activity) {
   if (!activity) return activity;
   const leg = (row) => (row?.daily ? { ...row, daily: byDate(row.daily) } : row);

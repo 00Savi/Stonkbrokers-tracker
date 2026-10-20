@@ -8,6 +8,7 @@ import { burnSeries, burnRateSeries, burnOfSupplyPct } from '../../lib/burn';
 import { formatLabels } from '../../lib/dates';
 import { windowSnapshots, tierRoiDatasets, seriesHasInk, windowChart } from '../../lib/yieldHistory';
 import { compactUsd, compactNum, YieldPeriodToggle, scaleAnnualYield, yieldSuffix } from '../kit';
+import { yieldBasisText } from '../../lib/yieldSample';
 import { ShareSection } from '../CopyControl';
 import { TierFlowSection, netTierCount } from '../TierFlowCards';
 import { baseChartOptions, compactTick, compactUsdTick, cumulativeBurnDataset, TIER_COLORS, percentTick } from '../../lib/charts';
@@ -149,7 +150,7 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
             </div>
           </div>
           <p className="text-xs text-slate-400 mb-4">
-            Est. ROI is cash-on-cash: annualized vault yield ÷ (this floor + activation tokens at spot). Yield is the trailing 7-day RewardPaid sample, allocated by tier weight. The slider only scales the yield leg.
+            Est. ROI is cash-on-cash: annualized vault yield ÷ (this floor + activation tokens at spot). {yieldBasisText(slice)} The slider only scales the yield leg.
           </p>
 
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
@@ -221,7 +222,7 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
                         <tr className="bg-[#08090b]/40 border-b border-[#1e2228]/50">
                           <td colSpan="5" className="p-4 md:p-6">
                             <div className="flex justify-between items-center mb-3">
-                              <h4 className="text-sm font-bold text-slate-300">Trailing 7-Day Realized Yield ({t.name})</h4>
+                              <h4 className="text-sm font-bold text-slate-300">Daily yield ({t.name})</h4>
                               <span className="text-xs text-slate-500">Based on On-Chain Distributions</span>
                             </div>
                             <div className="relative h-32 md:h-40 w-full">
@@ -254,7 +255,7 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
               <h2 className="text-xl font-bold text-white flex items-center gap-2">Historical Yield & Payback Horizon</h2>
-              <p className="text-xs text-slate-400 mt-1">Cash-on-cash: (annualized vault RewardPaid) ÷ (NFT floor + activation tokens at spot). The 7-day sample is split by tier weight. The slider scales yield only — cost stays at live floor and token price.</p>
+              <p className="text-xs text-slate-400 mt-1">Cash-on-cash: annualized vault RewardPaid ÷ (NFT floor + activation tokens at spot). {yieldBasisText(slice)} The slider scales yield only. Cost stays at the live floor and token price.</p>
             </div>
           </div>
 
@@ -411,7 +412,7 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
 
       <MethodologyCard accent="text-indigo-400">
           <p><strong className="text-white">Four Anvil markets, one incubator:</strong> Ghosts, Zombies, Knights, and Watchers each have 3,000 NFTs, one faction token, and a SoftStakingVault. The All tab compares the four on one axis. This page is one market.</p>
-          <p><strong className="text-white">Yield &amp; ROI:</strong> Cash-on-cash is annualized vault RewardPaid ÷ (this floor + activation tokens at spot). The 7-day sample is split by tier weight. The volume slider scales yield only — cost stays at live floor and token price. Night vault WETH is The Night inventory, not StonkBooster.</p>
+          <p><strong className="text-white">Yield &amp; ROI:</strong> Cash-on-cash is annualized vault RewardPaid ÷ (this floor + activation tokens at spot), split by tier weight. {yieldBasisText(slice)} The volume slider scales yield only. Cost stays at the live floor and token price. Night vault WETH is The Night inventory, not StonkBooster.</p>
           <p><strong className="text-white">Activation:</strong> Same mechanic as Mancer/Yard. The vault emits no Deactivated event — a sale clears the position. <code>activeCount()</code> is an upper bound; this page replays Activated plus NFT transfers.</p>
           <p><strong className="text-white">Burn:</strong> Days before hourly snapshots are reconstructed from token burns to dead/zero, scaled to the first trusted supply read.</p>
           <p><strong className="text-white">Ownership:</strong> Circulating NFTs are collection size minus AMM vault inventory. Wallets per 100 NFTs is unique NFT wallets (vault and burn addresses excluded) divided by that circulating number, times 100.</p>

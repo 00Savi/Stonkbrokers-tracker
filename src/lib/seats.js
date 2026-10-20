@@ -105,15 +105,25 @@ export function nightshadesSnipeUsd(factions, quoteUsdByFaction, tierId = 'T0') 
   return w > 0 ? costW / w : null;
 }
 
-function feeUsd(project, timeframe) {
+function chartCols(project, role) {
   const chart = protocolRevenueChart(project, { skipLedger: true });
-  if (chart.kind !== 'protocol' && chart.kind !== 'cashflow') return 0;
-  const cols = chart.kind === 'cashflow'
-    ? (chart.cols || []).filter((c) => c.key === 'fees')
-    : protocolFeeCols(chart.cols);
+  if (role === 'kept') {
+    if (chart.kind === 'cashflow') return (chart.cols || []).filter((c) => c.key === 'fees');
+    if (chart.kind !== 'protocol') return [];
+    return protocolFeeCols(chart.cols);
+  }
+  if (chart.kind !== 'protocol') return [];
+  return (chart.cols || []).filter((c) => c.role === role);
+}
+
+function colsUsd(cols, timeframe) {
   if (!cols.length) return 0;
   const n = windowLen(timeframe, cols[0].data?.length || 0);
   return cols.reduce((s, c) => s + sumTail(c.data, n), 0);
+}
+
+function feeUsd(project, timeframe) {
+  return colsUsd(chartCols(project, 'kept'), timeframe);
 }
 
 function seriesUsd(values, timeframe) {
@@ -122,13 +132,15 @@ function seriesUsd(values, timeframe) {
 }
 
 /**
- * Trailing protocol-kept fees. Holder payouts, gacha pulls, and yield÷365
- * stay visible and out of the mix.
+ * Trailing protocol-kept fees. Cash already paid to seats, cash still in the
+ * pot, gacha pulls, and yield÷365 stay visible and out of the mix.
  */
 export function revenueRows(project, timeframe = '30d') {
   const rows = [];
   const fees = feeUsd(project, timeframe);
   if (fees > 0) rows.push({ usd: fees, inMix: true, source: 'protocol', note: 'Fees kept' });
+  const paid = colsUsd(chartCols(project, 'paid'), timeframe);
+  const pot = colsUsd(chartCols(project, 'float'), timeframe);
   const ledger = project?.ledger;
   if (ledger?.historyDelivered?.length) {
     const usd = seriesUsd(ledger.historyDelivered, timeframe);
@@ -139,6 +151,10 @@ export function revenueRows(project, timeframe = '30d') {
     const usd = seriesUsd(gacha, timeframe);
     if (usd > 0) rows.push({ usd, inMix: false, source: 'gacha', note: 'Pulls, not fees kept' });
   }
+  if (paid > 0 && !rows.some((r) => r.source === 'holders')) {
+    rows.push({ usd: paid, inMix: false, source: 'paid', note: 'Paid to holders' });
+  }
+  if (pot > 0) rows.push({ usd: pot, inMix: false, source: 'float', note: 'Cash in the pot' });
   if (!rows.some((r) => r.inMix)) {
     const snaps = project?.dailySnapshots || [];
     const usd = seriesUsd(snaps.map((s) => (Number(s.annualYield) || 0) / 365), timeframe);

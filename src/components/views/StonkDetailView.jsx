@@ -7,6 +7,7 @@ import { burnSeries, burnRateSeries, burnOfSupplyPct, attributedStonkBurn, daily
 import { formatLabels } from '../../lib/dates';
 import { windowSnapshots, tierRoiDatasets, protocolRevenueChart, sliceCols, windowPeriodLabel, seriesHasInk, holderRevenueCol, windowChart } from '../../lib/yieldHistory';
 import { compactUsd, compactNum, Card, Figure, Stat, KpiStrip, Tag, SkeletonCard, SplitBar, YieldPeriodToggle, scaleAnnualYield, yieldSuffix } from '../kit';
+import { yieldBasisText } from '../../lib/yieldSample';
 import { ShareSection } from '../CopyControl';
 import { TierFlowSection, netTierCount } from '../TierFlowCards';
 import { baseChartOptions, compactTick, compactUsdTick, cumulativeBurnDataset, STREAM_COLORS, TIER_COLORS, barThickness, percentTick } from '../../lib/charts';
@@ -137,7 +138,7 @@ export default function StonkDetailView({ data, activeTab }) {
   const { labels: revDates, cols: REV_STREAMS } = {
     labels: slicedRev.labels,
     cols: [
-      { ...(byKey.amm || { data: [], total: 0 }), label: 'AMM & Swap Rev', color: STREAM_COLORS.amm },
+      { ...(byKey.amm || { data: [], total: 0 }), label: 'Cash in the pot', color: STREAM_COLORS.vaulted },
       { ...(byKey.box || { data: [], total: 0 }), label: 'Clock-In Box', color: STREAM_COLORS.box },
       { ...(byKey.tax || { data: [], total: 0 }), label: 'Snipe / curve tax', color: STREAM_COLORS.tax },
       { ...(byKey.booster || { data: [], total: 0 }), label: 'Partner Revenue Share', color: STREAM_COLORS.booster },
@@ -152,7 +153,6 @@ export default function StonkDetailView({ data, activeTab }) {
     return col;
   })();
   const stonkBoosterTotal =
-    (Number(REV_STREAMS[0]?.total) || 0) +
     (Number(REV_STREAMS[1]?.total) || 0) +
     (Number(REV_STREAMS[2]?.total) || 0) +
     (Number(REV_STREAMS[3]?.total) || 0) +
@@ -217,7 +217,7 @@ export default function StonkDetailView({ data, activeTab }) {
       <ShareSection id="roi" className="scroll-mt-32 space-y-4">
         <Card
           eyebrow="ROI"
-          sub="Cash-on-cash vs floor plus activation, at last sync."
+          sub={`Cash-on-cash vs floor plus activation. ${yieldBasisText(project)}`}
           corner={<span className="font-mono text-[11px] text-muted">Floor {formatCurrency(floorCostUsd)}</span>}
         >
           <KpiStrip>
@@ -313,7 +313,7 @@ export default function StonkDetailView({ data, activeTab }) {
                       {isExpanded && (
                         <tr className="border-b border-line-soft bg-panel-2/40">
                           <td colSpan="5" className="px-5 py-4">
-                            <p className="eyebrow mb-3 text-faint">Trailing 7-day yield · {t.name}</p>
+                            <p className="eyebrow mb-3 text-faint">Daily yield · {t.name}</p>
                             <div className="relative h-32 w-full md:h-40">
                               {seriesHasInk(t.dailyYields) ? (
                                 <Line
@@ -368,14 +368,15 @@ export default function StonkDetailView({ data, activeTab }) {
       <ShareSection id="revenue" className="scroll-mt-32 space-y-4">
         <Card
           eyebrow={`StonkBooster · ${revPeriod}`}
-          sub="AMM, Clock-In locker fees, V2 snipe / curve tax, Partner Revenue Share, Smart LP skim. Bonding volume is notional and stays off this stack."
+          sub="Clock-In locker fees, V2 snipe / curve tax, Partner Revenue Share, and Smart LP skim. Cash still in the oracle is shown beside this total and is not part of it. Bonding volume is notional and stays off this stack."
         >
           <Figure value={formatCurrency(stonkBoosterTotal)} />
           <KpiStrip className="mt-6">
             <StreamStat
               color={REV_STREAMS[0].color}
-              label="AMM"
+              label="Cash in the pot"
               value={formatCurrency(REV_STREAMS[0].total)}
+              note="Oracle float, not a fee"
             />
             <StreamStat
               color={REV_STREAMS[1].color}

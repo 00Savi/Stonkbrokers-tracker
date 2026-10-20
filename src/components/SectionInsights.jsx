@@ -4,6 +4,7 @@ import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend,
 } from 'chart.js';
 import { loadOverlap, loadProjectAnalysis } from '../lib/ggindex';
+import { seatCashByDate } from '../lib/yieldSample';
 import { cashVsMarkSeries } from '../lib/yieldHistory';
 import { byDate, formatLabels } from '../lib/dates';
 import { baseChartOptions, barThickness, categoryBarOptions, compactTick, compactUsdTick, STREAM_COLORS } from '../lib/charts';
@@ -80,13 +81,13 @@ const STREAMS = [
 
 function CashVsMark({ project }) {
   const tier = project?.tiers?.[0];
-  const series = cashVsMarkSeries(project?.dailySnapshots, tier);
+  const series = cashVsMarkSeries(project?.dailySnapshots, tier, seatCashByDate(project, tier));
   if (!series) return null;
   const labels = formatLabels(series.labels);
   return (
     <ChartPanel
       title={`Cash yield vs mark · ${series.tier}`}
-      note="Cash is the annualized yield on each snapshot divided by 365, summed. Mark is how far the entry cost (floor plus this tier’s tokens) has moved since the first day in the window. Both are USD."
+      note="Cash is what that seat was paid on each day, summed. A day with no print adds nothing. Mark is how far the entry cost (floor plus this tier’s tokens) has moved since the first day in the window. Both are USD."
     >
       <Line
         data={{

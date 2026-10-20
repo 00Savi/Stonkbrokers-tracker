@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Routes, Route, Navigate, useParams, useLocation, useSearchParams } from 'react-router-dom';
 import { TopNav, TabBar } from './components/Shell';
 import ChartShareLayer from './components/ChartShareLayer';
@@ -23,6 +23,7 @@ import { NIGHTSHADES_FACTIONS } from './lib/nightshades';
 import { PROJECT_BY_SLUG, TAB_BY_SLUG, DEFAULT_TAB, BONUS_LIVE, PROJECTS, isProjectLive, tabsForProject } from './lib/routes';
 import { useProjectScrollSpy } from './lib/projectScroll';
 import { SkeletonCard } from './components/kit';
+import { applyYieldSample, useYieldSampleId } from './lib/yieldSample';
 
 const DETAIL_VIEWS = {
   stonk: StonkDetailView,
@@ -129,6 +130,8 @@ function ScrollToTop() {
 
 export default function App() {
   const { data, sources, pending } = useDashboard();
+  const sampleId = useYieldSampleId();
+  const shown = useMemo(() => applyYieldSample(data, sampleId), [data, sampleId]);
   const booting = sources.snapshot === 'loading';
 
   if (sources.snapshot === 'error') {
@@ -148,20 +151,20 @@ export default function App() {
   return (
     <div className="flex min-h-full flex-col pb-8">
       <ScrollToTop />
-      <TopNav live={sources.prices === 'ready'} sources={sources} data={data} pending={booting || pending('overlay')} />
+      <TopNav live={sources.prices === 'ready'} sources={sources} data={shown} pending={booting || pending('overlay')} />
       <ChartMobileSync />
       <ChartShareLayer />
 
       <main className="mx-auto w-full max-w-[1500px] px-3 sm:px-4">
         <Routes>
-          <Route path="/" element={<HomeView data={data} />} />
+          <Route path="/" element={<HomeView data={shown} />} />
           <Route path="/rankings" element={<Navigate to="/ecosystem" replace />} />
           <Route
             path="/ecosystem"
             element={
               <Section>
                 <div id="ecosystem-share">
-                  {data ? <EcosystemView data={data} pending={booting} /> : <SkeletonCard rows={6} />}
+                  {data ? <EcosystemView data={shown} pending={booting} /> : <SkeletonCard rows={6} />}
                 </div>
               </Section>
             }
@@ -170,7 +173,7 @@ export default function App() {
             path="/portfolio"
             element={
               <Section title="Portfolio">
-                {data ? <PortfolioView data={data} /> : <SkeletonCard rows={5} />}
+                {data ? <PortfolioView data={shown} /> : <SkeletonCard rows={5} />}
               </Section>
             }
           />
@@ -178,7 +181,7 @@ export default function App() {
             path="/broker"
             element={
               <Section title="Broker scan">
-                {data ? <BrokerScanView data={data} /> : <SkeletonCard rows={5} />}
+                {data ? <BrokerScanView data={shown} /> : <SkeletonCard rows={5} />}
               </Section>
             }
           />
@@ -186,7 +189,7 @@ export default function App() {
             path="/anvil"
             element={
               <Section title="Anvil scan">
-                {data ? <AnvilScanView data={data} /> : <SkeletonCard rows={5} />}
+                {data ? <AnvilScanView data={shown} /> : <SkeletonCard rows={5} />}
               </Section>
             }
           />
@@ -194,7 +197,7 @@ export default function App() {
             path="/tokens"
             element={
               <Section title="Markets & Swap">
-                {data ? <MemesTokensView data={data} type="memes" /> : <SkeletonCard rows={5} />}
+                {data ? <MemesTokensView data={shown} type="memes" /> : <SkeletonCard rows={5} />}
               </Section>
             }
           />
@@ -202,7 +205,7 @@ export default function App() {
             path="/stocks"
             element={
               <Section title="Markets & Swap">
-                {data ? <MemesTokensView data={data} type="stocks" /> : <SkeletonCard rows={5} />}
+                {data ? <MemesTokensView data={shown} type="stocks" /> : <SkeletonCard rows={5} />}
               </Section>
             }
           />
@@ -211,7 +214,7 @@ export default function App() {
             element={
               BONUS_LIVE ? (
                 <div className="pt-5">
-                  <BonusDetailView data={data} />
+                  <BonusDetailView data={shown} />
                 </div>
               ) : (
                 <Navigate to="/" replace />
@@ -220,7 +223,7 @@ export default function App() {
           />
           <Route
             path="/:project/:tab"
-            element={<ProjectPage data={data} />}
+            element={<ProjectPage data={shown} />}
           />
           <Route path="/:project" element={<RedirectToDefaultTab />} />
           <Route path="*" element={<Navigate to="/" replace />} />

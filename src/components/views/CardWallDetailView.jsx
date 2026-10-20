@@ -7,6 +7,7 @@ import { burnSeries, burnRateSeries, burnOfSupplyPct } from '../../lib/burn';
 import { formatLabels } from '../../lib/dates';
 import { windowSnapshots, protocolRevenueChart, sliceCols, seriesHasInk, windowChart } from '../../lib/yieldHistory';
 import { BetaTag, compactUsd, compactNum, YieldPeriodToggle, scaleAnnualYield, yieldSuffix } from '../kit';
+import { yieldBasisText } from '../../lib/yieldSample';
 import { CopyControl, ShareSection, copySectionEl } from '../CopyControl';
 import { TierFlowSection, netTierCount } from '../TierFlowCards';
 import { baseChartOptions, compactTick, compactUsdTick, cumulativeBurnDataset, TIER_COLORS, percentTick } from '../../lib/charts';
@@ -240,6 +241,7 @@ export default function CardWallDetailView({ data, activeTab }) {
               <span className="text-white font-bold tracking-wide">{formatCurrency(floorCostUsd)}</span>
             </div>
           </div>
+          <p className="text-xs text-slate-400 mb-4">{yieldBasisText(project)}</p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4">
@@ -338,7 +340,7 @@ export default function CardWallDetailView({ data, activeTab }) {
                               <div className="mb-6">
                                 <div className="flex justify-between items-center mb-4">
                                   <div>
-                                    <h4 className="text-sm font-bold text-slate-200">Trailing 7-Day Slab Rain ({t.name})</h4>
+                                    <h4 className="text-sm font-bold text-slate-200">Daily slab rain ({t.name})</h4>
                                     <p className="text-xs text-slate-400">Delivered directly to member ERC-6551 token-bound wallets</p>
                                   </div>
                                   <span className="text-xs font-semibold px-2.5 py-1 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">{t.recentDrops.length} Slabs Delivered</span>
@@ -361,7 +363,7 @@ export default function CardWallDetailView({ data, activeTab }) {
                                 </div>
                               </div>
                             ) : null}
-                            <h4 className="text-sm font-bold text-slate-300 mb-3">Trailing 7-Day Realized Yield ({t.name})</h4>
+                            <h4 className="text-sm font-bold text-slate-300 mb-3">Daily yield ({t.name})</h4>
                             <div className="relative h-32 md:h-40 w-full">
                               {seriesHasInk(t.dailyYields) ? (
                                 <Line 

@@ -7,6 +7,7 @@ import { Line, Bar } from 'react-chartjs-2';
 import { formatLabels } from '../../lib/dates';
 import { windowSnapshots, tierRoiDatasets, protocolRevenueChart, sliceCols, windowPeriodLabel, seriesHasInk, holderRevenueCol, windowChart } from '../../lib/yieldHistory';
 import { compactUsd, compactNum, YieldPeriodToggle, scaleAnnualYield, yieldSuffix } from '../kit';
+import { yieldBasisText } from '../../lib/yieldSample';
 import { ShareSection } from '../CopyControl';
 import { TierFlowSection, netTierCount } from '../TierFlowCards';
 import { baseChartOptions, compactTick, compactUsdTick, STREAM_COLORS, TIER_COLORS, percentTick } from '../../lib/charts';
@@ -189,7 +190,7 @@ export default function InternDetailView({ data, activeTab }) {
               <h3 className="text-sm font-bold text-white">Activation CoC — intern ladder</h3>
               <span className="text-xs font-bold text-amber-400 bg-amber-900/30 px-2 py-1 rounded border border-amber-800/50">{parseFloat(volumeMultiplier).toFixed(1)}x Intern Clock In volume</span>
             </div>
-            <p className="text-xs text-slate-400 mb-4">Five school-year tiers in $STONKBROKER (Freshman 3,333 → Alumnus 83,333), same weights as brokers. Half of every activation fee is burned. Intern CoC is trailing Intern Clock In inflows, not parent-broker base pay.</p>
+            <p className="text-xs text-slate-400 mb-4">Five school-year tiers in $STONKBROKER (Freshman 3,333 → Alumnus 83,333), same weights as brokers. Half of every activation fee is burned. Intern CoC is Intern Clock In, not parent-broker base pay. {yieldBasisText(project)}</p>
             <input type="range" min="0.1" max="10" step="0.1" value={volumeMultiplier} onChange={(e) => setVolumeMultiplier(e.target.value)} className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500 mb-6" />
 
             <div className="overflow-x-auto -mx-1 sm:mx-0">
@@ -415,7 +416,7 @@ export default function InternDetailView({ data, activeTab }) {
       <MethodologyCard accent="text-amber-400">
         <p><strong className="text-white">What this is:</strong> Interns by StonkBrokers is the companion NFT to StonkBrokers, not a second broker seat. Paper at <a className="text-amber-300 underline" href={INTERNS_DOCS} target="_blank" rel="noreferrer">stonkbrokers.cash/docs/interns</a>. Holding an intern is not equity and is not a guaranteed share of revenue.</p>
         <p><strong className="text-white">Mint:</strong> Only an activated parent broker can release its intern(s). A dormant sweep puts all 8,888 into parent TBAs on mint open; they cannot move until released.</p>
-        <p><strong className="text-white">Yield &amp; ROI:</strong> Intern Clock In 3.0 (0xf90a…bc059) is the intern yield pot. Weight is job-title slice × intern activation tier (same 1.00 / 1.25 / 1.60 / 2.00 / 3.33 multipliers as brokers). CoC is trailing intern Clock In inflows ÷ (intern floor USD + activation $STONKBROKER at spot). Parent-broker Clock In that is delegated as base pay is a separate cashflow and is not added into intern CoC.</p>
+        <p><strong className="text-white">Yield &amp; ROI:</strong> Intern Clock In 3.0 (0xf90a…bc059) is the intern yield pot. Weight is job-title slice × intern activation tier (same 1.00 / 1.25 / 1.60 / 2.00 / 3.33 multipliers as brokers). CoC is intern Clock In ÷ (intern floor USD + activation $STONKBROKER at spot). {yieldBasisText(project)} Parent-broker Clock In that is delegated as base pay is a separate cashflow and is not added into intern CoC.</p>
         <p><strong className="text-white">Intern desks:</strong> Intern Exchange (0xDea3…f518) is the intern AMM. A 9.99% protocol fee on the curve splits 66% desk / 25% Intern Clock In / 9% treasury. The Exchange tile is that gross fee; the 25% engine share is already in intern CoC via Clock In inflows and is not counted twice. Names and V2 lending stay blank until those desks deploy.</p>
         <p><strong className="text-white">Ownership:</strong> Circulating live interns are released supply minus Intern Exchange / AMM vault inventory. Dormant tokens in parent TBAs are not circulating. Wallets per 100 NFTs is unique intern wallets (vault and burn excluded) divided by that circulating number, times 100. Chain onboard is unique EOAs whose first intern buy or mint was one of their first 10 txs ($STONKBROKER token buys stay on StonkBrokers).</p>
         <p><strong className="text-white">Burn:</strong> Interns and StonkBrokers do not share an activation manager. Interns use 0x668e…4b37; brokers use 0xacd5…f664. Both burn the same $STONKBROKER token (0xe934…abf50). Half of each intern fee is destroyed; that intern total is a subset of token-wide supply burn. Token-supply charts stay on the parent StonkBrokers burn page — interns are not a second ERC-20.</p>

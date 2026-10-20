@@ -1,3 +1,4 @@
+import { holderStreams } from './books';
 import { STREAM_COLORS, TIER_COLORS, barThickness } from './charts';
 import { dateKey, formatLabels, utcIso } from './dates';
 import { trailingSnapshots, usableSnapshots } from './snapshots';
@@ -189,7 +190,9 @@ function windowLookup(dates, arr) {
   return (label) => {
     const j = idx.get(mdKey(label));
     if (j == null) return null;
-    const n = Number(arr?.[j]);
+    const raw = arr?.[j];
+    if (raw == null || raw === '') return null;
+    const n = Number(raw);
     return Number.isFinite(n) ? n : 0;
   };
 }
@@ -204,12 +207,17 @@ function pickNum(row, keys, fallback = null) {
 }
 
 const FEE_COL_META = [
-  { key: 'amm', label: 'AMM & swap rev', color: STREAM_COLORS.amm, snap: ['revAmm'], daily: 'dailyAmm', hist: 'historyAmm' },
-  { key: 'dex', label: 'DEX rev', color: STREAM_COLORS.dex, snap: ['revDex'], daily: 'dailyDex', hist: 'historyDex' },
-  { key: 'box', label: 'Clock-In / locker fees', color: STREAM_COLORS.box, snap: ['revBox'], daily: 'dailySecurityBox', hist: 'historyBox' },
-  { key: 'tax', label: 'Snipe / curve tax', color: STREAM_COLORS.tax, snap: ['revTax'], daily: 'dailyBondingTax', hist: 'historyTax' },
-  { key: 'booster', label: 'Partner Revenue Share', color: STREAM_COLORS.booster, snap: ['revBooster'], daily: 'dailyBooster', hist: 'historyBooster' },
-  { key: 'smartLp', label: 'Smart LP Protocol Revenue', color: STREAM_COLORS.smartLp, snap: ['revSmartLp'], daily: 'dailySmartLp', hist: 'historySmartLp' },
+  { key: 'amm', label: 'AMM & swap rev', color: STREAM_COLORS.amm, snap: ['revAmm'], daily: 'dailyAmm', hist: 'historyAmm', gap: 'historyGapAmm' },
+  { key: 'dex', label: 'DEX rev', color: STREAM_COLORS.dex, snap: ['revDex'], daily: 'dailyDex', hist: 'historyDex', gap: 'historyGapDex' },
+  { key: 'box', label: 'Clock-In / locker fees', color: STREAM_COLORS.box, snap: ['revBox'], daily: 'dailySecurityBox', hist: 'historyBox', gap: 'historyGapBox' },
+  { key: 'tax', label: 'Snipe / curve tax', color: STREAM_COLORS.tax, snap: ['revTax'], daily: 'dailyBondingTax', hist: 'historyTax', gap: 'historyGapTax' },
+  { key: 'booster', label: 'Partner Revenue Share', color: STREAM_COLORS.booster, snap: ['revBooster'], daily: 'dailyBooster', hist: 'historyBooster', gap: 'historyGapBooster' },
+  { key: 'smartLp', label: 'Smart LP Protocol Revenue', color: STREAM_COLORS.smartLp, snap: ['revSmartLp'], daily: 'dailySmartLp', hist: 'historySmartLp', gap: 'historyGapSmartLp' },
+];
+
+const HOLDER_COL_META = [
+  { key: 'paid', label: 'Paid to holders', color: STREAM_COLORS.holdersRev, snap: ['revPaid'], daily: 'dailyPaid', hist: 'historyPaid', gap: 'historyGapPaid' },
+  { key: 'float', label: 'Cash in the pot', color: STREAM_COLORS.vaulted, snap: ['revFloat'], daily: 'dailyFloat', hist: 'historyFloat', gap: 'historyGapFloat' },
 ];
 
 const VOLUME_META = {
@@ -219,6 +227,7 @@ const VOLUME_META = {
   snap: ['revVolume'],
   daily: 'dailyLaunchpad',
   hist: 'historyVolume',
+  gap: 'historyGapVolume',
 };
 
 /** UTC calendar days for the 7-day walk when `dailyDates` was not persisted. */
@@ -258,9 +267,11 @@ function streamOnLabels(labels, snaps, r, meta) {
     ? (r.historyAmm || r.historyTotalUsd || [])
     : (r[meta.hist] || []);
   const histLookup = windowLookup(r.historyDates || [], histArr);
+  const gapLookup = windowLookup(r.historyDates || [], meta.gap ? (r[meta.gap] || []) : []);
   const byDate = new Map((snaps || []).map((s) => [mdKey(s.date), s]));
   const today = utcIso();
   return labels.map((d) => {
+    if (gapLookup(d) > 0 && mdKey(d) !== today) return null;
     const fromWin = shortLookup(d);
     const s = byDate.get(mdKey(d));
     const fromSnap = s ? pickNum(s, meta.snap) : null;
@@ -346,14 +357,16 @@ export function protocolRevenueChart(project, { skipLedger = false } = {}) {
   const hasSmart = !!(r.smartLp || r.dailySmartLp?.length || snaps.some((s) => s.revSmartLp != null));
   const rWin = { ...r, dailyDates: short };
 
-  const cols = FEE_COL_META
+  const extras = HOLDER_COL_META.filter((m) => seriesHasInk(r[m.hist]));
+  const cols = applyHolderRoles(project, FEE_COL_META
     .filter((m) => m.key !== 'smartLp' || hasSmart)
+    .concat(extras)
     .map((m) => ({
       key: m.key,
       label: m.label,
       color: m.color,
       data: streamOnLabels(labels, snaps, rWin, m),
-    }));
+    })));
 
   // Nightshades 99% anti-snipe is curve withhold, not protocol-kept. A tax
   // bar that is a large fraction of the same day's bonding volume is that
@@ -375,8 +388,54 @@ export function protocolRevenueChart(project, { skipLedger = false } = {}) {
 export const FEE_KEYS = ['amm', 'dex', 'box', 'tax', 'booster', 'smartLp', 'fees'];
 export const VOLUME_KEYS = ['volume', 'launch'];
 
+const KEPT_KEYS = ['amm', 'dex', 'box', 'tax', 'booster', 'smartLp', 'fees'];
+
+function holderRole(col) {
+  return col?.role === 'paid' || col?.role === 'float';
+}
+
+/**
+ * Fee columns only. A chart that is already just the pot or the payout
+ * (Yard vault, for example) keeps those columns so the panel still draws.
+ */
 export function protocolFeeCols(cols) {
-  return (cols || []).filter((c) => ['amm', 'dex', 'box', 'tax', 'booster', 'smartLp'].includes(c.key));
+  const list = cols || [];
+  const kept = list.filter((c) => !holderRole(c) && (c.role === 'kept' || c.role == null || KEPT_KEYS.includes(c.key)));
+  if (kept.length) return kept;
+  return list.filter((c) => holderRole(c) || KEPT_KEYS.includes(c.key));
+}
+
+function applyHolderRoles(project, cols) {
+  const book = holderStreams(project);
+  const paid = new Set(book.paid);
+  const pot = new Set(book.float);
+  const labeled = cols.map((col) => {
+    if (paid.has(col.key)) {
+      return {
+        ...col,
+        role: 'paid',
+        label: col.key === 'dex' ? 'Paid to holders (DEX)' : 'Paid to holders',
+      };
+    }
+    if (pot.has(col.key)) return { ...col, role: 'float', label: 'Cash in the pot' };
+    return { ...col, role: 'kept' };
+  });
+  const by = Object.fromEntries(labeled.map((col) => [col.key, col]));
+  const fold = (legacyKey, destKey) => {
+    const dest = by[destKey];
+    const src = by[legacyKey];
+    if (!dest || !src || !seriesHasInk(dest.data)) return;
+    dest.data = dest.data.map((value, i) => {
+      const n = Number(value);
+      if (Number.isFinite(n) && n !== 0) return value;
+      return src.data?.[i] ?? value;
+    });
+    src.data = src.data.map(() => 0);
+    src.role = 'kept';
+  };
+  if (paid.has('paid')) fold('amm', 'paid');
+  if (pot.has('float')) fold('amm', 'float');
+  return labeled.filter((col) => col.role !== 'kept' || col.key !== 'amm' || seriesHasInk(col.data) || (!paid.has('paid') && !pot.has('float')));
 }
 
 /**
@@ -444,19 +503,38 @@ export function holderRevenueCol(project, rawLabels) {
  * month total on the 1st — treating that as a daily print and ×365 is why
  * early Oakmont ROI printed ~1600%. Those series stay on the revenue chart.
  */
+function priceAndCircAsOf(p, day) {
+  const key = dateKey(day);
+  const circNow = Number(p?.ownership?.circulatingSupply) || 0;
+  let px = 0;
+  let circ = 0;
+  for (const snap of usableSnapshots(p?.dailySnapshots)) {
+    const k = dateKey(snap?.date);
+    if (!k || (key && k > key)) continue;
+    const price = Number(snap.tokenPriceUsd);
+    if (price > 0) px = price;
+    const supply = Number(snap.circulatingSupply);
+    if (supply > 0) circ = supply;
+  }
+  return { px, circ: circ || circNow };
+}
+
 export function cashflowRoiByDate(p) {
   const cadence = String(p?.cashflow?.cadence || 'day').toLowerCase();
   if (cadence === 'month' || p?.config?.kind === 'vault') return {};
   const dates = p?.cashflow?.dailyDates || [];
   const revs = p?.cashflow?.dailyRevenue || [];
-  const circ = Number(p?.ownership?.circulatingSupply) || 0;
-  const price = Number(p?.market?.tokenPriceUsd) || 0;
   const req = Number(p?.tiers?.[0]?.reqTokens) || 0;
   const map = {};
-  if (!dates.length || !(price > 0)) return map;
+  if (!dates.length) return map;
   dates.forEach((date, i) => {
+    const { px, circ } = priceAndCircAsOf(p, date);
+    if (!(px > 0)) {
+      map[date] = null;
+      return;
+    }
     const day = Number(revs[i]) || 0;
-    const cost = req > 0 ? req * price : circ * price;
+    const cost = req > 0 ? req * px : circ * px;
     const annualForStake = circ > 0 && req > 0 ? day * (req / circ) * 365 : day * 365;
     map[date] = cost > 0 ? (annualForStake / cost) * 100 : null;
   });
@@ -505,9 +583,16 @@ function yearsPayback(snap, tier, floorCostUsd, tokenPriceUsd) {
 export function tierRoiDatasets(snaps, tiers, { floorCostUsd = 0, tokenPriceUsd = 0, colors = TIER_ROI_COLORS } = {}) {
   return (tiers || []).map((t, i) => {
     const tc = floorCostUsd + (t.reqTokens || 0) * tokenPriceUsd;
-    const currentRoi = tc > 0 && t.trackedAnnualYieldUsd > 0
+    const liveRoi = tc > 0 && t.trackedAnnualYieldUsd > 0
       ? ((t.trackedAnnualYieldUsd / tc) * 100).toFixed(2)
       : '0.00';
+    // The line is the rate recorded each day. The tag matches the last point
+    // on that line. The run-rate toggle moves the table, not this history.
+    const lastRoi = [...(snaps || [])].reverse().map((s) => {
+      const n = Number(s.tiers?.find((st) => st.tier === t.tier)?.roi);
+      return Number.isFinite(n) ? n : null;
+    }).find((n) => n != null);
+    const currentRoi = lastRoi != null ? lastRoi.toFixed(2) : liveRoi;
     return {
       label: `${t.tier} ROI (${currentRoi}%)`,
       endLabel: `${t.tier} ${Number(currentRoi).toFixed(1)}%`,
@@ -684,29 +769,29 @@ export function ownershipHistory(snaps, live = {}) {
 }
 
 /**
- * Cumulative implied cash versus the change in entry cost.
+ * Cumulative cash actually paid to the seat versus the change in entry cost.
  *
- * `yieldUsd` on a snapshot is an annualized run-rate, so a day's cash is that
- * rate divided by 365. Mark is the floor plus the tier's token cost, minus the
- * same cost on the first day of the window. The two lines are both USD, so a
- * floor rally and collected cash stop looking like the same ROI.
+ * Days with no daily print add nothing. Mark is the floor plus the tier's
+ * token cost, minus the same cost on the first day of the window.
  */
-export function cashVsMarkSeries(snaps, tier) {
+export function cashVsMarkSeries(snaps, tier, cashByDay) {
   if (!tier || !snaps?.length) return null;
+  const cashMap = cashByDay instanceof Map ? cashByDay : null;
   const rows = [];
   for (const s of snaps) {
     const floor = Number(s.nftFloorUsd);
     const px = Number(s.tokenPriceUsd);
-    const y = Number(s.tiers?.find((t) => t.tier === tier.tier)?.yieldUsd);
     const floorOk = Number.isFinite(floor) && floor > 0;
     const pxOk = Number.isFinite(px) && px >= 0;
     if (!floorOk && !pxOk) continue;
     const cost = (floorOk ? floor : 0) + (Number(tier.reqTokens) || 0) * (pxOk ? px : 0);
     if (!(cost > 0)) continue;
+    const key = dateKey(s.date);
+    const printed = cashMap && key && cashMap.has(key) ? Number(cashMap.get(key)) : 0;
     rows.push({
       date: s.date,
       cost,
-      dailyCash: Number.isFinite(y) && y > 0 ? y / 365 : 0,
+      dailyCash: Number.isFinite(printed) && printed > 0 ? printed : 0,
     });
   }
   if (rows.length < 2) return null;

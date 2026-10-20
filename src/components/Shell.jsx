@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { PROJECTS, isProjectLive, tabsForProject } from '../lib/routes';
 import { LAUNCHER_REF, SAVI_X } from '../lib/share';
-import { Value, price, usd, eth, BetaTag, WindowBar, IntervalBar } from './kit';
+import { Value, price, usd, eth, BetaTag, WindowBar, IntervalBar, YieldSampleBar } from './kit';
+import { setYieldSampleId, useYieldSampleId } from '../lib/yieldSample';
 import { useChartView } from '../lib/chartWindow';
 
 export { LAUNCHER_REF, SAVI_X };
@@ -103,6 +104,7 @@ export function TopNav({ live, sources, data, pending }) {
   const ticker = project?.ticker || 'STONK';
   const ethUsd = data?.projects?.stonk?.market?.ethPriceUsd;
   const status = liveStatus(live, sources);
+  const sampleId = useYieldSampleId();
 
   useEffect(() => {
     function onPointerDown(event) {
@@ -249,6 +251,7 @@ export function TopNav({ live, sources, data, pending }) {
               </div>
             )}
           </div>
+          <YieldSampleBar compact value={sampleId} onChange={setYieldSampleId} />
           <span
             className="hidden items-center gap-1.5 rounded-full border border-line px-2.5 py-1 font-mono text-[10px] text-faint md:flex"
             title={status.title}

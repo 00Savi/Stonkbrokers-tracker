@@ -356,6 +356,7 @@ export function ProtocolFeeVolumePanels({ labels, cols, kind, holder, note, titl
   }
 
   const fees = protocolFeeCols(cols).filter((c) => seriesHasInk(c.data));
+  const pots = (cols || []).filter((c) => c.role === 'float' && seriesHasInk(c.data));
   const mix = mixPercentCols(fees).filter((c) => seriesHasInk(c.data));
   const totals = dailyTotals(fees);
   const withTotal = totalNeedsLine(fees);
@@ -401,6 +402,17 @@ export function ProtocolFeeVolumePanels({ labels, cols, kind, holder, note, titl
     });
   }
   if (holderView) views.push(holderView);
+  if (pots.length) {
+    views.push({
+      id: 'pot',
+      label: 'Pot',
+      title: 'Cash in the pot (USD)',
+      note: 'ETH or tokens still sitting in the oracle or clock-in. This is not a fee the protocol kept, and it is not cash already paid to a seat.',
+      body: (
+        <Bar data={{ labels, datasets: barDatasets(pots, { stacked: true }) }} options={usdStackOptions(labels, interval)} />
+      ),
+    });
+  }
   return <ChartSwitch initial="dollars" views={views} />;
 }
 

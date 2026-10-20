@@ -525,13 +525,22 @@ export default function EcosystemView({ data, pending = false }) {
     const p = data.projects[k];
     const t0 = p?.tiers?.[0];
     const map = {};
-    for (const [d, v] of Object.entries(cashflowRoiByDate(p))) {
-      if (Number.isFinite(Number(v))) map[dateKey(d)] = Number(v);
-    }
-    for (const s of p?.dailySnapshots || []) {
-      const row = s.tiers?.find((st) => st.tier === (t0?.tier || 'T0'));
-      const roi = row?.roi != null ? Number(row.roi) : (s.roi != null ? Number(s.roi) : null);
-      if (Number.isFinite(roi)) map[dateKey(s.date)] = roi;
+    const rebuilt = cashflowRoiByDate(p);
+    const useRebuilt = p?.config?.kind === 'cashflow'
+      && Object.values(rebuilt).some((v) => Number.isFinite(Number(v)));
+    if (useRebuilt) {
+      for (const [d, v] of Object.entries(rebuilt)) {
+        if (Number.isFinite(Number(v))) map[dateKey(d)] = Number(v);
+      }
+    } else {
+      for (const [d, v] of Object.entries(rebuilt)) {
+        if (Number.isFinite(Number(v))) map[dateKey(d)] = Number(v);
+      }
+      for (const s of p?.dailySnapshots || []) {
+        const row = s.tiers?.find((st) => st.tier === (t0?.tier || 'T0'));
+        const roi = row?.roi != null ? Number(row.roi) : (s.roi != null ? Number(s.roi) : null);
+        if (Number.isFinite(roi)) map[dateKey(s.date)] = roi;
+      }
     }
     roiMaps[k] = map;
     const fees = protocolFeeSeries(p);
@@ -610,7 +619,7 @@ export default function EcosystemView({ data, pending = false }) {
             <Stat label="30D fees kept" value={compactUsd(mixTotal)} note="Protocol revenue" />
           </KpiStrip>
         </Card>
-        <Card flush eyebrow="Seats" sub="Cash-on-cash is trailing yield divided by that cost. The snipe column fills in as each vault answers.">
+        <Card flush eyebrow="Seats" sub="Cash-on-cash uses the run rate in the header, divided by that cost. The snipe column fills in as each vault answers.">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-left">
               <thead>
@@ -823,7 +832,7 @@ export default function EcosystemView({ data, pending = false }) {
 
       <MethodologyCard>
         <p><strong className="text-white">Seats:</strong> Floor cost is the cheapest listing plus the T0 token requirement, at the last sync. For The Card Wall that listing is the cheapest star, and the row lists the rest. Snipe cost is the AMM specific-buy quote for one NFT plus those same activation tokens. Nightshades is one typical faction, weighted by how many are active, not the sum of four.</p>
-        <p><strong className="text-white">Revenue:</strong> The bar is protocol-kept fees over the trailing 30 days. Paid-to-members, gacha pulls, and a yield divided by 365 stay on the page and out of the total. The window control on History is the only one that changes a chart.</p>
+        <p><strong className="text-white">Revenue:</strong> The bar is fees the protocol kept over the trailing 30 days. Cash already paid to seats, cash still sitting in the oracle or vault, gacha pulls, and a yield divided by 365 stay on the page and out of that total. Seat yield is a separate run rate. The window control on History is the chart range.</p>
         <p><strong className="text-white">Ownership:</strong> Wallets per 100 NFTs is unique wallets divided by circulating supply, times 100. Top 10 is the share those wallets hold. Still holding is written when the activity rebuild records who entered and who left. NFTs in the AMM are a count. The Anvil scan is where a vault’s contents are priced.</p>
         <p><strong className="text-white">Chain onboard:</strong> Unique EOAs that sent a transaction with nonce 0–9 which received or minted a StonkBrokers, Mancer, Card Wall, TickerYard, or Interns NFT, or bought that project’s token off its AMM. Airdrops and peer transfers do not count.</p>
       </MethodologyCard>

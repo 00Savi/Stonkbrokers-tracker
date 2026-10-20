@@ -43,6 +43,7 @@ import {
   bucketDropSeries,
   activationTokenCostUsd,
   ethUsdAtTs,
+  floorUsdOn,
 } from '../../lib/portfolioHistory';
 
 const FORECAST_YEARS = [1, 3, 5, 10];
@@ -163,6 +164,8 @@ function groupByProject(ownedAssets) {
     prev.earnedValue += a.earnedValue || 0;
     prev.basisUsd = (prev.basisUsd || 0) + (a.basisUsd || 0);
     prev.activationCostUsd = (prev.activationCostUsd || 0) + (a.activationCostUsd || 0);
+    prev.entryFloorUsd = (prev.entryFloorUsd || 0) + (a.entryFloorUsd || 0);
+    prev.entryCostUsd = (prev.entryCostUsd || 0) + (a.entryCostUsd || 0);
     prev.basisKnown = (prev.basisKnown || 0) + (a.basisKnown || 0);
     prev.idsPartial = prev.idsPartial || a.idsPartial;
     prev.idsFound = (prev.idsFound || 0) + (a.idsFound || 0);
@@ -172,10 +175,11 @@ function groupByProject(ownedAssets) {
   return [...map.values()];
 }
 
-/** What you paid: inbound NFT ETH + ~activation tokens. Token bags stay at mark. */
-function assetCostBasisUsd(asset) {
+/** Cost at entry: ETH paid for the NFT when we know it, otherwise the floor that day, plus activation tokens. */
+function assetEntryCostUsd(asset) {
   if (asset?.tokenPosition) return Number(asset.floorValue) || 0;
-  return (Number(asset.basisUsd) || 0) + (Number(asset.activationCostUsd) || 0);
+  if (Number(asset.entryCostUsd) > 0) return Number(asset.entryCostUsd);
+  return (Number(asset.entryFloorUsd) || 0) + (Number(asset.activationCostUsd) || 0) + (Number(asset.basisUsd) || 0);
 }
 
 function roiAgainst(numer, denom) {
@@ -187,14 +191,21 @@ function sumNftCosts(nfts) {
   let basisUsd = 0;
   let activationCostUsd = 0;
   let basisKnown = 0;
+  let entryFloorUsd = 0;
+  let entryCostUsd = 0;
   for (const nft of nfts || []) {
+    const act = Number(nft.activationCostUsd) || 0;
+    const floorThen = Number(nft.entryFloorUsd) || 0;
+    const paid = nft.basisKnown && Number(nft.basisUsd) > 0 ? Number(nft.basisUsd) : floorThen;
     if (nft.basisKnown) {
       basisUsd += Number(nft.basisUsd) || 0;
       basisKnown += 1;
     }
-    activationCostUsd += Number(nft.activationCostUsd) || 0;
+    activationCostUsd += act;
+    entryFloorUsd += floorThen;
+    entryCostUsd += paid + act;
   }
-  return { basisUsd, activationCostUsd, basisKnown };
+  return { basisUsd, activationCostUsd, basisKnown, entryFloorUsd, entryCostUsd };
 }
 
 async function applyPurchaseCosts(nfts, data, fallbackEthUsd) {
@@ -474,6 +485,7 @@ export default function PortfolioView({ data }) {
                 purchaseEth: 0,
                 basisUsd: 0,
                 basisKnown: false,
+                entryFloorUsd: floorUsdOn(pData, lastIn?.ts || actTs),
                 activationCostUsd: act.usd,
                 actTokens: act.tokens,
                 actTokenPriceUsd: act.tokenPriceUsd,
@@ -682,16 +694,18 @@ export default function PortfolioView({ data }) {
   const costTotals = useMemo(() => {
     let basisUsd = 0;
     let activationCostUsd = 0;
+    let entryCostUsd = 0;
     let basisKnown = 0;
     let nftCount = 0;
     for (const g of grouped) {
       if (g.tokenPosition) continue;
       basisUsd += Number(g.basisUsd) || 0;
       activationCostUsd += Number(g.activationCostUsd) || 0;
+      entryCostUsd += assetEntryCostUsd(g);
       basisKnown += Number(g.basisKnown) || 0;
       nftCount += (g.nfts || []).length;
     }
-    return { basisUsd, activationCostUsd, basisKnown, nftCount, total: basisUsd + activationCostUsd };
+    return { basisUsd, activationCostUsd, entryCostUsd, basisKnown, nftCount, total: entryCostUsd };
   }, [grouped]);
 
   useEffect(() => {
@@ -718,9 +732,7 @@ export default function PortfolioView({ data }) {
   const forecastUsd = results.yieldUsd * forecastYears;
   const cashLabel = mode === 'history' ? 'Earned in your ownership' : `Forecasted ${forecastYears}y cash-flow`;
   const cashValue = mode === 'history' ? results.earnedUsd : forecastUsd;
-  const realizedDenom = costTotals.total + grouped
-    .filter((g) => g.tokenPosition)
-    .reduce((sum, g) => sum + (Number(g.floorValue) || 0), 0);
+  const realizedDenom = grouped.reduce((sum, g) => sum + assetEntryCostUsd(g), 0);
   const roiPct = mode === 'history'
     ? roiAgainst(results.earnedUsd, realizedDenom)
     : roiAgainst(forecastUsd, results.floorUsd);
@@ -765,12 +777,7 @@ export default function PortfolioView({ data }) {
         mode,
         floor: formatCurrency(results.floorUsd),
         basis: costTotals.nftCount > 0 ? formatCurrency(costTotals.total) : '',
-        basisDetail: costTotals.nftCount > 0
-          ? [
-              costTotals.basisKnown > 0 ? `NFT ${formatCurrency(costTotals.basisUsd)}` : null,
-              costTotals.activationCostUsd > 0 ? `Act ~${formatCurrency(costTotals.activationCostUsd)}` : null,
-            ].filter(Boolean).join(' · ')
-          : '',
+        basisDetail: costTotals.nftCount > 0 ? 'Cost at entry' : '',
         cashLabel,
         cash: results.hasErrors ? 'ERROR' : formatCurrency(cashValue),
         roi: results.hasErrors ? 'ERROR' : formatRoi(roiPct),
@@ -1024,7 +1031,7 @@ export default function PortfolioView({ data }) {
               <p className="text-xl md:text-2xl font-extrabold text-white">{formatCurrency(results.floorUsd)}</p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3 sm:p-5 shadow-inner">
-              <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Portfolio cost basis</p>
+              <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Cost at entry</p>
               <p className="text-xl md:text-2xl font-extrabold text-white">
                 {costTotals.nftCount === 0
                   ? '—'
@@ -1032,13 +1039,8 @@ export default function PortfolioView({ data }) {
               </p>
               <p className="text-[10px] text-slate-500 mt-1">
                 {costTotals.nftCount === 0
-                  ? 'No NFT purchases in this scan'
-                  : [
-                      costTotals.basisKnown > 0 ? `NFT ${formatCurrency(costTotals.basisUsd)}` : 'NFT —',
-                      costTotals.activationCostUsd > 0
-                        ? `Act ~${formatCurrency(costTotals.activationCostUsd)}`
-                        : 'Act —',
-                    ].join(' · ')}
+                  ? 'No seats in this scan'
+                  : 'Floor the day the seat opened, or the ETH paid, plus activation tokens'}
               </p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3 sm:p-5 shadow-inner">
@@ -1049,7 +1051,7 @@ export default function PortfolioView({ data }) {
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3 sm:p-5 shadow-inner">
               <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">
-                {mode === 'history' ? 'Realized vs basis' : 'Combined Portfolio ROI'}
+                {mode === 'history' ? 'Cash on entry cost' : 'Combined Portfolio ROI'}
               </p>
               <p className={`text-xl md:text-2xl font-extrabold ${results.hasErrors ? 'text-rose-400' : 'text-blue-400'}`}>
                 {results.hasErrors ? 'ERROR' : formatRoi(roiPct)}
@@ -1140,8 +1142,9 @@ export default function PortfolioView({ data }) {
             ) : (
               grouped.map((asset) => {
                 const open = !!openProjects[asset.projectKey];
+                const entryCost = assetEntryCostUsd(asset);
                 const assetRoi = mode === 'history'
-                  ? roiAgainst(asset.earnedValue, assetCostBasisUsd(asset))
+                  ? roiAgainst(asset.earnedValue, entryCost)
                   : roiAgainst((asset.yieldValue || 0) * forecastYears, asset.floorValue);
                 return (
                 <div key={asset.projectKey} className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 shadow-inner">
@@ -1191,14 +1194,11 @@ export default function PortfolioView({ data }) {
                         </p>
                       )}
                       <p className="text-[10px] text-slate-400 mt-1">
-                        Floor {formatCurrency(asset.floorValue)}
-                        {!asset.tokenPosition && asset.basisKnown > 0
-                          ? ` · Basis ${formatCurrency(asset.basisUsd || 0)}`
+                        Floor today {formatCurrency(asset.floorValue)}
+                        {mode === 'history' && !asset.tokenPosition && entryCost > 0
+                          ? ` · Entry ${formatCurrency(entryCost)}`
                           : ''}
-                        {!asset.tokenPosition && asset.activationCostUsd > 0
-                          ? ` · Act ~${formatCurrency(asset.activationCostUsd)}`
-                          : ''}
-                        {' · '}ROI {formatRoi(assetRoi, 1)}
+                        {' · '}{mode === 'history' ? 'Since entry' : 'ROI'} {formatRoi(assetRoi, 1)}
                       </p>
                     </div>
                     <svg

@@ -4,6 +4,7 @@ import { burnSeries, burnOfSupplyPct } from '../../lib/burn';
 import { dateKey, formatLabels } from '../../lib/dates';
 import { seriesHasInk, bucketKey } from '../../lib/yieldHistory';
 import { compactUsd, compactNum, YieldPeriodToggle, scaleAnnualYield, yieldSuffix, yieldPeriodLabel } from '../kit';
+import { yieldBasisText } from '../../lib/yieldSample';
 import { ShareSection } from '../CopyControl';
 import { axisTitle, baseChartOptions, compactTick, compactUsdTick, percentTick } from '../../lib/charts';
 import { useChartView } from '../../lib/chartWindow';
@@ -574,7 +575,7 @@ export default function NightshadesAllView({ project, setFaction }) {
             <div>
               <h3 className="text-lg font-bold text-white">Nightshades faction ROI</h3>
               <p className="text-xs text-slate-400 mt-1">
-                Cash-on-cash for a T0 Shade: annualized vault yield ÷ (NFT floor USD + activation tokens at spot). Yield is the 7-day RewardPaid sample, split by tier weight. Open a faction for the full table and volume slider.
+                Cash-on-cash for a T0 Shade: annualized vault yield ÷ (NFT floor USD + activation tokens at spot). {yieldBasisText(project)} Open a faction for the full table and volume slider.
               </p>
             </div>
           </div>
@@ -643,7 +644,7 @@ export default function NightshadesAllView({ project, setFaction }) {
                         <tr className="bg-[#08090b]/40 border-b border-[#1e2228]/50">
                           <td colSpan="5" className="p-4 md:p-6">
                             <div className="flex justify-between items-center mb-3">
-                              <h4 className="text-sm font-bold text-slate-300">Trailing 7-day realized yield ({t0?.name})</h4>
+                              <h4 className="text-sm font-bold text-slate-300">Daily yield ({t0?.name})</h4>
                             </div>
                             <div className="relative h-32 md:h-40 w-full">
                               {seriesHasInk(t0?.dailyYields) ? (
@@ -861,7 +862,7 @@ export default function NightshadesAllView({ project, setFaction }) {
 
       <MethodologyCard accent="text-indigo-400">
           <p><strong className="text-white">All is a comparison, not a rollup:</strong> Ghosts, Zombies, Knights, and Watchers stay four series on one axis. Totals are not added together except on the Night LP health chart&apos;s combined line. Open a faction for that market&apos;s tiers, simulator, and vault detail.</p>
-          <p><strong className="text-white">Yield &amp; ROI:</strong> Cash-on-cash for a Shade is annualized vault RewardPaid ÷ (NFT floor USD + activation tokens at spot). Yield is the trailing 7-day RewardPaid sample, split by Anvil tier weight. Night vault WETH is loot for The Night and is never counted as StonkBrokers StonkBooster.</p>
+          <p><strong className="text-white">Yield &amp; ROI:</strong> Cash-on-cash for a Shade is annualized vault RewardPaid ÷ (NFT floor USD + activation tokens at spot), split by Anvil tier weight. {yieldBasisText(project)} Night vault WETH is loot for The Night and is never counted as StonkBrokers StonkBooster.</p>
           <p><strong className="text-white">The Night</strong> is the daily VRF strike. Favored factions keep their pools; struck factions can lose 20% of that pair&apos;s WETH to the vault (tokens sold for WETH). Unlabeled millions under Struck are vault token inventory, not strike size. Pool WETH over time overwrites the same UTC day on each hourly run until the series grows.</p>
       </MethodologyCard>
     </div>

@@ -118,6 +118,10 @@ export function UnderwaterCard({ ownership, tokenLeg = true }) {
     });
   }
 
+  const entry = row.entry;
+  const entryNote = entry && Number(entry.cost) > 0
+    ? ` Cost at entry is the floor and activation tokens on the day the seat opened. Since then those ${entry.seats} seats have returned ${Number(entry.coc).toFixed(1)}% of that cost in cash.`
+    : '';
   const splitNote = hasNftLine
     ? `${row.nftUnder ?? '—'} of ${row.nftWallets ?? '—'} NFT wallets (${Number(row.nftPct).toFixed(1)}%)`
       + (hasTokenLine
@@ -130,7 +134,7 @@ export function UnderwaterCard({ ownership, tokenLeg = true }) {
       id: 'share',
       label: 'Share',
       title: 'Holders underwater',
-      note: `${splitNote} Cost is the floor or the token price on the day the position opened. The lines are that share of today's holders, saved each hour.${tokenLeg ? '' : ' Token bags stay on StonkBrokers.'}`,
+      note: `${splitNote} Cost today on the seat table is the live floor. ${entryNote} The lines are that share of today's holders, saved each hour.${tokenLeg ? '' : ' Token bags stay on StonkBrokers.'}`,
       body: lineSets.length ? (
         <Line data={{ labels, datasets: lineSets }} options={percentOptions(labels)} />
       ) : (
