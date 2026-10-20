@@ -5,6 +5,7 @@ import {
 } from 'chart.js';
 import { loadOverlap, loadProjectAnalysis } from '../lib/ggindex';
 import { seatCashByDate } from '../lib/yieldSample';
+import { bookSlugOf } from '../lib/books';
 import { cashVsMarkSeries } from '../lib/yieldHistory';
 import { byDate, formatLabels } from '../lib/dates';
 import { baseChartOptions, barThickness, categoryBarOptions, compactTick, compactUsdTick, STREAM_COLORS } from '../lib/charts';
@@ -492,6 +493,9 @@ export function SectionInsights({ sectionId }) {
 
   if (sectionId === 'roi') return <CashVsMark project={project} />;
   if (sectionId === 'revenue' || sectionId === 'night') {
+    // Stonk already draws the booster mix, including the reward and partner share.
+    // The index stitch under this chart labeled that reward "AMM" and stopped in September.
+    if (bookSlugOf(project) === 'stonk') return null;
     return <StreamQuality revenue={analysis?.revenue} />;
   }
   if (sectionId === 'liquidity') return <FeeRates project={project} />;

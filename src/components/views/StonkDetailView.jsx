@@ -138,11 +138,16 @@ export default function StonkDetailView({ data, activeTab }) {
   const { labels: revDates, cols: REV_STREAMS } = {
     labels: slicedRev.labels,
     cols: [
-      { ...(byKey.amm || { data: [], total: 0 }), label: 'Cash in the pot', color: STREAM_COLORS.vaulted },
-      { ...(byKey.box || { data: [], total: 0 }), label: 'Clock-In Box', color: STREAM_COLORS.box },
-      { ...(byKey.tax || { data: [], total: 0 }), label: 'Snipe / curve tax', color: STREAM_COLORS.tax },
-      { ...(byKey.booster || { data: [], total: 0 }), label: 'Partner Revenue Share', color: STREAM_COLORS.booster },
-      { ...(byKey.smartLp || { data: [], total: 0 }), label: 'Smart LP Protocol Revenue', color: STREAM_COLORS.smartLp },
+      {
+        ...(byKey.amm || { data: [], total: 0 }),
+        label: 'Booster reward',
+        color: STREAM_COLORS.amm,
+        role: 'kept',
+      },
+      { ...(byKey.box || { data: [], total: 0 }), label: 'Clock-In Box', color: STREAM_COLORS.box, role: 'kept' },
+      { ...(byKey.tax || { data: [], total: 0 }), label: 'Snipe / curve tax', color: STREAM_COLORS.tax, role: 'kept' },
+      { ...(byKey.booster || { data: [], total: 0 }), label: 'Partner Revenue Share', color: STREAM_COLORS.booster, role: 'kept' },
+      { ...(byKey.smartLp || { data: [], total: 0 }), label: 'Smart LP Protocol Revenue', color: STREAM_COLORS.smartLp, role: 'kept' },
     ],
   };
   const smartLp = revenue.smartLp || {};
@@ -153,6 +158,7 @@ export default function StonkDetailView({ data, activeTab }) {
     return col;
   })();
   const stonkBoosterTotal =
+    (Number(REV_STREAMS[0]?.total) || 0) +
     (Number(REV_STREAMS[1]?.total) || 0) +
     (Number(REV_STREAMS[2]?.total) || 0) +
     (Number(REV_STREAMS[3]?.total) || 0) +
@@ -368,15 +374,15 @@ export default function StonkDetailView({ data, activeTab }) {
       <ShareSection id="revenue" className="scroll-mt-32 space-y-4">
         <Card
           eyebrow={`StonkBooster · ${revPeriod}`}
-          sub="Clock-In locker fees, V2 snipe / curve tax, Partner Revenue Share, and Smart LP skim. Cash still in the oracle is shown beside this total and is not part of it. Bonding volume is notional and stays off this stack."
+          sub="Booster reward is the share of AMM and OpenSea fees paid to seats, scaled from the T4 oracle. Clock-In locker fees, curve tax, Partner Revenue Share, and Smart LP skim are counted beside it. Bonding swap volume stays off this stack."
         >
           <Figure value={formatCurrency(stonkBoosterTotal)} />
           <KpiStrip className="mt-6">
             <StreamStat
               color={REV_STREAMS[0].color}
-              label="Cash in the pot"
+              label="Booster reward"
               value={formatCurrency(REV_STREAMS[0].total)}
-              note="Oracle float, not a fee"
+              note="AMM and OpenSea fee share"
             />
             <StreamStat
               color={REV_STREAMS[1].color}
@@ -411,7 +417,7 @@ export default function StonkDetailView({ data, activeTab }) {
             kind={rawRev.kind}
             interval={interval}
             title="StonkBooster"
-            note="Protocol revenue that day. Swap volume is not included."
+            note="Booster reward plus the source fees that day. Swap volume stays off this stack."
             holder={{
               labels: slicedHolder.labels,
               data: slicedHolder.cols[0]?.data,
@@ -747,7 +753,7 @@ export default function StonkDetailView({ data, activeTab }) {
 
       <MethodologyCard>
           <p><strong className="text-ink">Yield &amp; ROI:</strong> Live cash-on-cash is a trailing sample of the T4 Partner oracle wallet, scaled by total network weight / 333, annualized, then divided by (NFT floor USD + activation tokens at DexScreener spot). From 2026-08-20 that oracle is live. Earlier ROI days estimate the same CoC from Clock In v1, v2, and Overtime pot inflows ÷ reconstructed active weight, with cost basis frozen at the first oracle snapshot. Mid-August is a real FOMO / revenue spike (NFT trades printed around 12 ETH); the % uses the later ~4 ETH floor so it tracks that yield spike rather than repricing entry cost day by day. A one-day collapse between two hot UTC sessions is treated as a bucket hole, not a crash. Clock In 3.0 (0xf412…dbc58, 2026-09-21) is the live pot; v2 DirectedClockInBooster is retired.</p>
-          <p><strong className="text-ink">Protocol revenue (StonkBooster mix):</strong> AMM collector, Clock In locker fees (v1 retired, v2 retired, v3 live, Overtime retired), launchpad tax, Partner Revenue Share (Nightshades 13.33% civ-pad + Mancer 25% dex), and Smart LP skim. Clock In is Safety Deposit lock/collect fees (90% community / 10% protocol), not a raffle. Nightshades Night vault WETH is The Night inventory and is never counted here. Bonding swap volume is notional and is not revenue.</p>
+          <p><strong className="text-ink">Protocol revenue (StonkBooster mix):</strong> Booster reward is the share of AMM and OpenSea fees routed to seats. It is the T4 oracle sample scaled by total seat weight / 333, and it is inside the headline. Clock In locker fees (v1 retired, v2 retired, v3 live, Overtime retired), launchpad tax, Partner Revenue Share (Nightshades 13.33% civ-pad + Mancer 25% dex), and Smart LP skim are counted at the source. Clock In is Safety Deposit lock/collect fees (90% community / 10% protocol), not a raffle. Nightshades Night vault WETH is The Night inventory and is never counted here. Bonding swap volume is notional and is not revenue.</p>
           <p><strong className="text-ink">Payback:</strong> Entry cost ÷ annualized trailing yield. Charts reprice cost at the last sync.</p>
           <p><strong className="text-ink">Ownership:</strong> Circulating NFTs are collection size minus AMM vault inventory. Holder breadth is unique NFT wallets (vault and burn addresses excluded) divided by that circulating number. Activated-wallet count is unique current owners of NFTs that still have an open activation — a sale clears it. Chain onboard is unique EOAs whose first cluster buy or mint of this project was one of their first 10 txs.</p>
           <p><strong className="text-ink">Burn:</strong> Token-wide $STONKBROKER destroyed (supply deflation + dead + tokens locked in the broker activation manager). The cumulative chart is that token total. Pre-snapshot days reconstruct burns that lower totalSupply, plus dead, scaled to the first trusted supply read. On All, flywheel days above 10M are clipped so later burns stay readable. Intern activations use a different manager and burn into the same token; that intern total is subtracted out of the StonkBrokers tile. The daily chart starts on the first intern activation. Once a snapshot stamps internBurnTokens, that day's intern bar is the change in the stamp and StonkBrokers is the rest of the day's token burn. Earlier days estimate the intern share from activations. A day with broker activations keeps at least the floor-tier burn, so the broker bar cannot print as zero. Past about 40 days the two series stack.</p>
