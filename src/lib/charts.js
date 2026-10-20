@@ -552,6 +552,8 @@ export function activityDatasets({
   lineLabel = 'Net active',
   inColor = '#00a804',
   outColor = '#f43f5e',
+  inLabel = 'Daily activations',
+  outLabel = 'Daily deactivations',
   barSize = 18,
 } = {}) {
   const down = (outs || []).map((v) => {
@@ -572,7 +574,7 @@ export function activityDatasets({
     },
     {
       type: 'bar',
-      label: 'Daily activations',
+      label: inLabel,
       data: ins,
       backgroundColor: inColor,
       borderRadius: 2,
@@ -583,7 +585,7 @@ export function activityDatasets({
     },
     {
       type: 'bar',
-      label: 'Daily deactivations',
+      label: outLabel,
       data: down,
       backgroundColor: outColor,
       borderRadius: 2,

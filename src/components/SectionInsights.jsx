@@ -12,7 +12,9 @@ import { baseChartOptions, barThickness, categoryBarOptions, compactTick, compac
 import { explorerAddressUrl } from '../lib/tba';
 import { walletName } from '../lib/wallets';
 import { compactNum, compactUsd, Card, KpiStrip, Stat } from './kit';
-import { ChartPanel } from './HistoryCharts';
+import { ActivityChart, ChartPanel } from './HistoryCharts';
+import { useChartView } from '../lib/chartWindow';
+import { windowChart } from '../lib/yieldHistory';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend);
 
@@ -79,6 +81,80 @@ const STREAMS = [
   { key: 'dex', label: 'DEX', color: STREAM_COLORS.dex },
   { key: 'smart_lp', label: 'Smart LP', color: STREAM_COLORS.smartLp },
 ];
+
+function flowRows(project) {
+  const own = project?.ammFlow?.dates?.length ? [project.ammFlow] : [];
+  const kids = Object.values(project?.factions || {})
+    .map((f) => f?.ammFlow)
+    .filter((f) => f?.dates?.length);
+  return own.length ? own : kids;
+}
+
+function combineFlow(project) {
+  const rows = flowRows(project);
+  if (!rows.length) return null;
+  if (rows.length === 1) return rows[0];
+  const map = new Map();
+  for (const flow of rows) {
+    flow.dates.forEach((day, i) => {
+      const cur = map.get(day) || { entered: 0, left: 0, feeEth: 0 };
+      cur.entered += Number(flow.entered?.[i]) || 0;
+      cur.left += Number(flow.left?.[i]) || 0;
+      cur.feeEth += Number(flow.feeEth?.[i]) || 0;
+      map.set(day, cur);
+    });
+  }
+  const dates = [...map.keys()].sort();
+  return {
+    dates,
+    entered: dates.map((d) => map.get(d).entered),
+    left: dates.map((d) => map.get(d).left),
+    feeEth: dates.map((d) => map.get(d).feeEth),
+  };
+}
+
+function AmmExchange({ project }) {
+  const { range: timeframe, interval } = useChartView();
+  const flow = combineFlow(project);
+  if (!flow) return null;
+  const win = windowChart(flow.dates, [flow.entered, flow.left, flow.feeEth], timeframe, interval, ['sum', 'sum', 'sum']);
+  const entered = win.cols[0] || [];
+  const left = win.cols[1] || [];
+  const net = entered.map((v, i) => (Number(v) || 0) - (Number(left[i]) || 0));
+  const sum = (arr) => arr.reduce((s, v) => s + (Number(v) || 0), 0);
+  const inn = sum(flow.entered);
+  const out = sum(flow.left);
+  const eth = sum(flow.feeEth);
+  const ethUsd = Number(project?.market?.ethPriceUsd)
+    || Number(Object.values(project?.factions || {}).find((f) => Number(f?.market?.ethPriceUsd) > 0)?.market?.ethPriceUsd)
+    || 0;
+  return (
+    <Card
+      eyebrow="AMM exchange"
+      sub="Totals cover every day indexed. The chart follows Range. In is NFTs sold into the vault, out is NFTs bought back. Fees are the ETH the AMM charged on those trades, priced at the latest ETH."
+    >
+      <KpiStrip>
+        <Stat label="In" value={compactNum(inn)} note="Sold into the vault" />
+        <Stat label="Out" value={compactNum(out)} note="Bought out of the vault" />
+        <Stat label="Net" value={`${sum(net) > 0 ? '+' : ''}${compactNum(sum(net))}`} note="In minus out" tone="accent" />
+        <Stat label="Fees" value={ethUsd > 0 ? compactUsd(eth * ethUsd) : `${eth.toFixed(2)} ETH`} note={ethUsd > 0 ? `${eth.toFixed(2)} ETH charged` : 'ETH charged on the trades'} />
+      </KpiStrip>
+      <div className="mt-4">
+        <ActivityChart
+          labels={win.labels}
+          ins={entered}
+          outs={left}
+          net={net}
+          interval={interval}
+          lineLabel="Net into vault"
+          inLabel="Sold in"
+          outLabel="Bought out"
+          lineColor="#e7e9ec"
+        />
+      </div>
+    </Card>
+  );
+}
 
 function CashVsMark({ project }) {
   const tier = project?.tiers?.[0];
@@ -503,6 +579,7 @@ export function SectionInsights({ sectionId }) {
   if (sectionId === 'ownership') {
     return (
       <div className="mt-4 space-y-4">
+        <AmmExchange project={project} />
         <HolderStructure structure={analysis?.structure} />
         <ActivityPanels activity={analysis?.activity} project={project} />
         <Cohorts cohorts={analysis?.cohorts} />

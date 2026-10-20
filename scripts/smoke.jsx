@@ -37,6 +37,7 @@ import BonusDetailView from '../src/components/views/BonusDetailView';
 import SpecialDetailView from '../src/components/views/SpecialDetailView';
 import NightshadesDetailView from '../src/components/views/NightshadesDetailView';
 import { UnderwaterCard } from '../src/components/UnderwaterCard';
+import { AnalysisProvider } from '../src/components/SectionInsights';
 import { protocolRevenueChart, resampleSeries } from '../src/lib/yieldHistory';
 import { rollupNightshadesOwnership } from '../src/lib/nightshades';
 import { tokenValuation } from '../src/lib/valuation';
@@ -710,6 +711,25 @@ for (const [name, View, props] of VIEWS) {
     console.error(`FAIL  Copy section missing on headings (${sectionCopies})`);
   } else {
     console.log('ok    Copy section is on each heading');
+  }
+  const ammHtml = renderToString(
+    <StaticRouter location="/stonkbrokers/ownership">
+      <AnalysisProvider slug="stonk" project={snapshot.projects.stonk}>
+        <StonkDetailView data={snapshot} activeTab="ownership" />
+      </AnalysisProvider>
+    </StaticRouter>,
+  );
+  const ammOk = ammHtml.includes('AMM exchange')
+    && ammHtml.includes('Sold into the vault')
+    && ammHtml.includes('Bought out of the vault')
+    && ammHtml.includes('3,115')
+    && ammHtml.includes('806')
+    && ammHtml.includes('$1.44M');
+  if (!ammOk) {
+    failed++;
+    console.error('FAIL  stonk ownership missing AMM in/out/fees');
+  } else {
+    console.log('ok    stonk AMM exchange shows in, out, net, and fees');
   }
   const ns = snapshot.projects?.nightshades;
   const factionY = Object.values(ns?.factions || {}).map((f) => Number(f?.tiers?.[0]?.trackedAnnualYieldUsd) || 0);

@@ -422,6 +422,7 @@ const { fetchNight } = require("./lib/night.cjs");
 const priceDays = require("./lib/priceDays.cjs");
 const { foldOnboarding, emptySummary, keepOnboardingHistory } = require("./lib/onboarding.cjs");
 const { fetchGachaRevenue } = require("./lib/gacha.cjs");
+const { walkAmmFlow, mergeAmmFlow } = require("./lib/ammFlow.cjs");
 
 const gg = new GgIndex();
 const rpc = new Rpc();
@@ -4491,12 +4492,37 @@ async function run() {
         }
       }
 
+      let ammFlow = prevProjData.ammFlow || null;
+      if (conf.ammCa && conf.nftCa) {
+        try {
+          const head = await rpc.blockNumber();
+          const pinned = blockTime.anchors?.length ? blockTime.anchors[blockTime.anchors.length - 1][0] : head;
+          await blockTime.ensureRange(rpc, Math.min(pinned, head), head);
+          const fromTs = Math.floor(Date.now() / 1000) - 2 * 86400;
+          const fresh = await walkAmmFlow({
+            rpc,
+            blockTime,
+            nft: conf.nftCa,
+            amm: conf.ammCa,
+            fromBlock: blockTime.blockAt(fromTs),
+            toBlock: head,
+          });
+          ammFlow = mergeAmmFlow(prevProjData.ammFlow, fresh);
+          const inn = (fresh.entered || []).reduce((s, n) => s + n, 0);
+          const out = (fresh.left || []).reduce((s, n) => s + n, 0);
+          console.log(`  amm flow ${inn} in / ${out} out on the fresh window`);
+        } catch (e) {
+          console.warn(`[warn] ${projectKey} amm flow: ${e.message}`);
+        }
+      }
+
       finalJson.projects[projectKey] = {
         market: markets[projectKey],
         activation: activationStats,
         ownership: ownershipStats,
         tiers: mappedTiers,
         revenue: revenueBreakdown,
+        ...(ammFlow ? { ammFlow } : {}),
         lockedLp: lockedLpData,
         ledger: ledger,
         ...(projectKey === "cardwall" ? { gacha } : {}),

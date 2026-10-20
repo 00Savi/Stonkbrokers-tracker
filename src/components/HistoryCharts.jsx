@@ -434,6 +434,8 @@ export function ActivityChart({
   interval = 'daily',
   lineColor = '#38bdf8',
   lineLabel = 'Net active',
+  inLabel = 'Daily activations',
+  outLabel = 'Daily deactivations',
   outColor = '#f43f5e',
 }) {
   return (
@@ -446,6 +448,8 @@ export function ActivityChart({
           outs,
           lineColor,
           lineLabel,
+          inLabel,
+          outLabel,
           outColor,
           barSize: barThickness(labels?.length || 0),
         }),
