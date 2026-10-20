@@ -119,6 +119,21 @@ export function trailingAnnual(map, days) {
   return sum * (365 / days);
 }
 
+/**
+ * The requested window when every day is present.
+ * When the book is a shorter complete run, annualize that run and say so.
+ * A hole inside the requested window still refuses the rate.
+ */
+function trailingCovered(map, days) {
+  const full = trailingAnnual(map, days);
+  if (full != null) return { annual: full, short: false };
+  const have = spanDays(map);
+  if (!(have > 0) || have >= days) return { annual: null, short: false };
+  const short = trailingAnnual(map, have);
+  if (short == null) return { annual: null, short: false };
+  return { annual: short, short: true };
+}
+
 function networkWeight(project) {
   const br = project?.activation?.breakdown || {};
   let tw = 0;
@@ -154,15 +169,33 @@ function streamMode(direct, amm, dex, weight, tw) {
   return null;
 }
 
+function hasInk(map) {
+  for (const value of map.values()) {
+    if (value > 0) return true;
+  }
+  return false;
+}
+
 function yieldPool(project) {
   const rev = project?.revenue || {};
   const paid = seriesFrom(rev.historyDates, rev.historyPaid);
   const pot = seriesFrom(rev.historyDates, rev.historyFloat);
   const amm = seriesFrom(rev.historyDates, rev.historyAmm);
   const dex = seriesFrom(rev.historyDates, rev.historyDex);
-  const pool = new Map(amm);
-  for (const [day, value] of pot) pool.set(day, value);
-  for (const [day, value] of paid) pool.set(day, value);
+  // Dedicated paid/float history replaces the AMM column once it has cash.
+  // A zero-filled column is not that book. Copying it over the AMM wiped
+  // every older day, so Month and Quarter collapsed back to the 7-day walk.
+  const pool = new Map();
+  if (hasInk(paid) || hasInk(pot)) {
+    if (hasInk(pot)) {
+      for (const [day, value] of pot) pool.set(day, value);
+    }
+    if (hasInk(paid)) {
+      for (const [day, value] of paid) pool.set(day, value);
+    }
+  } else {
+    for (const [day, value] of amm) pool.set(day, value);
+  }
   return { pool, dex };
 }
 
@@ -278,14 +311,15 @@ function applyCardwall(project, id, days) {
   if (!tiers.length) return scaleBuilt(project, untouched(project, id, days, 0));
   const maps = tiers.map((t) => seriesFrom(t.dailyDates, t.dailyYields));
   const have = Math.max(0, ...maps.map(spanDays));
-  const rains = maps.map((m) => trailingAnnual(m, days));
-  if (rains.some((n) => n == null)) return scaleBuilt(project, untouched(project, id, days, have));
-  const partial = days === 30 ? null : 'rain';
+  const covered = maps.map((m) => trailingCovered(m, days));
+  if (covered.some((row) => row.annual == null)) return scaleBuilt(project, untouched(project, id, days, have));
+  const short = covered.some((row) => row.short);
+  const partial = days === 30 ? (short ? 'short' : null) : (short ? 'rain-short' : 'rain');
   return scaleBuilt(project, {
     ...project,
     tiers: tiers.map((t, i) => {
       const stake = days === 30 ? stakeShare(project, t) : 0;
-      return markTier(project, t, rains[i] + stake);
+      return markTier(project, t, covered[i].annual + stake);
     }),
     yieldSample: sampleMeta(id, days, { applied: true, have, partial }),
   });
@@ -298,16 +332,16 @@ function applyPool(project, id, days, { perUnit, fill = false }) {
     ? fillGaps(seriesFrom(tier.dailyDates, tier.dailyYields))
     : seriesFrom(tier.dailyDates, tier.dailyYields);
   const have = spanDays(map);
-  const pool = trailingAnnual(map, days);
+  const covered = trailingCovered(map, days);
   const scale = perUnit(project, tier);
-  if (pool == null || !(scale > 0)) return untouched(project, id, days, have);
-  const annual = pool * scale;
+  if (covered.annual == null || !(scale > 0)) return untouched(project, id, days, have);
+  const annual = covered.annual * scale;
   return {
     ...project,
     tiers: project.tiers.map((t, i) => (
       i === 0 ? markTier(project, t, annual) : t
     )),
-    yieldSample: sampleMeta(id, days, { applied: true, have }),
+    yieldSample: sampleMeta(id, days, { applied: true, have, partial: covered.short ? 'short' : null }),
   };
 }
 
@@ -316,12 +350,13 @@ function applyAnvil(project, id, days) {
   if (!tiers.length) return scaleBuilt(project, untouched(project, id, days, 0));
   const maps = tiers.map((t) => seatMap(project, t));
   const have = Math.max(0, ...maps.map(spanDays));
-  const annuals = maps.map((m) => trailingAnnual(m, days));
-  if (annuals.some((n) => n == null)) return scaleBuilt(project, untouched(project, id, days, have));
+  const covered = maps.map((m) => trailingCovered(m, days));
+  if (covered.some((row) => row.annual == null)) return scaleBuilt(project, untouched(project, id, days, have));
+  const partial = covered.some((row) => row.short) ? 'short' : null;
   return scaleBuilt(project, {
     ...project,
-    tiers: tiers.map((t, i) => markTier(project, t, annuals[i])),
-    yieldSample: sampleMeta(id, days, { applied: true, have }),
+    tiers: tiers.map((t, i) => markTier(project, t, covered[i].annual)),
+    yieldSample: sampleMeta(id, days, { applied: true, have, partial }),
   });
 }
 
@@ -412,8 +447,14 @@ export function yieldBasisText(project) {
     if (s.have > 0) return `Published sample. The daily book covers ${s.have} days.${extra}`;
     return `Published sample. This seat has no daily book for a longer window.${extra}`;
   }
-  if (s.partial === 'rain') {
-    return `${s.label} slab rain, annualized. Staking is a 30-day figure, so it joins the Month rate.${extra}`;
+  if (s.partial === 'rain' || s.partial === 'rain-short') {
+    const lead = s.partial === 'rain-short'
+      ? `${s.label} asks for ${s.days} days. Slab rain covers ${s.have}, so this rate uses those days.`
+      : `${s.label} slab rain, annualized.`;
+    return `${lead} Staking is a 30-day figure, so it joins the Month rate.${extra}`;
+  }
+  if (s.partial === 'short') {
+    return `${s.label} asks for ${s.days} days. The book covers ${s.have}, so this rate uses those days.${extra}`;
   }
   return `${s.label} trailing cash, annualized × 365/${s.days}.${extra}`;
 }
