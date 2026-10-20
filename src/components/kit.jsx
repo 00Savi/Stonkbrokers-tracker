@@ -280,11 +280,12 @@ export const CHART_INTERVALS = [
 ];
 
 /** Range or interval control. Sticky chrome uses a small select, not a pill group. */
-export function WindowBar({ value, onChange, windows = YIELD_WINDOWS, compact = false, label = 'Chart range' }) {
+export function WindowBar({ value, onChange, windows = YIELD_WINDOWS, compact = false, label = 'Chart range', title }) {
   return (
     <div className="relative shrink-0">
       <select
         aria-label={label}
+        title={title || label}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className={`appearance-none rounded-md border border-line bg-panel font-medium text-ink [color-scheme:dark] hover:border-muted focus:border-muted focus:outline-none ${
@@ -317,22 +318,57 @@ export function IntervalBar({ value, onChange, compact = false }) {
       windows={CHART_INTERVALS}
       compact={compact}
       label="Chart interval"
+      title="How chart days are grouped"
     />
   );
 }
+
+const CONTROL_LABEL = 'font-mono text-[10px] uppercase tracking-wider text-faint';
 
 /** Trailing window the seat yield is annualized from. Separate from the chart range. */
 export function YieldSampleBar({ value, onChange, compact = false }) {
   return (
     <div className="flex items-center gap-1.5">
-      <span className={`font-mono text-faint ${compact ? 'text-[10px]' : 'text-[11px]'}`}>Run rate</span>
+      <span className={CONTROL_LABEL}>Run rate</span>
       <WindowBar
         value={value}
         onChange={onChange}
         windows={YIELD_SAMPLE_WINDOWS}
         compact={compact}
         label="Yield run rate"
+        title="Week, month, or quarter of cash the seat yield is annualized from"
       />
+    </div>
+  );
+}
+
+/** Run rate, chart range, and chart interval on one bar. */
+export function ViewControls({
+  sampleId,
+  onSample,
+  timeframe,
+  onRange,
+  interval,
+  onInterval,
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1.5">
+      <YieldSampleBar compact value={sampleId} onChange={onSample} />
+      <span className="hidden h-4 w-px bg-line sm:inline-block" aria-hidden="true" />
+      <div className="flex items-center gap-1.5">
+        <span className={CONTROL_LABEL}>Range</span>
+        <WindowBar
+          compact
+          value={timeframe}
+          onChange={onRange}
+          label="Chart range"
+          title="How far back the charts go"
+        />
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span className={CONTROL_LABEL}>Interval</span>
+        <IntervalBar compact value={interval} onChange={onInterval} />
+      </div>
     </div>
   );
 }

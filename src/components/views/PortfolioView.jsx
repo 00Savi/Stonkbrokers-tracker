@@ -3,7 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { ethers } from 'ethers';
 import { SAVI_X } from '../Shell';
 import { NfaNote } from '../Disclaimer';
-import { copyPortfolioSnapshot } from '../../lib/share';
+import { copyElement, copyPortfolioSnapshot } from '../../lib/share';
+import { CopyControl } from '../CopyControl';
 import { PAIR_COLORS, STREAM_COLORS } from '../../lib/charts';
 import { SliceChart } from '../SliceChart';
 import { PROJECTS } from '../../lib/routes';
@@ -180,6 +181,22 @@ function assetEntryCostUsd(asset) {
   if (asset?.tokenPosition) return Number(asset.floorValue) || 0;
   if (Number(asset.entryCostUsd) > 0) return Number(asset.entryCostUsd);
   return (Number(asset.entryFloorUsd) || 0) + (Number(asset.activationCostUsd) || 0) + (Number(asset.basisUsd) || 0);
+}
+
+function Copyable({ id, className = '', children }) {
+  const ref = useRef(null);
+  return (
+    <div ref={ref} className={`relative ${className}`}>
+      <CopyControl
+        overlay
+        tight
+        idleLabel="Copy"
+        title="Copy this piece for X"
+        onCopy={() => copyElement(ref.current, { filename: `savi-portfolio-${id}.png`, maxW: 1080 })}
+      />
+      {children}
+    </div>
+  );
 }
 
 function roiAgainst(numer, denom) {
@@ -777,7 +794,9 @@ export default function PortfolioView({ data }) {
         mode,
         floor: formatCurrency(results.floorUsd),
         basis: costTotals.nftCount > 0 ? formatCurrency(costTotals.total) : '',
-        basisDetail: costTotals.nftCount > 0 ? 'Cost at entry' : '',
+        basisDetail: mode === 'history'
+          ? 'Cash credited after each seat opened and activated'
+          : `${forecastYears}y at the current run rate. Not compounded.`,
         cashLabel,
         cash: results.hasErrors ? 'ERROR' : formatCurrency(cashValue),
         roi: results.hasErrors ? 'ERROR' : formatRoi(roiPct),
@@ -803,18 +822,15 @@ export default function PortfolioView({ data }) {
           },
         assets: grouped.map((asset) => {
           const thumb = resolved[asset.projectKey] || {};
+          const entryCost = assetEntryCostUsd(asset);
+          const assetRoi = mode === 'history'
+            ? roiAgainst(asset.earnedValue, entryCost)
+            : roiAgainst((asset.yieldValue || 0) * forecastYears, asset.floorValue);
           return {
             name: `${asset.project} (${asset.tokenPosition ? formatAmount(asset.balance) : `${asset.balance} owned`})`,
-            detail: [
-              thumb.tokenId != null ? `#${thumb.tokenId}` : null,
-              `Floor ${formatCurrency(asset.floorValue)}`,
-              asset.tokenPosition
-                ? null
-                : (asset.basisKnown > 0 ? `Basis ${formatCurrency(asset.basisUsd || 0)}` : null),
-              asset.tokenPosition || !(asset.activationCostUsd > 0)
-                ? null
-                : `Act ~${formatCurrency(asset.activationCostUsd)}`,
-            ].filter(Boolean).join(' · '),
+            detail: mode === 'history'
+              ? `Floor today ${formatCurrency(asset.floorValue)} · Entry ${entryCost > 0 ? formatCurrency(entryCost) : '—'} · Since entry ${formatRoi(assetRoi, 1)}`
+              : `Floor today ${formatCurrency(asset.floorValue)} · ${forecastYears}y ${formatRoi(assetRoi, 1)}`,
             value: mode === 'history'
               ? formatCurrency(asset.earnedValue || 0)
               : `+ ${formatCurrency((asset.yieldValue || 0) * forecastYears)}`,
@@ -940,7 +956,7 @@ export default function PortfolioView({ data }) {
               <div>
                 <p className="text-sm font-extrabold text-white">Share this wallet on X</p>
                 <p className="text-[11px] text-emerald-200/80 mt-0.5">
-                  Copies a one-page 4:5 card — floor, cost basis, yield, and holdings. No addresses.
+                  Copies a one-page card for X. Each chart below has its own Copy. Addresses stay off the image.
                 </p>
               </div>
               <button
@@ -1025,7 +1041,8 @@ export default function PortfolioView({ data }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+          <Copyable id="totals" className="mb-8">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3 sm:p-5 shadow-inner">
               <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Total Floor Value</p>
               <p className="text-xl md:text-2xl font-extrabold text-white">{formatCurrency(results.floorUsd)}</p>
@@ -1062,11 +1079,12 @@ export default function PortfolioView({ data }) {
               <p className="text-xl md:text-2xl font-extrabold text-purple-400">{results.totalUnits} Units</p>
             </div>
           </div>
+          </Copyable>
 
           {grouped.some((g) => g.floorValue > 0) && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-              <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
-                <h3 className="text-sm font-bold text-white mb-4">Floor allocation</h3>
+              <Copyable id="floor" className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
+                <h3 className="text-sm font-bold text-white mb-4 pr-8">Floor allocation</h3>
                 <SliceChart
                   noun="Floor"
                   format={formatCurrency}
@@ -1076,12 +1094,12 @@ export default function PortfolioView({ data }) {
                     color: PIE_COLORS[i % PIE_COLORS.length],
                   }))}
                 />
-              </div>
+              </Copyable>
               {mode === 'forecast' ? (
-                <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
-                  <div className="flex items-center justify-between gap-2 mb-2">
+                <Copyable id="forecast" className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
+                  <div className="flex items-center justify-between gap-2 mb-2 pr-8">
                     <h3 className="text-sm font-bold text-white">Forecasted cash-flow</h3>
-                    <GrainBar value={forecastGrain} onChange={setForecastGrain} />
+                    <div data-share-omit><GrainBar value={forecastGrain} onChange={setForecastGrain} /></div>
                   </div>
                   <p className="text-2xl font-extrabold text-emerald-400 mb-1">
                     {formatCurrency(runRate[forecastGrain] || 0)}
@@ -1090,12 +1108,12 @@ export default function PortfolioView({ data }) {
                     </span>
                   </p>
                   <p className="text-xs text-slate-500">Current wallet yield as a run-rate. Not compounded.</p>
-                </div>
+                </Copyable>
               ) : (
-                <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
-                  <div className="flex items-center justify-between gap-2 mb-2">
+                <Copyable id="drops" className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
+                  <div className="flex items-center justify-between gap-2 mb-2 pr-8">
                     <h3 className="text-sm font-bold text-white">Daily drops</h3>
-                    <GrainBar value={historyGrain} onChange={setHistoryGrain} />
+                    <div data-share-omit><GrainBar value={historyGrain} onChange={setHistoryGrain} /></div>
                   </div>
                   <p className="text-xs text-slate-500 mb-3">
                     Yield credited after you received and activated each NFT. {GRAINS.find((g) => g.id === historyGrain)?.title} buckets.
@@ -1130,12 +1148,14 @@ export default function PortfolioView({ data }) {
                       </div>
                     )}
                   </div>
-                </div>
+                </Copyable>
               )}
             </div>
           )}
 
-          <h3 className="text-sm font-bold text-white mb-4 border-b border-[#1e2228] pb-2">Owned Asset Breakdown</h3>
+          <div className="mb-4 flex items-center justify-between gap-3 border-b border-[#1e2228] pb-2">
+            <h3 className="text-sm font-bold text-white">Owned Asset Breakdown</h3>
+          </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {grouped.length === 0 ? (
               <p className="text-xs text-slate-400 lg:col-span-2">No ecosystem NFTs found in the provided wallet(s).</p>
@@ -1147,11 +1167,11 @@ export default function PortfolioView({ data }) {
                   ? roiAgainst(asset.earnedValue, entryCost)
                   : roiAgainst((asset.yieldValue || 0) * forecastYears, asset.floorValue);
                 return (
-                <div key={asset.projectKey} className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 shadow-inner">
+                <Copyable key={asset.projectKey} id={`holding-${asset.projectKey}`} className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 shadow-inner">
                   <button
                     type="button"
                     onClick={() => toggleProject(asset.projectKey)}
-                    className="w-full flex items-center justify-between gap-3 text-left"
+                    className="w-full flex items-center justify-between gap-3 pr-8 text-left"
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       {thumbs[asset.projectKey]?.src || officialLogoSrc(asset) ? (
@@ -1353,18 +1373,18 @@ export default function PortfolioView({ data }) {
                       </table>
                     </div>
                   )}
-                </div>
+                </Copyable>
                 );
               })
             )}
           </div>
 
           {allNfts.length > 0 && (
-            <div className="mt-6 bg-[#08090b] border border-[#1e2228] rounded-xl overflow-hidden">
+            <Copyable id="tokenbound" className="mt-6 bg-[#08090b] border border-[#1e2228] rounded-xl overflow-hidden">
               <button
                 type="button"
                 onClick={() => setAggregateOpen((v) => !v)}
-                className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-[#1e2228]/30 transition"
+                className="w-full flex items-center justify-between px-4 py-3 pr-12 text-left hover:bg-[#1e2228]/30 transition"
               >
                 <span className="text-sm font-bold text-white">All assets in tokenbound wallets</span>
                 <span className="flex items-center gap-2">
@@ -1393,7 +1413,7 @@ export default function PortfolioView({ data }) {
                   )}
                 </div>
               )}
-            </div>
+            </Copyable>
           )}
             </>
           )}

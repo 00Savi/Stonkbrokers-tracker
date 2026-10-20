@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { PROJECTS, isProjectLive, tabsForProject } from '../lib/routes';
 import { LAUNCHER_REF, SAVI_X } from '../lib/share';
-import { Value, price, usd, eth, BetaTag, WindowBar, IntervalBar, YieldSampleBar } from './kit';
+import { Value, price, usd, eth, BetaTag, YieldSampleBar, ViewControls } from './kit';
 import { setYieldSampleId, useYieldSampleId } from '../lib/yieldSample';
 import { useChartView } from '../lib/chartWindow';
 
@@ -251,7 +251,9 @@ export function TopNav({ live, sources, data, pending }) {
               </div>
             )}
           </div>
-          <YieldSampleBar compact value={sampleId} onChange={setYieldSampleId} />
+          {project || first === 'ecosystem' ? null : (
+            <YieldSampleBar compact value={sampleId} onChange={setYieldSampleId} />
+          )}
           <span
             className="hidden items-center gap-1.5 rounded-full border border-line px-2.5 py-1 font-mono text-[10px] text-faint md:flex"
             title={status.title}
@@ -292,6 +294,7 @@ export function TabBar({ data }) {
   const { project } = useParams();
   const [searchParams] = useSearchParams();
   const { range: timeframe, setRange, interval, setInterval } = useChartView();
+  const sampleId = useYieldSampleId();
   const meta = PROJECTS.find((p) => p.slug === project);
   const tabs = tabsForProject(meta);
   const keep = searchParams.toString();
@@ -323,10 +326,14 @@ export function TabBar({ data }) {
         ))}
       </div>
       <div className="flex shrink-0 items-center justify-end gap-2">
-        <div className="flex items-center gap-1">
-          <WindowBar compact value={timeframe} onChange={setRange} />
-          <IntervalBar compact value={interval} onChange={setInterval} />
-        </div>
+        <ViewControls
+          sampleId={sampleId}
+          onSample={setYieldSampleId}
+          timeframe={timeframe}
+          onRange={setRange}
+          interval={interval}
+          onInterval={setInterval}
+        />
         {ledger && (
           <span className="hidden font-mono text-[10px] text-faint xl:inline" title="Last ledger sync">
             Ledger {ledger}

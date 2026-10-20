@@ -342,43 +342,72 @@ function panel(ctx, x, y, w, h) {
   ctx.stroke();
 }
 
+function moneyShort(n) {
+  const v = Number(n) || 0;
+  const sign = v < 0 ? '-' : '';
+  const abs = Math.abs(v);
+  if (abs >= 1000) return `${sign}$${(abs / 1000).toFixed(abs >= 10000 ? 0 : 1)}k`;
+  if (abs >= 100) return `${sign}$${abs.toFixed(0)}`;
+  if (abs >= 1) return `${sign}$${abs.toFixed(0)}`;
+  return `${sign}$${abs.toFixed(2)}`;
+}
+
 function drawDonut(ctx, x, y, w, h, slices) {
-  const total = slices.reduce((s, sl) => s + (Number(sl.value) || 0), 0);
-  const cx = x + w * 0.38;
-  const cy = y + h / 2 + 8;
-  const r = Math.min(w, h) * 0.28;
-  if (!(total > 0)) {
+  const rows = (slices || []).filter((sl) => Number(sl.value) > 0);
+  const total = rows.reduce((s, sl) => s + Number(sl.value), 0);
+  const cx = x + Math.min(w * 0.28, 150);
+  const cy = y + h / 2 + 4;
+  const r = Math.min(h * 0.42, w * 0.26);
+  if (!(total > 0) || !(r > 8)) {
     ctx.fillStyle = '#575e67';
     ctx.font = '600 14px ui-sans-serif, system-ui, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('No floor to split', cx, cy);
+    ctx.fillText('No floor to split', x + w / 2, y + h / 2);
     ctx.textAlign = 'left';
     return;
   }
-  let a = -Math.PI / 2;
-  for (const sl of slices) {
-    const sweep = ((Number(sl.value) || 0) / total) * Math.PI * 2;
+  let angle = -Math.PI / 2;
+  for (const sl of rows) {
+    const sweep = (Number(sl.value) / total) * Math.PI * 2;
     ctx.beginPath();
     ctx.moveTo(cx, cy);
-    ctx.arc(cx, cy, r, a, a + sweep);
+    ctx.arc(cx, cy, r, angle, angle + sweep);
     ctx.closePath();
     ctx.fillStyle = sl.color || '#94a3b8';
     ctx.fill();
-    a += sweep;
+    angle += sweep;
   }
   ctx.beginPath();
-  ctx.arc(cx, cy, r * 0.58, 0, Math.PI * 2);
+  ctx.arc(cx, cy, r * 0.64, 0, Math.PI * 2);
   ctx.fillStyle = '#0e1013';
   ctx.fill();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#f4f6f8';
+  ctx.font = '800 20px ui-sans-serif, system-ui, sans-serif';
+  ctx.fillText(fitText(ctx, moneyShort(total), r * 1.1), cx, cy - 8);
+  ctx.fillStyle = '#8b929b';
+  ctx.font = '700 10px ui-sans-serif, system-ui, sans-serif';
+  ctx.fillText('FLOOR', cx, cy + 12);
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
 
-  let ly = y + 36;
-  slices.forEach((sl) => {
+  const legendX = x + Math.min(w * 0.52, cx + r + 28);
+  const legendRight = x + w - 8;
+  const rowH = Math.min(40, Math.max(28, (h - 12) / Math.max(rows.length, 1)));
+  rows.forEach((sl, i) => {
+    const ly = y + 8 + i * rowH;
+    const pct = `${((Number(sl.value) / total) * 100).toFixed(0)}%`;
+    const money = moneyShort(sl.value);
     ctx.fillStyle = sl.color || '#94a3b8';
-    ctx.fillRect(x + w * 0.68, ly, 10, 10);
-    ctx.fillStyle = '#e7e9ec';
-    ctx.font = '600 13px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText(sl.label || '', x + w * 0.68 + 16, ly - 2);
-    ly += 22;
+    roundRect(ctx, legendX, ly + 4, 8, rowH - 14, 2);
+    ctx.fill();
+    ctx.fillStyle = '#f4f6f8';
+    ctx.font = '700 14px ui-sans-serif, system-ui, sans-serif';
+    ctx.fillText(fitText(ctx, sl.label || '', legendRight - legendX - 108), legendX + 16, ly + 2);
+    ctx.fillStyle = '#8b929b';
+    ctx.font = '600 12px ui-sans-serif, system-ui, sans-serif';
+    ctx.fillText(fitText(ctx, `${money} · ${pct}`, legendRight - legendX - 16), legendX + 16, ly + 18);
   });
 }
 
@@ -394,26 +423,44 @@ function drawBars(ctx, x, y, w, h, bars) {
     return;
   }
   const max = Math.max(...values, 1);
-  const left = x + 16;
+  const left = x + 44;
   const right = x + w - 16;
   const top = y + 8;
-  const bottom = y + h - 28;
-  const inner = right - left;
-  const gap = n > 8 ? 2 : 8;
-  const bw = Math.max(3, (inner - gap * (n - 1)) / n);
+  const bottom = y + h - 26;
+  const inner = Math.max(1, right - left);
+  const gap = n > 24 ? 1 : n > 10 ? 2 : 6;
+  const bw = Math.max(2, (inner - gap * (n - 1)) / n);
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(left, bottom);
+  ctx.lineTo(right, bottom);
+  ctx.stroke();
+  ctx.fillStyle = '#6b7280';
+  ctx.font = '600 11px ui-sans-serif, system-ui, sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText(moneyShort(max), left - 6, top);
+  ctx.fillText('0', left - 6, bottom - 12);
+  ctx.textAlign = 'left';
   values.forEach((v, i) => {
     const bh = ((bottom - top) * v) / max;
     const bx = left + i * (bw + gap);
     ctx.fillStyle = colors[i] || '#f7931a';
-    roundRect(ctx, bx, bottom - bh, bw, Math.max(2, bh), 3);
+    roundRect(ctx, bx, bottom - Math.max(1.5, bh), bw, Math.max(1.5, bh), Math.min(3, bw / 2));
     ctx.fill();
   });
   ctx.fillStyle = '#8b929b';
   ctx.font = '600 11px ui-sans-serif, system-ui, sans-serif';
-  const step = n > 8 ? Math.ceil(n / 6) : 1;
-  labels.forEach((label, i) => {
-    if (i % step !== 0 && i !== n - 1) return;
-    ctx.fillText(String(label), left + i * (bw + gap), bottom + 6);
+  const picks = n > 8 ? [0, Math.round((n - 1) / 2), n - 1] : labels.map((_, i) => i);
+  let lastRight = -Infinity;
+  picks.forEach((i) => {
+    const text = String(labels[i] ?? '');
+    const tw = ctx.measureText(text).width;
+    let lx = left + i * (bw + gap);
+    if (lx + tw > right) lx = right - tw;
+    if (lx < lastRight + 10) return;
+    ctx.fillText(text, lx, bottom + 8);
+    lastRight = lx + tw;
   });
 }
 
@@ -565,10 +612,10 @@ function drawPortfolioCard({
   }
 
   const stats = [
-    { label: 'Floor', value: floor, color: '#e7e9ec' },
-    { label: 'Cost basis', value: basis || '—', color: '#e7e9ec' },
-    { label: mode === 'history' ? 'Realized' : 'ROI', value: roi, color: '#38bdf8' },
-    { label: 'Units', value: units, color: '#f7931a' },
+    { label: 'Floor today', value: floor, color: '#e7e9ec' },
+    { label: 'Cost at entry', value: basis || '—', color: '#e7e9ec' },
+    { label: mode === 'history' ? 'On entry cost' : 'Forecast ROI', value: roi, color: '#38bdf8' },
+    { label: 'Seats', value: units, color: '#f7931a' },
   ];
   const statY = heroY + heroH + gap;
   const statH = 92;
@@ -585,7 +632,7 @@ function drawPortfolioCard({
   });
 
   const chartY = statY + statH + gap;
-  const chartH = 292;
+  const chartH = 340;
   const chartW = (W - pad * 2 - gap) / 2;
   cardPanel(ctx, pad, chartY, chartW, chartH);
   ctx.fillStyle = '#6b7280';
@@ -628,20 +675,25 @@ function drawPortfolioCard({
       roundRect(ctx, pad, y, W - pad * 2, rowH - 4, 12);
       ctx.fill();
     }
-    const thumb = Math.round(rowH - 16);
-    drawThumb(ctx, a.img, pad + 10, y + 6, thumb, a.mark || a.name);
+    const thumb = Math.min(44, Math.round(rowH - 18));
+    const mid = y + (rowH - 4) / 2;
+    drawThumb(ctx, a.img, pad + 10, mid - thumb / 2, thumb, a.mark || a.name);
+    ctx.textBaseline = 'middle';
     ctx.fillStyle = '#00a804';
-    ctx.font = '800 16px ui-sans-serif, system-ui, sans-serif';
+    ctx.font = '800 18px ui-sans-serif, system-ui, sans-serif';
     const value = a.value || '—';
     ctx.textAlign = 'right';
-    ctx.fillText(fitText(ctx, value, 160), W - pad - 14, y + 12);
+    ctx.fillText(fitText(ctx, value, 170), W - pad - 16, mid);
     ctx.textAlign = 'left';
+    const textX = pad + thumb + 24;
+    const textW = W - pad - 190 - textX;
     ctx.fillStyle = '#f4f6f8';
     ctx.font = '700 16px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText(fitText(ctx, a.name || 'Project', W - pad * 2 - thumb - 200), pad + thumb + 22, y + 10);
+    ctx.fillText(fitText(ctx, a.name || 'Project', textW), textX, mid - 12);
     ctx.fillStyle = '#8b929b';
     ctx.font = '600 12px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText(fitText(ctx, a.detail || '', W - pad * 2 - thumb - 200), pad + thumb + 22, y + 32);
+    ctx.fillText(fitText(ctx, a.detail || '', textW), textX, mid + 10);
+    ctx.textBaseline = 'top';
   });
 
   ctx.fillStyle = '#0a0c0e';

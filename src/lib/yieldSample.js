@@ -13,8 +13,8 @@ import { typicalNightshadesSeat } from './nightshades';
  */
 
 export const YIELD_SAMPLE_WINDOWS = [
-  { id: '7', label: '7D', days: 7 },
-  { id: '30', label: '30D', days: 30 },
+  { id: '7', label: 'Week', days: 7 },
+  { id: '30', label: 'Month', days: 30 },
   { id: '90', label: 'Quarter', days: 90 },
 ];
 
@@ -43,7 +43,7 @@ export function yieldSampleDays(id = currentId()) {
 }
 
 export function yieldSampleLabel(id = currentId()) {
-  return YIELD_SAMPLE_WINDOWS.find((w) => w.id === id)?.label || '30D';
+  return YIELD_SAMPLE_WINDOWS.find((w) => w.id === id)?.label || 'Month';
 }
 
 export function setYieldSampleId(id) {
@@ -413,7 +413,7 @@ export function yieldBasisText(project) {
     return `Published sample. This seat has no daily book for a longer window.${extra}`;
   }
   if (s.partial === 'rain') {
-    return `${s.label} slab rain, annualized. Staking is a 30-day figure, so it joins the rate on 30D.${extra}`;
+    return `${s.label} slab rain, annualized. Staking is a 30-day figure, so it joins the Month rate.${extra}`;
   }
   return `${s.label} trailing cash, annualized × 365/${s.days}.${extra}`;
 }

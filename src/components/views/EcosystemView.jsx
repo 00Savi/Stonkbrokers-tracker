@@ -12,12 +12,13 @@ import {
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 import {
-  compactUsd, compactNum, WindowBar, IntervalBar, Card, Stat, Tag, KpiStrip,
+  compactUsd, compactNum, ViewControls, Card, Stat, Tag, KpiStrip,
 } from '../kit';
 import { dateKey, formatLabels } from '../../lib/dates';
 import { burnSeries } from '../../lib/burn';
 import { cashflowRoiByDate, seriesHasInk, bucketKey, windowLen, windowPeriodLabel } from '../../lib/yieldHistory';
 import { useChartView } from '../../lib/chartWindow';
+import { setYieldSampleId, useYieldSampleId } from '../../lib/yieldSample';
 import { useSectionScrollSpy } from '../../lib/projectScroll';
 import { baseChartOptions, compactTick, compactUsdTick, PROJECT_COLORS, levelAxis } from '../../lib/charts';
 import { OnboardClusterPanel } from '../HistoryCharts';
@@ -289,6 +290,7 @@ export default function EcosystemView({ data, pending = false }) {
   const aliased = TAB_ALIAS[tabFromUrl] || tabFromUrl;
   const activeTab = ECO_TABS.some((t) => t.id === aliased) ? aliased : 'seats';
   const { range: timeframe, setRange, interval, setInterval } = useChartView();
+  const sampleId = useYieldSampleId();
   const [quotes, setQuotes] = useState({});
   const [structures, setStructures] = useState(null);
   const [retentions, setRetentions] = useState(null);
@@ -591,19 +593,29 @@ export default function EcosystemView({ data, pending = false }) {
   return (
     <div className="relative space-y-6 pt-4">
       <div className="sticky top-[var(--header-h,5.5rem)] z-20 -mx-3 bg-[#08090b] px-3" data-share-omit>
-        <div className="flex items-center gap-1 overflow-x-auto border-b border-line px-1 pb-3 pt-4 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {ECO_TABS.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => selectTab(tab.id)}
-              className={`shrink-0 whitespace-nowrap rounded-lg px-2.5 py-2 text-[12px] transition-colors sm:px-3 sm:py-1.5 sm:text-[13px] ${
-                activeTab === tab.id ? 'bg-panel-2 text-ink' : 'text-muted hover:text-ink'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+        <div className="flex flex-col gap-2 border-b border-line pb-3 pt-4 sm:flex-row sm:items-center">
+          <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {ECO_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => selectTab(tab.id)}
+                className={`shrink-0 whitespace-nowrap rounded-lg px-2.5 py-2 text-[12px] transition-colors sm:px-3 sm:py-1.5 sm:text-[13px] ${
+                  activeTab === tab.id ? 'bg-panel-2 text-ink' : 'text-muted hover:text-ink'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          <ViewControls
+            sampleId={sampleId}
+            onSample={setYieldSampleId}
+            timeframe={timeframe}
+            onRange={setRange}
+            interval={interval}
+            onInterval={setInterval}
+          />
         </div>
       </div>
 
@@ -619,7 +631,7 @@ export default function EcosystemView({ data, pending = false }) {
             <Stat label="30D fees kept" value={compactUsd(mixTotal)} note="Protocol revenue" />
           </KpiStrip>
         </Card>
-        <Card flush eyebrow="Seats" sub="Cash-on-cash uses the run rate in the header, divided by that cost. The snipe column fills in as each vault answers.">
+        <Card flush eyebrow="Seats" sub="Cash-on-cash uses the run rate on this bar, divided by that cost. The snipe column fills in as each vault answers.">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-left">
               <thead>
@@ -785,10 +797,6 @@ export default function EcosystemView({ data, pending = false }) {
       </ShareSection>
 
       <ShareSection id="history" className="scroll-mt-32 space-y-4">
-        <div className="flex items-center justify-end gap-2" data-share-omit>
-          <WindowBar compact value={timeframe} onChange={setRange} />
-          <IntervalBar compact value={interval} onChange={setInterval} />
-        </div>
         <p className="max-w-2xl text-[13px] leading-relaxed text-muted">
           {period} on each project’s own scale. The seat table above stays at last sync.
         </p>
@@ -832,7 +840,7 @@ export default function EcosystemView({ data, pending = false }) {
 
       <MethodologyCard>
         <p><strong className="text-white">Seats:</strong> Floor cost is the cheapest listing plus the T0 token requirement, at the last sync. For The Card Wall that listing is the cheapest star, and the row lists the rest. Snipe cost is the AMM specific-buy quote for one NFT plus those same activation tokens. Nightshades is one typical faction, weighted by how many are active, not the sum of four.</p>
-        <p><strong className="text-white">Revenue:</strong> The bar is fees the protocol kept over the trailing 30 days. Cash already paid to seats, cash still sitting in the oracle or vault, gacha pulls, and a yield divided by 365 stay on the page and out of that total. Seat yield is a separate run rate. The window control on History is the chart range.</p>
+        <p><strong className="text-white">Revenue:</strong> The bar is fees the protocol kept over the trailing 30 days. Cash already paid to seats, cash still sitting in the oracle or vault, gacha pulls, and a yield divided by 365 stay on the page and out of that total. Seat yield follows the Run rate on the bar above. Range and Interval only change the charts.</p>
         <p><strong className="text-white">Ownership:</strong> Wallets per 100 NFTs is unique wallets divided by circulating supply, times 100. Top 10 is the share those wallets hold. Still holding is written when the activity rebuild records who entered and who left. NFTs in the AMM are a count. The Anvil scan is where a vault’s contents are priced.</p>
         <p><strong className="text-white">Chain onboard:</strong> Unique EOAs that sent a transaction with nonce 0–9 which received or minted a StonkBrokers, Mancer, Card Wall, TickerYard, or Interns NFT, or bought that project’s token off its AMM. Airdrops and peer transfers do not count.</p>
       </MethodologyCard>
