@@ -8,6 +8,8 @@ import { formatLabels } from '../../lib/dates';
 import { windowSnapshots, tierRoiDatasets, protocolRevenueChart, sliceCols, windowPeriodLabel, seriesHasInk, holderRevenueCol, windowChart } from '../../lib/yieldHistory';
 import { compactUsd, compactNum, YieldPeriodToggle, scaleAnnualYield, yieldSuffix } from '../kit';
 import { yieldBasisText } from '../../lib/yieldSample';
+import { seatCsvRows } from '../../lib/csv';
+import { CsvButton } from '../CsvButton';
 import { ShareSection } from '../CopyControl';
 import { TierFlowSection, netTierCount } from '../TierFlowCards';
 import { baseChartOptions, compactTick, compactUsdTick, cumulativeBurnDataset, STREAM_COLORS, TIER_COLORS, percentTick } from '../../lib/charts';
@@ -192,6 +194,12 @@ export default function YardDetailView({ data, activeTab }) {
             <input type="range" min="0.1" max="10" step="0.1" value={volumeMultiplier} onChange={(e) => setVolumeMultiplier(e.target.value)} className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-500" />
           </div>
 
+          <div className="mb-2 flex justify-end">
+            <CsvButton
+              filename={`${config.ticker || 'yard'}-seats.csv`}
+              rows={seatCsvRows(project, { floorUsd: floorCostUsd, volume: volumeMultiplier })}
+            />
+          </div>
           <div className="overflow-x-auto -mx-1 sm:mx-0">
             <table className="w-full text-left border-collapse">
               <thead>

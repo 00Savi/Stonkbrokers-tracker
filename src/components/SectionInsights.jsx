@@ -13,6 +13,7 @@ import { explorerAddressUrl } from '../lib/tba';
 import { walletName } from '../lib/wallets';
 import { compactNum, compactUsd, Card, KpiStrip, Stat } from './kit';
 import { ActivityChart, ChartPanel } from './HistoryCharts';
+import { PayoutCalendar } from './PayoutCalendar';
 import { useChartView } from '../lib/chartWindow';
 import { windowChart } from '../lib/yieldHistory';
 
@@ -156,17 +157,48 @@ function AmmExchange({ project }) {
   );
 }
 
+function tierChipLabel(tier) {
+  if (!tier) return '';
+  return tier.name ? `${tier.tier}: ${tier.name}` : tier.tier;
+}
+
 function CashVsMark({ project }) {
-  const tier = project?.tiers?.[0];
+  const tiers = (project?.tiers || []).filter((tier) => tier?.tier);
+  const [tierId, setTierId] = useState(tiers[0]?.tier || '');
+  const tier = tiers.find((row) => row.tier === tierId) || tiers[0];
   const series = cashVsMarkSeries(project?.dailySnapshots, tier, seatCashByDate(project, tier));
   if (!series) return null;
   const labels = formatLabels(series.labels);
+  const toolbar = tiers.length > 1 ? (
+    <div
+      role="tablist"
+      aria-label="Seat tier"
+      className="mt-3 flex max-w-full gap-1 overflow-x-auto rounded-lg border border-line p-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
+      {tiers.map((row) => (
+        <button
+          key={row.tier}
+          type="button"
+          role="tab"
+          aria-selected={row.tier === tier.tier}
+          onClick={() => setTierId(row.tier)}
+          className={`shrink-0 rounded-md px-2.5 py-1 text-[12px] font-medium normal-case tracking-normal ${
+            row.tier === tier.tier ? 'bg-panel-2 text-ink' : 'text-muted hover:text-ink'
+          }`}
+        >
+          {tierChipLabel(row)}
+        </button>
+      ))}
+    </div>
+  ) : null;
   return (
     <ChartPanel
-      title={`Cash yield vs mark · ${series.tier}`}
+      title={`Cash yield vs mark · ${tierChipLabel(tier)}`}
       note="Cash is what that seat was paid on each day, summed. A day with no print adds nothing. Mark is how far the entry cost (floor plus this tier’s tokens) has moved since the first day in the window. Both are USD."
+      toolbar={toolbar}
     >
       <Line
+        key={tier?.tier || 'tier'}
         data={{
           labels,
           datasets: [
@@ -567,7 +599,14 @@ export function SectionInsights({ sectionId }) {
   if (!ctx || !sectionId) return null;
   const { project, analysis, overlapSlugs } = ctx;
 
-  if (sectionId === 'roi') return <CashVsMark project={project} />;
+  if (sectionId === 'roi') {
+    return (
+      <>
+        <CashVsMark project={project} />
+        <PayoutCalendar project={project} />
+      </>
+    );
+  }
   if (sectionId === 'revenue' || sectionId === 'night') {
     // Stonk already draws the booster mix, including the reward and partner share.
     // The index stitch under this chart labeled that reward "AMM" and stopped in September.

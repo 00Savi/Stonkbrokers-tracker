@@ -41,7 +41,7 @@ import { AnalysisProvider } from '../src/components/SectionInsights';
 import { protocolRevenueChart, resampleSeries } from '../src/lib/yieldHistory';
 import { rollupNightshadesOwnership } from '../src/lib/nightshades';
 import { tokenValuation } from '../src/lib/valuation';
-import { compactUsd } from '../src/components/kit';
+import { compactNum, compactUsd } from '../src/components/kit';
 import { applyLiveMachines, dropsForMachine, freshAlleyDrops } from '../src/lib/cardwallDrops';
 import { dateKey } from '../src/lib/dates';
 import { PROJECTS, tabsForProject } from '../src/lib/routes';
@@ -61,6 +61,14 @@ import { ANVIL_VAULTS, internRowState, internStatusLine, predictTbaAddress, rank
 import { cheapestWallEth, listedSeat, mixUsd, revenueRows, snipeSeatUsd } from '../src/lib/seats';
 import { isProjectLive } from '../src/lib/routes';
 import { typicalNightshadesSeat } from '../src/lib/nightshades';
+import { parseYieldSample } from '../src/lib/yieldSample';
+import { paybackMonths, portfolioCashMarkSeries } from '../src/lib/portfolioHistory';
+import { seatCsvRows } from '../src/lib/csv';
+import { sumVersusHold } from '../src/lib/lpHold';
+import { agoLabel, buildTape, eventAgeSeconds, tapeBooks, tokenAmount } from '../src/lib/eventTape';
+import { EventTape } from '../src/components/EventTape';
+import { heaviestWeekday, monthCells, payoutDays, weekdayRollup } from '../src/lib/payoutCalendar';
+import { PayoutCalendar } from '../src/components/PayoutCalendar';
 
 const snapshot = JSON.parse(fs.readFileSync('public/data.json', 'utf8'));
 
@@ -719,17 +727,74 @@ for (const [name, View, props] of VIEWS) {
       </AnalysisProvider>
     </StaticRouter>,
   );
+  const flow = snapshot.projects?.stonk?.ammFlow;
+  const flowIn = (flow?.entered || []).reduce((s, n) => s + (Number(n) || 0), 0);
+  const flowOut = (flow?.left || []).reduce((s, n) => s + (Number(n) || 0), 0);
+  const flowEth = (flow?.feeEth || []).reduce((s, n) => s + (Number(n) || 0), 0);
+  const flowUsd = flowEth * (Number(snapshot.projects?.stonk?.market?.ethPriceUsd) || 0);
   const ammOk = ammHtml.includes('AMM exchange')
     && ammHtml.includes('Sold into the vault')
     && ammHtml.includes('Bought out of the vault')
-    && ammHtml.includes('3,115')
-    && ammHtml.includes('806')
-    && ammHtml.includes('$1.44M');
+    && flowIn > 0
+    && ammHtml.includes(compactNum(flowIn))
+    && ammHtml.includes(compactNum(flowOut))
+    && ammHtml.includes(compactUsd(flowUsd));
   if (!ammOk) {
     failed++;
     console.error('FAIL  stonk ownership missing AMM in/out/fees');
   } else {
     console.log('ok    stonk AMM exchange shows in, out, net, and fees');
+  }
+  const tierNames = (snapshot.projects?.stonk?.tiers || []).map((t) => `${t.tier}: ${t.name}`);
+  const t0At = ammHtml.indexOf('>T0: Floor Trader<');
+  const selectedAt = t0At > 0 ? ammHtml.lastIndexOf('aria-selected="true"', t0At) : -1;
+  const tierOk = ammHtml.includes('Cash yield vs mark · T0: Floor Trader')
+    && ammHtml.includes('aria-label="Seat tier"')
+    && tierNames.length === 5
+    && tierNames.every((name) => ammHtml.includes(`>${name}<`))
+    && selectedAt >= 0
+    && t0At - selectedAt < 400;
+  if (!tierOk) {
+    failed++;
+    console.error('FAIL  cash vs mark missing the tier toggle');
+  } else {
+    console.log('ok    cash vs mark defaults to T0 and lists every tier');
+  }
+  const seatHtml = renderToString(
+    <StaticRouter location="/stonkbrokers/roi">
+      <StonkDetailView data={snapshot} activeTab="roi" />
+    </StaticRouter>,
+  );
+  const seatRows = seatCsvRows(snapshot.projects.stonk, { floorUsd: 1000, volume: 1 });
+  if (!seatHtml.includes('>CSV<') || seatRows[0][0] !== 'tier' || seatRows.length < 2) {
+    failed++;
+    console.error('FAIL  seat table missing CSV');
+  } else {
+    console.log('ok    seat table offers a CSV');
+  }
+  const opened = Date.parse('2026-09-01T00:00:00Z') / 1000;
+  const cashMark = portfolioCashMarkSeries([{
+    projectKey: 'stonk',
+    nfts: [{
+      tierId: 'T0',
+      isActive: true,
+      lastTransferTs: opened,
+      activationTs: opened,
+      entryFloorUsd: 1000,
+      activationCostUsd: 200,
+      basisKnown: false,
+      yieldValue: 600,
+    }],
+  }], snapshot);
+  const months = paybackMonths(1200, 600);
+  if (months !== 24 || cashMark.labels.length < 2 || !(cashMark.cash.at(-1) > 0) || cashMark.mark.length !== cashMark.cash.length) {
+    failed++;
+    console.error(`FAIL  portfolio cash vs mark months=${months} days=${cashMark.labels.length} cash=${cashMark.cash.at(-1)}`);
+  } else if (parseYieldSample('90') !== '90' || parseYieldSample('nope') !== null) {
+    failed++;
+    console.error('FAIL  run rate query parser');
+  } else {
+    console.log(`ok    portfolio cash vs mark ${cashMark.labels.length} days, payback 24 mo, run rate ?r=`);
   }
   const ns = snapshot.projects?.nightshades;
   const factionY = Object.values(ns?.factions || {}).map((f) => Number(f?.tiers?.[0]?.trackedAnnualYieldUsd) || 0);
@@ -1198,6 +1263,152 @@ for (const [name, View, props] of VIEWS) {
     console.error('FAIL  reserve outstanding × price is still labeled FDV');
   } else {
     console.log('ok    strike FDV uses the fixed cap');
+  }
+}
+
+{
+  const vaults = [
+    { mode: 0, tvlUsd: 100, fees7dUsd: 20, protocolFees7dUsd: 2, versusHold: { feesKeptUsd: 18, gapUsd: -5, netUsd: 13, windowDays: 7 } },
+    { mode: 1, tvlUsd: 50, fees7dUsd: 8, protocolFees7dUsd: 1, versusHold: { feesKeptUsd: 7, gapUsd: -1, netUsd: 6, windowDays: 7 } },
+    { mode: 2, tvlUsd: 10, fees7dUsd: 4, protocolFees7dUsd: 0.4 },
+  ];
+  const all = sumVersusHold(vaults, null);
+  const fr = sumVersusHold(vaults, 0);
+  const ask = sumVersusHold(vaults, 2);
+  if (!all || all.n !== 2 || all.feesKeptUsd !== 25 || all.gapUsd !== -6 || all.netUsd !== 19 || !fr || fr.n !== 1 || fr.gapUsd !== -5 || ask) {
+    failed++;
+    console.error('FAIL  smart LP versus hold sum', all, fr, ask);
+  } else {
+    console.log('ok    smart LP versus hold sums by mode');
+  }
+  const stonk = snapshot.projects.stonk;
+  const sample = (stonk.revenue?.smartLp?.vaults || []).slice(0, 1).map((v) => ({
+    ...v,
+    versusHold: { feesKeptUsd: 18, gapUsd: -12345.67, netUsd: -12327.67, windowDays: 7 },
+  }));
+  const data = {
+    ...snapshot,
+    projects: {
+      ...snapshot.projects,
+      stonk: {
+        ...stonk,
+        revenue: {
+          ...stonk.revenue,
+          smartLp: { ...stonk.revenue.smartLp, vaults: sample },
+        },
+      },
+    },
+  };
+  const html = renderToString(
+    <StaticRouter location="/stonkbrokers/liquidity">
+      <StonkDetailView data={data} activeTab="liquidity" />
+    </StaticRouter>
+  );
+  if (!sample.length || !html.includes('Versus hold') || !html.includes('Fees kept') || !html.includes('-$12.3k')) {
+    failed++;
+    console.error('FAIL  smart LP hold panel');
+  } else {
+    console.log('ok    smart LP hold panel');
+  }
+}
+
+{
+  const amm = '0xe302733accf4800146e55fc45b46b4e4ffc032d2';
+  const book = { slug: 'stonk', nftCa: '0x539cdd042c2f3d93ebc5be7dfff0c79f3b4fabf0', ammCa: amm, label: 'StonkBrokers' };
+  const tape = buildTape([
+    { kind: 'transfer', token_id: '5', from: amm, to: '0xabc0000000000000000000000000000000000001', block_number: 10, log_index: 1, transaction_hash: '0x1', book },
+    { kind: 'transfer', token_id: '9', from: '0xdef0000000000000000000000000000000000002', to: amm, block_number: 12, log_index: 0, transaction_hash: '0x2', book },
+    { kind: 'activated', token_id: '3', value: '66666000000000000000000', to: '0x1110000000000000000000000000000000000003', block_number: 11, log_index: 2, transaction_hash: '0x3', book },
+    { kind: 'cleared', token_id: '8', block_number: 11, log_index: 4, transaction_hash: '0x4', book },
+    { kind: 'transfer', token_id: null, from: amm, to: '0xabc0000000000000000000000000000000000001', block_number: 99, log_index: 0, transaction_hash: '0x5', book },
+  ]);
+  const kinds = tape.map((row) => `${row.kind}#${row.tokenId}`).join(',');
+  const want = 'sold-in#9,deactivation#8,activation#3,bought-out#5';
+  const stonkBooks = tapeBooks('stonk');
+  const ghostBooks = tapeBooks('nightshades', 'ghosts');
+  const allNight = tapeBooks('nightshades', 'all');
+  if (
+    kinds !== want
+    || tape[2].amount !== '66,666'
+    || tokenAmount('66666000000000000000000') !== '66,666'
+    || agoLabel(eventAgeSeconds(100, 100 + 10 * 600)) !== '10m ago'
+    || stonkBooks.length !== 1
+    || stonkBooks[0].slug !== 'stonk'
+    || ghostBooks.length !== 1
+    || ghostBooks[0].slug !== 'ghosts'
+    || allNight.length !== 4
+    || tapeBooks('oakmont').length !== 0
+  ) {
+    failed++;
+    console.error('FAIL  event tape', kinds, stonkBooks, ghostBooks.length, allNight.length);
+  } else {
+    console.log('ok    event tape orders swaps, activations, and deactivations');
+  }
+  const html = renderToString(
+    <StaticRouter location="/stonkbrokers/roi">
+      <EventTape books={stonkBooks} />
+    </StaticRouter>
+  );
+  if (!html.includes('Latest moves') || !html.includes('Loading the latest moves')) {
+    failed++;
+    console.error('FAIL  event tape shell');
+  } else {
+    console.log('ok    event tape shell');
+  }
+}
+
+{
+  const project = {
+    bookSlug: 'stonk',
+    config: { ticker: 'STONK' },
+    activation: { breakdown: { T0: 1 } },
+    tiers: [{
+      tier: 'T0',
+      name: 'Floor Trader',
+      weight: 100,
+      dailyDates: ['2026-10-18', '2026-10-19', '2026-10-20'],
+      dailyYields: [10, 0, 5],
+    }],
+    revenue: {
+      historyDates: ['2026-10-18', '2026-10-19', '2026-10-20'],
+      historyAmm: [10, 0, 5],
+      historyBox: [2, 0, 1],
+      historyTax: [0, 0, 3],
+      historyBooster: [0, 0, 0],
+      historySmartLp: [0, 0, 0],
+      historyPaid: [0, 0, 0],
+      historyFloat: [0, 0, 0],
+      historyDex: [0, 0, 0],
+    },
+  };
+  const days = payoutDays(project, project.tiers[0]);
+  const byDate = new Map(days.map((day) => [day.date, day]));
+  const cells = monthCells(2026, 10, byDate);
+  const heavy = heaviestWeekday(weekdayRollup(days));
+  const oct18 = byDate.get('2026-10-18');
+  const oct20 = byDate.get('2026-10-20');
+  const html = renderToString(
+    <StaticRouter location="/stonkbrokers/roi">
+      <PayoutCalendar project={project} />
+    </StaticRouter>
+  );
+  if (
+    days.length !== 3
+    || oct18?.floatShare !== 10
+    || oct18?.paidShare !== 0
+    || oct18?.sources.map((row) => row.key).join(',') !== 'box'
+    || oct20?.sources.map((row) => row.key).join(',') !== 'box,tax'
+    || heavy?.long !== 'Sunday'
+    || cells[3]?.day !== 1
+    || !html.includes('Payout calendar')
+    || !html.includes('Still in the pot')
+    || !html.includes('Clock-In')
+    || !html.includes('Snipe tax')
+  ) {
+    failed++;
+    console.error('FAIL  payout calendar', oct18, oct20, heavy, cells[3]);
+  } else {
+    console.log('ok    payout calendar splits pot cash from protocol streams');
   }
 }
 

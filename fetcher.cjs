@@ -4424,6 +4424,7 @@ async function run() {
               });
               smart = await fromGgIndex(idx, {
                 rpc,
+                blockTime,
                 ethPriceUsd: markets[projectKey]?.ethPriceUsd,
                 tokenPrices,
                 lookbackDays: YIELD_LOOKBACK_DAYS,

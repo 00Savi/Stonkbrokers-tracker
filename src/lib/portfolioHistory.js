@@ -406,6 +406,109 @@ export function walletDailyDrops(ownedAssets, data) {
   return { labels, data: labels.map((d) => byDate[d]) };
 }
 
+/** What this seat cost to open: ETH paid when we know it, otherwise that day's floor, plus activation tokens. */
+export function nftEntryCostUsd(nft) {
+  const act = Number(nft?.activationCostUsd) || 0;
+  const floorThen = Number(nft?.entryFloorUsd) || 0;
+  const paid = nft?.basisKnown && Number(nft?.basisUsd) > 0 ? Number(nft.basisUsd) : floorThen;
+  return paid + act;
+}
+
+/** Months to earn the entry cost back at the current annual yield. */
+export function paybackMonths(entryCost, annualYield) {
+  const cost = Number(entryCost) || 0;
+  const annual = Number(annualYield) || 0;
+  if (!(cost > 0) || !(annual > 0)) return null;
+  return (cost / annual) * 12;
+}
+
+export function formatPaybackMonths(months) {
+  if (months == null || !Number.isFinite(Number(months))) return '—';
+  const n = Number(months);
+  if (n >= 24) return `${Math.round(n)} mo`;
+  return `${n.toFixed(1)} mo`;
+}
+
+function snapsByDay(project) {
+  return [...(project?.dailySnapshots || [])]
+    .map((snap) => ({
+      date: dateKey(snap?.date),
+      floor: Number(snap?.nftFloorUsd) || 0,
+      px: Number(snap?.tokenPriceUsd) || 0,
+    }))
+    .filter((snap) => snap.date)
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+}
+
+function carried(snaps, day, field) {
+  let best = 0;
+  for (const snap of snaps) {
+    if (snap.date > day) break;
+    if (snap[field] > 0) best = snap[field];
+  }
+  return best;
+}
+
+/**
+ * From the first seat that opened: cash collected, and how far replacement
+ * cost (floor plus that tier's tokens) has moved from what the seat cost to open.
+ */
+export function portfolioCashMarkSeries(ownedAssets, data) {
+  const drops = walletDailyDrops(ownedAssets, data);
+  const cashByDay = new Map();
+  drops.labels.forEach((day, i) => {
+    const key = dateKey(day) || day;
+    if (key) cashByDay.set(key, (cashByDay.get(key) || 0) + (Number(drops.data[i]) || 0));
+  });
+
+  const seats = [];
+  for (const asset of ownedAssets || []) {
+    if (asset?.tokenPosition) continue;
+    const project = data?.projects?.[asset.projectKey];
+    if (!project) continue;
+    const snaps = snapsByDay(project);
+    for (const nft of asset.nfts || []) {
+      const start = Number(nft.activationTs || nft.lastTransferTs) > 0 ? earningStartTs(nft) : 0;
+      const open = start ? dayKeyFromSeconds(start) : '';
+      if (!open) continue;
+      const tier = (project.tiers || []).find((row) => row.tier === nft.tierId) || project.tiers?.[0];
+      seats.push({
+        open,
+        snaps,
+        req: Number(tier?.reqTokens) || 0,
+        entry: nftEntryCostUsd(nft),
+      });
+    }
+  }
+
+  const days = new Set(cashByDay.keys());
+  for (const seat of seats) {
+    days.add(seat.open);
+    for (const snap of seat.snaps) {
+      if (snap.date >= seat.open) days.add(snap.date);
+    }
+  }
+  const labels = [...days].filter(Boolean).sort();
+  if (labels.length < 2) return { labels: [], cash: [], mark: [] };
+
+  let cum = 0;
+  const cash = [];
+  const mark = [];
+  for (const day of labels) {
+    cum += cashByDay.get(day) || 0;
+    cash.push(cum);
+    let moved = 0;
+    for (const seat of seats) {
+      if (seat.open > day) continue;
+      const replacement = carried(seat.snaps, day, 'floor') + seat.req * carried(seat.snaps, day, 'px');
+      if (!(replacement > 0)) continue;
+      moved += replacement - seat.entry;
+    }
+    mark.push(moved);
+  }
+  return { labels, cash, mark };
+}
+
 export function bucketDropSeries(labels, values, grain = 'd') {
   if (grain === 'd') {
     return { labels: labels || [], data: (values || []).map((v) => Number(v) || 0) };

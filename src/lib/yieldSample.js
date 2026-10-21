@@ -1,4 +1,5 @@
-import { useSyncExternalStore } from 'react';
+import { useEffect, useRef, useSyncExternalStore } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { yieldBook } from './books';
 import { dateKey } from './dates';
 import { typicalNightshadesSeat } from './nightshades';
@@ -20,21 +21,46 @@ export const YIELD_SAMPLE_WINDOWS = [
 
 export const DEFAULT_YIELD_SAMPLE = '30';
 const STORAGE_KEY = 'yield-sample';
+/** Query key. `w` is already the chart range, and on the portfolio it is the wallet list. */
+const URL_KEY = 'r';
 
 const listeners = new Set();
 let sampleId = null;
 
+export function parseYieldSample(value) {
+  return YIELD_SAMPLE_WINDOWS.some((w) => w.id === value) ? value : null;
+}
+
 function storedId() {
   try {
     const v = localStorage.getItem(STORAGE_KEY);
-    return YIELD_SAMPLE_WINDOWS.some((w) => w.id === v) ? v : DEFAULT_YIELD_SAMPLE;
+    return parseYieldSample(v) || DEFAULT_YIELD_SAMPLE;
   } catch {
     return DEFAULT_YIELD_SAMPLE;
   }
 }
 
+function readUrlSample() {
+  if (typeof window === 'undefined') return null;
+  try {
+    return parseYieldSample(new URLSearchParams(window.location.search).get(URL_KEY));
+  } catch {
+    return null;
+  }
+}
+
 function currentId() {
-  if (!sampleId) sampleId = storedId();
+  if (!sampleId) {
+    const fromUrl = readUrlSample();
+    sampleId = fromUrl || storedId();
+    if (fromUrl) {
+      try {
+        localStorage.setItem(STORAGE_KEY, fromUrl);
+      } catch {
+        /* the link still wins for this tab */
+      }
+    }
+  }
   return sampleId;
 }
 
@@ -66,6 +92,40 @@ export function useYieldSampleId() {
     currentId,
     () => DEFAULT_YIELD_SAMPLE,
   );
+}
+
+/**
+ * The address bar is the shareable copy of the run rate.
+ * A `?r=` on the link wins over this browser's saved choice.
+ * Changing the dropdown writes `?r=` back, except Month, which is the default.
+ */
+export function YieldSampleUrlSync() {
+  const [params, setParams] = useSearchParams();
+  const sampleId = useYieldSampleId();
+  const written = useRef(undefined);
+  const fromUrl = parseYieldSample(params.get(URL_KEY));
+
+  useEffect(() => {
+    if (fromUrl && fromUrl !== sampleId && fromUrl !== written.current) {
+      written.current = fromUrl;
+      setYieldSampleId(fromUrl);
+      return;
+    }
+    const wanted = sampleId === DEFAULT_YIELD_SAMPLE ? null : sampleId;
+    if ((fromUrl || null) === wanted) {
+      written.current = wanted;
+      return;
+    }
+    written.current = wanted;
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (!wanted) next.delete(URL_KEY);
+      else next.set(URL_KEY, wanted);
+      return next;
+    }, { replace: true });
+  }, [fromUrl, sampleId, setParams]);
+
+  return null;
 }
 
 function seriesFrom(dates, values) {

@@ -4,7 +4,7 @@ import { ethers } from 'ethers';
 import { SAVI_X } from '../Shell';
 import { NfaNote } from '../Disclaimer';
 import { copyElement, copyPortfolioSnapshot } from '../../lib/share';
-import { CopyControl } from '../CopyControl';
+import { CsvButton } from '../CsvButton';
 import { PAIR_COLORS, STREAM_COLORS } from '../../lib/charts';
 import { SliceChart } from '../SliceChart';
 import { PROJECTS } from '../../lib/routes';
@@ -14,7 +14,7 @@ import { formatLabels } from '../../lib/dates';
 import {
   Chart as ChartJS, ArcElement, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend, Filler
 } from 'chart.js';
-import { Bar } from 'react-chartjs-2';
+import { Bar, Line } from 'react-chartjs-2';
 import {
   aggregateTbaHoldings,
   buildPriceIndex,
@@ -42,6 +42,10 @@ import {
   mapLimited,
   walletDailyDrops,
   bucketDropSeries,
+  portfolioCashMarkSeries,
+  nftEntryCostUsd,
+  paybackMonths,
+  formatPaybackMonths,
   activationTokenCostUsd,
   ethUsdAtTs,
   floorUsdOn,
@@ -197,6 +201,47 @@ function Copyable({ id, className = '', children }) {
       {children}
     </div>
   );
+}
+
+function portfolioCsvRows(grouped) {
+  const rows = [[
+    'project', 'token_id', 'tier', 'wallet', 'opened',
+    'entry_cost_usd', 'floor_today_usd', 'earned_usd', 'annual_yield_usd', 'payback_months',
+  ]];
+  for (const asset of grouped || []) {
+    if (asset.tokenPosition) {
+      rows.push([
+        asset.project,
+        '',
+        'token',
+        asset.wallet || '',
+        asset.holdStartTs ? formatDate(asset.holdStartTs) : '',
+        '',
+        Number(asset.floorValue || 0).toFixed(2),
+        Number(asset.earnedValue || 0).toFixed(2),
+        Number(asset.yieldValue || 0).toFixed(2),
+        '',
+      ]);
+      continue;
+    }
+    for (const nft of asset.nfts || []) {
+      const entry = nftEntryCostUsd(nft);
+      const months = paybackMonths(entry, nft.yieldValue);
+      rows.push([
+        asset.project,
+        nft.tokenId,
+        nft.tierName || nft.tierId || '',
+        nft.wallet || '',
+        formatDate(nft.lastTransferTs || nft.activationTs),
+        entry.toFixed(2),
+        Number(nft.floorValue || 0).toFixed(2),
+        Number(nft.earnedValue || 0).toFixed(2),
+        Number(nft.yieldValue || 0).toFixed(2),
+        months == null ? '' : months.toFixed(1),
+      ]);
+    }
+  }
+  return rows;
 }
 
 function roiAgainst(numer, denom) {
@@ -768,6 +813,10 @@ export default function PortfolioView({ data }) {
     () => bucketDropSeries(dropSeries.labels, dropSeries.data, historyGrain),
     [dropSeries, historyGrain],
   );
+  const cashMark = useMemo(
+    () => portfolioCashMarkSeries(results.ownedAssets, data),
+    [results.ownedAssets, data],
+  );
 
   const copyLabel =
     copyState === 'busy' ? 'Copying…' :
@@ -1153,8 +1202,56 @@ export default function PortfolioView({ data }) {
             </div>
           )}
 
+          {cashMark.labels.length > 1 && (
+            <Copyable id="cash-mark" className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-8">
+              <h3 className="text-sm font-bold text-white mb-1 pr-8">Cash vs mark</h3>
+              <p className="text-xs text-slate-500 mb-3">
+                Cash is what these seats were paid after they opened. Mark is the replacement cost that day, floor plus activation tokens, minus what the seat cost to open.
+              </p>
+              <div className="relative h-52 w-full">
+                <Line
+                  data={{
+                    labels: formatLabels(cashMark.labels),
+                    datasets: [
+                      {
+                        label: 'Cumulative cash',
+                        data: cashMark.cash,
+                        borderColor: '#00a804',
+                        backgroundColor: 'transparent',
+                        tension: 0.3,
+                        pointRadius: 0,
+                        spanGaps: true,
+                      },
+                      {
+                        label: 'Mark change',
+                        data: cashMark.mark,
+                        borderColor: '#94a3b8',
+                        backgroundColor: 'transparent',
+                        tension: 0.3,
+                        pointRadius: 0,
+                        spanGaps: true,
+                      },
+                    ],
+                  }}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#94a3b8', boxWidth: 10 } } },
+                    scales: {
+                      x: { ticks: { color: '#94a3b8', maxRotation: 0, autoSkip: true, maxTicksLimit: 8 }, grid: { color: '#1e2228' } },
+                      y: { ticks: { color: '#94a3b8', callback: tickMoney }, grid: { color: '#1e2228' } },
+                    },
+                  }}
+                />
+              </div>
+            </Copyable>
+          )}
+
           <div className="mb-4 flex items-center justify-between gap-3 border-b border-[#1e2228] pb-2">
             <h3 className="text-sm font-bold text-white">Owned Asset Breakdown</h3>
+            {grouped.length > 0 && (
+              <CsvButton filename="savi-portfolio.csv" rows={portfolioCsvRows(grouped)} />
+            )}
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {grouped.length === 0 ? (
@@ -1166,6 +1263,7 @@ export default function PortfolioView({ data }) {
                 const assetRoi = mode === 'history'
                   ? roiAgainst(asset.earnedValue, entryCost)
                   : roiAgainst((asset.yieldValue || 0) * forecastYears, asset.floorValue);
+                const payback = asset.tokenPosition ? null : paybackMonths(entryCost, asset.yieldValue);
                 return (
                 <Copyable key={asset.projectKey} id={`holding-${asset.projectKey}`} className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 shadow-inner">
                   <button
@@ -1219,6 +1317,7 @@ export default function PortfolioView({ data }) {
                           ? ` · Entry ${formatCurrency(entryCost)}`
                           : ''}
                         {' · '}{mode === 'history' ? 'Since entry' : 'ROI'} {formatRoi(assetRoi, 1)}
+                        {payback != null ? ` · Payback ${formatPaybackMonths(payback)}` : ''}
                       </p>
                     </div>
                     <svg
@@ -1325,9 +1424,14 @@ export default function PortfolioView({ data }) {
                                     )}
                                   </td>
                                   <td className="py-2 pl-2 text-right text-xs font-bold text-emerald-400 whitespace-nowrap">
-                                    {mode === 'history'
-                                      ? formatCurrency(nft.earnedValue || 0)
-                                      : `+ ${formatCurrency(nft.yieldValue * forecastYears)}`}
+                                    <div>
+                                      {mode === 'history'
+                                        ? formatCurrency(nft.earnedValue || 0)
+                                        : formatCurrency((nft.yieldValue || 0) * forecastYears)}
+                                    </div>
+                                    <div className="text-[10px] font-medium text-slate-400">
+                                      Payback {formatPaybackMonths(paybackMonths(nftEntryCostUsd(nft), nft.yieldValue))}
+                                    </div>
                                   </td>
                                 </tr>
                                 {open && (

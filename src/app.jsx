@@ -23,7 +23,9 @@ import { NIGHTSHADES_FACTIONS } from './lib/nightshades';
 import { PROJECT_BY_SLUG, TAB_BY_SLUG, DEFAULT_TAB, BONUS_LIVE, PROJECTS, isProjectLive, tabsForProject } from './lib/routes';
 import { useProjectScrollSpy } from './lib/projectScroll';
 import { SkeletonCard } from './components/kit';
-import { applyYieldSample, useYieldSampleId } from './lib/yieldSample';
+import { applyYieldSample, useYieldSampleId, YieldSampleUrlSync } from './lib/yieldSample';
+import { tapeBooks } from './lib/eventTape';
+import { EventTape } from './components/EventTape';
 
 const DETAIL_VIEWS = {
   stonk: StonkDetailView,
@@ -104,6 +106,9 @@ function ProjectPage({ data }) {
       </div>
       <div className="pt-5 pb-10" id="project-share">
         {data ? (
+          <EventTape books={tapeBooks(key, key === 'nightshades' ? faction : null)} />
+        ) : null}
+        {data ? (
           <AnalysisProvider slug={insight.slug} project={insight.project} overlapSlugs={insight.overlapSlugs}>
             <View data={data} activeTab={activeTab} />
           </AnalysisProvider>
@@ -151,6 +156,7 @@ export default function App() {
   return (
     <div className="flex min-h-full flex-col pb-8">
       <ScrollToTop />
+      <YieldSampleUrlSync />
       <TopNav live={sources.prices === 'ready'} sources={sources} data={shown} pending={booting || pending('overlay')} />
       <ChartMobileSync />
       <ChartShareLayer />

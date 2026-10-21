@@ -8,6 +8,9 @@ import { formatLabels } from '../../lib/dates';
 import { windowSnapshots, tierRoiDatasets, protocolRevenueChart, sliceCols, windowPeriodLabel, seriesHasInk, holderRevenueCol, windowChart } from '../../lib/yieldHistory';
 import { compactUsd, compactNum, Card, Figure, Stat, KpiStrip, Tag, SkeletonCard, SplitBar, YieldPeriodToggle, scaleAnnualYield, yieldSuffix } from '../kit';
 import { yieldBasisText } from '../../lib/yieldSample';
+import { feesKeptUsd, sumVersusHold } from '../../lib/lpHold';
+import { seatCsvRows } from '../../lib/csv';
+import { CsvButton } from '../CsvButton';
 import { ShareSection } from '../CopyControl';
 import { TierFlowSection, netTierCount } from '../TierFlowCards';
 import { baseChartOptions, compactTick, compactUsdTick, cumulativeBurnDataset, STREAM_COLORS, TIER_COLORS, barThickness, percentTick } from '../../lib/charts';
@@ -71,6 +74,49 @@ function FeeStat({ label, value }) {
     <div className="min-w-0 rounded-lg border border-line bg-panel-2 px-2.5 py-2">
       <p className="eyebrow text-faint">{label}</p>
       <p className="num mt-1 text-[15px] text-ink">{value}</p>
+    </div>
+  );
+}
+
+const HOLD_MODES = [
+  ['all', 'All'],
+  ['0', 'Full Range'],
+  ['1', 'Balanced Band'],
+  ['2', 'Ask'],
+];
+
+function HoldCompare({ vaults }) {
+  const [mode, setMode] = useState('all');
+  const modeId = mode === 'all' ? null : Number(mode);
+  const sum = useMemo(() => sumVersusHold(vaults, modeId), [vaults, modeId]);
+  const kept = useMemo(() => feesKeptUsd(vaults, modeId), [vaults, modeId]);
+  const days = sum?.windowDays || 7;
+  return (
+    <div>
+      <div className="flex flex-wrap gap-1.5">
+        {HOLD_MODES.map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setMode(id)}
+            className={`rounded-md border px-2 py-1 font-mono text-[10px] uppercase tracking-wide ${
+              mode === id ? 'border-line bg-panel-2 text-ink' : 'border-line text-faint'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <FeeStat label="Fees kept" value={compactUsd(sum ? sum.feesKeptUsd : kept.feesKeptUsd)} />
+        <FeeStat label="Versus hold" value={sum ? compactUsd(sum.gapUsd) : '—'} />
+        <FeeStat label="Net" value={sum ? compactUsd(sum.netUsd) : '—'} />
+      </div>
+      <p className="mt-2 text-[12px] leading-relaxed text-muted">
+        {sum
+          ? `Fees kept are trading fees after the skim, across ${sum.n} of ${vaults.length} vaults over ${days} days. Versus hold marks today's liquidity, including tokens sitting idle in the vault, against the mix that same liquidity would have been at the pool price from the start of that window. Net adds the two.`
+          : `Fees kept are trading fees after the skim${kept.n ? `, across ${kept.n} vaults` : ''}. Versus hold appears once this snapshot has the pool price from the start of the window.`}
+      </p>
     </div>
   );
 }
@@ -269,7 +315,16 @@ export default function StonkDetailView({ data, activeTab }) {
           )}
         </Card>
 
-        <Card flush eyebrow="Tiers">
+        <Card
+          flush
+          eyebrow="Tiers"
+          corner={(
+            <CsvButton
+              filename={`${config.ticker || 'seats'}-seats.csv`}
+              rows={seatCsvRows(project, { floorUsd: floorCostUsd, volume: volumeMultiplier })}
+            />
+          )}
+        >
           <div className="overflow-x-auto">
             <table className="w-full min-w-[640px] text-left">
               <thead>
@@ -458,6 +513,7 @@ export default function StonkDetailView({ data, activeTab }) {
               }
             >
               <div className="space-y-4">
+            <HoldCompare vaults={smartLpVaults} />
             <SmartLpChartPanels snaps={roiSnaps} smartLp={smartLp} vaults={smartLpVaults} />
               {smartLpOpen && (
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
@@ -515,6 +571,15 @@ export default function StonkDetailView({ data, activeTab }) {
                                   <FeeStat label="Depositor fees" value={formatCurrency(v.fees7dUsd || 0)} />
                                   <FeeStat label="Protocol rev" value={formatCurrency(v.protocolFees7dUsd || 0)} />
                                 </div>
+                                {Number.isFinite(Number(v.versusHold?.gapUsd)) ? (
+                                  <p className="mt-2 text-[12px] leading-relaxed text-muted">
+                                    Kept {formatCurrency(v.versusHold.feesKeptUsd)}
+                                    {' · '}
+                                    Versus hold {formatCurrency(v.versusHold.gapUsd)}
+                                    {' · '}
+                                    Net {formatCurrency(v.versusHold.netUsd)}
+                                  </p>
+                                ) : null}
                                 <a
                                   href={explorerAddressUrl(v.ca)}
                                   target="_blank"
