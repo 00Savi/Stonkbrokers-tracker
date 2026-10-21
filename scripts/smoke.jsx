@@ -1412,5 +1412,56 @@ for (const [name, View, props] of VIEWS) {
   }
 }
 
+{
+  const stonkTabs = tabsForProject(PROJECTS.find((p) => p.key === 'stonk')).map((t) => t.slug);
+  const stonk = snapshot.projects.stonk;
+  const data = {
+    ...snapshot,
+    projects: {
+      ...snapshot.projects,
+      stonk: {
+        ...stonk,
+        revenue: {
+          ...stonk.revenue,
+          pairTokenUsd: 40,
+          dailyPairTokens: [40],
+          historyPairTokens: [40],
+          pairTokens: {
+            count: 2,
+            protocolFeeBps: 1000,
+            protocolFees7dUsd: 40,
+            fees7dUsd: 400,
+            totalTvlUsd: 25000,
+            pairs: [
+              { ca: '0x873f0000000000000000000000000000000004ab', symbol: 'USONVDA', symbol0: 'USO', symbol1: 'NVDA', tvlUsd: 20000, fees7dUsd: 300, protocolFees7dUsd: 30 },
+              { ca: '0x0d1400000000000000000000000000000000dca8', symbol: 'ETHNVDA', symbol0: 'ETH', symbol1: 'NVDA', tvlUsd: 5000, fees7dUsd: 100, protocolFees7dUsd: 10 },
+            ],
+          },
+        },
+      },
+    },
+  };
+  const html = renderToString(
+    <StaticRouter location="/stonkbrokers/pairs">
+      <StonkDetailView data={data} activeTab="pairs" />
+    </StaticRouter>
+  );
+  const pairAt = stonkTabs.indexOf('pairs');
+  const smartAt = stonkTabs.indexOf('liquidity');
+  if (
+    pairAt < 0
+    || smartAt !== pairAt + 1
+    || !html.includes('USONVDA')
+    || !html.includes('not the Smart LP skim')
+    || !html.includes('$40')
+    || !html.includes('$25.0k')
+  ) {
+    failed++;
+    console.error('FAIL  pair token revenue section', stonkTabs.join(','));
+  } else {
+    console.log('ok    pair token revenue is its own section');
+  }
+}
+
 console.log(failed ? `\n${failed} render(s) failed` : `\nall clean`);
 process.exit(failed ? 1 : 0);

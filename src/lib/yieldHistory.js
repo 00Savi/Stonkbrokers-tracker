@@ -213,6 +213,7 @@ const FEE_COL_META = [
   { key: 'tax', label: 'Snipe / curve tax', color: STREAM_COLORS.tax, snap: ['revTax'], daily: 'dailyBondingTax', hist: 'historyTax', gap: 'historyGapTax' },
   { key: 'booster', label: 'Partner Revenue Share', color: STREAM_COLORS.booster, snap: ['revBooster'], daily: 'dailyBooster', hist: 'historyBooster', gap: 'historyGapBooster' },
   { key: 'smartLp', label: 'Smart LP Protocol Revenue', color: STREAM_COLORS.smartLp, snap: ['revSmartLp'], daily: 'dailySmartLp', hist: 'historySmartLp', gap: 'historyGapSmartLp' },
+  { key: 'pairTokens', label: 'Pair Tokens', color: STREAM_COLORS.pairTokens, snap: ['revPairTokens'], daily: 'dailyPairTokens', hist: 'historyPairTokens', gap: 'historyGapPairTokens' },
 ];
 
 const HOLDER_COL_META = [
@@ -233,6 +234,7 @@ const VOLUME_META = {
 /** UTC calendar days for the 7-day walk when `dailyDates` was not persisted. */
 function liveWalkDates(r, meta) {
   if (meta?.key === 'smartLp' && r?.smartLp?.dailyDates?.length) return r.smartLp.dailyDates;
+  if (meta?.key === 'pairTokens' && r?.pairTokens?.dailyDates?.length) return r.pairTokens.dailyDates;
   if (r?.dailyDates?.length) return r.dailyDates;
   const n = Math.max(
     (r?.dailyAmm || []).length,
@@ -284,7 +286,7 @@ function streamOnLabels(labels, snaps, r, meta) {
     // recent days, so that stream always prefers live.
     const historyEmpty = h == null || h === 0;
     const livePrinted = fromWin != null && fromWin !== 0;
-    const liveFirst = meta.key === 'smartLp' || mdKey(d) === today || (historyEmpty && livePrinted);
+    const liveFirst = meta.key === 'smartLp' || meta.key === 'pairTokens' || mdKey(d) === today || (historyEmpty && livePrinted);
     if (liveFirst) {
       if (fromWin != null) return fromWin;
       if (fromSnap != null) return fromSnap;
@@ -355,11 +357,12 @@ export function protocolRevenueChart(project, { skipLedger = false } = {}) {
     return short;
   })());
   const hasSmart = !!(r.smartLp || r.dailySmartLp?.length || snaps.some((s) => s.revSmartLp != null));
+  const hasPair = !!(r.pairTokens || r.dailyPairTokens?.length || snaps.some((s) => s.revPairTokens != null));
   const rWin = { ...r, dailyDates: short };
 
   const extras = HOLDER_COL_META.filter((m) => seriesHasInk(r[m.hist]));
   const cols = applyHolderRoles(project, FEE_COL_META
-    .filter((m) => m.key !== 'smartLp' || hasSmart)
+    .filter((m) => (m.key !== 'smartLp' || hasSmart) && (m.key !== 'pairTokens' || hasPair))
     .concat(extras)
     .map((m) => ({
       key: m.key,
@@ -385,10 +388,10 @@ export function protocolRevenueChart(project, { skipLedger = false } = {}) {
   return { labels: formatLabels(labels), rawLabels: labels, kind: 'protocol', cols };
 }
 
-export const FEE_KEYS = ['amm', 'dex', 'box', 'tax', 'booster', 'smartLp', 'fees'];
+export const FEE_KEYS = ['amm', 'dex', 'box', 'tax', 'booster', 'smartLp', 'pairTokens', 'fees'];
 export const VOLUME_KEYS = ['volume', 'launch'];
 
-const KEPT_KEYS = ['amm', 'dex', 'box', 'tax', 'booster', 'smartLp', 'fees'];
+const KEPT_KEYS = ['amm', 'dex', 'box', 'tax', 'booster', 'smartLp', 'pairTokens', 'fees'];
 
 function holderRole(col) {
   return col?.role === 'paid' || col?.role === 'float';

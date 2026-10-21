@@ -18,6 +18,7 @@ const PROTOCOL = [
   { key: 'tax', label: 'Snipe tax', field: 'historyTax' },
   { key: 'booster', label: 'Partner share', field: 'historyBooster' },
   { key: 'smartLp', label: 'Smart LP skim', field: 'historySmartLp' },
+  { key: 'pairTokens', label: 'Pair Tokens', field: 'historyPairTokens' },
   { key: 'dex', label: 'DEX', field: 'historyDex' },
   { key: 'amm', label: 'AMM', field: 'historyAmm' },
 ];

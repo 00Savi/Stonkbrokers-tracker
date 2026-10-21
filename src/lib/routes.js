@@ -35,6 +35,7 @@ export const TAB_BY_SLUG = {
   revenue: 'revenue',
   night: 'night',
   liquidity: 'liquidity',
+  pairs: 'pairs',
   burn: 'burn',
   activation: 'activation',
   ownership: 'ownership',
@@ -71,7 +72,10 @@ export const VAULT_TABS = [
 export function tabsForProject(meta) {
   const tabs = meta?.kind === 'vault' ? VAULT_TABS : TABS;
   if (meta?.key === 'stonk') {
-    return tabs.map((t) => (t.slug === 'liquidity' ? { ...t, label: 'Smart LPs' } : t));
+    const next = tabs.map((t) => (t.slug === 'liquidity' ? { ...t, label: 'Smart LPs' } : t));
+    const at = next.findIndex((t) => t.slug === 'liquidity');
+    next.splice(at < 0 ? next.length : at, 0, { slug: 'pairs', label: 'Pair Tokens' });
+    return next;
   }
   if (meta?.key === 'tickeryard') {
     return tabs.map((t) => (t.slug === 'revenue' ? { ...t, label: 'Distributions' } : t));

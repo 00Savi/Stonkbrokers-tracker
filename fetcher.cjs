@@ -112,8 +112,11 @@ function overlayDailyStreams(snaps, revenue, extraDates) {
     s.revSmartLp = Number(revenue.dailySmartLp?.[j]) || 0;
     s.revBooster = Number(revenue.dailyBooster?.[j]) || 0;
     s.revSmartLpGross = Number(revenue.dailySmartLpGross?.[j]) || 0;
+    s.revPairTokens = Number(revenue.dailyPairTokens?.[j]) || 0;
+    s.revPairTokensGross = Number(revenue.dailyPairTokensGross?.[j]) || 0;
   }
   overlaySmartLpDaily(snaps, revenue);
+  overlayPairDaily(snaps, revenue);
   overlayHistoryStreams(snaps, revenue);
   return snaps;
 }
@@ -128,6 +131,20 @@ function overlaySmartLpDaily(snaps, revenue) {
     if (j == null) continue;
     s.revSmartLp = Number(daily[j]) || 0;
     s.revSmartLpGross = Number(revenue.dailySmartLpGross?.[j]) || 0;
+  }
+  return snaps;
+}
+
+function overlayPairDaily(snaps, revenue) {
+  const dates = revenue?.pairTokens?.dailyDates || [];
+  const daily = revenue?.dailyPairTokens || [];
+  if (!dates.length || !daily.length) return snaps;
+  const idx = new Map(dates.map((d, i) => [mdSnapKey(d), i]));
+  for (const s of snaps) {
+    const j = idx.get(mdSnapKey(s.date));
+    if (j == null) continue;
+    s.revPairTokens = Number(daily[j]) || 0;
+    s.revPairTokensGross = Number(revenue.dailyPairTokensGross?.[j]) || 0;
   }
   return snaps;
 }
@@ -182,6 +199,7 @@ const LIVE_TODAY_STREAMS = [
   ["dailyBondingTax", "historyTax"],
   ["dailyBooster", "historyBooster"],
   ["dailySmartLp", "historySmartLp"],
+  ["dailyPairTokens", "historyPairTokens"],
 ];
 
 /**
@@ -197,6 +215,7 @@ function mergeLiveTodayHistory(revenue) {
     dailyDates.length,
     (revenue.dailyAmm || []).length,
     (revenue.dailySmartLp || []).length,
+    (revenue.dailyPairTokens || []).length,
   );
   if (!n) return;
   if (!dailyDates.length) {
@@ -361,6 +380,50 @@ function carrySmartLp(revenueBreakdown, prevRevenue, smart) {
   if (smart) applySmartLp(revenueBreakdown, smart);
 }
 
+function applyPairTokens(revenueBreakdown, book) {
+  if (!book) return;
+  revenueBreakdown.pairTokenUsd = book.protocolFees7dUsd || 0;
+  if (Array.isArray(book.daily)) revenueBreakdown.dailyPairTokens = book.daily;
+  if (Array.isArray(book.dailyGross)) revenueBreakdown.dailyPairTokensGross = book.dailyGross;
+  revenueBreakdown.pairTokens = {
+    pairs: book.pairs || [],
+    count: book.count || (book.pairs || []).length,
+    totalTvlUsd: book.totalTvlUsd || 0,
+    fees7dUsd: book.fees7dUsd || 0,
+    protocolFees7dUsd: book.protocolFees7dUsd || 0,
+    dailyDates: book.dailyDates || [],
+    protocolFeeBps: book.protocolFeeBps,
+    feeSplit: book.feeSplit,
+    site: book.site,
+  };
+}
+
+function carryPairTokens(revenueBreakdown, prevRevenue, book) {
+  const prev = prevRevenue?.pairTokens;
+  const prevPairs = Array.isArray(prev?.pairs) ? prev.pairs : [];
+  const nextPairs = Array.isArray(book?.pairs) ? book.pairs : [];
+  if (nextPairs.length && book.feeWalkOk !== false) {
+    applyPairTokens(revenueBreakdown, book);
+    return;
+  }
+  if (prevPairs.length) {
+    console.warn(`[warn] pair tokens returned ${nextPairs.length} pairs; keeping previous ${prevPairs.length}`);
+    applyPairTokens(revenueBreakdown, {
+      ...prev,
+      pairs: prev.pairs,
+      count: prev.count || prevPairs.length,
+      protocolFees7dUsd: prevRevenue.pairTokenUsd || prev.protocolFees7dUsd,
+      fees7dUsd: prev.fees7dUsd,
+      totalTvlUsd: prev.totalTvlUsd,
+      daily: prevRevenue.dailyPairTokens,
+      dailyGross: prevRevenue.dailyPairTokensGross,
+      dailyDates: prev.dailyDates,
+    });
+    return;
+  }
+  if (book) applyPairTokens(revenueBreakdown, book);
+}
+
 function carrySnapshotTvl(extra, snaps, todayStr) {
   const tvl = Number(extra?.smartLpTvl) || 0;
   if (tvl > 0) return extra;
@@ -417,6 +480,7 @@ const { buildSpecialProject, isSpecial } = require("./lib/specials.cjs");
 const yieldDays = require("./lib/yieldDays.cjs");
 const vaultFlow = require("./lib/vaultFlow.cjs");
 const { fetchSmartLps, fromGgIndex, USDG } = require("./lib/smartLp.cjs");
+const { fetchPairTokens } = require("./lib/pairTokens.cjs");
 const dates = require("./lib/dates.cjs");
 const { fetchNight } = require("./lib/night.cjs");
 const priceDays = require("./lib/priceDays.cjs");
@@ -2603,6 +2667,7 @@ function persistStreamDays(projectKey, revenue) {
       dexVolume: Number(revenue.dailyDexVolume?.[i]) || 0,
       smartLp: Number(revenue.dailySmartLp?.[i]) || 0,
       booster: Number(revenue.dailyBooster?.[i]) || 0,
+      pairTokens: Number(revenue.dailyPairTokens?.[i]) || 0,
     };
   }
   yieldDays.save(yieldDays.mergeStreams(yieldDays.load(), projectKey, dayMap));
@@ -2631,6 +2696,7 @@ function ingestHistoryArrays(byIso, prev) {
     ["dexVolume", prev.historyDexVolume],
     ["smartLp", prev.historySmartLp],
     ["booster", prev.historyBooster],
+    ["pairTokens", prev.historyPairTokens],
     ["holders", prev.historyHolder],
   ];
   for (let i = 0; i < dates.length; i++) {
@@ -2741,6 +2807,7 @@ async function attachRevenueHistory(projectKey, revenue, scale, yieldMode, prevR
   revenue.historyDex = col("dex");
   revenue.historyDexVolume = col("dexVolume");
   revenue.historySmartLp = col("smartLp");
+  revenue.historyPairTokens = col("pairTokens");
   revenue.historyBooster = col("booster");
   revenue.historyHolder = col("holders");
   revenue.historyGapAmm = gap("amm");
@@ -2751,6 +2818,7 @@ async function attachRevenueHistory(projectKey, revenue, scale, yieldMode, prevR
   revenue.historyGapTax = gap("tax");
   revenue.historyGapDex = gap("dex");
   revenue.historyGapSmartLp = gap("smartLp");
+  revenue.historyGapPairTokens = gap("pairTokens");
   revenue.historyGapBooster = gap("booster");
   revenue.historyTotalUsd = revenue.historyAmm;
 }
@@ -4398,6 +4466,25 @@ async function run() {
           if (dailySnapshots.length > 365) dailySnapshots.shift();
         } else if (liveBurnTok > 0) {
           lastSnap.totalBurn = liveBurnTok;
+        }
+      }
+
+      if (projectKey === "stonk" && revenueBreakdown) {
+        try {
+          const book = await fetchPairTokens({
+            rpc,
+            blockTime,
+            ethPriceUsd: markets[projectKey]?.ethPriceUsd,
+            tokenPrices,
+            lookbackDays: YIELD_LOOKBACK_DAYS,
+          });
+          carryPairTokens(revenueBreakdown, prevProjData.revenue, book);
+          console.log(
+            `  pair tokens: ${book?.count || 0} pairs, TVL $${Number(book?.totalTvlUsd || 0).toFixed(0)}, skim $${Number(book?.protocolFees7dUsd || 0).toFixed(0)}`,
+          );
+        } catch (e) {
+          console.warn(`[warn] pair tokens: ${e.message}`);
+          carryPairTokens(revenueBreakdown, prevProjData.revenue, null);
         }
       }
 

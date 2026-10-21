@@ -194,12 +194,20 @@ export default function StonkDetailView({ data, activeTab }) {
       { ...(byKey.tax || { data: [], total: 0 }), label: 'Snipe / curve tax', color: STREAM_COLORS.tax, role: 'kept' },
       { ...(byKey.booster || { data: [], total: 0 }), label: 'Partner Revenue Share', color: STREAM_COLORS.booster, role: 'kept' },
       { ...(byKey.smartLp || { data: [], total: 0 }), label: 'Smart LP Protocol Revenue', color: STREAM_COLORS.smartLp, role: 'kept' },
+      { ...(byKey.pairTokens || { data: [], total: 0 }), label: 'Pair Tokens', color: STREAM_COLORS.pairTokens, role: 'kept' },
     ],
   };
   const smartLp = revenue.smartLp || {};
+  const pairBook = revenue.pairTokens || {};
   const smartLpCol = (() => {
     const col = REV_STREAMS[4] || { total: 0, color: STREAM_COLORS.smartLp, data: [] };
     const live7d = Number(smartLp.protocolFees7dUsd);
+    if (timeframe === '7d' && live7d > 0) return { ...col, total: live7d };
+    return col;
+  })();
+  const pairCol = (() => {
+    const col = REV_STREAMS[5] || { total: 0, color: STREAM_COLORS.pairTokens, data: [] };
+    const live7d = Number(pairBook.protocolFees7dUsd);
     if (timeframe === '7d' && live7d > 0) return { ...col, total: live7d };
     return col;
   })();
@@ -208,7 +216,8 @@ export default function StonkDetailView({ data, activeTab }) {
     (Number(REV_STREAMS[1]?.total) || 0) +
     (Number(REV_STREAMS[2]?.total) || 0) +
     (Number(REV_STREAMS[3]?.total) || 0) +
-    (Number(smartLpCol.total) || 0);
+    (Number(smartLpCol.total) || 0) +
+    (Number(pairCol.total) || 0);
 
   // 3. Burn Tracker Data
   const realBurntTokens = Math.max(
@@ -429,7 +438,7 @@ export default function StonkDetailView({ data, activeTab }) {
       <ShareSection id="revenue" className="scroll-mt-32 space-y-4">
         <Card
           eyebrow={`StonkBooster · ${revPeriod}`}
-          sub="Booster reward is the share of AMM and OpenSea fees paid to seats, scaled from the T4 oracle. Clock-In locker fees, curve tax, Partner Revenue Share, and Smart LP skim are counted beside it. Bonding swap volume stays off this stack."
+          sub="Booster reward is the share of AMM and OpenSea fees paid to seats, scaled from the T4 oracle. Clock-In locker fees, curve tax, Partner Revenue Share, Smart LP skim, and Pair Token skim are each their own line. Bonding swap volume stays off this stack."
         >
           <Figure value={formatCurrency(stonkBoosterTotal)} />
           <KpiStrip className="mt-6">
@@ -463,6 +472,12 @@ export default function StonkDetailView({ data, activeTab }) {
               value={formatCurrency(smartLpCol.total)}
               note={smartLp.perfFeeBps ? `${(smartLp.perfFeeBps / 100).toFixed(0)}% skim` : '10% skim'}
             />
+            <StreamStat
+              color={pairCol.color}
+              label="Pair Tokens"
+              value={formatCurrency(pairCol.total)}
+              note={pairBook.protocolFeeBps ? `${(pairBook.protocolFeeBps / 100).toFixed(0)}% skim` : '10% skim'}
+            />
           </KpiStrip>
         </Card>
 
@@ -479,6 +494,52 @@ export default function StonkDetailView({ data, activeTab }) {
               note: 'From Aug 20: per-NFT daily yield × active units. Earlier bars are Clock In pot inflows.',
             }}
           />
+      </ShareSection>
+
+      <ShareSection id="pairs" title="Pair Tokens" className="scroll-mt-32 space-y-4">
+        <Card
+          eyebrow="Pair Tokens"
+          sub="Each pair token is a full-range Uniswap v4 position. compound() skims 10% of the LP fees to the protocol and folds the rest back into the position. That skim is not the Smart LP skim."
+        >
+          <KpiStrip>
+            <Stat label="Pairs" value={pairBook.count ? compactNum(pairBook.count) : '—'} />
+            <Stat label="TVL" value={formatCurrency(pairBook.totalTvlUsd || 0)} />
+            <Stat label="Fees compounded" value={formatCurrency(pairBook.fees7dUsd || 0)} note={revPeriod} />
+            <Stat label="Protocol skim" value={formatCurrency(pairCol.total || pairBook.protocolFees7dUsd || 0)} note="50/50 Clock In and buyback" />
+          </KpiStrip>
+        </Card>
+        <Card eyebrow="Pairs" sub="Sorted by protocol skim over the same window. Fees compounded are the LP fees collected. The skim is the protocol's 10%.">
+          {Array.isArray(pairBook.pairs) && pairBook.pairs.length > 0 ? (
+            <div className="max-h-[32rem] overflow-auto">
+              <table className="w-full min-w-[640px] text-left">
+                <thead>
+                  <tr className="eyebrow border-b border-line text-faint">
+                    <th className="px-5 py-3 font-normal">Pair</th>
+                    <th className="px-3 py-3 font-normal">Assets</th>
+                    <th className="px-3 py-3 text-right font-normal">TVL</th>
+                    <th className="px-3 py-3 text-right font-normal">Compounded</th>
+                    <th className="px-5 py-3 text-right font-normal">Skim</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pairBook.pairs.map((p) => (
+                    <tr key={p.ca} className="border-b border-line-soft">
+                      <td className="px-5 py-3">
+                        <a className="text-[13px] text-ink hover:underline" href={explorerAddressUrl(p.ca)} target="_blank" rel="noreferrer">{p.symbol}</a>
+                      </td>
+                      <td className="px-3 py-3 font-mono text-[12px] text-muted">{p.symbol0} + {p.symbol1}</td>
+                      <td className="num px-3 py-3 text-right text-[13px] text-ink">{formatCurrency(p.tvlUsd || 0)}</td>
+                      <td className="num px-3 py-3 text-right text-[13px] text-ink">{formatCurrency(p.fees7dUsd || 0)}</td>
+                      <td className="num px-5 py-3 text-right text-[13px] text-ink">{formatCurrency(p.protocolFees7dUsd || 0)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="font-mono text-[12px] text-faint">The pair-token book is not in this ledger yet. The next sync reads the factory and the compound skim.</p>
+          )}
+        </Card>
       </ShareSection>
 
       <ShareSection id="liquidity" title="Smart LPs" className="scroll-mt-32 space-y-4">

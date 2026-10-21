@@ -24,6 +24,7 @@ const SECTION_COPY_LABEL = {
   revenue: 'Revenue',
   night: 'Night',
   liquidity: 'Liquidity',
+  pairs: 'Pair Tokens',
   burn: 'Burn',
   activation: 'Activation',
   ownership: 'Ownership',

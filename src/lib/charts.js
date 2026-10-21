@@ -8,6 +8,7 @@ export const STREAM_COLORS = {
   box: '#38bdf8',
   tax: '#f472b6',
   smartLp: '#fbbf24',
+  pairTokens: '#14b8a6',
   volume: '#8b5cf6',
   delivered: '#00a804',
   vaulted: '#f5b700',
