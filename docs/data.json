@@ -18075,6 +18075,1235 @@
           "feeRecipientA": "0xb668382cf44038a3e8140e789060f6a809787cda",
           "feeRecipientB": "0x1f12fe622c11947f93f53d63f68f7f46b6d081c9",
           "perfFeeBps": 1000
+        },
+        "clockIn": {
+          "engine": "0xf4129019d8838f2555bdc8ecb3024a02145dbc58",
+          "site": "https://stonkbrokers.io/clock-in",
+          "rounds": 137,
+          "ethDistributed": 52.232607,
+          "ethPerEngineWeight": 0.0000024025937239912135,
+          "ethUsd": 120792.08,
+          "ethPot": 7e-18,
+          "minDropEth": 0.01,
+          "currentRound": 142,
+          "assets": [
+            {
+              "symbol": "STONKBROKER",
+              "address": "0xe934e36a439c94017b64a3fece66af12099abf50",
+              "eth": 41.097583,
+              "usd": 95041.45,
+              "share": 0.7868
+            },
+            {
+              "symbol": "USDG",
+              "address": "0x5fc5360d0400a0fd4f2af552add042d716f1d168",
+              "eth": 6.4517,
+              "usd": 14920.07,
+              "share": 0.1235
+            },
+            {
+              "symbol": "NVDA",
+              "address": "0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec",
+              "eth": 1.11913,
+              "usd": 2588.08,
+              "share": 0.0214
+            },
+            {
+              "symbol": "cbBTC",
+              "address": "0xcec185eb182c47d1ba1efc84e6959e18cd620be4",
+              "eth": 1.041432,
+              "usd": 2408.39,
+              "share": 0.0199
+            },
+            {
+              "symbol": "SPCX",
+              "address": "0x4a0e65a3eccec6dbe60ae065f2e7bb85fae35eea",
+              "eth": 0.530403,
+              "usd": 1226.6,
+              "share": 0.0102
+            },
+            {
+              "symbol": "GOOGL",
+              "address": "0x2e0847e8910a9732eb3fb1bb4b70a580adad4fe3",
+              "eth": 0.480839,
+              "usd": 1111.98,
+              "share": 0.0092
+            },
+            {
+              "symbol": "AMZN",
+              "address": "0x12f190a9f9d7d37a250758b26824b97ce941bf54",
+              "eth": 0.377956,
+              "usd": 874.05,
+              "share": 0.0072
+            },
+            {
+              "symbol": "PLTR",
+              "address": "0x894e1ec2d74ffe5aef8dc8a9e84686accb964f2a",
+              "eth": 0.280681,
+              "usd": 649.1,
+              "share": 0.0054
+            },
+            {
+              "symbol": "AMD",
+              "address": "0x86923f96303d656e4aa86d9d42d1e57ad2023fdc",
+              "eth": 0.216739,
+              "usd": 501.23,
+              "share": 0.0041
+            },
+            {
+              "symbol": "USAR",
+              "address": "0xd917b029c761d264c6a312bbbcda868658ef86a6",
+              "eth": 0.199619,
+              "usd": 461.63,
+              "share": 0.0038
+            },
+            {
+              "symbol": "TSLA",
+              "address": "0x322f0929c4625ed5bad873c95208d54e1c003b2d",
+              "eth": 0.152085,
+              "usd": 351.71,
+              "share": 0.0029
+            },
+            {
+              "symbol": "AAPL",
+              "address": "0xaf3d76f1834a1d425780943c99ea8a608f8a93f9",
+              "eth": 0.146415,
+              "usd": 338.6,
+              "share": 0.0028
+            },
+            {
+              "symbol": "GLD",
+              "address": "0xc9a981fee1f9dec688bb123ccdecc63d0debfc4e",
+              "eth": 0.099182,
+              "usd": 229.37,
+              "share": 0.0019
+            },
+            {
+              "symbol": "GME",
+              "address": "0x1b0e319c6a659f002271b69db8a7df2f911c153e",
+              "eth": 0.038837,
+              "usd": 89.81,
+              "share": 0.0007
+            }
+          ],
+          "recent": [
+            {
+              "round": 141,
+              "date": "2026-10-26",
+              "potEth": 1.077086,
+              "recipients": 1842,
+              "top": "STONKBROKER",
+              "assets": [
+                {
+                  "symbol": "STONKBROKER",
+                  "address": "0xe934e36a439c94017b64a3fece66af12099abf50",
+                  "eth": 0.819685,
+                  "share": 0.761
+                },
+                {
+                  "symbol": "USDG",
+                  "address": "0x5fc5360d0400a0fd4f2af552add042d716f1d168",
+                  "eth": 0.153511,
+                  "share": 0.1425
+                },
+                {
+                  "symbol": "cbBTC",
+                  "address": "0xcec185eb182c47d1ba1efc84e6959e18cd620be4",
+                  "eth": 0.025948,
+                  "share": 0.0241
+                },
+                {
+                  "symbol": "NVDA",
+                  "address": "0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec",
+                  "eth": 0.023757,
+                  "share": 0.0221
+                },
+                {
+                  "symbol": "SPCX",
+                  "address": "0x4a0e65a3eccec6dbe60ae065f2e7bb85fae35eea",
+                  "eth": 0.011835,
+                  "share": 0.011
+                },
+                {
+                  "symbol": "GOOGL",
+                  "address": "0x2e0847e8910a9732eb3fb1bb4b70a580adad4fe3",
+                  "eth": 0.01014,
+                  "share": 0.0094
+                },
+                {
+                  "symbol": "AMZN",
+                  "address": "0x12f190a9f9d7d37a250758b26824b97ce941bf54",
+                  "eth": 0.00841,
+                  "share": 0.0078
+                },
+                {
+                  "symbol": "PLTR",
+                  "address": "0x894e1ec2d74ffe5aef8dc8a9e84686accb964f2a",
+                  "eth": 0.006087,
+                  "share": 0.0057
+                },
+                {
+                  "symbol": "AMD",
+                  "address": "0x86923f96303d656e4aa86d9d42d1e57ad2023fdc",
+                  "eth": 0.004418,
+                  "share": 0.0041
+                },
+                {
+                  "symbol": "TSLA",
+                  "address": "0x322f0929c4625ed5bad873c95208d54e1c003b2d",
+                  "eth": 0.00432,
+                  "share": 0.004
+                },
+                {
+                  "symbol": "USAR",
+                  "address": "0xd917b029c761d264c6a312bbbcda868658ef86a6",
+                  "eth": 0.003227,
+                  "share": 0.003
+                },
+                {
+                  "symbol": "AAPL",
+                  "address": "0xaf3d76f1834a1d425780943c99ea8a608f8a93f9",
+                  "eth": 0.002828,
+                  "share": 0.0026
+                },
+                {
+                  "symbol": "GLD",
+                  "address": "0xc9a981fee1f9dec688bb123ccdecc63d0debfc4e",
+                  "eth": 0.001903,
+                  "share": 0.0018
+                },
+                {
+                  "symbol": "GME",
+                  "address": "0x1b0e319c6a659f002271b69db8a7df2f911c153e",
+                  "eth": 0.001015,
+                  "share": 0.0009
+                }
+              ]
+            },
+            {
+              "round": 140,
+              "date": "2026-10-26",
+              "potEth": 0.122295,
+              "recipients": 1842,
+              "top": "STONKBROKER",
+              "assets": [
+                {
+                  "symbol": "STONKBROKER",
+                  "address": "0xe934e36a439c94017b64a3fece66af12099abf50",
+                  "eth": 0.093161,
+                  "share": 0.7618
+                },
+                {
+                  "symbol": "USDG",
+                  "address": "0x5fc5360d0400a0fd4f2af552add042d716f1d168",
+                  "eth": 0.01743,
+                  "share": 0.1425
+                },
+                {
+                  "symbol": "cbBTC",
+                  "address": "0xcec185eb182c47d1ba1efc84e6959e18cd620be4",
+                  "eth": 0.002946,
+                  "share": 0.0241
+                },
+                {
+                  "symbol": "NVDA",
+                  "address": "0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec",
+                  "eth": 0.002667,
+                  "share": 0.0218
+                },
+                {
+                  "symbol": "SPCX",
+                  "address": "0x4a0e65a3eccec6dbe60ae065f2e7bb85fae35eea",
+                  "eth": 0.001344,
+                  "share": 0.011
+                },
+                {
+                  "symbol": "GOOGL",
+                  "address": "0x2e0847e8910a9732eb3fb1bb4b70a580adad4fe3",
+                  "eth": 0.001121,
+                  "share": 0.0092
+                },
+                {
+                  "symbol": "AMZN",
+                  "address": "0x12f190a9f9d7d37a250758b26824b97ce941bf54",
+                  "eth": 0.000955,
+                  "share": 0.0078
+                },
+                {
+                  "symbol": "PLTR",
+                  "address": "0x894e1ec2d74ffe5aef8dc8a9e84686accb964f2a",
+                  "eth": 0.000691,
+                  "share": 0.0057
+                },
+                {
+                  "symbol": "AMD",
+                  "address": "0x86923f96303d656e4aa86d9d42d1e57ad2023fdc",
+                  "eth": 0.000502,
+                  "share": 0.0041
+                },
+                {
+                  "symbol": "TSLA",
+                  "address": "0x322f0929c4625ed5bad873c95208d54e1c003b2d",
+                  "eth": 0.000459,
+                  "share": 0.0038
+                },
+                {
+                  "symbol": "USAR",
+                  "address": "0xd917b029c761d264c6a312bbbcda868658ef86a6",
+                  "eth": 0.000366,
+                  "share": 0.003
+                },
+                {
+                  "symbol": "AAPL",
+                  "address": "0xaf3d76f1834a1d425780943c99ea8a608f8a93f9",
+                  "eth": 0.000321,
+                  "share": 0.0026
+                },
+                {
+                  "symbol": "GLD",
+                  "address": "0xc9a981fee1f9dec688bb123ccdecc63d0debfc4e",
+                  "eth": 0.000216,
+                  "share": 0.0018
+                },
+                {
+                  "symbol": "GME",
+                  "address": "0x1b0e319c6a659f002271b69db8a7df2f911c153e",
+                  "eth": 0.000115,
+                  "share": 0.0009
+                }
+              ]
+            },
+            {
+              "round": 139,
+              "date": "2026-10-26",
+              "potEth": 0.013277,
+              "recipients": 1842,
+              "top": "STONKBROKER",
+              "assets": [
+                {
+                  "symbol": "STONKBROKER",
+                  "address": "0xe934e36a439c94017b64a3fece66af12099abf50",
+                  "eth": 0.010097,
+                  "share": 0.7605
+                },
+                {
+                  "symbol": "USDG",
+                  "address": "0x5fc5360d0400a0fd4f2af552add042d716f1d168",
+                  "eth": 0.001892,
+                  "share": 0.1425
+                },
+                {
+                  "symbol": "cbBTC",
+                  "address": "0xcec185eb182c47d1ba1efc84e6959e18cd620be4",
+                  "eth": 0.000337,
+                  "share": 0.0253
+                },
+                {
+                  "symbol": "NVDA",
+                  "address": "0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec",
+                  "eth": 0.00029,
+                  "share": 0.0218
+                },
+                {
+                  "symbol": "SPCX",
+                  "address": "0x4a0e65a3eccec6dbe60ae065f2e7bb85fae35eea",
+                  "eth": 0.000146,
+                  "share": 0.011
+                },
+                {
+                  "symbol": "GOOGL",
+                  "address": "0x2e0847e8910a9732eb3fb1bb4b70a580adad4fe3",
+                  "eth": 0.000122,
+                  "share": 0.0092
+                },
+                {
+                  "symbol": "AMZN",
+                  "address": "0x12f190a9f9d7d37a250758b26824b97ce941bf54",
+                  "eth": 0.000104,
+                  "share": 0.0078
+                },
+                {
+                  "symbol": "PLTR",
+                  "address": "0x894e1ec2d74ffe5aef8dc8a9e84686accb964f2a",
+                  "eth": 0.000075,
+                  "share": 0.0057
+                },
+                {
+                  "symbol": "AMD",
+                  "address": "0x86923f96303d656e4aa86d9d42d1e57ad2023fdc",
+                  "eth": 0.000054,
+                  "share": 0.0041
+                },
+                {
+                  "symbol": "TSLA",
+                  "address": "0x322f0929c4625ed5bad873c95208d54e1c003b2d",
+                  "eth": 0.00005,
+                  "share": 0.0038
+                },
+                {
+                  "symbol": "USAR",
+                  "address": "0xd917b029c761d264c6a312bbbcda868658ef86a6",
+                  "eth": 0.00004,
+                  "share": 0.003
+                },
+                {
+                  "symbol": "AAPL",
+                  "address": "0xaf3d76f1834a1d425780943c99ea8a608f8a93f9",
+                  "eth": 0.000035,
+                  "share": 0.0026
+                },
+                {
+                  "symbol": "GLD",
+                  "address": "0xc9a981fee1f9dec688bb123ccdecc63d0debfc4e",
+                  "eth": 0.000023,
+                  "share": 0.0018
+                },
+                {
+                  "symbol": "GME",
+                  "address": "0x1b0e319c6a659f002271b69db8a7df2f911c153e",
+                  "eth": 0.000013,
+                  "share": 0.0009
+                }
+              ]
+            },
+            {
+              "round": 138,
+              "date": "2026-10-25",
+              "potEth": 0.014384,
+              "recipients": 1842,
+              "top": "STONKBROKER",
+              "assets": [
+                {
+                  "symbol": "STONKBROKER",
+                  "address": "0xe934e36a439c94017b64a3fece66af12099abf50",
+                  "eth": 0.010941,
+                  "share": 0.7607
+                },
+                {
+                  "symbol": "USDG",
+                  "address": "0x5fc5360d0400a0fd4f2af552add042d716f1d168",
+                  "eth": 0.00205,
+                  "share": 0.1425
+                },
+                {
+                  "symbol": "cbBTC",
+                  "address": "0xcec185eb182c47d1ba1efc84e6959e18cd620be4",
+                  "eth": 0.000365,
+                  "share": 0.0253
+                },
+                {
+                  "symbol": "NVDA",
+                  "address": "0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec",
+                  "eth": 0.000311,
+                  "share": 0.0216
+                },
+                {
+                  "symbol": "SPCX",
+                  "address": "0x4a0e65a3eccec6dbe60ae065f2e7bb85fae35eea",
+                  "eth": 0.000158,
+                  "share": 0.011
+                },
+                {
+                  "symbol": "GOOGL",
+                  "address": "0x2e0847e8910a9732eb3fb1bb4b70a580adad4fe3",
+                  "eth": 0.000132,
+                  "share": 0.0092
+                },
+                {
+                  "symbol": "AMZN",
+                  "address": "0x12f190a9f9d7d37a250758b26824b97ce941bf54",
+                  "eth": 0.000112,
+                  "share": 0.0078
+                },
+                {
+                  "symbol": "PLTR",
+                  "address": "0x894e1ec2d74ffe5aef8dc8a9e84686accb964f2a",
+                  "eth": 0.000081,
+                  "share": 0.0057
+                },
+                {
+                  "symbol": "AMD",
+                  "address": "0x86923f96303d656e4aa86d9d42d1e57ad2023fdc",
+                  "eth": 0.000059,
+                  "share": 0.0041
+                },
+                {
+                  "symbol": "TSLA",
+                  "address": "0x322f0929c4625ed5bad873c95208d54e1c003b2d",
+                  "eth": 0.000054,
+                  "share": 0.0038
+                },
+                {
+                  "symbol": "USAR",
+                  "address": "0xd917b029c761d264c6a312bbbcda868658ef86a6",
+                  "eth": 0.000043,
+                  "share": 0.003
+                },
+                {
+                  "symbol": "AAPL",
+                  "address": "0xaf3d76f1834a1d425780943c99ea8a608f8a93f9",
+                  "eth": 0.000038,
+                  "share": 0.0026
+                },
+                {
+                  "symbol": "GLD",
+                  "address": "0xc9a981fee1f9dec688bb123ccdecc63d0debfc4e",
+                  "eth": 0.000025,
+                  "share": 0.0018
+                },
+                {
+                  "symbol": "GME",
+                  "address": "0x1b0e319c6a659f002271b69db8a7df2f911c153e",
+                  "eth": 0.000014,
+                  "share": 0.0009
+                }
+              ]
+            },
+            {
+              "round": 137,
+              "date": "2026-10-25",
+              "potEth": 0.013581,
+              "recipients": 1842,
+              "top": "STONKBROKER",
+              "assets": [
+                {
+                  "symbol": "STONKBROKER",
+                  "address": "0xe934e36a439c94017b64a3fece66af12099abf50",
+                  "eth": 0.010343,
+                  "share": 0.7616
+                },
+                {
+                  "symbol": "USDG",
+                  "address": "0x5fc5360d0400a0fd4f2af552add042d716f1d168",
+                  "eth": 0.001923,
+                  "share": 0.1416
+                },
+                {
+                  "symbol": "cbBTC",
+                  "address": "0xcec185eb182c47d1ba1efc84e6959e18cd620be4",
+                  "eth": 0.000344,
+                  "share": 0.0253
+                },
+                {
+                  "symbol": "NVDA",
+                  "address": "0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec",
+                  "eth": 0.000294,
+                  "share": 0.0216
+                },
+                {
+                  "symbol": "SPCX",
+                  "address": "0x4a0e65a3eccec6dbe60ae065f2e7bb85fae35eea",
+                  "eth": 0.000149,
+                  "share": 0.011
+                },
+                {
+                  "symbol": "GOOGL",
+                  "address": "0x2e0847e8910a9732eb3fb1bb4b70a580adad4fe3",
+                  "eth": 0.000124,
+                  "share": 0.0092
+                },
+                {
+                  "symbol": "AMZN",
+                  "address": "0x12f190a9f9d7d37a250758b26824b97ce941bf54",
+                  "eth": 0.000106,
+                  "share": 0.0078
+                },
+                {
+                  "symbol": "PLTR",
+                  "address": "0x894e1ec2d74ffe5aef8dc8a9e84686accb964f2a",
+                  "eth": 0.000077,
+                  "share": 0.0057
+                },
+                {
+                  "symbol": "AMD",
+                  "address": "0x86923f96303d656e4aa86d9d42d1e57ad2023fdc",
+                  "eth": 0.000056,
+                  "share": 0.0041
+                },
+                {
+                  "symbol": "TSLA",
+                  "address": "0x322f0929c4625ed5bad873c95208d54e1c003b2d",
+                  "eth": 0.000051,
+                  "share": 0.0038
+                },
+                {
+                  "symbol": "USAR",
+                  "address": "0xd917b029c761d264c6a312bbbcda868658ef86a6",
+                  "eth": 0.000041,
+                  "share": 0.003
+                },
+                {
+                  "symbol": "AAPL",
+                  "address": "0xaf3d76f1834a1d425780943c99ea8a608f8a93f9",
+                  "eth": 0.000036,
+                  "share": 0.0026
+                },
+                {
+                  "symbol": "GLD",
+                  "address": "0xc9a981fee1f9dec688bb123ccdecc63d0debfc4e",
+                  "eth": 0.000024,
+                  "share": 0.0018
+                },
+                {
+                  "symbol": "GME",
+                  "address": "0x1b0e319c6a659f002271b69db8a7df2f911c153e",
+                  "eth": 0.000013,
+                  "share": 0.0009
+                }
+              ]
+            },
+            {
+              "round": 136,
+              "date": "2026-10-24",
+              "potEth": 0.166343,
+              "recipients": 1842,
+              "top": "STONKBROKER",
+              "assets": [
+                {
+                  "symbol": "STONKBROKER",
+                  "address": "0xe934e36a439c94017b64a3fece66af12099abf50",
+                  "eth": 0.126691,
+                  "share": 0.7616
+                },
+                {
+                  "symbol": "USDG",
+                  "address": "0x5fc5360d0400a0fd4f2af552add042d716f1d168",
+                  "eth": 0.023551,
+                  "share": 0.1416
+                },
+                {
+                  "symbol": "cbBTC",
+                  "address": "0xcec185eb182c47d1ba1efc84e6959e18cd620be4",
+                  "eth": 0.004216,
+                  "share": 0.0253
+                },
+                {
+                  "symbol": "NVDA",
+                  "address": "0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec",
+                  "eth": 0.0036,
+                  "share": 0.0216
+                },
+                {
+                  "symbol": "SPCX",
+                  "address": "0x4a0e65a3eccec6dbe60ae065f2e7bb85fae35eea",
+                  "eth": 0.001828,
+                  "share": 0.011
+                },
+                {
+                  "symbol": "GOOGL",
+                  "address": "0x2e0847e8910a9732eb3fb1bb4b70a580adad4fe3",
+                  "eth": 0.001525,
+                  "share": 0.0092
+                },
+                {
+                  "symbol": "AMZN",
+                  "address": "0x12f190a9f9d7d37a250758b26824b97ce941bf54",
+                  "eth": 0.001299,
+                  "share": 0.0078
+                },
+                {
+                  "symbol": "PLTR",
+                  "address": "0x894e1ec2d74ffe5aef8dc8a9e84686accb964f2a",
+                  "eth": 0.00094,
+                  "share": 0.0057
+                },
+                {
+                  "symbol": "AMD",
+                  "address": "0x86923f96303d656e4aa86d9d42d1e57ad2023fdc",
+                  "eth": 0.000682,
+                  "share": 0.0041
+                },
+                {
+                  "symbol": "TSLA",
+                  "address": "0x322f0929c4625ed5bad873c95208d54e1c003b2d",
+                  "eth": 0.000625,
+                  "share": 0.0038
+                },
+                {
+                  "symbol": "USAR",
+                  "address": "0xd917b029c761d264c6a312bbbcda868658ef86a6",
+                  "eth": 0.000498,
+                  "share": 0.003
+                },
+                {
+                  "symbol": "AAPL",
+                  "address": "0xaf3d76f1834a1d425780943c99ea8a608f8a93f9",
+                  "eth": 0.000437,
+                  "share": 0.0026
+                },
+                {
+                  "symbol": "GLD",
+                  "address": "0xc9a981fee1f9dec688bb123ccdecc63d0debfc4e",
+                  "eth": 0.000294,
+                  "share": 0.0018
+                },
+                {
+                  "symbol": "GME",
+                  "address": "0x1b0e319c6a659f002271b69db8a7df2f911c153e",
+                  "eth": 0.000157,
+                  "share": 0.0009
+                }
+              ]
+            },
+            {
+              "round": 135,
+              "date": "2026-10-24",
+              "potEth": 0.070811,
+              "recipients": 1842,
+              "top": "STONKBROKER",
+              "assets": [
+                {
+                  "symbol": "STONKBROKER",
+                  "address": "0xe934e36a439c94017b64a3fece66af12099abf50",
+                  "eth": 0.053932,
+                  "share": 0.7616
+                },
+                {
+                  "symbol": "USDG",
+                  "address": "0x5fc5360d0400a0fd4f2af552add042d716f1d168",
+                  "eth": 0.010026,
+                  "share": 0.1416
+                },
+                {
+                  "symbol": "cbBTC",
+                  "address": "0xcec185eb182c47d1ba1efc84e6959e18cd620be4",
+                  "eth": 0.001795,
+                  "share": 0.0253
+                },
+                {
+                  "symbol": "NVDA",
+                  "address": "0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec",
+                  "eth": 0.001533,
+                  "share": 0.0216
+                },
+                {
+                  "symbol": "SPCX",
+                  "address": "0x4a0e65a3eccec6dbe60ae065f2e7bb85fae35eea",
+                  "eth": 0.000778,
+                  "share": 0.011
+                },
+                {
+                  "symbol": "GOOGL",
+                  "address": "0x2e0847e8910a9732eb3fb1bb4b70a580adad4fe3",
+                  "eth": 0.000649,
+                  "share": 0.0092
+                },
+                {
+                  "symbol": "AMZN",
+                  "address": "0x12f190a9f9d7d37a250758b26824b97ce941bf54",
+                  "eth": 0.000553,
+                  "share": 0.0078
+                },
+                {
+                  "symbol": "PLTR",
+                  "address": "0x894e1ec2d74ffe5aef8dc8a9e84686accb964f2a",
+                  "eth": 0.0004,
+                  "share": 0.0057
+                },
+                {
+                  "symbol": "AMD",
+                  "address": "0x86923f96303d656e4aa86d9d42d1e57ad2023fdc",
+                  "eth": 0.00029,
+                  "share": 0.0041
+                },
+                {
+                  "symbol": "TSLA",
+                  "address": "0x322f0929c4625ed5bad873c95208d54e1c003b2d",
+                  "eth": 0.000266,
+                  "share": 0.0038
+                },
+                {
+                  "symbol": "USAR",
+                  "address": "0xd917b029c761d264c6a312bbbcda868658ef86a6",
+                  "eth": 0.000212,
+                  "share": 0.003
+                },
+                {
+                  "symbol": "AAPL",
+                  "address": "0xaf3d76f1834a1d425780943c99ea8a608f8a93f9",
+                  "eth": 0.000186,
+                  "share": 0.0026
+                },
+                {
+                  "symbol": "GLD",
+                  "address": "0xc9a981fee1f9dec688bb123ccdecc63d0debfc4e",
+                  "eth": 0.000125,
+                  "share": 0.0018
+                },
+                {
+                  "symbol": "GME",
+                  "address": "0x1b0e319c6a659f002271b69db8a7df2f911c153e",
+                  "eth": 0.000067,
+                  "share": 0.0009
+                }
+              ]
+            },
+            {
+              "round": 134,
+              "date": "2026-10-23",
+              "potEth": 0.020127,
+              "recipients": 1843,
+              "top": "STONKBROKER",
+              "assets": [
+                {
+                  "symbol": "STONKBROKER",
+                  "address": "0xe934e36a439c94017b64a3fece66af12099abf50",
+                  "eth": 0.015322,
+                  "share": 0.7613
+                },
+                {
+                  "symbol": "USDG",
+                  "address": "0x5fc5360d0400a0fd4f2af552add042d716f1d168",
+                  "eth": 0.002858,
+                  "share": 0.142
+                },
+                {
+                  "symbol": "cbBTC",
+                  "address": "0xcec185eb182c47d1ba1efc84e6959e18cd620be4",
+                  "eth": 0.00051,
+                  "share": 0.0253
+                },
+                {
+                  "symbol": "NVDA",
+                  "address": "0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec",
+                  "eth": 0.000435,
+                  "share": 0.0216
+                },
+                {
+                  "symbol": "SPCX",
+                  "address": "0x4a0e65a3eccec6dbe60ae065f2e7bb85fae35eea",
+                  "eth": 0.000221,
+                  "share": 0.011
+                },
+                {
+                  "symbol": "GOOGL",
+                  "address": "0x2e0847e8910a9732eb3fb1bb4b70a580adad4fe3",
+                  "eth": 0.000184,
+                  "share": 0.0092
+                },
+                {
+                  "symbol": "AMZN",
+                  "address": "0x12f190a9f9d7d37a250758b26824b97ce941bf54",
+                  "eth": 0.000157,
+                  "share": 0.0078
+                },
+                {
+                  "symbol": "PLTR",
+                  "address": "0x894e1ec2d74ffe5aef8dc8a9e84686accb964f2a",
+                  "eth": 0.000114,
+                  "share": 0.0056
+                },
+                {
+                  "symbol": "AMD",
+                  "address": "0x86923f96303d656e4aa86d9d42d1e57ad2023fdc",
+                  "eth": 0.000083,
+                  "share": 0.0041
+                },
+                {
+                  "symbol": "TSLA",
+                  "address": "0x322f0929c4625ed5bad873c95208d54e1c003b2d",
+                  "eth": 0.000076,
+                  "share": 0.0038
+                },
+                {
+                  "symbol": "USAR",
+                  "address": "0xd917b029c761d264c6a312bbbcda868658ef86a6",
+                  "eth": 0.00006,
+                  "share": 0.003
+                },
+                {
+                  "symbol": "AAPL",
+                  "address": "0xaf3d76f1834a1d425780943c99ea8a608f8a93f9",
+                  "eth": 0.000053,
+                  "share": 0.0026
+                },
+                {
+                  "symbol": "GLD",
+                  "address": "0xc9a981fee1f9dec688bb123ccdecc63d0debfc4e",
+                  "eth": 0.000036,
+                  "share": 0.0018
+                },
+                {
+                  "symbol": "GME",
+                  "address": "0x1b0e319c6a659f002271b69db8a7df2f911c153e",
+                  "eth": 0.000019,
+                  "share": 0.0009
+                }
+              ]
+            },
+            {
+              "round": 133,
+              "date": "2026-10-23",
+              "potEth": 0.011688,
+              "recipients": 1843,
+              "top": "STONKBROKER",
+              "assets": [
+                {
+                  "symbol": "STONKBROKER",
+                  "address": "0xe934e36a439c94017b64a3fece66af12099abf50",
+                  "eth": 0.008898,
+                  "share": 0.7613
+                },
+                {
+                  "symbol": "USDG",
+                  "address": "0x5fc5360d0400a0fd4f2af552add042d716f1d168",
+                  "eth": 0.00166,
+                  "share": 0.142
+                },
+                {
+                  "symbol": "cbBTC",
+                  "address": "0xcec185eb182c47d1ba1efc84e6959e18cd620be4",
+                  "eth": 0.000296,
+                  "share": 0.0253
+                },
+                {
+                  "symbol": "NVDA",
+                  "address": "0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec",
+                  "eth": 0.000253,
+                  "share": 0.0216
+                },
+                {
+                  "symbol": "SPCX",
+                  "address": "0x4a0e65a3eccec6dbe60ae065f2e7bb85fae35eea",
+                  "eth": 0.000128,
+                  "share": 0.011
+                },
+                {
+                  "symbol": "GOOGL",
+                  "address": "0x2e0847e8910a9732eb3fb1bb4b70a580adad4fe3",
+                  "eth": 0.000107,
+                  "share": 0.0092
+                },
+                {
+                  "symbol": "AMZN",
+                  "address": "0x12f190a9f9d7d37a250758b26824b97ce941bf54",
+                  "eth": 0.000091,
+                  "share": 0.0078
+                },
+                {
+                  "symbol": "PLTR",
+                  "address": "0x894e1ec2d74ffe5aef8dc8a9e84686accb964f2a",
+                  "eth": 0.000066,
+                  "share": 0.0056
+                },
+                {
+                  "symbol": "AMD",
+                  "address": "0x86923f96303d656e4aa86d9d42d1e57ad2023fdc",
+                  "eth": 0.000048,
+                  "share": 0.0041
+                },
+                {
+                  "symbol": "TSLA",
+                  "address": "0x322f0929c4625ed5bad873c95208d54e1c003b2d",
+                  "eth": 0.000044,
+                  "share": 0.0038
+                },
+                {
+                  "symbol": "USAR",
+                  "address": "0xd917b029c761d264c6a312bbbcda868658ef86a6",
+                  "eth": 0.000035,
+                  "share": 0.003
+                },
+                {
+                  "symbol": "AAPL",
+                  "address": "0xaf3d76f1834a1d425780943c99ea8a608f8a93f9",
+                  "eth": 0.000031,
+                  "share": 0.0026
+                },
+                {
+                  "symbol": "GLD",
+                  "address": "0xc9a981fee1f9dec688bb123ccdecc63d0debfc4e",
+                  "eth": 0.000021,
+                  "share": 0.0018
+                },
+                {
+                  "symbol": "GME",
+                  "address": "0x1b0e319c6a659f002271b69db8a7df2f911c153e",
+                  "eth": 0.000011,
+                  "share": 0.0009
+                }
+              ]
+            },
+            {
+              "round": 132,
+              "date": "2026-10-23",
+              "potEth": 0.015349,
+              "recipients": 1843,
+              "top": "STONKBROKER",
+              "assets": [
+                {
+                  "symbol": "STONKBROKER",
+                  "address": "0xe934e36a439c94017b64a3fece66af12099abf50",
+                  "eth": 0.011684,
+                  "share": 0.7613
+                },
+                {
+                  "symbol": "USDG",
+                  "address": "0x5fc5360d0400a0fd4f2af552add042d716f1d168",
+                  "eth": 0.002179,
+                  "share": 0.142
+                },
+                {
+                  "symbol": "cbBTC",
+                  "address": "0xcec185eb182c47d1ba1efc84e6959e18cd620be4",
+                  "eth": 0.000389,
+                  "share": 0.0253
+                },
+                {
+                  "symbol": "NVDA",
+                  "address": "0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec",
+                  "eth": 0.000332,
+                  "share": 0.0216
+                },
+                {
+                  "symbol": "SPCX",
+                  "address": "0x4a0e65a3eccec6dbe60ae065f2e7bb85fae35eea",
+                  "eth": 0.000169,
+                  "share": 0.011
+                },
+                {
+                  "symbol": "GOOGL",
+                  "address": "0x2e0847e8910a9732eb3fb1bb4b70a580adad4fe3",
+                  "eth": 0.000141,
+                  "share": 0.0092
+                },
+                {
+                  "symbol": "AMZN",
+                  "address": "0x12f190a9f9d7d37a250758b26824b97ce941bf54",
+                  "eth": 0.00012,
+                  "share": 0.0078
+                },
+                {
+                  "symbol": "PLTR",
+                  "address": "0x894e1ec2d74ffe5aef8dc8a9e84686accb964f2a",
+                  "eth": 0.000087,
+                  "share": 0.0056
+                },
+                {
+                  "symbol": "AMD",
+                  "address": "0x86923f96303d656e4aa86d9d42d1e57ad2023fdc",
+                  "eth": 0.000063,
+                  "share": 0.0041
+                },
+                {
+                  "symbol": "TSLA",
+                  "address": "0x322f0929c4625ed5bad873c95208d54e1c003b2d",
+                  "eth": 0.000058,
+                  "share": 0.0038
+                },
+                {
+                  "symbol": "USAR",
+                  "address": "0xd917b029c761d264c6a312bbbcda868658ef86a6",
+                  "eth": 0.000046,
+                  "share": 0.003
+                },
+                {
+                  "symbol": "AAPL",
+                  "address": "0xaf3d76f1834a1d425780943c99ea8a608f8a93f9",
+                  "eth": 0.00004,
+                  "share": 0.0026
+                },
+                {
+                  "symbol": "GLD",
+                  "address": "0xc9a981fee1f9dec688bb123ccdecc63d0debfc4e",
+                  "eth": 0.000027,
+                  "share": 0.0018
+                },
+                {
+                  "symbol": "GME",
+                  "address": "0x1b0e319c6a659f002271b69db8a7df2f911c153e",
+                  "eth": 0.000014,
+                  "share": 0.0009
+                }
+              ]
+            },
+            {
+              "round": 131,
+              "date": "2026-10-22",
+              "potEth": 0.517949,
+              "recipients": 1843,
+              "top": "STONKBROKER",
+              "assets": [
+                {
+                  "symbol": "STONKBROKER",
+                  "address": "0xe934e36a439c94017b64a3fece66af12099abf50",
+                  "eth": 0.394786,
+                  "share": 0.7622
+                },
+                {
+                  "symbol": "USDG",
+                  "address": "0x5fc5360d0400a0fd4f2af552add042d716f1d168",
+                  "eth": 0.073542,
+                  "share": 0.142
+                },
+                {
+                  "symbol": "cbBTC",
+                  "address": "0xcec185eb182c47d1ba1efc84e6959e18cd620be4",
+                  "eth": 0.012634,
+                  "share": 0.0244
+                },
+                {
+                  "symbol": "NVDA",
+                  "address": "0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec",
+                  "eth": 0.011205,
+                  "share": 0.0216
+                },
+                {
+                  "symbol": "SPCX",
+                  "address": "0x4a0e65a3eccec6dbe60ae065f2e7bb85fae35eea",
+                  "eth": 0.005689,
+                  "share": 0.011
+                },
+                {
+                  "symbol": "GOOGL",
+                  "address": "0x2e0847e8910a9732eb3fb1bb4b70a580adad4fe3",
+                  "eth": 0.004745,
+                  "share": 0.0092
+                },
+                {
+                  "symbol": "AMZN",
+                  "address": "0x12f190a9f9d7d37a250758b26824b97ce941bf54",
+                  "eth": 0.004042,
+                  "share": 0.0078
+                },
+                {
+                  "symbol": "PLTR",
+                  "address": "0x894e1ec2d74ffe5aef8dc8a9e84686accb964f2a",
+                  "eth": 0.002926,
+                  "share": 0.0056
+                },
+                {
+                  "symbol": "AMD",
+                  "address": "0x86923f96303d656e4aa86d9d42d1e57ad2023fdc",
+                  "eth": 0.002124,
+                  "share": 0.0041
+                },
+                {
+                  "symbol": "TSLA",
+                  "address": "0x322f0929c4625ed5bad873c95208d54e1c003b2d",
+                  "eth": 0.001944,
+                  "share": 0.0038
+                },
+                {
+                  "symbol": "USAR",
+                  "address": "0xd917b029c761d264c6a312bbbcda868658ef86a6",
+                  "eth": 0.001551,
+                  "share": 0.003
+                },
+                {
+                  "symbol": "AAPL",
+                  "address": "0xaf3d76f1834a1d425780943c99ea8a608f8a93f9",
+                  "eth": 0.001359,
+                  "share": 0.0026
+                },
+                {
+                  "symbol": "GLD",
+                  "address": "0xc9a981fee1f9dec688bb123ccdecc63d0debfc4e",
+                  "eth": 0.000915,
+                  "share": 0.0018
+                },
+                {
+                  "symbol": "GME",
+                  "address": "0x1b0e319c6a659f002271b69db8a7df2f911c153e",
+                  "eth": 0.000488,
+                  "share": 0.0009
+                }
+              ]
+            },
+            {
+              "round": 130,
+              "date": "2026-10-22",
+              "potEth": 0.102504,
+              "recipients": 1843,
+              "top": "STONKBROKER",
+              "assets": [
+                {
+                  "symbol": "STONKBROKER",
+                  "address": "0xe934e36a439c94017b64a3fece66af12099abf50",
+                  "eth": 0.07813,
+                  "share": 0.7622
+                },
+                {
+                  "symbol": "USDG",
+                  "address": "0x5fc5360d0400a0fd4f2af552add042d716f1d168",
+                  "eth": 0.014554,
+                  "share": 0.142
+                },
+                {
+                  "symbol": "cbBTC",
+                  "address": "0xcec185eb182c47d1ba1efc84e6959e18cd620be4",
+                  "eth": 0.0025,
+                  "share": 0.0244
+                },
+                {
+                  "symbol": "NVDA",
+                  "address": "0xd0601ce157db5bdc3162bbac2a2c8af5320d9eec",
+                  "eth": 0.002217,
+                  "share": 0.0216
+                },
+                {
+                  "symbol": "SPCX",
+                  "address": "0x4a0e65a3eccec6dbe60ae065f2e7bb85fae35eea",
+                  "eth": 0.001126,
+                  "share": 0.011
+                },
+                {
+                  "symbol": "GOOGL",
+                  "address": "0x2e0847e8910a9732eb3fb1bb4b70a580adad4fe3",
+                  "eth": 0.000939,
+                  "share": 0.0092
+                },
+                {
+                  "symbol": "AMZN",
+                  "address": "0x12f190a9f9d7d37a250758b26824b97ce941bf54",
+                  "eth": 0.0008,
+                  "share": 0.0078
+                },
+                {
+                  "symbol": "PLTR",
+                  "address": "0x894e1ec2d74ffe5aef8dc8a9e84686accb964f2a",
+                  "eth": 0.000579,
+                  "share": 0.0056
+                },
+                {
+                  "symbol": "AMD",
+                  "address": "0x86923f96303d656e4aa86d9d42d1e57ad2023fdc",
+                  "eth": 0.00042,
+                  "share": 0.0041
+                },
+                {
+                  "symbol": "TSLA",
+                  "address": "0x322f0929c4625ed5bad873c95208d54e1c003b2d",
+                  "eth": 0.000385,
+                  "share": 0.0038
+                },
+                {
+                  "symbol": "USAR",
+                  "address": "0xd917b029c761d264c6a312bbbcda868658ef86a6",
+                  "eth": 0.000307,
+                  "share": 0.003
+                },
+                {
+                  "symbol": "AAPL",
+                  "address": "0xaf3d76f1834a1d425780943c99ea8a608f8a93f9",
+                  "eth": 0.000269,
+                  "share": 0.0026
+                },
+                {
+                  "symbol": "GLD",
+                  "address": "0xc9a981fee1f9dec688bb123ccdecc63d0debfc4e",
+                  "eth": 0.000181,
+                  "share": 0.0018
+                },
+                {
+                  "symbol": "GME",
+                  "address": "0x1b0e319c6a659f002271b69db8a7df2f911c153e",
+                  "eth": 0.000097,
+                  "share": 0.0009
+                }
+              ]
+            }
+          ]
         }
       },
       "ammFlow": {

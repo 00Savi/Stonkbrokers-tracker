@@ -398,6 +398,34 @@ function applyPairTokens(revenueBreakdown, book) {
   };
 }
 
+function applyClockIn(revenueBreakdown, book) {
+  if (!book || !(book.rounds > 0)) return;
+  revenueBreakdown.clockIn = {
+    engine: book.engine,
+    site: book.site,
+    rounds: book.rounds,
+    ethDistributed: book.ethDistributed,
+    ethPerEngineWeight: book.ethPerEngineWeight,
+    ethUsd: book.ethUsd,
+    ethPot: book.ethPot,
+    minDropEth: book.minDropEth,
+    currentRound: book.currentRound,
+    assets: book.assets || [],
+    recent: book.recent || [],
+  };
+}
+
+function carryClockIn(revenueBreakdown, prevRevenue, book) {
+  if (book && book.ok !== false && book.rounds > 0) {
+    applyClockIn(revenueBreakdown, book);
+    return;
+  }
+  if (prevRevenue?.clockIn?.rounds > 0) {
+    console.warn("[warn] clock in rounds missing; keeping previous book");
+    revenueBreakdown.clockIn = prevRevenue.clockIn;
+  }
+}
+
 function carryPairTokens(revenueBreakdown, prevRevenue, book) {
   const prev = prevRevenue?.pairTokens;
   const prevPairs = Array.isArray(prev?.pairs) ? prev.pairs : [];
@@ -481,6 +509,7 @@ const yieldDays = require("./lib/yieldDays.cjs");
 const vaultFlow = require("./lib/vaultFlow.cjs");
 const { fetchSmartLps, fromGgIndex, USDG } = require("./lib/smartLp.cjs");
 const { fetchPairTokens } = require("./lib/pairTokens.cjs");
+const { fetchClockIn } = require("./lib/clockIn.cjs");
 const dates = require("./lib/dates.cjs");
 const { fetchNight } = require("./lib/night.cjs");
 const priceDays = require("./lib/priceDays.cjs");
@@ -4560,6 +4589,20 @@ async function run() {
         } catch (e) {
           console.warn(`[warn] pair tokens: ${e.message}`);
           carryPairTokens(revenueBreakdown, prevProjData.revenue, null);
+        }
+        try {
+          const clock = await fetchClockIn({
+            rpc,
+            blockTime,
+            ethPriceUsd: markets[projectKey]?.ethPriceUsd,
+          });
+          carryClockIn(revenueBreakdown, prevProjData.revenue, clock);
+          console.log(
+            `  clock in: ${clock?.rounds || 0} rounds, ${Number(clock?.ethDistributed || 0).toFixed(3)} ETH distributed, pot ${Number(clock?.ethPot || 0).toFixed(4)} ETH`,
+          );
+        } catch (e) {
+          console.warn(`[warn] clock in: ${e.message}`);
+          carryClockIn(revenueBreakdown, prevProjData.revenue, null);
         }
       }
 

@@ -18,6 +18,7 @@ import { useChartView } from '../../lib/chartWindow';
 import { explorerAddressUrl } from '../../lib/tba';
 import { SliceChart } from '../SliceChart';
 import { MethodologyCard } from '../Disclaimer';
+import { ClockInDistributions } from '../ClockInDistributions';
 import { UnderwaterCard } from '../UnderwaterCard';
 import {
   EmptyChart,
@@ -494,6 +495,14 @@ export default function StonkDetailView({ data, activeTab }) {
               note: 'From Aug 20: per-NFT daily yield × active units. Earlier bars are Clock In pot inflows.',
             }}
           />
+
+        <ClockInDistributions
+          book={revenue.clockIn}
+          tiers={tiers}
+          activation={activation}
+          ethPriceUsd={market.ethPriceUsd}
+          formatCurrency={formatCurrency}
+        />
       </ShareSection>
 
       <ShareSection id="pairs" title="Pair Tokens" className="scroll-mt-32 space-y-4">

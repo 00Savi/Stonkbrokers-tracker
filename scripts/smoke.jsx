@@ -1422,6 +1422,7 @@ for (const [name, View, props] of VIEWS) {
       ...snapshot.projects,
       stonk: {
         ...stonk,
+        market: { ...stonk.market, ethPriceUsd: 1000 },
         revenue: {
           ...stonk.revenue,
           pairTokenUsd: 40,
@@ -1437,6 +1438,18 @@ for (const [name, View, props] of VIEWS) {
               { ca: '0x873f0000000000000000000000000000000004ab', symbol: 'USONVDA', symbol0: 'USO', symbol1: 'NVDA', tvlUsd: 20000, fees7dUsd: 300, protocolFees7dUsd: 30 },
               { ca: '0x0d1400000000000000000000000000000000dca8', symbol: 'ETHNVDA', symbol0: 'ETH', symbol1: 'NVDA', tvlUsd: 5000, fees7dUsd: 100, protocolFees7dUsd: 10 },
             ],
+          },
+          clockIn: {
+            rounds: 12,
+            ethDistributed: 2.5,
+            ethPerEngineWeight: 4.321 / 10000,
+            ethUsd: 5800,
+            ethPot: 0.004,
+            minDropEth: 0.01,
+            assets: [
+              { symbol: 'GLD', address: '0xc9a981fee1f9dec688bb123ccdecc63d0debfc4e', eth: 1.8, usd: 4321, share: 0.72 },
+            ],
+            recent: [],
           },
         },
       },
@@ -1456,6 +1469,10 @@ for (const [name, View, props] of VIEWS) {
     || !html.includes('not the Smart LP skim')
     || !html.includes('$40')
     || !html.includes('$25.0k')
+    || !html.includes('Clock In distributions')
+    || !html.includes('one seat of that tier')
+    || !html.includes('$4,321')
+    || html.includes('Lifetime ETH the rounds directed')
   ) {
     failed++;
     console.error('FAIL  pair token revenue section', stonkTabs.join(','));
