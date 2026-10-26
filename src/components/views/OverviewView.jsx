@@ -69,7 +69,7 @@ function tierRows(data) {
     if (!p) continue;
     const floorUsd = (p.market?.nftFloorEth || 0) * (p.market?.ethPriceUsd || 0);
     const tokenUsd = p.market?.tokenPriceUsd || 0;
-    const nft = !meta.kind || meta.kind === 'machines' || meta.kind === 'brokers' || meta.kind === 'factions';
+    const nft = !meta.kind || meta.kind === 'machines' || meta.kind === 'brokers' || meta.kind === 'factions' || meta.kind === 'mutual';
 
     for (const t of p.tiers || []) {
       const night = meta.kind === 'factions' ? typicalNightshadesSeat(p.factions, t.tier) : null;

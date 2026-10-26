@@ -411,6 +411,7 @@ function applyClockIn(revenueBreakdown, book) {
     minDropEth: book.minDropEth,
     currentRound: book.currentRound,
     assets: book.assets || [],
+    history: book.history || [],
     recent: book.recent || [],
   };
 }
@@ -510,6 +511,7 @@ const vaultFlow = require("./lib/vaultFlow.cjs");
 const { fetchSmartLps, fromGgIndex, USDG } = require("./lib/smartLp.cjs");
 const { fetchPairTokens } = require("./lib/pairTokens.cjs");
 const { fetchClockIn } = require("./lib/clockIn.cjs");
+const { fetchMutualFun } = require("./lib/mutualFun.cjs");
 const dates = require("./lib/dates.cjs");
 const { fetchNight } = require("./lib/night.cjs");
 const priceDays = require("./lib/priceDays.cjs");
@@ -834,6 +836,31 @@ const PROJECTS = {
       { id: "T3", name: "Towered", reqTokens: 450000, weight: 200, rainWeight: 5 },
       { id: "T4", name: "Fortress", reqTokens: 1200000, weight: 333, rainWeight: 6 }
     ]
+  },
+  // The Mutual Fun. Seats, five funds, enrollment by share class. Not an
+  // Anvil vault: fetchMutualFun reads the Dividend Office and the Fund Desk.
+  mutualfun: {
+    kind: "mutual",
+    genesisBlock: 98_000_000,
+    tokenCa: "0xc76b6020a3d7f4bb5cee85d44f8b0da6a6ee7616",
+    nftCa: "0x1215d567dc4e0f2999dcc262d78d1586ff97154f",
+    activationCa: "0xf658b4abdafc6c8d652742d563e9d9ab8b454475",
+    ammCa: "0x0959f956a13f73be944d564e301df63e3ba02047",
+    maxSupply: 4001,
+    unitValue: 0,
+    ticker: "TMF",
+    logo: "Mutual.svg",
+    openseaSlug: "themutualfun",
+    site: "https://themutual.fun/",
+    underConstruction: false,
+    teamWallets: 0,
+    tiers: [
+      { id: "T0", name: "Retail", reqTokens: 40100, weight: 100 },
+      { id: "T1", name: "Investor", reqTokens: 100250, weight: 150 },
+      { id: "T2", name: "Advisor", reqTokens: 200500, weight: 200 },
+      { id: "T3", name: "Institutional", reqTokens: 401000, weight: 250 },
+      { id: "T4", name: "Retirement", reqTokens: 1002500, weight: 333 },
+    ],
   },
   // Interns by StonkBrokers. Collection + activation live 2026-09-19.
   // Intern Clock In 3.0 (2026-09-22) is the intern yield pot. InternExchange
@@ -4286,6 +4313,27 @@ async function run() {
         finalJson.projects.interns = buildInternStub(conf, markets, prevProjData);
         console.log("  intern CAs empty; mint-desk stub (fill nftCa + activationCa to go live)");
         projectsOk++;
+        continue;
+      }
+
+      if (conf.kind === "mutual") {
+        try {
+          const spot = markets[projectKey] || {};
+          finalJson.projects[projectKey] = await fetchMutualFun({
+            rpc,
+            blockTime,
+            ethPriceUsd: spot.ethPriceUsd || ethPriceUsd,
+            tokenPriceUsd: spot.tokenPriceUsd || 0,
+            tokenPrices,
+          });
+          projectsOk++;
+        } catch (e) {
+          console.warn(`[warn] mutual fun: ${e.message || e}`);
+          if (prevProjData && Object.keys(prevProjData).length) {
+            finalJson.projects[projectKey] = prevProjData;
+          }
+          projectsFailed++;
+        }
         continue;
       }
 

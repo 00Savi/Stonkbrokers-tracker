@@ -502,6 +502,7 @@ export default function StonkDetailView({ data, activeTab }) {
           activation={activation}
           ethPriceUsd={market.ethPriceUsd}
           formatCurrency={formatCurrency}
+          timeframe={timeframe}
         />
       </ShareSection>
 

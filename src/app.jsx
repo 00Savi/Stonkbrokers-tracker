@@ -13,6 +13,7 @@ import InternDetailView from './components/views/InternDetailView';
 import MancerDetailView from './components/views/MancerDetailView';
 import YardDetailView from './components/views/YardDetailView';
 import CardWallDetailView from './components/views/CardWallDetailView';
+import MutualFunDetailView from './components/views/MutualFunDetailView';
 import BonusDetailView from './components/views/BonusDetailView';
 import MemesTokensView from './components/views/MemesTokensView';
 import SpecialDetailView from './components/views/SpecialDetailView';
@@ -33,6 +34,7 @@ const DETAIL_VIEWS = {
   mancer: MancerDetailView,
   tickeryard: YardDetailView,
   cardwall: CardWallDetailView,
+  mutualfun: MutualFunDetailView,
   index: (props) => <SpecialDetailView {...props} projectKey="index" />,
   printer: (props) => <SpecialDetailView {...props} projectKey="printer" />,
   oakmont: (props) => <SpecialDetailView {...props} projectKey="oakmont" />,

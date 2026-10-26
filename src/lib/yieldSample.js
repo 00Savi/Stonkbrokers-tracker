@@ -424,7 +424,7 @@ function applyOne(project, id, days, key) {
   if (!project) return project;
   const tagged = project.bookSlug === key ? project : { ...project, bookSlug: key };
   const kind = tagged.config?.kind;
-  if (kind === 'machines' || kind === 'vault') return untouched(tagged, id, days, 0);
+  if (kind === 'machines' || kind === 'vault' || kind === 'mutual') return untouched(tagged, id, days, 0);
   if (key === 'cardwall') return applyCardwall(tagged, id, days);
   if (kind === 'cashflow') {
     return applyPool(tagged, id, days, {

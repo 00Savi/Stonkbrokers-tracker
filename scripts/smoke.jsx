@@ -33,6 +33,7 @@ import InternDetailView from '../src/components/views/InternDetailView';
 import MancerDetailView from '../src/components/views/MancerDetailView';
 import YardDetailView from '../src/components/views/YardDetailView';
 import CardWallDetailView from '../src/components/views/CardWallDetailView';
+import MutualFunDetailView from '../src/components/views/MutualFunDetailView';
 import BonusDetailView from '../src/components/views/BonusDetailView';
 import SpecialDetailView from '../src/components/views/SpecialDetailView';
 import NightshadesDetailView from '../src/components/views/NightshadesDetailView';
@@ -115,6 +116,8 @@ const ROUTES = [
   '/tickeryard/activation',
   '/tickeryard/ownership',
   '/cardwall/burn',
+  '/mutualfun/roi',
+  '/mutualfun/activation',
   '/index/roi',
   '/rhmachines/revenue',
   '/oakmont/roi',
@@ -199,12 +202,36 @@ for (const [label, View] of [
   ['Mancer', MancerDetailView],
   ['Yard', YardDetailView],
   ['CardWall', CardWallDetailView],
+  ['MutualFun', MutualFunDetailView],
 ]) {
   for (const tab of TABS) {
     VIEWS.push([`${label}·${tab}`, View, { data: snapshot, activeTab: tab }]);
   }
 }
 VIEWS.push(['Nightshades·all', NightshadesDetailView, { data: snapshot, activeTab: 'roi' }]);
+
+{
+  const html = renderToString(
+    <StaticRouter location="/mutualfun/roi">
+      <MutualFunDetailView data={snapshot} />
+    </StaticRouter>
+  );
+  const funds = snapshot.projects?.mutualfun?.funds || [];
+  if (
+    !html.includes('The Mutual Fun')
+    || !html.includes('Argon')
+    || !html.includes('Retail')
+    || !html.includes('Open Market')
+    || funds.length !== 5
+    || !html.includes('401,000')
+    || !html.includes('beta')
+  ) {
+    failed++;
+    console.error('FAIL  mutual fun project page', funds.map((f) => f.name).join(','));
+  } else {
+    console.log('ok    mutual fun shows five funds and the share classes');
+  }
+}
 
 {
   const emptyFaction = {
@@ -1449,6 +1476,26 @@ for (const [name, View, props] of VIEWS) {
             assets: [
               { symbol: 'GLD', address: '0xc9a981fee1f9dec688bb123ccdecc63d0debfc4e', eth: 1.8, usd: 4321, share: 0.72 },
             ],
+            history: [
+              {
+                round: 88,
+                date: new Date().toISOString().slice(0, 10),
+                potEth: 0.777,
+                recipients: 17,
+                unit: 4.321 / 10000,
+                top: 'GLD',
+                assets: [{ symbol: 'GLD', eth: 0.777, share: 1 }],
+              },
+              {
+                round: 3,
+                date: '2020-01-01',
+                potEth: 9,
+                recipients: 4,
+                unit: 1,
+                top: 'GONE',
+                assets: [],
+              },
+            ],
             recent: [],
           },
         },
@@ -1472,7 +1519,12 @@ for (const [name, View, props] of VIEWS) {
     || !html.includes('Clock In distributions')
     || !html.includes('one seat of that tier')
     || !html.includes('$4,321')
-    || html.includes('Lifetime ETH the rounds directed')
+    || !html.includes('Round 88')
+    || !html.includes('17 brokers')
+    || !html.includes('$777')
+    || html.includes('Round 3')
+    || html.includes('GONE')
+    || html.includes('not the token amount that landed')
   ) {
     failed++;
     console.error('FAIL  pair token revenue section', stonkTabs.join(','));
