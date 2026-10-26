@@ -383,7 +383,11 @@ export function ProtocolFeeVolumePanels({ labels, cols, kind, holder, note, titl
       body: fees.length ? (
         <Bar data={{ labels, datasets: dollarSets }} options={usdStackOptions(labels, interval)} />
       ) : (
-        <EmptyChart>No revenue days in this window</EmptyChart>
+        <EmptyChart>
+          {holderView
+            ? 'This cash was paid to holders. It is on the Holder tab, not kept as a protocol fee.'
+            : 'No revenue days in this window'}
+        </EmptyChart>
       ),
     },
   ];
@@ -413,7 +417,8 @@ export function ProtocolFeeVolumePanels({ labels, cols, kind, holder, note, titl
       ),
     });
   }
-  return <ChartSwitch initial="dollars" views={views} />;
+  const openOn = fees.length ? 'dollars' : (holderView ? 'holder' : 'dollars');
+  return <ChartSwitch initial={openOn} views={views} />;
 }
 
 const MODE_FILL = {

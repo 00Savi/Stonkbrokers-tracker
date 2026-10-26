@@ -463,12 +463,27 @@ export function holderRevenueOnLabels(project, labels) {
 
   const r = project?.revenue || {};
   const holderHist = windowLookup(r.historyDates || [], r.historyHolder || []);
+  // historyPaid is zero-filled, so the AMM column (and Mancer's DEX column)
+  // is the payout. Those columns leave the protocol chart. Sum them here or
+  // the cash disappears instead of moving to Holder.
+  const standIn = {
+    amm: 'historyAmm',
+    dex: 'historyDex',
+  };
+  const standInLookups = holderStreams(project).paid
+    .filter((key) => standIn[key])
+    .map((key) => windowLookup(r.historyDates || [], r[standIn[key]] || []));
   const tiers = project?.tiers || [];
   const snaps = usableSnapshots(project?.dailySnapshots);
   const live = project?.activation?.breakdown || project?.activation?.byTier || {};
   const snapByDate = new Map(snaps.map((s) => [mdKey(s.date), s]));
 
   return axis.map((d) => {
+    const fromStreams = standInLookups.reduce((sum, lookup) => {
+      const n = Number(lookup(d));
+      return n > 0 ? sum + n : sum;
+    }, 0);
+    if (fromStreams > 0) return fromStreams;
     const fromHist = holderHist(d);
     if (fromHist > 0) return fromHist;
     const key = mdKey(d);

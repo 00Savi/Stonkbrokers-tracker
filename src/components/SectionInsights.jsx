@@ -608,9 +608,10 @@ export function SectionInsights({ sectionId }) {
     );
   }
   if (sectionId === 'revenue' || sectionId === 'night') {
-    // Stonk already draws the booster mix, including the reward and partner share.
-    // The index stitch under this chart labeled that reward "AMM" and stopped in September.
-    if (bookSlugOf(project) === 'stonk') return null;
+    // The index stitch labeled holder payouts "AMM" and stopped in September.
+    // Stonk draws its own mix. Mancer's ledger chart is the one that continues.
+    const slug = bookSlugOf(project);
+    if (slug === 'stonk' || slug === 'mancer') return null;
     return <StreamQuality revenue={analysis?.revenue} />;
   }
   if (sectionId === 'liquidity') return <FeeRates project={project} />;

@@ -37,8 +37,9 @@ import BonusDetailView from '../src/components/views/BonusDetailView';
 import SpecialDetailView from '../src/components/views/SpecialDetailView';
 import NightshadesDetailView from '../src/components/views/NightshadesDetailView';
 import { UnderwaterCard } from '../src/components/UnderwaterCard';
+import { ProtocolFeeVolumePanels } from '../src/components/HistoryCharts';
 import { AnalysisProvider } from '../src/components/SectionInsights';
-import { protocolRevenueChart, resampleSeries } from '../src/lib/yieldHistory';
+import { protocolRevenueChart, resampleSeries, holderRevenueOnLabels } from '../src/lib/yieldHistory';
 import { rollupNightshadesOwnership } from '../src/lib/nightshades';
 import { tokenValuation } from '../src/lib/valuation';
 import { compactNum, compactUsd } from '../src/components/kit';
@@ -1460,6 +1461,42 @@ for (const [name, View, props] of VIEWS) {
     console.error('FAIL  pair token revenue section', stonkTabs.join(','));
   } else {
     console.log('ok    pair token revenue is its own section');
+  }
+}
+
+{
+  const project = {
+    config: { ticker: 'MANCER' },
+    revenue: {
+      historyDates: ['2026-10-20', '2026-10-21'],
+      historyAmm: [100, 40],
+      historyDex: [25, 10],
+      historyPaid: [0, 0],
+      historyFloat: [0, 0],
+      historyHolder: [0, 0],
+    },
+    tiers: [],
+    dailySnapshots: [],
+  };
+  const holder = holderRevenueOnLabels(project, project.revenue.historyDates);
+  const html = renderToString(
+    <StaticRouter location="/mancer/revenue">
+      <ProtocolFeeVolumePanels
+        labels={['Oct 20', 'Oct 21']}
+        cols={[
+          { key: 'amm', role: 'paid', data: [100, 40], label: 'Paid to holders', color: '#00a804' },
+          { key: 'dex', role: 'paid', data: [25, 10], label: 'Paid to holders (DEX)', color: '#f97316' },
+        ]}
+        kind="protocol"
+        holder={{ labels: ['Oct 20', 'Oct 21'], data: holder }}
+      />
+    </StaticRouter>
+  );
+  if (holder[0] !== 125 || holder[1] !== 50 || html.includes('No revenue days in this window')) {
+    failed++;
+    console.error('FAIL  mancer holder revenue', holder);
+  } else {
+    console.log('ok    mancer payout stays on the holder chart');
   }
 }
 
