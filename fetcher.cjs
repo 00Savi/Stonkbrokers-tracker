@@ -1194,21 +1194,29 @@ async function loadMarketPrices() {
       markets.cardwall.nftFloorEth = +os.collectionEth.toFixed(3);
       markets.cardwall.floorSource = "opensea";
     }
-    markets.cardwall.starFloorEth = os.byRarity;
+    // GraphQL is the live per-star book. The unfiltered listing walk and last
+    // hour's array only fill a star the live read missed. Keeping the whole
+    // previous array on any failure republished one October read for weeks
+    // after the listings had moved, which is what the Anvil scan prices.
+    let stars = os.byRarity;
     try {
-      const stars = await fetchStarFloorsGraphql(PROJECTS.cardwall.openseaSlug);
-      if (stars.some((v) => Number(v) > 0)) markets.cardwall.starFloorEth = stars;
+      stars = mergeStarSlots(await fetchStarFloorsGraphql(PROJECTS.cardwall.openseaSlug), stars);
     } catch (e) {
       console.warn(`[warn] cardwall star floors: ${e.message}`);
     }
-    const prevStars = previous.projects?.cardwall?.market?.starFloorEth;
-    if (
-      !(markets.cardwall.starFloorEth || []).some((v) => Number(v) > 0) &&
-      Array.isArray(prevStars) &&
-      prevStars.some((v) => Number(v) > 0)
-    ) {
-      markets.cardwall.starFloorEth = prevStars;
+    if ((stars || []).filter((v) => Number(v) > 0).length < 5) {
+      try {
+        stars = mergeStarSlots(stars, await fetchStarFloorsRest(PROJECTS.cardwall.openseaSlug));
+      } catch (e) {
+        console.warn(`[warn] cardwall star floors (rest): ${e.message}`);
+      }
     }
+    const prevStars = previous.projects?.cardwall?.market?.starFloorEth;
+    stars = mergeStarSlots(stars, prevStars);
+    markets.cardwall.starFloorEth = stars;
+    console.log(
+      `  cardwall stars ${stars.map((v) => (Number(v) > 0 ? Number(v) : "—")).join(" / ")} ETH`,
+    );
   }
 
   if (PROJECTS.coattail) {
@@ -2418,13 +2426,14 @@ async function fetchOpenSeaGraphql(query) {
       "content-type": "application/json",
       accept: "application/json",
       origin: "https://opensea.io",
+      "user-agent": "Mozilla/5.0",
     },
     body: JSON.stringify({ query }),
     signal: AbortSignal.timeout(20_000),
   });
   if (!res.ok) throw new Error(`opensea graphql ${res.status}`);
   const body = await res.json();
-  if (body.errors?.length) throw new Error(body.errors[0].message);
+  if (body.errors?.length && !body.data) throw new Error(body.errors[0].message);
   return body.data || {};
 }
 
@@ -2436,28 +2445,94 @@ function listedEth(node) {
   return unit;
 }
 
-/** Cheapest OpenSea listing at each Card Wall star rating. rarityOf 0 is one star. */
-async function fetchStarFloorsGraphql(slug) {
-  let last = new Error("empty star floors");
-  for (let attempt = 0; attempt < 4; attempt++) {
-    try {
-      const parts = STAR_MARKS.map((marks, i) => `
-    s${i}: collectionItems(
+function mergeStarSlots(primary, fallback) {
+  const out = [null, null, null, null, null];
+  for (let i = 0; i < 5; i++) {
+    const a = Number(primary?.[i]);
+    const b = Number(fallback?.[i]);
+    if (a > 0) out[i] = a;
+    else if (b > 0) out[i] = b;
+  }
+  return out;
+}
+
+function starQuery(slug, marks) {
+  return `collectionItems(
       collectionSlug: "${slug}",
       sort: { by: PRICE, direction: ASC },
       limit: 1,
       filter: { isListed: true, attributes: [{ traitType: "Rarity", values: ["${marks}"] }] }
-    ) { items { bestListing { pricePerItem { token { unit symbol } } } } }`).join("\n");
+    ) { items { bestListing { pricePerItem { token { unit symbol } } } } }`;
+}
+
+/** Cheapest OpenSea listing at each Card Wall star rating. rarityOf 0 is one star. */
+async function fetchStarFloorsGraphql(slug) {
+  let last = new Error("empty star floors");
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const parts = STAR_MARKS.map((marks, i) => `s${i}: ${starQuery(slug, marks)}`).join("\n");
       const data = await fetchOpenSeaGraphql(`query { ${parts} }`);
       const stars = STAR_MARKS.map((_, i) => listedEth(data[`s${i}`]));
-      if (stars.some((v) => Number(v) > 0)) return stars;
+      if (stars.filter((v) => Number(v) > 0).length === 5) return stars;
+      if (stars.some((v) => Number(v) > 0)) {
+        const filled = await fillStarFloorsOneByOne(slug, stars);
+        if (filled.some((v) => Number(v) > 0)) return filled;
+      }
       last = new Error("star floors came back empty");
     } catch (e) {
       last = e;
     }
-    if (attempt < 3) await sleep(800 * (attempt + 1));
+    if (attempt < 2) await sleep(800 * (attempt + 1));
   }
+  const filled = await fillStarFloorsOneByOne(slug, [null, null, null, null, null]);
+  if (filled.some((v) => Number(v) > 0)) return filled;
   throw last;
+}
+
+async function fillStarFloorsOneByOne(slug, stars) {
+  const out = stars.slice(0, 5);
+  while (out.length < 5) out.push(null);
+  for (let i = 0; i < STAR_MARKS.length; i++) {
+    if (Number(out[i]) > 0) continue;
+    try {
+      const data = await fetchOpenSeaGraphql(`query { s: ${starQuery(slug, STAR_MARKS[i])} }`);
+      const px = listedEth(data.s);
+      if (px > 0) out[i] = px;
+    } catch (e) {
+      console.warn(`[warn] cardwall ${i + 1}-star floor: ${e.message}`);
+    }
+    await sleep(300);
+  }
+  return out;
+}
+
+/** Same five floors via the listings API the collection-floor call already uses. */
+async function fetchStarFloorsRest(slug) {
+  const key = process.env.OPENSEA_API_KEY;
+  const stars = [null, null, null, null, null];
+  if (!key || !slug) return stars;
+  for (let i = 0; i < STAR_MARKS.length; i++) {
+    const q = new URL(`https://api.opensea.io/api/v2/listings/collection/${slug}/best`);
+    q.searchParams.set("limit", "1");
+    q.searchParams.set("traits", JSON.stringify([{ traitType: "Rarity", value: STAR_MARKS[i] }]));
+    try {
+      const res = await fetch(q, {
+        headers: { accept: "application/json", "x-api-key": key },
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!res.ok) {
+        console.warn(`[warn] cardwall ${i + 1}-star listings ${res.status}`);
+        continue;
+      }
+      const j = await res.json();
+      const wei = j.listings?.[0]?.price?.current?.value;
+      if (wei) stars[i] = Number(wei) / 1e18;
+    } catch (e) {
+      console.warn(`[warn] cardwall ${i + 1}-star listings: ${e.message}`);
+    }
+    await sleep(250);
+  }
+  return stars;
 }
 
 async function fetchCollectionFloorGraphql(slug) {
