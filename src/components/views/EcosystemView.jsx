@@ -650,7 +650,7 @@ export default function EcosystemView({ data, pending = false }) {
                   <tr key={meta.key} className="border-b border-line-soft">
                     <td className="px-5 py-3">
                       <Link to={projectPath(meta.key, 'roi')} className="flex items-center gap-3">
-                        <img src={logoSrc(meta, p)} alt="" className="h-8 w-8 rounded-md border border-line object-cover bg-panel" />
+                        <img src={logoSrc(meta, p)} alt="" className="h-8 w-8 rounded-md border border-line object-cover bg-panel" style={String(logoSrc(meta, p)).endsWith('Mutual.png') ? { imageRendering: 'pixelated' } : undefined} />
                         <span className="text-[13px] text-ink">{meta.name}</span>
                         {best?.meta.key === meta.key && seat.roi > 0 && <Tag tone="good">best</Tag>}
                         {p?.underConstruction && <Tag tone="warn">pre-launch</Tag>}

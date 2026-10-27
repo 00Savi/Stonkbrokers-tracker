@@ -150,6 +150,7 @@ export function TopNav({ live, sources, data, pending }) {
               src={logo.startsWith('http') ? logo : `/${logo}`}
               alt=""
               className="h-9 w-9 shrink-0 rounded-xl border border-line object-cover sm:h-10 sm:w-10"
+              style={String(logo).endsWith('Mutual.png') ? { imageRendering: 'pixelated' } : undefined}
             />
             <span className="flex min-w-0 items-center gap-2">
               <span className="truncate text-[14px] font-semibold tracking-tight text-ink sm:text-[17px]">

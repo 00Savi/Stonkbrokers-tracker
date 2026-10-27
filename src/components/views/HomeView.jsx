@@ -172,6 +172,7 @@ export default function HomeView({ data }) {
                         src={logo.startsWith('http') ? logo : `/${logo}`}
                         alt=""
                         className="h-8 w-8 shrink-0 rounded-lg border border-line object-cover lg:h-11 lg:w-11 lg:rounded-xl"
+                        style={String(logo).endsWith('.png') && String(logo).includes('Mutual') ? { imageRendering: 'pixelated' } : undefined}
                       />
                     ) : (
                       <span className="h-8 w-8 shrink-0 rounded-lg border border-line bg-panel-2 lg:h-11 lg:w-11 lg:rounded-xl" />

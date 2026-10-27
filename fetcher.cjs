@@ -849,7 +849,7 @@ const PROJECTS = {
     maxSupply: 4001,
     unitValue: 0,
     ticker: "TMF",
-    logo: "Mutual.svg",
+    logo: "Mutual.png",
     openseaSlug: "themutualfun",
     site: "https://themutual.fun/",
     underConstruction: false,
