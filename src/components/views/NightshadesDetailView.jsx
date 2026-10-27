@@ -181,7 +181,8 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
                 <tr className="border-b border-[#1e2228] text-slate-500 text-xs uppercase tracking-wider">
                   <th className="pb-4 font-medium pl-2">Tier</th>
                   <th className="pb-4 font-medium">Activation Req.</th>
-                  <th className="pb-4 font-medium">Current Total Cost</th>
+                  <th className="pb-4 font-medium">Floor</th>
+                  <th className="pb-4 font-medium">Act. cost</th>
                   <th className="pb-4 font-medium">
                     <div className="flex items-center gap-2">
                       <span>Expected Yield</span>
@@ -213,8 +214,10 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
                         </td>
                         <td className="py-5"><span className="text-white font-bold">{formatNumber(t.reqTokens)}</span> {tokenLabel}</td>
                         <td className="py-5">
-                          <div className="font-bold text-white">{formatCurrency(totalCost)}</div>
-                          <div className="text-xs text-slate-500 mt-0.5">Floor + {formatCurrency(actCost)} Act.</div>
+                          <div className="font-bold text-white">{floorCostUsd > 0 ? formatCurrency(floorCostUsd) : '—'}</div>
+                        </td>
+                        <td className="py-5">
+                          <div className="font-bold text-white">{actCost > 0 ? formatCurrency(actCost) : '—'}</div>
                         </td>
                         <td className="py-5">
                           <span className="text-white font-bold text-base">{formatCurrency(scaleAnnualYield(simulatedYield, yieldPeriod))}</span> <span className="text-slate-500">{yieldSuffix(yieldPeriod)}</span>
@@ -228,7 +231,7 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
                       </tr>
                       {isExpanded && (
                         <tr className="bg-[#08090b]/40 border-b border-[#1e2228]/50">
-                          <td colSpan="5" className="p-4 md:p-6">
+                          <td colSpan="6" className="p-4 md:p-6">
                             <div className="flex justify-between items-center mb-3">
                               <h4 className="text-sm font-bold text-slate-300">Daily yield ({t.name})</h4>
                               <span className="text-xs text-slate-500">Based on On-Chain Distributions</span>

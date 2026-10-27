@@ -1,5 +1,6 @@
 import React from 'react';
 import { YIELD_SAMPLE_WINDOWS } from '../lib/yieldSample';
+import { CURRENCIES, formatMoney, readDisplay, useDisplayCurrency } from '../lib/money';
 
 /**
  * The shared vocabulary every page is built from.
@@ -215,20 +216,24 @@ export function BetaTag() {
 /* Formatting                                                                 */
 /* -------------------------------------------------------------------------- */
 
-export const usd = (v, digits = 0) =>
-  v == null || !Number.isFinite(Number(v))
-    ? '—'
-    : new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD',
-        minimumFractionDigits: digits,
-        maximumFractionDigits: digits,
-      }).format(Number(v));
+export const usd = (v, digits = 0) => {
+  if (v == null || !Number.isFinite(Number(v))) return '—';
+  const display = readDisplay();
+  if (display.ccy && display.ccy !== 'USD') return formatMoney(Number(v), display.ccy, display);
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(Number(v));
+};
 
 /** Short USD for table cells and mobile stat tiles. Full value stays in `title`. */
 export function compactUsd(v) {
   const n = Number(v);
   if (v == null || !Number.isFinite(n)) return '—';
+  const display = readDisplay();
+  if (display.ccy && display.ccy !== 'USD') return formatMoney(n, display.ccy, display);
   const abs = Math.abs(n);
   const sign = n < 0 ? '-' : '';
   if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(2)}M`;
@@ -342,7 +347,25 @@ export function YieldSampleBar({ value, onChange, compact = false }) {
   );
 }
 
-/** Run rate, chart range, and chart interval on one bar. */
+/** ETH / USD / EUR. Same URL-backed control as range and interval. */
+export function CurrencyBar({ compact = false }) {
+  const [ccy, setCcy] = useDisplayCurrency();
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className={CONTROL_LABEL}>Currency</span>
+      <WindowBar
+        compact={compact}
+        value={ccy}
+        onChange={setCcy}
+        windows={CURRENCIES}
+        label="Display currency"
+        title="Show dollar amounts in USD, euros, or ETH"
+      />
+    </div>
+  );
+}
+
+/** Run rate, chart range, and chart interval on one bar. Currency sits in the top bar. */
 export function ViewControls({
   sampleId,
   onSample,

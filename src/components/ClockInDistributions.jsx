@@ -27,6 +27,28 @@ function shortDate(iso) {
   });
 }
 
+function roundTierPay(row, tiers, activation, ethPriceUsd) {
+  const counts = activation?.breakdown || {};
+  return (tiers || [])
+    .filter((tier) => Number(tier.weight) > 0)
+    .map((tier) => {
+      const pay = seatPay({
+        ethPerEngineWeight: row?.unit,
+        weight: tier.weight,
+        ethPriceUsd,
+      });
+      const active = Number(counts[tier.tier] ?? counts[tier.id]) || 0;
+      return {
+        id: tier.tier || tier.id || tier.name,
+        name: tier.name,
+        active,
+        perSeatUsd: pay.usd,
+        perSeatEth: pay.eth,
+        tierUsd: pay.usd * active,
+      };
+    });
+}
+
 function windowAssets(rows, ethPriceUsd, known) {
   const addresses = new Map((known || []).map((row) => [row.symbol, row.address]));
   const bySymbol = new Map();
@@ -160,6 +182,36 @@ export function ClockInDistributions({ book, tiers, activation, ethPriceUsd, for
                   </span>
                 ))}
               </div>
+              {Number(selected.unit) > 0 ? (
+                <div className="mt-3 overflow-auto">
+                  <table className="w-full min-w-[420px] text-left">
+                    <thead>
+                      <tr className="eyebrow border-b border-line text-faint">
+                        <th className="px-3 py-2 font-normal">Tier</th>
+                        <th className="px-3 py-2 text-right font-normal">Per seat</th>
+                        <th className="px-3 py-2 text-right font-normal">Active now</th>
+                        <th className="px-3 py-2 text-right font-normal">Tier total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {roundTierPay(selected, tiers, activation, ethPriceUsd).map((seat) => (
+                        <tr key={seat.id} className="border-b border-line/70">
+                          <td className="px-3 py-2 text-[13px] text-ink">{seat.name}</td>
+                          <td className="px-3 py-2 text-right text-[13px] text-ink">
+                            {formatCurrency(seat.perSeatUsd)}
+                            <div className="text-[11px] text-muted">{formatEth(seat.perSeatEth)}</div>
+                          </td>
+                          <td className="px-3 py-2 text-right text-[13px] text-muted">{compactNum(seat.active)}</td>
+                          <td className="px-3 py-2 text-right text-[13px] text-ink">{formatCurrency(seat.tierUsd)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="mt-2 text-[11px] text-muted">Per seat is this round’s pot divided by engine weight, times the tier weight. Active is today’s roster, so the tier total is that credit times the seats activated now.</p>
+                </div>
+              ) : (
+                <p className="mt-2 text-[12px] text-muted">This round has no per-weight credit, so a tier split is not in the ledger.</p>
+              )}
             </div>
           ) : null}
 

@@ -595,6 +595,7 @@ export default function EcosystemView({ data, pending = false }) {
       <div className="sticky top-[var(--header-h,5.5rem)] z-20 -mx-3 bg-[#08090b] px-3" data-share-omit>
         <div className="flex flex-col gap-2 border-b border-line pb-3 pt-4 sm:flex-row sm:items-center">
           <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <span className="shrink-0 pr-1 font-mono text-[10px] uppercase tracking-wider text-faint">Jump</span>
             {ECO_TABS.map((tab) => (
               <button
                 key={tab.id}

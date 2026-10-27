@@ -166,7 +166,8 @@ export default function MutualFunDetailView({ data }) {
                 <tr className="border-b border-[#1e2228] text-slate-500 text-xs uppercase tracking-wider">
                   <th className="pb-4 font-medium pl-2">Tier</th>
                   <th className="pb-4 font-medium">Activation Req.</th>
-                  <th className="pb-4 font-medium">Current Total Cost</th>
+                  <th className="pb-4 font-medium">Floor</th>
+                  <th className="pb-4 font-medium">Act. cost</th>
                   <th className="pb-4 font-medium">
                     <div className="flex items-center gap-2">
                       <span>Expected Yield</span>
@@ -197,8 +198,10 @@ export default function MutualFunDetailView({ data }) {
                         </td>
                         <td className="py-5"><span className="text-white font-bold">{formatNumber(t.reqTokens)}</span> ${config.ticker}</td>
                         <td className="py-5">
-                          <div className="font-bold text-white">{totalCost > 0 ? formatCurrency(totalCost) : '—'}</div>
-                          <div className="text-xs text-slate-500 mt-0.5">Floor + {formatCurrency(actCost)} Act.</div>
+                          <div className="font-bold text-white">{floorCostUsd > 0 ? formatCurrency(floorCostUsd) : '—'}</div>
+                        </td>
+                        <td className="py-5">
+                          <div className="font-bold text-white">{actCost > 0 ? formatCurrency(actCost) : '—'}</div>
                         </td>
                         <td className="py-5">
                           <span className="text-white font-bold text-base">{formatCurrency(scaleAnnualYield(simulatedYield, yieldPeriod))}</span> <span className="text-slate-500">{yieldSuffix(yieldPeriod)}</span>
@@ -212,7 +215,7 @@ export default function MutualFunDetailView({ data }) {
                       </tr>
                       {isExpanded && (
                         <tr className="bg-[#08090b]/40 border-b border-[#1e2228]/50">
-                          <td colSpan="5" className="p-4 md:p-6">
+                          <td colSpan="6" className="p-4 md:p-6">
                             <div className="flex justify-between items-center mb-3">
                               <h4 className="text-sm font-bold text-slate-300">Daily yield ({t.name})</h4>
                               <span className="text-xs text-slate-500">Based on On-Chain Distributions</span>
@@ -427,7 +430,7 @@ export default function MutualFunDetailView({ data }) {
             timeframe={tierTimeframe}
             onTimeframe={setTierTimeframe}
             formatNumber={formatNumber}
-            note="Act on ALL is seats enrolled in that class now. A transfer ends enrollment. A corner office is the level increase. Shorter windows use this mix only while every recorded day still sits inside them."
+            note="Act is an enrollment into that class, including a merge into it. Deact is an enrollment ending, or a seat retired by a merge. Up is the class a seat left when it became a corner office."
           />
 
           <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
@@ -520,9 +523,9 @@ export default function MutualFunDetailView({ data }) {
 
       <MethodologyCard accent="text-emerald-400">
         <p><strong className="text-white">Yield &amp; ROI:</strong> Cost is the OpenSea floor plus the Front-End Load at the $TMF spot. Cash-on-cash stays at zero until a fund posts a dividend. Payback is N/A for the same reason. The five fund cards are the desk's last ETH mark, not a yield.</p>
-        <p><strong className="text-white">Activation:</strong> Enrolled Seats are the live set. A transfer ends enrollment and the next holder pays the load again. A corner office is a merge into the next class. ALL on the tier cards is the current class mix. Shorter windows stay at zero once a recorded day falls outside them, because each enrollment is not yet stamped by class and day.</p>
-        <p><strong className="text-white">Burn:</strong> Half of every Front-End Load is $TMF sent to the Chairman's Estate. The percent is that burn over the prospectus supply of 1,604,401,000. Equivalent units are Seats retired by a merger. The collection cannot mint a replacement.</p>
-        <p><strong className="text-white">Liquidity:</strong> The Open Market posts 401,000 $TMF a Seat. Random is +8%, specific is +16%, and a hand-in is −8%. No ETH is charged. Holder counts stay blank until a wallet index covers this collection.</p>
+        <p><strong className="text-white">Activation:</strong> Enrolled Seats are the live set. A transfer ends enrollment and the next holder pays the load again. A corner office is a merge into the next class. Act, Up, and Deact on the tier cards are those events, split by the day they were logged.</p>
+        <p><strong className="text-white">Burn:</strong> Half of every Front-End Load is $TMF sent to the Chairman&apos;s Estate. The percent is that burn over the prospectus supply of 1,604,401,000. Equivalent units are Seats retired by a merger. The collection cannot mint a replacement. The burn line is that cumulative load, not unminted supply.</p>
+        <p><strong className="text-white">Liquidity:</strong> The Open Market posts 401,000 $TMF a Seat. Random is +8%, specific is +16%, and a hand-in is −8%. No ETH is charged. Holder counts come from the wallet index once its fold covers this collection. Circulating seats are minted seats minus mergers minus seats sitting in the Open Market.</p>
       </MethodologyCard>
     </div>
   );

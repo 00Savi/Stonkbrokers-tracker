@@ -41,6 +41,8 @@ export function factionSeatCost(fp, tier) {
 export function typicalNightshadesSeat(factions = {}, tierId = 'T0') {
   let yW = 0;
   let cW = 0;
+  let fW = 0;
+  let aW = 0;
   let w = 0;
   for (const id of NIGHTSHADES_FACTIONS) {
     const fp = factions[id];
@@ -51,17 +53,22 @@ export function typicalNightshadesSeat(factions = {}, tierId = 'T0') {
     const active = Number(fp.activation?.activeCount);
     const weight = active > 0 ? active : 1;
     const cost = factionSeatCost(fp, t);
+    const floorUsd = (Number(fp?.market?.nftFloorEth) || 0) * (Number(fp?.market?.ethPriceUsd) || 0);
     const annual = Number(t.trackedAnnualYieldUsd) || 0;
     yW += annual * weight;
     cW += cost * weight;
+    fW += floorUsd * weight;
+    aW += Math.max(0, cost - floorUsd) * weight;
     w += weight;
   }
-  if (!(w > 0)) return { annual: 0, cost: 0, roi: 0 };
+  if (!(w > 0)) return { annual: 0, cost: 0, floor: 0, act: 0, roi: 0 };
   const annual = yW / w;
   const cost = cW / w;
   return {
     annual,
     cost,
+    floor: fW / w,
+    act: aW / w,
     roi: cost > 0 && annual > 0 ? (annual / cost) * 100 : 0,
   };
 }

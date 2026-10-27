@@ -17,7 +17,7 @@ import {
 } from '../../lib/oakmont';
 import { baseChartOptions, compactTick, compactUsdTick, cumulativeBurnDataset, percentTick } from '../../lib/charts';
 import { useChartView } from '../../lib/chartWindow';
-import { YieldHistorySwitch, ChartSwitch, BurnHistorySwitch, EmptyChart } from '../HistoryCharts';
+import { YieldHistorySwitch, ChartStack, BurnHistorySwitch, EmptyChart } from '../HistoryCharts';
 import { DisclaimerCopy } from '../Disclaimer';
 import { tokenValuation } from '../../lib/valuation';
 
@@ -154,7 +154,8 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
               <thead>
                 <tr className="border-b border-[#1e2228] text-slate-500 text-xs uppercase">
                   <th className="pb-3">Unit</th>
-                  <th className="pb-3">Cost to enter</th>
+                  <th className="pb-3">Floor</th>
+                  <th className="pb-3">Act. cost</th>
                   <th className="pb-3">
                     <div className="flex items-center gap-2">
                       <span>Expected yield</span>
@@ -166,11 +167,11 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
               </thead>
               <tbody className="divide-y divide-[#1e2228]/50">
                 {tiers.map((t) => {
-                  const cost = t.entryUsd || (kind === 'machines'
-                    ? floorUsd + (t.reqTokens || 0) * tokenUsd * 1.15
-                    : kind === 'brokers'
-                      ? floorUsd + (t.reqTokens || 0) * tokenUsd
-                    : (t.reqTokens || 0) * tokenUsd);
+                  const floorPart = kind === 'machines' || kind === 'brokers' ? floorUsd : 0;
+                  const actPart = kind === 'machines'
+                    ? (t.reqTokens || 0) * tokenUsd * 1.15
+                    : (t.reqTokens || 0) * tokenUsd;
+                  const cost = t.entryUsd || floorPart + actPart;
                   const y = t.trackedAnnualYieldUsd || 0;
                   const r = cost > 0 ? (y / cost) * 100 : 0;
                   return (
@@ -179,7 +180,8 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
                         <div className="font-bold text-white">{t.name}</div>
                         <div className="text-xs text-slate-500">{num(t.reqTokens)} ${ticker}</div>
                       </td>
-                      <td className="py-4 text-white font-bold">{fmt(cost)}</td>
+                      <td className="py-4 text-white font-bold">{floorPart > 0 ? fmt(floorPart) : '—'}</td>
+                      <td className="py-4 text-white font-bold">{actPart > 0 ? fmt(actPart) : (cost > 0 && !(floorPart > 0) ? fmt(cost) : '—')}</td>
                       <td className="py-4 text-white font-bold">{y > 0 ? `${fmt(scaleAnnualYield(y, yieldPeriod))} ${yieldSuffix(yieldPeriod)}` : '—'}</td>
                       <td className="py-4 text-right">
                         <span className="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-2.5 py-1 rounded text-sm font-bold">
@@ -240,13 +242,13 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
               <p className="text-2xl font-extrabold" style={{ color: MARK.violet }}>{fmt(annual)}</p>
             </div>
           </div>
-          <ChartSwitch
-            initial="dollars"
+          <ChartStack
+            label="In revenue"
             views={[
               {
-                id: 'dollars',
-                label: 'Dollars',
-                title: 'Protocol rev vs holders revenue',
+                id: 'special-rev-kept',
+                jump: 'Protocol kept',
+                title: 'Protocol kept',
                 note: 'Protocol-kept fees beside what reached holders.',
                 body: revDates.length ? (
                   <Bar
@@ -267,10 +269,10 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
                 ),
               },
               {
-                id: 'holder',
-                label: 'Holder',
-                title: 'Holder revenue (USD)',
-                note: 'Revenue that reached token / NFT holders. Protocol-kept fees stay on Dollars.',
+                id: 'special-rev-seats',
+                jump: 'Paid to seats',
+                title: 'Paid to seats',
+                note: 'Revenue that reached token / NFT holders.',
                 body: (
                   <Bar
                     data={{
@@ -730,12 +732,12 @@ function VaultView({
             <Panel label="Tracked LP" value={fmt(lockedLp?.totalLpUsd)} color={MARK.sky} />
             <Panel label="24h wraps / unwraps" value={`${num(market.wraps24h)} / ${num(market.unwraps24h)}`} color={MARK.amber} />
           </div>
-          <ChartSwitch
-            initial="dollars"
+          <ChartStack
+            label="In fees"
             views={[
               {
-                id: 'dollars',
-                label: 'Dollars',
+                id: 'oak-rev-kept',
+                jump: 'Vault fees',
                 title: 'ETH protocol rev into the vault',
                 note: 'Oakmont’s indexer publishes monthly totals, not daily. Aug and Sep are the full series they expose.',
                 body: revDates.length ? (
@@ -755,9 +757,9 @@ function VaultView({
                 ),
               },
               {
-                id: 'holder',
-                label: 'Holder',
-                title: 'Holder revenue (USD)',
+                id: 'oak-rev-seats',
+                jump: 'Paid to seats',
+                title: 'Paid to seats',
                 note: 'Holder / wrap-side cash-flow from the same Oakmont series. Monthly buckets, not daily.',
                 body: (
                   <Bar

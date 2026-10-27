@@ -3,7 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { PROJECTS, projectPath } from '../../lib/routes';
 import { parseBrokerId } from '../../lib/brokerScan';
 import { NfaBanner } from '../Disclaimer';
-import { BetaTag, compactNum } from '../kit';
+import { BetaTag, compactNum, compactUsd, pct } from '../kit';
+import { listedSeat, mixUsd, revenueRows } from '../../lib/seats';
 
 function parseWallets(raw) {
   return String(raw || '')
@@ -17,6 +18,21 @@ function looksLikeAddress(s) {
 }
 
 const LIVE_PROJECTS = PROJECTS.filter((p) => p.live !== false);
+
+function ecosystemPulse(data) {
+  let best = null;
+  let fees = 0;
+  for (const meta of LIVE_PROJECTS) {
+    const project = data?.projects?.[meta.key];
+    if (!project || project.underConstruction) continue;
+    const seat = listedSeat(meta, project);
+    if (Number(seat.roi) > (best?.roi || 0)) best = { name: meta.name, roi: seat.roi };
+    fees += mixUsd(revenueRows(project, '30d'));
+  }
+  if (!best && !(fees > 0)) return null;
+  const seatBit = best ? `${best.name} ${pct(best.roi)} cash-on-cash` : '—';
+  return `Best listed seat ${seatBit}. Fees kept in the last 30 days ${compactUsd(fees)}.`;
+}
 
 const FALLBACK_LOGO = {
   stonk: 'Stonkbroker.png',
@@ -56,6 +72,7 @@ export default function HomeView({ data }) {
     navigate(`/broker?id=${id}`);
   };
 
+  const pulse = ecosystemPulse(data);
   const updated = data?.lastUpdated
     ? new Date(data.lastUpdated).toLocaleString('en-US', {
         month: 'short',
@@ -80,6 +97,9 @@ export default function HomeView({ data }) {
               Track floor, yield, burns, and activations across Robinhood Chain projects. Scan a wallet
               or open a collection.
             </p>
+            {pulse && (
+              <p className="mt-3 font-mono text-[12px] text-faint">{pulse}</p>
+            )}
             <NfaBanner className="mt-6" />
           </header>
 

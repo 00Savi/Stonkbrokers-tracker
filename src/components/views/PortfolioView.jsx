@@ -9,7 +9,7 @@ import { PAIR_COLORS, STREAM_COLORS } from '../../lib/charts';
 import { SliceChart } from '../SliceChart';
 import { PROJECTS } from '../../lib/routes';
 import { navNftScanTargets, portfolioProjectLabel } from '../../lib/portfolioScan';
-import { CURRENCIES, fetchEurPerUsd, formatMoney, moneyTick } from '../../lib/money';
+import { formatMoney, moneyTick, readDisplay, useDisplayCurrency } from '../../lib/money';
 import { formatLabels } from '../../lib/dates';
 import {
   Chart as ChartJS, ArcElement, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend, Filler
@@ -190,7 +190,7 @@ function assetEntryCostUsd(asset) {
 function Copyable({ id, className = '', children }) {
   const ref = useRef(null);
   return (
-    <div ref={ref} className={`relative ${className}`}>
+    <div ref={ref} id={id} className={`relative scroll-mt-36 ${className}`}>
       <CopyControl
         overlay
         tight
@@ -323,8 +323,6 @@ export default function PortfolioView({ data }) {
   const [forecastYears, setForecastYears] = useState(1);
   const [forecastGrain, setForecastGrain] = useState('d');
   const [historyGrain, setHistoryGrain] = useState('d');
-  const [ccy, setCcy] = useState('USD');
-  const [eurPerUsd, setEurPerUsd] = useState(0);
   const [copyState, setCopyState] = useState('idle');
   const [scanProgress, setScanProgress] = useState('');
   const [thumbs, setThumbs] = useState({});
@@ -332,18 +330,12 @@ export default function PortfolioView({ data }) {
   const barRef = useRef(null);
 
   const priceIndex = buildPriceIndex(data);
-  const ethUsd = data?.projects?.stonk?.market?.ethPriceUsd || 0;
-  const rates = { ethUsd, eurPerUsd };
+  const [ccy] = useDisplayCurrency();
+  const display = readDisplay();
+  const ethUsd = data?.projects?.stonk?.market?.ethPriceUsd || display.ethUsd || 0;
+  const rates = { ethUsd, eurPerUsd: display.eurPerUsd };
   const formatCurrency = (usd) => formatMoney(usd, ccy, rates);
   const tickMoney = moneyTick(ccy, rates);
-
-  useEffect(() => {
-    const ac = new AbortController();
-    fetchEurPerUsd(ac.signal).then((n) => {
-      if (n > 0) setEurPerUsd(n);
-    });
-    return () => ac.abort();
-  }, []);
 
   const loadInventories = (nfts) => {
     const tbas = [...new Set(nfts.map((n) => n.tba).filter(Boolean))];
@@ -1039,7 +1031,24 @@ export default function PortfolioView({ data }) {
             <p className="text-sm text-slate-400">No ecosystem NFTs found in the provided wallet(s).</p>
           ) : (
             <>
-          <div className="flex flex-col lg:flex-row lg:items-center gap-3 mb-5">
+          <nav aria-label="In this scan" className="mb-4 flex flex-wrap items-center gap-1.5">
+            <span className="font-mono text-[10px] uppercase tracking-wider text-faint">In this scan</span>
+            {[
+              { id: 'totals', label: 'Totals' },
+              { id: 'portfolio-forecast', label: 'Forecast' },
+              { id: 'portfolio-holdings', label: 'Holdings' },
+            ].map((row) => (
+              <button
+                key={row.id}
+                type="button"
+                onClick={() => document.getElementById(row.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                className="rounded-md border border-line px-2 py-1 text-[12px] text-muted hover:text-ink"
+              >
+                {row.label}
+              </button>
+            ))}
+          </nav>
+          <div id="portfolio-forecast" className="scroll-mt-36 flex flex-col lg:flex-row lg:items-center gap-3 mb-5">
             <div className="flex bg-[#08090b] rounded-lg p-1 border border-[#1e2228]">
               {[
                 { id: 'forecast', label: 'Annual forecast' },
@@ -1073,21 +1082,6 @@ export default function PortfolioView({ data }) {
                 ))}
               </div>
             )}
-            <div className="flex bg-[#08090b] rounded-lg p-1 border border-[#1e2228] lg:ml-auto">
-              {CURRENCIES.map((opt) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  disabled={opt.id === 'EUR' && !(eurPerUsd > 0)}
-                  onClick={() => setCcy(opt.id)}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-md transition disabled:opacity-40 ${
-                    ccy === opt.id ? 'bg-[#1e2228] text-white shadow-sm' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
           </div>
 
           <Copyable id="totals" className="mb-8">
@@ -1187,7 +1181,7 @@ export default function PortfolioView({ data }) {
                           plugins: { legend: { display: false } },
                           scales: {
                             x: { ticks: { color: '#94a3b8', maxRotation: 0, autoSkip: true, maxTicksLimit: 8 }, grid: { color: '#1e2228' } },
-                            y: { ticks: { color: '#94a3b8', callback: tickMoney }, grid: { color: '#1e2228' }, beginAtZero: true, unit: 'USD' },
+                            y: { ticks: { color: '#94a3b8', callback: tickMoney }, grid: { color: '#1e2228' }, beginAtZero: true, unit: ccy },
                           },
                         }}
                       />
@@ -1239,7 +1233,7 @@ export default function PortfolioView({ data }) {
                     plugins: { legend: { labels: { color: '#94a3b8', boxWidth: 10 } } },
                     scales: {
                       x: { ticks: { color: '#94a3b8', maxRotation: 0, autoSkip: true, maxTicksLimit: 8 }, grid: { color: '#1e2228' } },
-                      y: { ticks: { color: '#94a3b8', callback: tickMoney }, grid: { color: '#1e2228' } },
+                      y: { ticks: { color: '#94a3b8', callback: tickMoney }, grid: { color: '#1e2228' }, unit: ccy },
                     },
                   }}
                 />
@@ -1247,7 +1241,7 @@ export default function PortfolioView({ data }) {
             </Copyable>
           )}
 
-          <div className="mb-4 flex items-center justify-between gap-3 border-b border-[#1e2228] pb-2">
+          <div id="portfolio-holdings" className="scroll-mt-36 mb-4 flex items-center justify-between gap-3 border-b border-[#1e2228] pb-2">
             <h3 className="text-sm font-bold text-white">Owned Asset Breakdown</h3>
             {grouped.length > 0 && (
               <CsvButton filename="savi-portfolio.csv" rows={portfolioCsvRows(grouped)} />

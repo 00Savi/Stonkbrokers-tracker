@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { Chart as ChartJS } from 'chart.js';
+import { formatMoney, readDisplay } from './money';
 
 /** One hue per series when they share a chart. No two greens, no two golds. */
 export const STREAM_COLORS = {
@@ -59,9 +60,18 @@ export function compactTick(value) {
  * Axis labels for USD. Token prices here are often $0.00x; rounding those to
  * the nearest dollar made every tick on the price axis read $0.
  */
+function moneyUnit() {
+  return readDisplay().ccy || 'USD';
+}
+
 export function compactUsdTick(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return '';
+  const display = readDisplay();
+  if (display.ccy && display.ccy !== 'USD') {
+    if (n === 0) return display.ccy === 'ETH' ? 'Ξ0' : '€0';
+    return formatMoney(n, display.ccy, display);
+  }
   if (n === 0) return '$0';
   const abs = Math.abs(n);
   const sign = n < 0 ? '-' : '';
@@ -300,6 +310,7 @@ export function barThickness(n) {
 export function baseChartOptions(labels, interval = 'daily', { yUnit, yTick } = {}) {
   const n = Array.isArray(labels) ? labels.length : Number(labels) || 0;
   const xt = n > 0 ? xTicksFor(n, interval) : {};
+  const axisName = yTick === compactUsdTick ? moneyUnit() : yUnit;
   return {
     responsive: true,
     maintainAspectRatio: false,
@@ -313,8 +324,8 @@ export function baseChartOptions(labels, interval = 'daily', { yUnit, yTick } = 
         ticks: { color: '#575e67', callback: yTick || compactTick },
         grid: { color: '#171a1f' },
         border: { display: false },
-        unit: yUnit || undefined,
-        title: axisTitle(yUnit),
+        unit: axisName || undefined,
+        title: axisTitle(axisName),
       },
       x: {
         ticks: { color: '#575e67', ...xt, ...(n > 0 ? { density: 'set' } : {}) },
@@ -380,7 +391,8 @@ export function withYUnit(options, unit, tick) {
 }
 
 export function usdStackOptions(labels, interval = 'daily') {
-  const base = baseChartOptions(labels, interval, { yUnit: 'USD', yTick: compactUsdTick });
+  const unit = moneyUnit();
+  const base = baseChartOptions(labels, interval, { yUnit: unit, yTick: compactUsdTick });
   return {
     ...base,
     scales: {
@@ -390,8 +402,8 @@ export function usdStackOptions(labels, interval = 'daily') {
         ...base.scales.y,
         stacked: true,
         beginAtZero: true,
-        unit: 'USD',
-        title: axisTitle('USD'),
+        unit,
+        title: axisTitle(unit),
         ticks: { ...base.scales.y.ticks, callback: compactUsdTick },
       },
     },
@@ -479,7 +491,7 @@ function axisFor(kind, ticks, values, extra = {}) {
 }
 
 function inferredUnit(tick) {
-  if (tick === compactUsdTick) return 'USD';
+  if (tick === compactUsdTick) return moneyUnit();
   return '';
 }
 

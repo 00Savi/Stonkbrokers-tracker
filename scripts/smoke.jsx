@@ -326,11 +326,11 @@ for (const [name, View, props] of VIEWS) {
       <StonkDetailView data={snapshot} activeTab="burn" />
     </StaticRouter>
   );
-  const banned = ['>Token<', '>NFT<', '>Both<'];
+  const banned = ['>Token</button>', '>NFT</button>', '>Both</button>'];
   const leftover = banned.filter((s) => burnHtml.includes(s));
-  if (!burnHtml.includes('>Flywheel<') || leftover.length) {
+  if (!burnHtml.includes('Price against burn') || leftover.length) {
     failed++;
-    console.error(`FAIL  flywheel toggle still present ${leftover.join(', ')}`);
+    console.error(`FAIL  price against burn missing ${leftover.join(', ')}`);
   } else {
     console.log('ok    flywheel is token price only');
   }
@@ -558,7 +558,7 @@ for (const [name, View, props] of VIEWS) {
   } else if (html.includes('Intern activations (amber)')) {
     failed++;
     console.error('FAIL  intern overlay still on the total burn chart');
-  } else if (!html.includes('>Daily split<') || !html.includes('>Flywheel<') || !html.includes('>Cumulative<')) {
+  } else if (!html.includes('>Daily split<') || !html.includes('Price against burn') || !html.includes('>Cumulative<')) {
     failed++;
     console.error('FAIL  daily intern vs broker burn chart missing under flywheel');
   } else if (!(split.total > 0) || !(split.intern > 0) || split.brokers + split.intern !== split.total && Math.abs(split.brokers + split.intern - split.total) > 1) {
@@ -735,7 +735,7 @@ for (const [name, View, props] of VIEWS) {
   } else {
     console.log('ok    stonk heading sections ready for Copy all');
   }
-  if (!stonkHtml.includes('Chain onboard') || !stonkHtml.includes('>Onboard<')) {
+  if (!stonkHtml.includes('Chain onboard') || !stonkHtml.includes('Who just arrived')) {
     failed++;
     console.error('FAIL  stonk ownership missing chain onboard');
   } else {
@@ -1165,7 +1165,7 @@ for (const [name, View, props] of VIEWS) {
       }}
     />
   );
-  if (hidden !== '' || !shown.includes('Holders underwater') || !shown.includes('saved each hour') || !shown.includes('>Week<') || !shown.includes('>Mix<') || !shown.includes('NFT wallets') || !shown.includes('at least $1') || shown.includes('Payback by tier')) {
+  if (hidden !== '' || !shown.includes('Holders underwater') || !shown.includes('saved each hour') || !shown.includes('Underwater by the week the position opened') || !shown.includes('Holder mix') || !shown.includes('NFT wallets') || !shown.includes('at least $1') || shown.includes('Payback by tier')) {
     failed++;
     console.error('FAIL  underwater charts');
   } else if (nftOnly.includes('Holder mix') || nftOnly.includes('token only') || nftOnly.includes('token wallets') || !nftOnly.includes('Token bags stay on StonkBrokers')) {

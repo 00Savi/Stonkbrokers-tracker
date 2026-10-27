@@ -219,6 +219,7 @@ export default function MemesTokensView({ data, type }) {
         <h2 className="text-lg md:text-xl font-bold text-white">Markets & Swap</h2>
         <p className="text-xs md:text-sm text-slate-400 mt-1">
           Open a token to pin it next to the swap. Close the row to restore the list order.
+          The candle and the swap are live Mancer trading, not the tracker ledger.
         </p>
       </div>
 

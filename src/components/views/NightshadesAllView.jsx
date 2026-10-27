@@ -21,7 +21,7 @@ import {
     factionNightRecord,
     nightLpPoints,
 } from '../../lib/nightshades';
-import { ChartPanel, ChartSwitch, EmptyChart } from '../HistoryCharts';
+import { ChartPanel, ChartSwitch, ChartStack, EmptyChart } from '../HistoryCharts';
 import { MethodologyCard } from '../Disclaimer';
 import { SliceChart } from '../SliceChart';
 import { explorerTxUrl, explorerAddressUrl } from '../../lib/tba';
@@ -296,12 +296,12 @@ function NightLiquidity({ night, timeframe, interval, faction }) {
   }
 
   return (
-    <ChartSwitch
-      initial="split"
+    <ChartStack
+      label="In pools"
       views={[
         {
-          id: 'split',
-          label: 'By faction',
+          id: 'ns-pools',
+          jump: 'By faction',
           title: 'Pool liquidity by faction',
           note: 'Each Anvil pair on its own line. Not stacked — Ghosts is not added into Knights here.',
           body: togetherBody({
@@ -319,8 +319,8 @@ function NightLiquidity({ night, timeframe, interval, faction }) {
           }),
         },
         {
-          id: 'total',
-          label: 'Total',
+          id: 'ns-total',
+          jump: 'Combined',
           title: 'Total Nightshades pool liquidity',
           note: 'All four faction pools added together. This is system health: after a night, total WETH should dip on the struck side and then stick.',
           body: togetherBody({
@@ -585,7 +585,8 @@ export default function NightshadesAllView({ project, setFaction }) {
                 <tr className="border-b border-[#1e2228] text-slate-500 text-xs uppercase tracking-wider">
                   <th className="pb-4 font-medium pl-2">Faction</th>
                   <th className="pb-4 font-medium">Base Tier (T0)</th>
-                  <th className="pb-4 font-medium">Total Entry Cost</th>
+                  <th className="pb-4 font-medium">Floor</th>
+                  <th className="pb-4 font-medium">Act. cost</th>
                   <th className="pb-4 font-medium">
                     <div className="flex items-center gap-2">
                       <span>Expected Yield <span className="normal-case">({yieldLabel})</span></span>
@@ -625,8 +626,10 @@ export default function NightshadesAllView({ project, setFaction }) {
                           <div className="text-xs text-slate-500 mt-0.5">{formatNumber(t0?.reqTokens || 0)} {p.config?.ticker || f.ticker}</div>
                         </td>
                         <td className="py-5">
-                          <div className="font-bold text-white">{formatCurrency(totalCost)}</div>
-                          <div className="text-xs text-slate-500 mt-0.5">Floor + {formatCurrency(actCost)} Act.</div>
+                          <div className="font-bold text-white">{floorCost > 0 ? formatCurrency(floorCost) : '—'}</div>
+                        </td>
+                        <td className="py-5">
+                          <div className="font-bold text-white">{actCost > 0 ? formatCurrency(actCost) : '—'}</div>
                         </td>
                         <td className="py-5">
                           <span className="text-white font-bold text-base">{formatCurrency(scaleYield(t0?.trackedAnnualYieldUsd || 0))}</span>
@@ -642,7 +645,7 @@ export default function NightshadesAllView({ project, setFaction }) {
                       </tr>
                       {isExpanded && (
                         <tr className="bg-[#08090b]/40 border-b border-[#1e2228]/50">
-                          <td colSpan="5" className="p-4 md:p-6">
+                          <td colSpan="6" className="p-4 md:p-6">
                             <div className="flex justify-between items-center mb-3">
                               <h4 className="text-sm font-bold text-slate-300">Daily yield ({t0?.name})</h4>
                             </div>
@@ -830,12 +833,12 @@ export default function NightshadesAllView({ project, setFaction }) {
               );
             })}
           </div>
-          <ChartSwitch
-            initial="nft"
+          <ChartStack
+            label="In holders"
             views={[
               {
-                id: 'nft',
-                label: 'NFT',
+                id: 'ns-nft',
+                jump: 'NFT holders',
                 title: 'NFT holders',
                 note: 'Snapshot nftHolders when present; otherwise the live count as the latest point.',
                 body: togetherBody({
@@ -845,8 +848,8 @@ export default function NightshadesAllView({ project, setFaction }) {
                 }),
               },
               {
-                id: 'token',
-                label: 'Token',
+                id: 'ns-token',
+                jump: 'Token holders',
                 title: 'Token holders',
                 note: 'hourly historicalGrowth when it exists; else snapshot tokenHolders.',
                 body: togetherBody({

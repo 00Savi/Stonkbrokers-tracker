@@ -2,7 +2,7 @@ import React from 'react';
 import { Chart as ChartJS, ArcElement } from 'chart.js';
 import { Bar, Line } from 'react-chartjs-2';
 import { baseChartOptions, percentTick } from '../lib/charts';
-import { ChartSwitch, EmptyChart } from './HistoryCharts';
+import { ChartStack, EmptyChart } from './HistoryCharts';
 import { SliceChart } from './SliceChart';
 
 ChartJS.register(ArcElement);
@@ -131,8 +131,8 @@ export function UnderwaterCard({ ownership, tokenLeg = true }) {
 
   const views = [
     {
-      id: 'share',
-      label: 'Share',
+      id: 'uw-share',
+      jump: 'Share underwater',
       title: 'Holders underwater',
       note: `${splitNote} Cost today on the seat table is the live floor. ${entryNote} The lines are that share of today's holders, saved each hour.${tokenLeg ? '' : ' Token bags stay on StonkBrokers.'}`,
       body: lineSets.length ? (
@@ -144,8 +144,8 @@ export function UnderwaterCard({ ownership, tokenLeg = true }) {
   ];
   if (weeks.length > 0) {
     views.push({
-      id: 'week',
-      label: 'Week',
+      id: 'uw-week',
+      jump: 'By week opened',
       title: 'Underwater by the week the position opened',
       note: weekNote(weeks),
       body: (
@@ -176,7 +176,8 @@ export function UnderwaterCard({ ownership, tokenLeg = true }) {
   }
   if (tokenLeg) {
     views.push({
-      id: 'mix',
+      id: 'uw-mix',
+      jump: 'Wallet mix',
       label: 'Mix',
       title: 'Holder mix',
       fit: true,
@@ -197,5 +198,5 @@ export function UnderwaterCard({ ownership, tokenLeg = true }) {
       ),
     });
   }
-  return <ChartSwitch initial="share" views={views} />;
+  return <ChartStack label="In underwater" views={views} />;
 }

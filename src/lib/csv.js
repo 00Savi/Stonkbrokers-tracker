@@ -24,10 +24,11 @@ export function seatCsvRows(project, { floorUsd = 0, volume = 1 } = {}) {
   const px = Number(project?.market?.tokenPriceUsd) || 0;
   const floor = Number(floorUsd) || 0;
   const vol = Number(volume) || 1;
-  const header = ['tier', 'name', 'activation_tokens', 'cost_usd', 'annual_yield_usd', 'coc_pct', 'payback_months'];
+  const header = ['tier', 'name', 'activation_tokens', 'floor_usd', 'activation_usd', 'cost_usd', 'annual_yield_usd', 'coc_pct', 'payback_months'];
   const body = (project?.tiers || []).map((tier) => {
     const tokens = Number(tier.reqTokens) || 0;
-    const cost = floor + tokens * px;
+    const activation = tokens * px;
+    const cost = floor + activation;
     const annual = (Number(tier.trackedAnnualYieldUsd) || 0) * vol;
     const coc = cost > 0 ? (annual / cost) * 100 : 0;
     const months = paybackMonths(cost, annual);
@@ -35,6 +36,8 @@ export function seatCsvRows(project, { floorUsd = 0, volume = 1 } = {}) {
       tier.tier,
       tier.name || '',
       tokens,
+      floor.toFixed(2),
+      activation.toFixed(2),
       cost.toFixed(2),
       annual.toFixed(2),
       coc.toFixed(2),

@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { PROJECTS, isProjectLive, tabsForProject } from '../lib/routes';
 import { LAUNCHER_REF, SAVI_X } from '../lib/share';
-import { Value, price, usd, eth, BetaTag, YieldSampleBar, ViewControls } from './kit';
+import { Value, price, usd, compactUsd, eth, BetaTag, YieldSampleBar, CurrencyBar, ViewControls } from './kit';
+import { readDisplay } from '../lib/money';
 import { setYieldSampleId, useYieldSampleId } from '../lib/yieldSample';
 import { useChartView } from '../lib/chartWindow';
 
@@ -16,24 +17,24 @@ export const NAV_GROUPS = [
 ];
 
 export const NAV_ITEMS = [
-  { to: '/', label: 'Home', group: 'tools', dot: 'bg-brand' },
-  { to: '/portfolio', label: 'Portfolio Tracker', group: 'tools', dot: 'bg-accent' },
-  { to: '/broker', label: 'Broker Scan', group: 'tools', dot: 'bg-[#60a5fa]' },
-  { to: '/anvil', label: 'Anvil Scan', group: 'tools', dot: 'bg-[#fbbf24]' },
-  { to: '/ecosystem', label: 'Ecosystem Overview', group: 'tools', dot: 'bg-muted' },
-  { to: '/index/roi', label: 'Index', group: 'yield-tokens', dot: 'bg-[#14b8a6]' },
-  { to: '/oakmont/roi', label: 'Oakmont Vault', group: 'yield-tokens', dot: 'bg-[#e879f9]' },
-  { to: '/bonus', label: '$Bonus', group: 'yield-tokens', dot: 'bg-[#e8c547]' },
-  { to: '/stonkbrokers/roi', label: 'StonkBrokers', group: 'yield-nfts', dot: 'bg-[#60a5fa]' },
-  { to: '/interns/roi', label: 'Interns', group: 'yield-nfts', dot: 'bg-[#fbbf24]' },
-  { to: '/mancer/roi', label: 'Mancer', group: 'yield-nfts', dot: 'bg-[#a78bfa]' },
-  { to: '/tickeryard/roi', label: 'TickerYard', group: 'yield-nfts', dot: 'bg-[#22d3ee]' },
-  { to: '/cardwall/roi', label: 'The Card Wall', group: 'yield-nfts', dot: 'bg-[#fbbf24]' },
-  { to: '/mutualfun/roi', label: 'The Mutual Fun', group: 'yield-nfts', dot: 'bg-[#34d399]' },
-  { to: '/rhmachines/roi', label: 'RH Machines', group: 'yield-nfts', dot: 'bg-[#fb923c]' },
-  { to: '/coattail/roi', label: 'Coattail Brokers', group: 'yield-nfts', dot: 'bg-[#f43f5e]' },
-  { to: '/nightshades/roi', label: 'Nightshades', group: 'yield-nfts', dot: 'bg-[#818cf8]' },
-  { to: '/tokens', label: 'Markets & Swap', group: 'chain', dot: 'bg-accent' },
+  { to: '/', label: 'Home', group: 'tools', icon: 'home' },
+  { to: '/portfolio', label: 'Portfolio Tracker', group: 'tools', icon: 'chart' },
+  { to: '/broker', label: 'Broker Scan', group: 'tools', logo: 'Stonkbroker.png' },
+  { to: '/anvil', label: 'Anvil Scan', group: 'tools', icon: 'anvil' },
+  { to: '/ecosystem', label: 'Ecosystem Overview', group: 'tools', icon: 'system' },
+  { to: '/index/roi', label: 'Index', group: 'yield-tokens', logo: 'Index.png' },
+  { to: '/oakmont/roi', label: 'Oakmont Vault', group: 'yield-tokens', logo: 'Oakmont.png' },
+  { to: '/bonus', label: '$Bonus', group: 'yield-tokens', logo: 'Bonus.png' },
+  { to: '/stonkbrokers/roi', label: 'StonkBrokers', group: 'yield-nfts', logo: 'Stonkbroker.png' },
+  { to: '/interns/roi', label: 'Interns', group: 'yield-nfts', logo: 'Intern.svg' },
+  { to: '/mancer/roi', label: 'Mancer', group: 'yield-nfts', logo: 'logo.png' },
+  { to: '/tickeryard/roi', label: 'TickerYard', group: 'yield-nfts', logo: 'Yardkeepers.png' },
+  { to: '/cardwall/roi', label: 'The Card Wall', group: 'yield-nfts', logo: 'wall.png' },
+  { to: '/mutualfun/roi', label: 'The Mutual Fun', group: 'yield-nfts', logo: 'Mutual.png' },
+  { to: '/rhmachines/roi', label: 'RH Machines', group: 'yield-nfts', logo: 'Printer.png' },
+  { to: '/coattail/roi', label: 'Coattail Brokers', group: 'yield-nfts', logo: 'Coattail.svg' },
+  { to: '/nightshades/roi', label: 'Nightshades', group: 'yield-nfts', logo: 'Knight.png' },
+  { to: '/tokens', label: 'Markets & Swap', group: 'chain', icon: 'swap' },
 ].filter((item) => {
   const slug = item.to.split('/').filter(Boolean)[0];
   const project = PROJECTS.find((p) => p.slug === slug);
@@ -60,6 +61,85 @@ function logoForPath(pathname, data) {
   if (project?.logo) return project.logo;
   if (project) return data?.projects?.[project.key]?.config?.logo || 'Stonkbroker.png';
   return 'Stonkbroker.png';
+}
+
+const PIXEL_LOGO = /Stonkbroker|Intern|Mutual/;
+
+function NavIcon({ name }) {
+  const pen = {
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.6,
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+  };
+  if (name === 'home') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true" {...pen}>
+        <path d="M4 11.2 12 4.5l8 6.7" />
+        <path d="M6.5 10.4V19.5h11V10.4" />
+        <path d="M10 19.5v-4.5h4v4.5" />
+      </svg>
+    );
+  }
+  if (name === 'chart') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true" {...pen}>
+        <path d="M4 19V5" />
+        <path d="M4 19h16" />
+        <path d="M7.5 15.2 11.4 11l3.1 2.3L19 7.5" />
+      </svg>
+    );
+  }
+  if (name === 'anvil') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true" {...pen}>
+        <path d="M3 10.5h12.2c1.6 0 3-.6 4.3-1.8H8" />
+        <path d="M5.2 10.5v3.1h12.2v-3.1" />
+        <path d="M8.2 13.6v2.1h6.2v-2.1" />
+        <path d="M6 17.6h11.2" />
+        <path d="M7.4 19.6h8.4" />
+      </svg>
+    );
+  }
+  if (name === 'system') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true" {...pen}>
+        <circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none" />
+        <ellipse cx="12" cy="12" rx="8.6" ry="3.3" transform="rotate(-28 12 12)" />
+        <ellipse cx="12" cy="12" rx="8.6" ry="3.3" transform="rotate(64 12 12)" />
+        <circle cx="19.4" cy="8.7" r="1.05" fill="currentColor" stroke="none" />
+        <circle cx="6.5" cy="16.7" r="0.85" fill="currentColor" stroke="none" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...pen}>
+      <path d="M7 8h11l-3.2-3.2" />
+      <path d="M17 16H6l3.2 3.2" />
+    </svg>
+  );
+}
+
+function NavMark({ item }) {
+  if (item.logo) {
+    const pixel = PIXEL_LOGO.test(item.logo) && /Stonkbroker|Intern|Mutual/.test(item.logo);
+    return (
+      <img
+        src={`/${item.logo}`}
+        alt=""
+        className="h-6 w-6 shrink-0 rounded-md border border-line bg-[#08090b] object-cover"
+        style={pixel ? { imageRendering: 'pixelated' } : undefined}
+      />
+    );
+  }
+  return (
+    <span className="flex h-6 w-6 shrink-0 items-center justify-center text-current">
+      <span className="block h-[18px] w-[18px]">
+        <NavIcon name={item.icon} />
+      </span>
+    </span>
+  );
 }
 
 export function itemIsActive(pathname, to) {
@@ -104,6 +184,7 @@ export function TopNav({ live, sources, data, pending }) {
   const market = data?.projects?.[marketKey]?.market || {};
   const ticker = project?.ticker || 'STONK';
   const ethUsd = data?.projects?.stonk?.market?.ethPriceUsd;
+  const { ccy } = readDisplay();
   const status = liveStatus(live, sources);
   const sampleId = useYieldSampleId();
 
@@ -209,7 +290,7 @@ export function TopNav({ live, sources, data, pending }) {
                             active ? 'text-ink' : 'text-muted'
                           }`}
                         >
-                          <span className={`h-2 w-2 shrink-0 rounded-full ${item.dot}`} />
+                          <NavMark item={item} />
                           <span className="min-w-0 flex-1 truncate">{item.label}</span>
                           {beta && <BetaTag />}
                         </button>
@@ -228,7 +309,7 @@ export function TopNav({ live, sources, data, pending }) {
               <div className="text-[9px] uppercase tracking-wider text-faint">ETH</div>
               <div className="text-[12px] text-ink">
                 <Value pending={pending} ch={6}>
-                  {usd(ethUsd, 0)}
+                  {ccy === 'USD' ? usd(ethUsd, 0) : compactUsd(ethUsd)}
                 </Value>
               </div>
             </div>
@@ -237,7 +318,7 @@ export function TopNav({ live, sources, data, pending }) {
               <div className="text-[9px] uppercase tracking-wider text-faint">${ticker}</div>
               <div className="text-[12px] text-ink">
                 <Value pending={pending} ch={8}>
-                  {price(market.tokenPriceUsd)}
+                  {ccy === 'USD' ? price(market.tokenPriceUsd) : compactUsd(market.tokenPriceUsd)}
                 </Value>
               </div>
             </div>
@@ -247,12 +328,15 @@ export function TopNav({ live, sources, data, pending }) {
                 <div className="text-[9px] uppercase tracking-wider text-faint">Floor</div>
                 <div className="text-[12px] text-ink">
                   <Value pending={pending} ch={6}>
-                    {eth(market.nftFloorEth, 3)} Ξ
+                    {ccy === 'ETH'
+                      ? `${eth(market.nftFloorEth, 3)} Ξ`
+                      : compactUsd((Number(market.nftFloorEth) || 0) * (Number(ethUsd) || 0))}
                   </Value>
                 </div>
               </div>
             )}
           </div>
+          <CurrencyBar compact />
           {project || first === 'ecosystem' ? null : (
             <YieldSampleBar compact value={sampleId} onChange={setYieldSampleId} />
           )}
@@ -313,6 +397,7 @@ export function TabBar({ data }) {
   return (
     <div className="-mx-1 flex flex-col gap-2 overflow-x-auto border-b border-line px-1 pb-3 pt-4 sm:mx-0 sm:flex-row sm:items-center sm:gap-2 sm:px-0">
       <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <span className="shrink-0 pr-1 font-mono text-[10px] uppercase tracking-wider text-faint">Jump</span>
         {tabs.map((t) => (
           <NavLink
             key={t.slug}

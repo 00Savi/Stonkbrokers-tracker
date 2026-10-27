@@ -200,6 +200,13 @@ export default function StonkDetailView({ data, activeTab }) {
   };
   const smartLp = revenue.smartLp || {};
   const pairBook = revenue.pairTokens || {};
+  const pairRows = Array.isArray(pairBook.pairs) ? pairBook.pairs : [];
+  const pairQuiet = pairRows.filter((p) => !(Number(p.fees7dUsd) > 0)).length;
+  const pairRoundedOff = pairRows.some((p) => Number(p.fees7dUsd) > 0 && !(Number(p.protocolFees7dUsd) > 0));
+  const pairTvl = Number(pairBook.totalTvlUsd) || 0;
+  const pairFees = Number(pairBook.fees7dUsd) || 0;
+  const pairFeeApr = pairTvl > 0 ? (pairFees / pairTvl) * (365 / 7) * 100 : 0;
+  const pairSkimPct = pairBook.protocolFeeBps ? (pairBook.protocolFeeBps / 100).toFixed(0) : '10';
   const smartLpCol = (() => {
     const col = REV_STREAMS[4] || { total: 0, color: STREAM_COLORS.smartLp, data: [] };
     const live7d = Number(smartLp.protocolFees7dUsd);
@@ -341,7 +348,8 @@ export default function StonkDetailView({ data, activeTab }) {
                 <tr className="eyebrow border-b border-line text-faint">
                   <th className="px-5 py-3 font-normal">Tier</th>
                   <th className="px-3 py-3 font-normal">Activation</th>
-                  <th className="px-3 py-3 font-normal">Cost</th>
+                  <th className="px-3 py-3 font-normal">Floor</th>
+                  <th className="px-3 py-3 font-normal">Act. cost</th>
                   <th className="px-3 py-3 font-normal">
                     <div className="flex items-center gap-2">
                       <span>Yield</span>
@@ -372,10 +380,8 @@ export default function StonkDetailView({ data, activeTab }) {
                         <td className="num px-3 py-3 text-[13px] text-ink">
                           {formatNumber(t.reqTokens)} <span className="text-muted">${config.ticker}</span>
                         </td>
-                        <td className="px-3 py-3">
-                          <div className="num text-[13px] text-ink">{formatCurrency(totalCost)}</div>
-                          <div className="font-mono text-[11px] text-faint">Floor + {formatCurrency(actCost)}</div>
-                        </td>
+                        <td className="num px-3 py-3 text-[13px] text-ink">{floorCostUsd > 0 ? formatCurrency(floorCostUsd) : '—'}</td>
+                        <td className="num px-3 py-3 text-[13px] text-ink">{actCost > 0 ? formatCurrency(actCost) : '—'}</td>
                         <td className="num px-3 py-3 text-[13px] text-ink">{formatCurrency(scaleAnnualYield(simulatedYield, yieldPeriod))}</td>
                         <td className="px-5 py-3 text-right">
                           <Tag tone="good">{roi.toFixed(2)}%</Tag>
@@ -383,7 +389,7 @@ export default function StonkDetailView({ data, activeTab }) {
                       </tr>
                       {isExpanded && (
                         <tr className="border-b border-line-soft bg-panel-2/40">
-                          <td colSpan="5" className="px-5 py-4">
+                          <td colSpan="6" className="px-5 py-4">
                             <p className="eyebrow mb-3 text-faint">Daily yield · {t.name}</p>
                             <div className="relative h-32 w-full md:h-40">
                               {seriesHasInk(t.dailyYields) ? (
@@ -509,17 +515,18 @@ export default function StonkDetailView({ data, activeTab }) {
       <ShareSection id="pairs" title="Pair Tokens" className="scroll-mt-32 space-y-4">
         <Card
           eyebrow="Pair Tokens"
-          sub="Each pair token is a full-range Uniswap v4 position. compound() skims 10% of the LP fees to the protocol and folds the rest back into the position. That skim is not the Smart LP skim."
+          sub={`Each pair token is a full-range Uniswap v4 position. compound() skims ${pairSkimPct}% of the LP fees to the protocol and folds the rest back in. That skim is not the Smart LP skim. Book TVL is ${formatCurrency(pairTvl)}. ${pairRows.length ? `${pairQuiet} of ${pairRows.length} pairs compounded nothing in this window, so the dollar skim stays small.` : ''}`}
         >
           <KpiStrip>
             <Stat label="Pairs" value={pairBook.count ? compactNum(pairBook.count) : '—'} />
-            <Stat label="TVL" value={formatCurrency(pairBook.totalTvlUsd || 0)} />
-            <Stat label="Fees compounded" value={formatCurrency(pairBook.fees7dUsd || 0)} note={revPeriod} />
-            <Stat label="Protocol skim" value={formatCurrency(pairCol.total || pairBook.protocolFees7dUsd || 0)} note="50/50 Clock In and buyback" />
+            <Stat label="TVL" value={formatCurrency(pairTvl)} />
+            <Stat label="Fees compounded" value={formatCurrency(pairFees)} note={revPeriod} />
+            <Stat label="Fee APR" value={pairTvl > 0 ? `${pairFeeApr.toFixed(1)}%` : '—'} note="Compounded LP fees, annualized on TVL" />
+            <Stat label="Protocol skim" value={formatCurrency(pairCol.total || pairBook.protocolFees7dUsd || 0)} note={`${pairSkimPct}% of compounded fees · 50/50 Clock In and buyback`} />
           </KpiStrip>
         </Card>
         <Card eyebrow="Pairs" sub="Sorted by protocol skim over the same window. Fees compounded are the LP fees collected. The skim is the protocol's 10%.">
-          {Array.isArray(pairBook.pairs) && pairBook.pairs.length > 0 ? (
+          {pairRows.length > 0 ? (
             <div className="max-h-[32rem] overflow-auto">
               <table className="w-full min-w-[640px] text-left">
                 <thead>
@@ -532,7 +539,7 @@ export default function StonkDetailView({ data, activeTab }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {pairBook.pairs.map((p) => (
+                  {pairRows.map((p) => (
                     <tr key={p.ca} className="border-b border-line-soft">
                       <td className="px-5 py-3">
                         <a className="text-[13px] text-ink hover:underline" href={explorerAddressUrl(p.ca)} target="_blank" rel="noreferrer">{p.symbol}</a>
@@ -540,7 +547,13 @@ export default function StonkDetailView({ data, activeTab }) {
                       <td className="px-3 py-3 font-mono text-[12px] text-muted">{p.symbol0} + {p.symbol1}</td>
                       <td className="num px-3 py-3 text-right text-[13px] text-ink">{formatCurrency(p.tvlUsd || 0)}</td>
                       <td className="num px-3 py-3 text-right text-[13px] text-ink">{formatCurrency(p.fees7dUsd || 0)}</td>
-                      <td className="num px-5 py-3 text-right text-[13px] text-ink">{formatCurrency(p.protocolFees7dUsd || 0)}</td>
+                      <td className="num px-5 py-3 text-right text-[13px] text-ink">
+                        {Number(p.protocolFees7dUsd) > 0
+                          ? formatCurrency(p.protocolFees7dUsd)
+                          : Number(p.fees7dUsd) > 0
+                            ? <span title="The 10% skim of this pair was under one cent, and this ledger stored fees to the cent.">under 1¢</span>
+                            : formatCurrency(0)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -549,6 +562,9 @@ export default function StonkDetailView({ data, activeTab }) {
           ) : (
             <p className="font-mono text-[12px] text-faint">The pair-token book is not in this ledger yet. The next sync reads the factory and the compound skim.</p>
           )}
+          {pairRoundedOff ? (
+            <p className="mt-3 text-[12px] text-muted">A skim marked under 1¢ is still {pairSkimPct}% of that pair’s compounded fees. This ledger stored those fees to the cent, so anything under half a cent landed as zero.</p>
+          ) : null}
         </Card>
       </ShareSection>
 

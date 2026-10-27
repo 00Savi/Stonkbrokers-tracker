@@ -207,7 +207,8 @@ export default function InternDetailView({ data, activeTab }) {
                   <tr className="border-b border-[#1e2228] text-slate-500 text-xs uppercase tracking-wider">
                     <th className="pb-4 font-medium pl-2">Tier</th>
                     <th className="pb-4 font-medium">Activation Req.</th>
-                    <th className="pb-4 font-medium">Current Total Cost</th>
+                    <th className="pb-4 font-medium">Floor</th>
+                    <th className="pb-4 font-medium">Act. cost</th>
                     <th className="pb-4 font-medium">
                       <div className="flex items-center gap-2">
                         <span>Expected Yield</span>
@@ -238,8 +239,10 @@ export default function InternDetailView({ data, activeTab }) {
                           </td>
                           <td className="py-5"><span className="text-white font-bold">{formatNumber(t.reqTokens)}</span> $STONKBROKER</td>
                           <td className="py-5">
-                            <div className="font-bold text-white">{stonkPx > 0 ? formatCurrency(totalCost) : '—'}</div>
-                            <div className="text-xs text-slate-500 mt-0.5">Floor + {stonkPx > 0 ? formatCurrency(actCost) : '—'} Act.</div>
+                            <div className="font-bold text-white">{floorCostUsd > 0 ? formatCurrency(floorCostUsd) : '—'}</div>
+                          </td>
+                          <td className="py-5">
+                            <div className="font-bold text-white">{stonkPx > 0 && actCost > 0 ? formatCurrency(actCost) : '—'}</div>
                           </td>
                           <td className="py-5">
                             {building || !(simulatedYield > 0) ? (
@@ -261,7 +264,7 @@ export default function InternDetailView({ data, activeTab }) {
                         </tr>
                         {isExpanded && (
                           <tr className="bg-[#08090b]/40 border-b border-[#1e2228]/50">
-                            <td colSpan="5" className="p-4 md:p-6">
+                            <td colSpan="6" className="p-4 md:p-6">
                               <div className="relative h-32 md:h-40 w-full">
                                 {seriesHasInk(t.dailyYields) ? (
                                   <Line data={{ labels: t.dailyDates, datasets: [{ label: 'Daily Yield (USD)', data: t.dailyYields, borderColor: ACCENT, backgroundColor: 'rgba(251, 191, 36, 0.1)', borderWidth: 2, fill: true, tension: 0.4, pointRadius: 0 }] }} options={baseChartOptions(t.dailyDates, 'daily', { yUnit: 'USD', yTick: compactUsdTick })} />

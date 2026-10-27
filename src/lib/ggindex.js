@@ -143,20 +143,28 @@ export async function loadOverlay(signal, known) {
 }
 
 /** gg-index counts the AMM vault as an NFT holder. Circulating supply does not. */
-function mergeOwnership(baseOwn = {}, patchOwn) {
+function mergeOwnership(baseOwn = {}, patchOwn, project) {
   const own = { ...baseOwn, ...patchOwn };
   const vault = Number(own.ammVaultNfts) || 0;
   if (patchOwn?.nftHolders != null) {
     const raw = Number(patchOwn.nftHolders);
     if (Number.isFinite(raw)) own.nftHolders = vault > 0 ? Math.max(0, raw - 1) : raw;
   }
-  const max = Number(own.currentMaxSupply) || 0;
-  if (max > 0) {
-    own.circulatingNftSupply = Math.max(0, max - vault);
-    const wallets = Number(own.nftHolders) || 0;
-    own.ownershipRatio = own.circulatingNftSupply > 0
-      ? +Math.min(100, (wallets / own.circulatingNftSupply) * 100).toFixed(2)
-      : 0;
+  const cap = Number(own.currentMaxSupply) || 0;
+  const minted = Number(project?.seats?.minted);
+  const retired = Number(project?.seats?.retired) || 0;
+  // A collection still minting (Mutual Fun) is outstanding seats, not the
+  // prospectus cap. Fully minted projects have no `seats` object, so the
+  // cap remains the circulating base.
+  const outstanding = minted > 0 ? Math.max(0, minted - retired) : cap;
+  if (outstanding > 0) {
+    own.circulatingNftSupply = Math.max(0, outstanding - vault);
+    if (own.nftHolders != null) {
+      const wallets = Number(own.nftHolders) || 0;
+      own.ownershipRatio = own.circulatingNftSupply > 0
+        ? +Math.min(100, (wallets / own.circulatingNftSupply) * 100).toFixed(2)
+        : 0;
+    }
   }
   return own;
 }
@@ -177,7 +185,7 @@ export function applyOverlay(base, overlay) {
     if (!p) continue;
     projects[slug] = {
       ...p,
-      ...(patch.ownership ? { ownership: mergeOwnership(p.ownership, patch.ownership) } : {}),
+      ...(patch.ownership ? { ownership: mergeOwnership(p.ownership, patch.ownership, p) } : {}),
     };
   }
 
@@ -188,7 +196,7 @@ export function applyOverlay(base, overlay) {
       if (!isNightshadesFaction(slug) || !factions[slug] || !patch.ownership) continue;
       factions[slug] = {
         ...factions[slug],
-        ownership: mergeOwnership(factions[slug].ownership, patch.ownership),
+        ownership: mergeOwnership(factions[slug].ownership, patch.ownership, factions[slug]),
       };
     }
     const rolled = rollupNightshadesOwnership(factions);

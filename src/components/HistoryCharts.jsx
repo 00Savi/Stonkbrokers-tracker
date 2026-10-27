@@ -44,10 +44,10 @@ export function EmptyChart({ children = 'No series recorded yet' }) {
   );
 }
 
-export function ChartPanel({ title, note, children, className = '', tall = false, corner = null, fit = false, toolbar = null, footer = null, frameClass = '' }) {
+export function ChartPanel({ id, title, note, children, className = '', tall = false, corner = null, fit = false, toolbar = null, footer = null, frameClass = '' }) {
   const frame = frameClass || (fit ? '' : (tall ? 'h-72 sm:h-[28rem]' : 'h-52 sm:h-64 md:h-80'));
   return (
-    <section className={`card ${className}`}>
+    <section id={id} className={`card scroll-mt-36 ${className}`}>
       {(title || note || corner || toolbar) ? (
         <header className={`flex items-start justify-between gap-3 pt-4 pl-4 sm:pl-5 ${corner ? 'pr-14' : 'pr-4 sm:pr-5'}`}>
           <div className="min-w-0 flex-1">
@@ -66,8 +66,53 @@ export function ChartPanel({ title, note, children, className = '', tall = false
   );
 }
 
-/** One chart card. Chips pick an alternate view of the same subject. The window control still applies to whichever chip is showing. */
-export function ChartSwitch({ views, initial }) {
+function jumpTo(id) {
+  const el = document.getElementById(id);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/** Links to charts already on this page. One chart does not need a list. */
+export function SectionJumps({ label, links }) {
+  const rows = (links || []).filter((row) => row && row.id && row.label);
+  if (rows.length < 2) return null;
+  return (
+    <nav aria-label={label} className="flex flex-wrap items-center gap-1.5">
+      <span className="font-mono text-[10px] uppercase tracking-wider text-faint">{label}</span>
+      {rows.map((row) => (
+        <button
+          key={row.id}
+          type="button"
+          onClick={() => jumpTo(row.id)}
+          className="rounded-md border border-line px-2 py-1 text-[12px] text-muted hover:text-ink"
+        >
+          {row.label}
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+/** One card per view. Use this when each view is a different question. */
+export function ChartStack({ label, views }) {
+  const shown = (views || []).filter((view) => view && view.body != null);
+  if (!shown.length) return null;
+  return (
+    <div className="space-y-4">
+      <SectionJumps
+        label={label}
+        links={shown.map((view) => ({ id: view.anchor || view.id, label: view.jump || view.title }))}
+      />
+      {shown.map((view) => (
+        <ChartPanel key={view.id} id={view.anchor || view.id} title={view.title} note={view.note} fit={!!view.fit}>
+          {view.body}
+        </ChartPanel>
+      ))}
+    </div>
+  );
+}
+
+/** One chart card. Chips pick an alternate unit of the same subject. */
+export function ChartSwitch({ views, initial, anchor }) {
   const available = (views || []).filter((view) => view && view.body != null);
   const fallback = available[0]?.id || '';
   const [picked, setPicked] = useState(initial || fallback);
@@ -95,7 +140,7 @@ export function ChartSwitch({ views, initial }) {
     </div>
   ) : null;
   return (
-    <ChartPanel title={active.title} note={active.note} fit={!!active.fit} toolbar={toolbar}>
+    <ChartPanel id={anchor} title={active.title} note={active.note} fit={!!active.fit} toolbar={toolbar}>
       {active.body}
     </ChartPanel>
   );
@@ -137,7 +182,7 @@ export function YieldUsdPricePanel({ snaps, tiers }) {
   );
 }
 
-/** CoC % and yield-vs-price are the same yield history. Default is CoC %. */
+/** Yield tab. Cash-on-cash stays on the ROI table. This chart is the payout against the token price. */
 export function YieldHistorySwitch({
   labels,
   datasets,
@@ -145,33 +190,29 @@ export function YieldHistorySwitch({
   snaps,
   tiers,
   empty = null,
-  cocLabel = 'CoC %',
   cocTitle = 'Tier ROI',
   cocNote = 'Cash-on-cash for each tier over the selected window.',
   showUsd = true,
 }) {
-  const ink = seriesHasInk((datasets || []).flatMap((d) => d.data));
-  const views = [
-    {
-      id: 'coc',
-      label: cocLabel,
-      title: cocTitle,
-      note: cocNote,
-      body: ink || empty == null
-        ? <Line data={{ labels, datasets }} options={options} />
-        : <EmptyChart>{empty}</EmptyChart>,
-    },
-  ];
   if (showUsd) {
-    views.push({
-      id: 'usd',
-      label: 'Yield vs price',
-      title: 'Annualized yield (USD) vs token price',
-      note: 'ROI % moves when the token price moves. This is the payout leg on the left, spot price on the right.',
-      body: yieldUsdBody(snaps, tiers),
-    });
+    return (
+      <ChartPanel
+        id="yield-price"
+        title="Annualized yield (USD) vs token price"
+        note="ROI % moves when the token price moves. This is the payout leg on the left, spot price on the right. Cash-on-cash for each tier is on ROI."
+      >
+        {yieldUsdBody(snaps, tiers)}
+      </ChartPanel>
+    );
   }
-  return <ChartSwitch initial="coc" views={views} />;
+  const ink = seriesHasInk((datasets || []).flatMap((d) => d.data));
+  return (
+    <ChartPanel id="yield-coc" title={cocTitle} note={cocNote}>
+      {ink || empty == null
+        ? <Line data={{ labels, datasets }} options={options} />
+        : <EmptyChart>{empty}</EmptyChart>}
+    </ChartPanel>
+  );
 }
 
 function flywheelPlot({
@@ -257,31 +298,40 @@ export function FlywheelPanel({
   );
 }
 
-/** Cumulative burn, an optional daily split, and the flywheel share one card. */
+/** Cumulative burn stays one card. A daily split is the same burn in another shape. Price against burn is its own chart. */
 export function BurnHistorySwitch({ cumulative, flywheel, extras = [] }) {
   const views = [];
   if (cumulative) {
     views.push({
       id: 'cumulative',
       label: 'Cumulative',
-      title: cumulative.title || 'Cumulative burn',
-      note: cumulative.note || 'Cumulative tokens burnt.',
+      title: 'Supply destroyed',
+      note: cumulative.note || cumulative.title || 'Cumulative tokens burnt.',
       body: cumulative.body,
     });
   }
   for (const extra of extras) {
     if (extra) views.push(extra);
   }
-  if (flywheel) {
-    views.push({
-      id: 'flywheel',
-      label: 'Flywheel',
-      title: flywheel.title || 'The Deflationary Flywheel',
-      note: FLYWHEEL_NOTE,
-      body: flywheelPlot(flywheel),
-    });
-  }
-  return <ChartSwitch initial="cumulative" views={views} />;
+  const price = flywheel ? (
+    <ChartPanel id="burn-price" title="Price against burn" note={FLYWHEEL_NOTE}>
+      {flywheelPlot(flywheel)}
+    </ChartPanel>
+  ) : null;
+  if (!views.length) return price;
+  return (
+    <div className="space-y-4">
+      <SectionJumps
+        label="In burn"
+        links={[
+          { id: 'burn-supply', label: 'Supply destroyed' },
+          price ? { id: 'burn-price', label: 'Price against burn' } : null,
+        ]}
+      />
+      <ChartSwitch anchor="burn-supply" initial="cumulative" views={views} />
+      {price}
+    </div>
+  );
 }
 
 function dailyTotals(cols) {
@@ -352,7 +402,11 @@ export function ProtocolFeeVolumePanels({ labels, cols, kind, holder, note, titl
   } : null;
 
   if (kind === 'ledger' || kind === 'cashflow') {
-    return holderView ? <ChartSwitch views={[holderView]} /> : null;
+    return holderView ? (
+      <ChartPanel id="revenue-seats" title="Paid to seats" note={holderView.note}>
+        {holderView.body}
+      </ChartPanel>
+    ) : null;
   }
 
   const fees = protocolFeeCols(cols).filter((c) => seriesHasInk(c.data));
@@ -378,14 +432,14 @@ export function ProtocolFeeVolumePanels({ labels, cols, kind, holder, note, titl
     {
       id: 'dollars',
       label: 'Dollars',
-      title: title || 'Protocol revenue (USD)',
-      note: note || 'What the protocol charged or kept that day. The tooltip total is the stack.',
+      title: 'Protocol kept',
+      note: note || title || 'What the protocol charged or kept that day. The tooltip total is the stack.',
       body: fees.length ? (
         <Bar data={{ labels, datasets: dollarSets }} options={usdStackOptions(labels, interval)} />
       ) : (
         <EmptyChart>
           {holderView
-            ? 'This cash was paid to holders. It is on the Holder tab, not kept as a protocol fee.'
+            ? 'This cash was paid to seats. It is in Paid to seats, below, not kept as a protocol fee.'
             : 'No revenue days in this window'}
         </EmptyChart>
       ),
@@ -405,20 +459,31 @@ export function ProtocolFeeVolumePanels({ labels, cols, kind, holder, note, titl
       ),
     });
   }
-  if (holderView) views.push(holderView);
-  if (pots.length) {
-    views.push({
-      id: 'pot',
-      label: 'Pot',
-      title: 'Cash in the pot (USD)',
-      note: 'ETH or tokens still sitting in the oracle or clock-in. This is not a fee the protocol kept, and it is not cash already paid to a seat.',
-      body: (
-        <Bar data={{ labels, datasets: barDatasets(pots, { stacked: true }) }} options={usdStackOptions(labels, interval)} />
-      ),
-    });
-  }
-  const openOn = fees.length ? 'dollars' : (holderView ? 'holder' : 'dollars');
-  return <ChartSwitch initial={openOn} views={views} />;
+  const jumps = [
+    { id: 'revenue-kept', label: 'Protocol kept' },
+    holderView ? { id: 'revenue-seats', label: 'Paid to seats' } : null,
+    pots.length ? { id: 'revenue-pot', label: 'Still in the pot' } : null,
+  ];
+  return (
+    <div className="space-y-4">
+      <SectionJumps label="In revenue" links={jumps} />
+      <ChartSwitch anchor="revenue-kept" initial="dollars" views={views} />
+      {holderView ? (
+        <ChartPanel id="revenue-seats" title="Paid to seats" note={holderView.note}>
+          {holderView.body}
+        </ChartPanel>
+      ) : null}
+      {pots.length ? (
+        <ChartPanel
+          id="revenue-pot"
+          title="Still in the pot"
+          note="ETH or tokens still sitting in the oracle or clock-in. This is not a fee the protocol kept, and it is not cash already paid to a seat."
+        >
+          <Bar data={{ labels, datasets: barDatasets(pots, { stacked: true }) }} options={usdStackOptions(labels, interval)} />
+        </ChartPanel>
+      ) : null}
+    </div>
+  );
 }
 
 const MODE_FILL = {
@@ -485,9 +550,10 @@ export function SmartLpChartPanels({ snaps, smartLp, vaults }) {
   const views = [];
   if (hasMode) {
     views.push({
-      id: 'tvl',
+      id: 'lp-tvl',
       label: 'TVL',
-      title: 'Smart LP TVL',
+      title: 'Vault TVL',
+      jump: 'Vault TVL',
       note: 'Stacked by mode. The top edge is total vault TVL. A $0 hourly stamp is a missed read and is spanned.',
       body: (
         <Line
@@ -511,9 +577,10 @@ export function SmartLpChartPanels({ snaps, smartLp, vaults }) {
     });
   } else if (hasTvl) {
     views.push({
-      id: 'tvl',
+      id: 'lp-tvl',
       label: 'TVL',
-      title: 'Smart LP TVL',
+      title: 'Vault TVL',
+      jump: 'Vault TVL',
       note: 'Point-in-time vault TVL. A $0 hourly stamp is treated as a missed read and spanned, not a drained vault.',
       body: (
         <Line
@@ -544,7 +611,9 @@ export function SmartLpChartPanels({ snaps, smartLp, vaults }) {
     views.push({
       id: 'fees',
       label: 'Fees',
-      title: 'Daily depositor fees vs Smart LP protocol rev',
+      title: 'Fees',
+      jump: 'Fees',
+      anchor: 'lp-fees',
       note: 'Depositor net under the protocol skim. The skim’s share of the bar is that day’s take rate.',
       body: (
         <Bar
@@ -565,6 +634,8 @@ export function SmartLpChartPanels({ snaps, smartLp, vaults }) {
       id: 'pairs',
       label: 'Pairs',
       title: 'TVL by pair',
+      jump: 'TVL by pair',
+      anchor: 'lp-pairs',
       note: 'Live vault list. No extra fetch.',
       fit: true,
       body: (
@@ -580,7 +651,7 @@ export function SmartLpChartPanels({ snaps, smartLp, vaults }) {
       ),
     });
   }
-  return <ChartSwitch initial="tvl" views={views} />;
+  return <ChartStack label="In liquidity" views={views} />;
 }
 
 export function BlackHoleChartPanels({ snaps, lockedLp, ticker = 'STONK' }) {
@@ -593,7 +664,9 @@ export function BlackHoleChartPanels({ snaps, lockedLp, ticker = 'STONK' }) {
     views.push({
       id: 'pools',
       label: 'Pools',
-      title: 'Top locked pools (USD)',
+      title: 'Locked pools',
+      jump: 'Locked pools',
+      anchor: 'lock-pools',
       note: 'Largest Black Hole pairs by pool reserves right now.',
       body: (
         <Bar
@@ -617,7 +690,9 @@ export function BlackHoleChartPanels({ snaps, lockedLp, ticker = 'STONK' }) {
   views.push({
     id: 'locked',
     label: 'Locked',
-    title: `${ticker} locked over time`,
+    title: 'Tokens locked over time',
+    jump: 'Locked over time',
+    anchor: 'lock-time',
     note: 'Tokens sitting in Uniswap v4 PoolManager and DexScreener pool contracts. History is reconstructed from Transfer folds; the latest point is live.',
     body: hasLock ? (
       <Line
@@ -663,7 +738,7 @@ export function BlackHoleChartPanels({ snaps, lockedLp, ticker = 'STONK' }) {
       <EmptyChart />
     ),
   });
-  return <ChartSwitch initial="pools" views={views} />;
+  return <ChartStack label="In locked pools" views={views} />;
 }
 
 export function ActivationStackPanel({ snaps, tiers, breakdown }) {
@@ -744,9 +819,10 @@ export function OwnershipHistoryPanels({ snaps, live, onboard = null, tokenLeg =
     });
   const views = [
     {
-      id: 'holders',
+      id: 'own-holders',
       label: 'Holders',
-      title: tokenLeg ? 'NFT vs token holders' : 'NFT holders',
+      title: 'Who holds',
+      jump: 'Who holds',
       note: tokenLeg
         ? 'NFT wallets exclude the AMM vault. Token holders are addresses with at least one whole token. One axis when the two series are within 3×.'
         : 'NFT wallets exclude the AMM vault. This collection has no separate token.',
@@ -768,7 +844,9 @@ export function OwnershipHistoryPanels({ snaps, live, onboard = null, tokenLeg =
     {
       id: 'breadth',
       label: 'Per 100',
-      title: 'Wallets per 100 NFTs',
+      title: 'How concentrated',
+      jump: 'How concentrated',
+      anchor: 'own-breadth',
       note: 'Unique NFT wallets for every 100 in circulation. The AMM vault is not in the supply.',
       body: hasConc ? (
         <Line
@@ -808,7 +886,7 @@ export function OwnershipHistoryPanels({ snaps, live, onboard = null, tokenLeg =
     },
   ];
   if (onboard) views.push(onboardView(onboard));
-  return <ChartSwitch initial="holders" views={views} />;
+  return <ChartStack label="In ownership" views={views} />;
 }
 
 const ONBOARD_PROJECTS = [
@@ -842,7 +920,9 @@ function onboardView({ data, projectKey, timeframe, interval, color, name }) {
   return {
     id: 'onboard',
     label: 'Onboard',
-    title: `${name || 'Chain'} onboard`,
+    title: 'Who just arrived',
+    jump: 'Who just arrived',
+    anchor: 'own-onboard',
     note: 'Wallets whose first cluster buy or mint of this project was one of their first 10 txs on Robinhood Chain.',
     body: seriesHasInk(sliced.data) ? (
       <Line

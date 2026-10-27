@@ -1771,6 +1771,158 @@ async function fetchBurnHistory(projectKey, previous) {
   return previous && previous.labels?.length ? previous : null;
 }
 
+function growthSeries(previous, today, value) {
+  let labels = previous?.ownership?.historicalGrowth?.labels || [];
+  let data = previous?.ownership?.historicalGrowth?.data || [];
+  const byDay = new Map();
+  for (let i = 0; i < labels.length; i++) {
+    const key = dates.dateKey(labels[i]);
+    if (!key) continue;
+    byDay.set(key, Number(data[i]) || 0);
+  }
+  if (value != null && Number.isFinite(Number(value))) byDay.set(today, Number(value));
+  const keys = [...byDay.keys()].sort();
+  return { labels: keys, data: keys.map((k) => byDay.get(k)) };
+}
+
+/**
+ * Holder counts, vault inventory, and the daily row other NFT projects get
+ * from the shared path. Mutual Fun does not use that path: its burn is half
+ * of each Front-End Load, not `maxSupply * unitValue - supply`. A holder fold
+ * that is not ready yet leaves the previous count in place.
+ */
+async function attachMutualOwnership(conf, built, prev) {
+  const prevOwn = prev?.ownership || {};
+  let ammVaultNfts = Number(prevOwn.ammVaultNfts) || 0;
+  if (conf.nftCa && conf.ammCa) {
+    try {
+      const bals = await gg.balances(conf.nftCa, [conf.ammCa]);
+      const held = bals.get(conf.ammCa.toLowerCase());
+      if (held != null) ammVaultNfts = Number(held);
+    } catch (e) {
+      console.warn(`[warn] mutual fun AMM vault: ${e.message}`);
+    }
+  }
+
+  let nftHolders = prevOwn.nftHolders ?? null;
+  try {
+    const raw = await fetchTokenHoldersSafe(conf.nftCa);
+    nftHolders = ammVaultNfts > 0 ? Math.max(0, raw - 1) : raw;
+  } catch (e) {
+    console.warn(`[warn] mutual fun NFT holders: ${e.message}`);
+  }
+
+  let tokenHolders = prevOwn.tokenHolders ?? prevOwn.stonkHolders ?? null;
+  try {
+    tokenHolders = await fetchTokenHoldersSafe(conf.tokenCa);
+  } catch (e) {
+    console.warn(`[warn] mutual fun token holders: ${e.message}`);
+  }
+
+  const minted = Number(built.seats?.minted) || 0;
+  const retired = Number(built.seats?.retired) || 0;
+  const outstanding = Math.max(0, minted - retired);
+  const circulating = Math.max(0, outstanding - ammVaultNfts);
+  const ratio = circulating > 0 && nftHolders != null
+    ? parseFloat(Math.min(100, (Number(nftHolders) / circulating) * 100).toFixed(2))
+    : (prevOwn.ownershipRatio ?? null);
+  const today = dates.utcIso();
+  const seriesValue = tokenHolders != null ? tokenHolders : null;
+
+  built.ownership = {
+    ...built.ownership,
+    ammVaultNfts,
+    nftHolders,
+    tokenHolders,
+    stonkHolders: tokenHolders,
+    circulatingNftSupply: circulating,
+    currentMaxSupply: conf.maxSupply,
+    ownershipRatio: ratio,
+    burntNfts: retired,
+    permanentlyBurntTokens: Number(built.revenue?.burnedTokens) || Number(built.ownership?.permanentlyBurntTokens) || 0,
+    burnHistory: built.ownership?.burnHistory || prevOwn.burnHistory || null,
+    historicalGrowth: growthSeries(prev, today, seriesValue),
+    priceHistory: prevOwn.priceHistory,
+    holderMix: prevOwn.holderMix,
+    underwater: prevOwn.underwater,
+    underwaterHistory: prevOwn.underwaterHistory,
+  };
+  built.activation = {
+    ...built.activation,
+    dualBurn: {
+      totalBurnTokens: Number(built.revenue?.burnedTokens) || 0,
+      equivalentBrokersBurnt: retired,
+    },
+  };
+  built.dailySnapshots = stampMutualSnapshots(prev?.dailySnapshots, built);
+  return built;
+}
+
+function stampMutualSnapshots(prevSnaps, built) {
+  const byDate = new Map();
+  for (const s of prevSnaps || []) {
+    const k = dates.dateKey(s?.date);
+    if (k) byDate.set(k, { ...s });
+  }
+  const burn = built.ownership?.burnHistory;
+  const burnAt = new Map();
+  (burn?.labels || []).forEach((d, i) => burnAt.set(dates.dateKey(d), Number(burn.data?.[i]) || 0));
+  const act = built.activation?.history || {};
+  const activeAt = new Map();
+  (act.labels || []).forEach((d, i) => activeAt.set(dates.dateKey(d), Number(act.cumulative?.[i]) || 0));
+  const classes = built.activation?.classHistory || {};
+  const classAt = new Map();
+  (classes.labels || []).forEach((d, i) => {
+    const mix = {};
+    for (const id of ["T0", "T1", "T2", "T3", "T4"]) mix[id] = Number(classes.tiers?.[id]?.[i]) || 0;
+    classAt.set(dates.dateKey(d), mix);
+  });
+
+  const minted = Number(built.seats?.minted) || 0;
+  const days = new Set([...burnAt.keys(), ...activeAt.keys(), ...classAt.keys(), ...byDate.keys()]);
+  for (const day of days) {
+    if (!day) continue;
+    const prev = byDate.get(day) || {};
+    const active = activeAt.has(day) ? activeAt.get(day) : (prev.activeCount || 0);
+    const row = {
+      ...prev,
+      date: day,
+      timestamp: prev.timestamp || Date.parse(`${day}T00:00:00Z`),
+      totalBurn: burnAt.has(day) ? burnAt.get(day) : (prev.totalBurn || 0),
+      activeCount: active,
+      percentActivated: minted > 0 ? +((active / minted) * 100).toFixed(2) : (prev.percentActivated || 0),
+    };
+    if (classAt.has(day)) row.tierActive = classAt.get(day);
+    byDate.set(day, row);
+  }
+
+  const today = dates.utcIso();
+  const own = built.ownership || {};
+  const live = built.activation || {};
+  const floorEth = Number(built.market?.nftFloorEth) || 0;
+  const ethUsd = Number(built.market?.ethPriceUsd) || 0;
+  const px = Number(built.market?.tokenPriceUsd) || 0;
+  const prevToday = byDate.get(today) || {};
+  byDate.set(today, {
+    ...(byDate.get(today) || {}),
+    date: today,
+    timestamp: Date.now(),
+    tokenPriceUsd: px || prevToday.tokenPriceUsd || 0,
+    nftFloorEth: floorEth,
+    nftFloorUsd: +(floorEth * ethUsd).toFixed(2),
+    totalBurn: Number(own.permanentlyBurntTokens) || Number(built.revenue?.burnedTokens) || 0,
+    tokenHolders: own.tokenHolders ?? prevToday?.tokenHolders ?? null,
+    nftHolders: own.nftHolders ?? prevToday?.nftHolders ?? null,
+    ammVaultNfts: own.ammVaultNfts || 0,
+    ownershipRatio: own.ownershipRatio ?? prevToday?.ownershipRatio ?? null,
+    activeCount: live.activeCount || 0,
+    percentActivated: live.percentActivated || 0,
+    tierActive: { ...(live.breakdown || {}) },
+  });
+
+  return [...byDate.values()].sort((a, b) => String(a.date).localeCompare(String(b.date))).slice(-365);
+}
+
 function emptyTierWindow() {
   return { act: 0, deact: 0, up: 0 };
 }
@@ -4319,13 +4471,36 @@ async function run() {
       if (conf.kind === "mutual") {
         try {
           const spot = markets[projectKey] || {};
-          finalJson.projects[projectKey] = await fetchMutualFun({
+          const built = await fetchMutualFun({
             rpc,
             blockTime,
             ethPriceUsd: spot.ethPriceUsd || ethPriceUsd,
             tokenPriceUsd: spot.tokenPriceUsd || 0,
             tokenPrices,
+            genesisBlock: conf.genesisBlock,
           });
+          await attachMutualOwnership(conf, built, prevProjData);
+          if (conf.ammCa && conf.nftCa) {
+            try {
+              const head = await rpc.blockNumber();
+              const pinned = blockTime.anchors?.length ? blockTime.anchors[blockTime.anchors.length - 1][0] : head;
+              await blockTime.ensureRange(rpc, Math.min(pinned, head), head);
+              const fromTs = Math.floor(Date.now() / 1000) - 2 * 86400;
+              const fresh = await walkAmmFlow({
+                rpc,
+                blockTime,
+                nft: conf.nftCa,
+                amm: conf.ammCa,
+                fromBlock: blockTime.blockAt(fromTs),
+                toBlock: head,
+              });
+              built.ammFlow = mergeAmmFlow(prevProjData.ammFlow, fresh);
+            } catch (e) {
+              console.warn(`[warn] mutual fun amm flow: ${e.message}`);
+              if (prevProjData.ammFlow) built.ammFlow = prevProjData.ammFlow;
+            }
+          }
+          finalJson.projects[projectKey] = built;
           projectsOk++;
         } catch (e) {
           console.warn(`[warn] mutual fun: ${e.message || e}`);
@@ -4947,6 +5122,7 @@ async function run() {
     pushUw("mancer", PROJECTS.mancer, finalJson.projects.mancer, true);
     pushUw("tickeryard", PROJECTS.tickeryard, finalJson.projects.tickeryard, true);
     pushUw("cardwall", PROJECTS.cardwall, finalJson.projects.cardwall, true);
+    pushUw("mutualfun", PROJECTS.mutualfun, finalJson.projects.mutualfun, true);
     // NFT only. Interns lock parent $STONKBROKER to activate, but the bag itself
     // is a StonkBrokers position and is scored on that project.
     pushUw("interns", PROJECTS.interns, finalJson.projects.interns, false, finalJson.projects.stonk);

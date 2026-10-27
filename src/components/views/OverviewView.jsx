@@ -6,8 +6,9 @@ import {
 import { Scatter } from 'react-chartjs-2';
 import { NFT_PROJECTS, RANKING_PROJECTS } from '../../lib/routes';
 import { typicalNightshadesSeat } from '../../lib/nightshades';
-import { Card, Figure, Stat, SplitBar, Tag, BetaTag, Value, Skeleton, usd, num, pct } from '../kit';
+import { Card, Figure, Stat, SplitBar, Tag, BetaTag, Value, Skeleton, compactUsd, num, pct } from '../kit';
 import { axisTitle, compactUsdTick, PROJECT_COLORS } from '../../lib/charts';
+import { readDisplay } from '../../lib/money';
 
 ChartJS.register(LinearScale, LogarithmicScale, PointElement, LineElement, Tooltip, Legend, Filler);
 
@@ -73,7 +74,12 @@ function tierRows(data) {
 
     for (const t of p.tiers || []) {
       const night = meta.kind === 'factions' ? typicalNightshadesSeat(p.factions, t.tier) : null;
-      const cost = night?.cost || t.entryUsd || (nft ? floorUsd + (t.reqTokens || 0) * tokenUsd : (t.reqTokens || 0) * tokenUsd);
+      const machines = meta.kind === 'machines';
+      const floorPart = night ? night.floor : (nft ? floorUsd : 0);
+      const actPart = night
+        ? night.act
+        : (t.reqTokens || 0) * tokenUsd * (machines ? 1.15 : 1);
+      const cost = night?.cost || t.entryUsd || floorPart + actPart;
       const annual = night ? night.annual : (t.trackedAnnualYieldUsd || 0);
       rows.push({
         key: `${meta.key}-${t.tier}`,
@@ -82,6 +88,8 @@ function tierRows(data) {
         name: t.name,
         reqTokens: t.reqTokens,
         cost,
+        floor: floorPart,
+        act: actPart,
         annual,
         roi: night ? (night.roi || null) : (cost > 0 && annual > 0 ? (annual / cost) * 100 : null),
         payback: annual > 0 ? cost / annual : null,
@@ -123,7 +131,8 @@ function RankTable({ rows, pending }) {
           <tr className="eyebrow border-b border-line text-left text-faint">
             <th className="px-5 py-3 font-normal">Project · tier</th>
             <th className="px-3 py-3 text-right font-normal">Annual ROI</th>
-            <th className="px-3 py-3 text-right font-normal">Cost to enter</th>
+            <th className="px-3 py-3 text-right font-normal">Floor</th>
+            <th className="px-3 py-3 text-right font-normal">Act. cost</th>
             <th className="px-3 py-3 text-right font-normal">Annual yield</th>
             <th className="px-3 py-3 text-right font-normal">Payback</th>
             <th className="px-5 py-3 font-normal">Requires</th>
@@ -159,9 +168,10 @@ function RankTable({ rows, pending }) {
                 >
                   {r.roi == null ? '—' : pct(r.roi, 2)}
                 </td>
-                <td className="num px-3 py-2.5 text-right text-[12px] text-muted">{usd(r.cost)}</td>
+                <td className="num px-3 py-2.5 text-right text-[12px] text-muted">{r.floor > 0 ? compactUsd(r.floor) : '—'}</td>
+                <td className="num px-3 py-2.5 text-right text-[12px] text-muted">{r.act > 0 ? compactUsd(r.act) : '—'}</td>
                 <td className="num px-3 py-2.5 text-right text-[12px] text-muted">
-                  {usd(r.annual)}
+                  {compactUsd(r.annual)}
                 </td>
                 <td className="num px-3 py-2.5 text-right text-[12px] text-muted">
                   {r.payback == null ? '—' : `${r.payback.toFixed(1)}y`}
@@ -251,8 +261,8 @@ export default function OverviewView({ data, pending, compact = false }) {
             pending={pending}
           />
           <div className="mt-5 grid grid-cols-3 gap-4 border-t border-line-soft pt-3">
-            <Stat label="Cost to enter" value={usd(top?.cost)} pending={pending} ch={8} />
-            <Stat label="Annual yield" value={usd(top?.annual)} pending={pending} ch={7} />
+            <Stat label="Cost to enter" value={compactUsd(top?.cost)} pending={pending} ch={8} />
+            <Stat label="Annual yield" value={compactUsd(top?.annual)} pending={pending} ch={7} />
             <Stat
               label="Payback"
               value={top?.payback == null ? '—' : `${top.payback.toFixed(1)}y`}
@@ -268,19 +278,19 @@ export default function OverviewView({ data, pending, compact = false }) {
 
         {/* Where the money comes from -- one split, two named sources. */}
         <Card eyebrow="Protocol revenue · all sources" sub="Cumulative, across tracked projects">
-          <Figure value={usd(totalRevenue)} pending={pending} />
+          <Figure value={compactUsd(totalRevenue)} pending={pending} />
           <div className="mt-5">
             <SplitBar
               a={revenue.amm}
               b={revenue.other}
               labelA="AMM fees"
               labelB="Other streams"
-              valueA={usd(revenue.amm)}
-              valueB={usd(revenue.other)}
+              valueA={compactUsd(revenue.amm)}
+              valueB={compactUsd(revenue.other)}
             />
           </div>
           <div className="mt-4 grid grid-cols-2 gap-4 border-t border-line-soft pt-3">
-            <Stat label="Locked in LP" value={usd(lpUsd)} pending={pending} ch={9} />
+            <Stat label="Locked in LP" value={compactUsd(lpUsd)} pending={pending} ch={9} />
             <Stat label="Token holders" value={num(holders)} pending={pending} ch={7} />
           </div>
         </Card>
@@ -371,7 +381,7 @@ export default function OverviewView({ data, pending, compact = false }) {
                     callbacks: {
                       label: (ctx) => {
                         const raw = ctx.raw || {};
-                        return `${raw.label || ctx.dataset.label}: cost ${usd(raw.x)} · yield ${usd(raw.y)}/yr`;
+                        return `${raw.label || ctx.dataset.label}: cost ${compactUsd(raw.x)} · yield ${compactUsd(raw.y)}/yr`;
                       },
                     },
                   },
@@ -379,7 +389,7 @@ export default function OverviewView({ data, pending, compact = false }) {
                 scales: {
                   x: {
                     type: scatterLog ? 'logarithmic' : 'linear',
-                    title: axisTitle(scatterLog ? 'Cost to enter (USD, log)' : 'Cost to enter (USD)'),
+                    title: axisTitle(scatterLog ? `Cost to enter (${readDisplay().ccy}, log)` : `Cost to enter (${readDisplay().ccy})`),
                     ticks: { color: '#94a3b8', callback: compactUsdTick },
                     grid: { color: '#1e2228' },
                   },

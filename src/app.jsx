@@ -25,6 +25,7 @@ import { PROJECT_BY_SLUG, TAB_BY_SLUG, DEFAULT_TAB, BONUS_LIVE, PROJECTS, isProj
 import { useProjectScrollSpy } from './lib/projectScroll';
 import { SkeletonCard } from './components/kit';
 import { applyYieldSample, useYieldSampleId, YieldSampleUrlSync } from './lib/yieldSample';
+import { DisplayCurrencySync } from './lib/money';
 import { tapeBooks } from './lib/eventTape';
 import { EventTape } from './components/EventTape';
 
@@ -156,6 +157,7 @@ export default function App() {
   }
 
   return (
+    <DisplayCurrencySync ethUsd={shown?.projects?.stonk?.market?.ethPriceUsd || 0}>
     <div className="flex min-h-full flex-col pb-8">
       <ScrollToTop />
       <YieldSampleUrlSync />
@@ -238,6 +240,7 @@ export default function App() {
         </Routes>
       </main>
     </div>
+    </DisplayCurrencySync>
   );
 }
 
