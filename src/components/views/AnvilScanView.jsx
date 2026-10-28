@@ -4,17 +4,8 @@ import { compactNum, compactUsd } from '../kit';
 import { explorerAddressUrl } from '../../lib/tba';
 import { fetchNftImage } from '../../lib/portfolioHistory';
 import { ANVIL_VAULTS, SCAN_INCLUDE, anvilVaultById, rankVaultRows, scanAnvilVault, snipeCostFor } from '../../lib/anvilScan';
-import { internStateLabel, loadFloorBook, scanFloorListings } from '../../lib/floorCheck';
+import { FLOOR_MAX, internStateLabel, loadFloorBook, scanFloorListings } from '../../lib/floorCheck';
 import { bestEntries } from '../../lib/entryPaths';
-
-const SCAN_PARTS = [
-  { id: 'tokens', label: 'Anvil tokens' },
-  { id: 'nfts', label: 'Anvil NFTs' },
-  { id: 'stars', label: 'Wall stars' },
-  { id: 'interns', label: 'Interns' },
-  { id: 'stocks', label: 'Stocks' },
-  { id: 'memes', label: 'Memes' },
-];
 
 const INTERN_MARK = { sigma: 'Σ', divergent: 'Δ' };
 const INTERN_LABEL = { canActivate: 'can activate', activated: 'activated', dormant: 'dormant' };
@@ -65,18 +56,23 @@ function formatSnipe(cost, unit) {
   return unit === 'eth' ? formatEth(cost.eth) : compactUsd(cost.usd);
 }
 
+function netCostUsd(tbaUsd, cost) {
+  if (!cost) return null;
+  return cost.usd - (Number(tbaUsd) || 0);
+}
+
 function formatNet(tbaUsd, cost, unit) {
-  if (!cost) return '—';
-  const netUsd = (Number(tbaUsd) || 0) - cost.usd;
+  const netUsd = netCostUsd(tbaUsd, cost);
+  if (netUsd == null) return '—';
   if (unit === 'eth') return formatEth(netUsd / cost.ethUsd);
   return compactUsd(netUsd);
 }
 
 function netTone(tbaUsd, cost) {
-  if (!cost) return 'text-slate-500';
-  const net = (Number(tbaUsd) || 0) - cost.usd;
-  if (net > 0) return 'text-emerald-300';
-  if (net < 0) return 'text-rose-300';
+  const net = netCostUsd(tbaUsd, cost);
+  if (net == null) return 'text-slate-500';
+  if (net < 0) return 'text-emerald-300';
+  if (net > 0) return 'text-rose-300';
   return 'text-slate-300';
 }
 
@@ -100,21 +96,44 @@ function entryInterns(path) {
   }).filter(Boolean).join(' · ');
 }
 
+function MoneyLine({ label, value, tone, strong }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4">
+      <span className={`text-[10px] uppercase tracking-wider ${strong ? 'text-slate-300' : 'text-slate-500'}`}>{label}</span>
+      <span className={`font-mono tabular-nums ${strong ? 'text-[14px]' : 'text-[12px]'} ${tone || 'text-slate-200'}`}>{value}</span>
+    </div>
+  );
+}
+
+function EntryPortrait({ path, nftCa }) {
+  if (path.imageUrl) {
+    return (
+      <span className="inline-flex h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-[#1e2228] bg-[#08090b]">
+        <img
+          src={path.imageUrl}
+          alt={`StonkBroker #${path.id}`}
+          className="h-full w-full object-contain"
+          style={{ imageRendering: 'pixelated' }}
+        />
+      </span>
+    );
+  }
+  return <VaultThumb nftCa={nftCa} tokenId={path.id} name="StonkBroker" size="md" eager />;
+}
+
 function EntryBoard({ paths, snipeReady, floorBusy, floorNote, nftCa }) {
   return (
     <section className="mb-6">
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h3 className="text-[15px] font-semibold text-white">Best entry</h3>
-          <p className="mt-1 text-[11px] text-slate-500">
-            Purchase cost is that path&apos;s price minus the wallet you get. The lowest number is the better way in.
-          </p>
-        </div>
-        {floorBusy ? <span className="font-mono text-[10px] text-slate-500">Reading OpenSea…</span> : null}
+      <div className="mb-3">
+        <h3 className="text-[15px] font-semibold text-white">Best entry</h3>
+        <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-slate-500">
+          Every listed StonkBroker is here, not only the cheap asks. A high price can still win when the wallet is full.
+          Net cost is the total you pay minus that wallet. You pay the total. The wallet is what you then own.
+        </p>
       </div>
       {floorNote ? <p className="mb-3 font-mono text-[12px] text-rose-400">{floorNote}</p> : null}
-      {!snipeReady && !floorBusy ? (
-        <p className="mb-3 text-[11px] text-slate-500">Scan the vault to put the Anvil snipe next to these OpenSea listings.</p>
+      {!snipeReady && !floorBusy && paths.length > 0 ? (
+        <p className="mb-3 text-[11px] text-slate-500">Scan the vault to put the Anvil snipe on this list.</p>
       ) : null}
       {paths.length > 0 ? (
         <div className="overflow-hidden rounded-xl border border-[#1e2228]">
@@ -124,44 +143,49 @@ function EntryBoard({ paths, snipeReady, floorBusy, floorNote, nftCa }) {
             const href = path.kind === 'opensea' && nftCa
               ? `https://opensea.io/item/robinhood/${nftCa}/${path.id}`
               : null;
+            const interns = entryInterns(path);
             return (
-              <div key={`${path.kind}-${path.id}`} className="flex flex-col gap-2 border-t border-[#1e2228] px-3 py-3 first:border-t-0 sm:flex-row sm:items-center">
-                <div className="sm:w-40">
-                  <span className={`mr-2 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${best ? 'bg-emerald-500/15 text-emerald-300' : 'bg-white/5 text-slate-400'}`}>
-                    {best ? 'Best' : path.kind === 'anvil' ? 'Anvil' : 'OpenSea'}
-                  </span>
-                  <a href={`/broker?id=${path.id}`} className="font-semibold text-white hover:underline">#{path.id}</a>
-                </div>
-                <div className="min-w-0 flex-1 text-[12px] text-slate-400">
-                  <div>
-                    {path.kind === 'anvil' ? 'Anvil specific buy' : 'OpenSea listing'}
-                    {path.ask > 0 && path.symbol ? ` · ${path.ask} ${path.symbol}` : ''}
-                  </div>
-                  {entryInterns(path) ? <div className="mt-0.5 truncate text-slate-500">{entryInterns(path)}</div> : null}
-                </div>
-                <div className="grid grid-cols-3 gap-3 sm:w-72 sm:shrink-0">
-                  <div>
-                    <div className="text-[10px] uppercase tracking-wider text-slate-500">Cost</div>
-                    <div className="font-mono text-[13px] text-slate-200">{compactUsd(path.costUsd)}</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] uppercase tracking-wider text-slate-500">Wallet</div>
-                    <div className="font-mono text-[13px] text-slate-200">{compactUsd(path.walletUsd)}</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] uppercase tracking-wider text-slate-500">You pay</div>
-                    <div className={`font-mono text-[13px] ${tone}`}>{compactUsd(path.purchaseUsd)}</div>
+              <div
+                key={`${path.kind}-${path.id}`}
+                className={`flex flex-col gap-3 border-t border-[#1e2228] px-3 py-3 first:border-t-0 lg:flex-row lg:items-center ${best ? 'bg-emerald-500/[0.04]' : ''}`}
+              >
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <EntryPortrait path={path} nftCa={nftCa} />
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${best ? 'bg-emerald-500/15 text-emerald-300' : 'bg-white/5 text-slate-400'}`}>
+                        {best ? 'Best' : path.kind === 'anvil' ? 'Anvil' : 'OpenSea'}
+                      </span>
+                      <a href={`/broker?id=${path.id}`} className="text-[15px] font-semibold text-white hover:underline">#{path.id}</a>
+                      {href ? (
+                        <a href={href} target="_blank" rel="noreferrer" className="font-mono text-[11px] text-slate-500 hover:text-white">
+                          OpenSea
+                        </a>
+                      ) : (
+                        <span className="text-[11px] text-slate-500">Specific buy</span>
+                      )}
+                    </div>
+                    {path.ask > 0 && path.symbol ? (
+                      <p className="mt-1 font-mono text-[11px] text-slate-500">{path.ask} {path.symbol} ask</p>
+                    ) : null}
+                    {interns ? <p className="mt-1 truncate text-[12px] text-slate-400">{interns}</p> : null}
                   </div>
                 </div>
-                {href ? (
-                  <a href={href} target="_blank" rel="noreferrer" className="font-mono text-[11px] text-slate-500 hover:text-white sm:w-16 sm:text-right">
-                    OpenSea
-                  </a>
-                ) : null}
+                <div className="w-full space-y-1 rounded-xl border border-[#1e2228] bg-[#08090b] px-3 py-2 lg:w-72 lg:shrink-0">
+                  {(path.lines || []).map((line, n) => (
+                    <MoneyLine key={`${line.label}-${n}`} label={line.label} value={compactUsd(line.usd)} />
+                  ))}
+                  <div className="my-1 border-t border-[#1e2228]" />
+                  <MoneyLine label="Total" value={compactUsd(path.costUsd)} strong />
+                  <MoneyLine label="Wallet" value={compactUsd(path.walletUsd)} />
+                  <MoneyLine label="Net cost" value={compactUsd(path.purchaseUsd)} tone={tone} strong />
+                </div>
               </div>
             );
           })}
         </div>
+      ) : floorBusy ? (
+        <div className="h-24 animate-pulse rounded-xl border border-[#1e2228] bg-[#12151a]" />
       ) : null}
     </section>
   );
@@ -181,10 +205,9 @@ export default function AnvilScanView({ data }) {
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState(null);
   const [steps, setSteps] = useState([]);
-  const [include, setInclude] = useState(SCAN_INCLUDE);
-  const [scannedInclude, setScannedInclude] = useState(SCAN_INCLUDE);
   const [costUnit, setCostUnit] = useState('usd');
   const [floorRows, setFloorRows] = useState(null);
+  const [feeParts, setFeeParts] = useState([]);
   const [floorBusy, setFloorBusy] = useState(false);
   const [floorNote, setFloorNote] = useState('');
   const [floorSweep, setFloorSweep] = useState(0);
@@ -195,6 +218,7 @@ export default function AnvilScanView({ data }) {
   useEffect(() => {
     if (projectId !== 'stonk') {
       setFloorRows(null);
+      setFeeParts([]);
       setFloorNote('');
       setFloorBusy(false);
       return undefined;
@@ -207,12 +231,16 @@ export default function AnvilScanView({ data }) {
     setFloorNote('');
     (async () => {
       try {
-        const book = await loadFloorBook(source, 10);
+        const book = await loadFloorBook(source, FLOOR_MAX);
         const next = await scanFloorListings(book.listings, source, book.floors);
-        if (!cancel) setFloorRows(next);
+        if (!cancel) {
+          setFloorRows(next);
+          setFeeParts(book.feeParts || []);
+        }
       } catch (err) {
         if (!cancel) {
           setFloorRows(null);
+          setFeeParts([]);
           setFloorNote(err?.shortMessage || err?.message || 'OpenSea sweep failed.');
         }
       } finally {
@@ -222,13 +250,12 @@ export default function AnvilScanView({ data }) {
     return () => { cancel = true; };
   }, [projectId, floorSweep, !!data]);
 
-  const run = async (id, parts) => {
+  const run = async (id) => {
     const ticket = ++runRef.current;
     setError('');
     setBusy(true);
     setProgress('Connecting to Robinhood Chain…');
     setSteps([]);
-    setScannedInclude(parts);
     setResult(null);
     setOpenId(null);
     const controller = new AbortController();
@@ -236,7 +263,7 @@ export default function AnvilScanView({ data }) {
     runRef.controller = controller;
     try {
       const next = await scanAnvilVault(id, data, {
-        include: parts,
+        include: SCAN_INCLUDE,
         signal: controller.signal,
         onProgress: ({ label }) => {
           if (ticket !== runRef.current) return;
@@ -279,7 +306,7 @@ export default function AnvilScanView({ data }) {
     next.set('project', projectId);
     setParams(next, { replace: true });
     if (projectId === 'stonk') setFloorSweep((n) => n + 1);
-    run(projectId, include);
+    run(projectId);
   };
 
   const rows = useMemo(() => {
@@ -292,7 +319,7 @@ export default function AnvilScanView({ data }) {
     return rankVaultRows(list, sort);
   }, [result, fundedOnly, query, sort]);
 
-  const showInterns = scannedInclude.interns && result?.vault?.id === 'stonk';
+  const showInterns = result?.vault?.id === 'stonk';
   const cost = useMemo(
     () => snipeCostFor(data, result?.vault, result?.snipe),
     [data, result],
@@ -303,10 +330,12 @@ export default function AnvilScanView({ data }) {
     return bestEntries({
       listings: floorRows,
       vaultRows,
-      snipeUsd: result?.vault?.id === 'stonk' ? cost?.usd : 0,
+      snipe: result?.vault?.id === 'stonk' ? cost : null,
+      feeParts,
     });
-  }, [projectId, floorRows, result, cost]);
+  }, [projectId, floorRows, feeParts, result, cost]);
   const stonkCa = anvilVaultById('stonk')?.nftCa;
+  const seaStatus = floorBusy ? 'run' : floorNote ? 'error' : floorRows ? 'done' : 'wait';
   const colSpan = (showInterns ? 5 : 4) + 2;
 
   const totals = useMemo(() => {
@@ -322,9 +351,8 @@ export default function AnvilScanView({ data }) {
     <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl">
       <div className="mb-6">
         <h2 className="text-lg md:text-xl font-bold text-white">Anvil + Floor</h2>
-        <p className="text-xs text-slate-400 mt-1">
-          For StonkBrokers, the board compares every live way in: an OpenSea listing of a specific NFT, and an Anvil specific buy of a vault NFT. Each path is its price minus the wallet that comes with it.
-          The vault table is still every NFT sitting in the AMM, priced from ETH, Anvil tokens, each Wall at its own star floor, then stocks, then memes.
+        <p className="mt-1 text-xs text-slate-400">
+          OpenSea listings and Anvil specific buys, ranked by net cost.
           The picture is that vault NFT, so you can pick the one you want. It loads as the row scrolls into view.
         </p>
       </div>
@@ -350,6 +378,10 @@ export default function AnvilScanView({ data }) {
         </button>
       </form>
 
+      {(projectId === 'stonk' || steps.length > 0) && (floorBusy || floorRows || floorNote || steps.length > 0) ? (
+        <ScanProgress steps={steps} label={progress} showSea={projectId === 'stonk'} seaStatus={seaStatus} />
+      ) : null}
+
       {projectId === 'stonk' ? (
         <EntryBoard
           paths={entries}
@@ -360,25 +392,6 @@ export default function AnvilScanView({ data }) {
         />
       ) : null}
 
-      <fieldset data-share-omit className="mb-4">
-        <legend className="mb-2 text-[10px] uppercase tracking-wider text-slate-500">Include in this scan</legend>
-        <div className="flex flex-wrap gap-2">
-          {SCAN_PARTS.map((part) => (
-            <IncludeToggle
-              key={part.id}
-              checked={!!include[part.id]}
-              onChange={() => setInclude((prev) => ({ ...prev, [part.id]: !prev[part.id] }))}
-            >
-              {part.label}
-            </IncludeToggle>
-          ))}
-        </div>
-        <p className="mt-2 text-[11px] text-slate-500">
-          Interns are the two companions of a StonkBroker. Uncheck Wall stars to price every Wall at the collection floor. Uncheck stocks to skip the long tail.
-        </p>
-      </fieldset>
-
-      {steps.length > 0 && <ScanChecklist steps={steps} label={progress} />}
       {result?.book?.throughBlock ? (
         <p className="mb-4 font-mono text-[11px] text-slate-500">
           Holdings from the index at block {Number(result.book.throughBlock).toLocaleString('en-US')}. ETH, stocks, memes, and the snipe quote are live.
@@ -386,10 +399,6 @@ export default function AnvilScanView({ data }) {
       ) : null}
       {error ? (
         <p className="mb-4 font-mono text-[12px] text-rose-400">{error}</p>
-      ) : steps.length === 0 ? (
-        <p className="mb-4 font-mono text-[11px] text-slate-600">
-          Pick a project and scan its AMM. Stocks are priced before memes, and each one checks off as it finishes.
-        </p>
       ) : null}
 
       {result && (
@@ -422,8 +431,8 @@ export default function AnvilScanView({ data }) {
           </div>
           {cost && (
             <p className="mb-3 text-[11px] text-slate-500">
-              Snipe cost is {Math.round(cost.tokens).toLocaleString('en-US')} {cost.ticker} plus {cost.feeBps / 100}% in ETH.
-              Net is the TBA value minus that cost.
+              Anvil total is {Math.round(cost.tokens).toLocaleString('en-US')} {cost.ticker} plus the {cost.feeBps / 100}% ETH fee.
+              Net cost is that total minus the wallet.
             </p>
           )}
 
@@ -437,8 +446,8 @@ export default function AnvilScanView({ data }) {
                     <th className="px-3 py-2 font-medium">TBA value</th>
                     {showInterns && <th className="px-3 py-2 font-medium">Interns</th>}
                     <th className="px-3 py-2 font-medium">In the wallet</th>
-                    <th className="px-3 py-2 font-medium">Cost</th>
-                    <th className="px-3 py-2 font-medium">Net</th>
+                    <th className="px-3 py-2 font-medium">Total</th>
+                    <th className="px-3 py-2 font-medium">Net cost</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -480,7 +489,12 @@ export default function AnvilScanView({ data }) {
                           </a>
                         </td>
                         <td className="px-3 py-2 font-mono text-slate-200" title={costTitle(cost)}>
-                          {formatSnipe(cost, costUnit)}
+                          <div>{formatSnipe(cost, costUnit)}</div>
+                          {cost ? (
+                            <div className="text-[10px] font-normal text-slate-500">
+                              {Math.round(cost.tokens).toLocaleString('en-US')} {cost.ticker} + {cost.feeBps / 100}% fee
+                            </div>
+                          ) : null}
                         </td>
                         <td className={`px-3 py-2 font-mono ${netTone(row.usd, cost)}`} title={costTitle(cost)}>
                           {formatNet(row.usd, cost, costUnit)}
@@ -535,67 +549,76 @@ export default function AnvilScanView({ data }) {
   );
 }
 
-function ScanChecklist({ steps, label }) {
-  const done = steps.filter((step) => step.status === 'done').length;
-  const pct = steps.length ? (done / steps.length) * 100 : 0;
-  const groups = [];
-  for (const step of steps) {
-    const name = step.group || 'Scan';
-    let bucket = groups.find((group) => group.name === name);
-    if (!bucket) {
-      bucket = { name, steps: [] };
-      groups.push(bucket);
-    }
-    bucket.steps.push(step);
+function headingStatus(steps, match) {
+  const mine = steps.filter(match);
+  if (!mine.length) return 'wait';
+  if (mine.every((step) => step.status === 'done')) return 'done';
+  if (mine.some((step) => step.status === 'run' || step.status === 'done')) return 'run';
+  return 'wait';
+}
+
+function ScanProgress({ steps, label, showSea, seaStatus }) {
+  const headings = [];
+  if (showSea) headings.push({ id: 'opensea', label: 'OpenSea', status: seaStatus });
+  if (steps.length) {
+    headings.push(
+      { id: 'vault', label: 'Vault', status: headingStatus(steps, (step) => step.id === 'vault' || step.id === 'tba') },
+      { id: 'tokens', label: 'Anvil tokens', status: headingStatus(steps, (step) => step.id === 'eth' || step.id.startsWith('tok:')) },
+      { id: 'nfts', label: 'Anvil NFTs', status: headingStatus(steps, (step) => step.id.startsWith('nft:')) },
+      { id: 'stars', label: 'Wall stars', status: headingStatus(steps, (step) => step.id === 'stars') },
+      { id: 'interns', label: 'Interns', status: headingStatus(steps, (step) => step.id === 'interns') },
+      { id: 'stocks', label: 'Stocks', status: headingStatus(steps, (step) => step.id.startsWith('stock:')) },
+      { id: 'memes', label: 'Memes', status: headingStatus(steps, (step) => step.id.startsWith('meme:')) },
+    );
   }
+  const units = steps.length + (showSea ? 1 : 0);
+  const done = steps.filter((step) => step.status === 'done').length + (seaStatus === 'done' ? 1 : 0);
+  const running = seaStatus === 'run' || steps.some((step) => step.status === 'run');
+  const pct = units ? Math.max((done / units) * 100, running && done === 0 ? 8 : 0) : 0;
 
   return (
     <div className="mb-4 rounded-xl border border-[#1e2228] bg-[#08090b] p-3">
       <div className="mb-2 flex items-baseline justify-between gap-3">
-        <p className="text-[12px] text-slate-300">{label || 'Scanning'}</p>
-        <p className="font-mono text-[11px] text-slate-400">{done} / {steps.length}</p>
+        <p className="text-[12px] text-slate-300">{label || (running ? 'Scanning' : 'Scan')}</p>
+        <p className="font-mono text-[11px] text-slate-400">{done} / {units || headings.length}</p>
       </div>
-      <div className="mb-3 h-2 overflow-hidden rounded-full bg-[#1e2228]">
-        <div className="h-full rounded-full bg-emerald-400 transition-[width] duration-300" style={{ width: `${pct}%` }} />
+      <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-[#1e2228]">
+        <div className="h-full rounded-full bg-emerald-400 transition-[width] duration-300" style={{ width: `${Math.min(pct, 100)}%` }} />
       </div>
-      <div className="max-h-40 space-y-2 overflow-y-auto">
-        {groups.map((group) => (
-          <div key={group.name}>
-            <p className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">{group.name}</p>
-            <div className="flex flex-wrap gap-1">
-              {group.steps.map((step) => (
-                <StepChip key={step.id} step={step} />
-              ))}
-            </div>
-          </div>
+      <div className="flex flex-wrap gap-1.5">
+        {headings.map((heading) => (
+          <HeadingCheck key={heading.id} heading={heading} />
         ))}
       </div>
     </div>
   );
 }
 
-function StepChip({ step }) {
-  const done = step.status === 'done';
-  const running = step.status === 'run';
+function HeadingCheck({ heading }) {
+  const done = heading.status === 'done';
+  const running = heading.status === 'run';
+  const failed = heading.status === 'error';
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] leading-none ${
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[11px] leading-none ${
         done
           ? 'border-emerald-700/60 text-emerald-300'
           : running
             ? 'border-blue-500/50 text-blue-200'
-            : 'border-[#1e2228] text-slate-500'
+            : failed
+              ? 'border-rose-500/50 text-rose-300'
+              : 'border-[#1e2228] text-slate-500'
       }`}
     >
       <span
-        className={`inline-flex h-3 w-3 shrink-0 items-center justify-center rounded-[3px] border text-[8px] ${
+        className={`inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] border text-[9px] ${
           done ? 'border-emerald-400 bg-emerald-400 text-[#04140c]' : 'border-current'
         }`}
         aria-hidden="true"
       >
         {done ? '✓' : ''}
       </span>
-      {step.label}
+      {heading.label}
     </span>
   );
 }
@@ -715,14 +738,15 @@ function VaultThumb({ nftCa, tokenId, name, size = 'sm', eager = false }) {
     };
   }, [key, nftCa, tokenId, eager]);
 
-  const box = size === 'lg' ? 'h-28 w-28 rounded-2xl' : 'h-12 w-12 rounded-lg';
+  const box = size === 'lg' ? 'h-28 w-28 rounded-2xl' : size === 'md' ? 'h-16 w-16 rounded-xl' : 'h-12 w-12 rounded-lg';
   return (
     <span ref={ref} className={`inline-flex shrink-0 overflow-hidden border border-[#1e2228] bg-[#08090b] ${box}`}>
       {src ? (
         <img
           src={src}
           alt={`${name || 'NFT'} #${tokenId}`}
-          className="h-full w-full object-cover"
+          className="h-full w-full object-contain"
+          style={{ imageRendering: 'pixelated' }}
           onError={() => {
             pictureCache.set(key, '');
             setSrc('');
@@ -756,29 +780,6 @@ function internTone(state) {
   if (state === 'canActivate') return 'text-emerald-300';
   if (state === 'activated') return 'text-sky-300';
   return 'text-amber-300';
-}
-
-function IncludeToggle({ checked, onChange, children }) {
-  return (
-    <button
-      type="button"
-      aria-pressed={checked}
-      onClick={onChange}
-      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12px] font-semibold ${
-        checked ? 'border-blue-500/50 text-white' : 'border-[#1e2228] text-slate-500'
-      }`}
-    >
-      <span
-        className={`inline-flex h-3.5 w-3.5 items-center justify-center rounded-[3px] border text-[9px] ${
-          checked ? 'border-blue-400 bg-blue-500 text-white' : 'border-current'
-        }`}
-        aria-hidden="true"
-      >
-        {checked ? '✓' : ''}
-      </span>
-      {children}
-    </button>
-  );
 }
 
 function SortButton({ active, onClick, children }) {

@@ -114,11 +114,15 @@ function NavIcon({ name }) {
   if (name === 'anvil') {
     return (
       <svg viewBox="0 0 24 24" aria-hidden="true" {...pen}>
-        <path d="M3 10.5h12.2c1.6 0 3-.6 4.3-1.8H8" />
-        <path d="M5.2 10.5v3.1h12.2v-3.1" />
-        <path d="M8.2 13.6v2.1h6.2v-2.1" />
-        <path d="M6 17.6h11.2" />
-        <path d="M7.4 19.6h8.4" />
+        <path d="M16.6 2.6 10.4 11.6" />
+        <path d="M14.6 1.7 16.8 2.5 15.4 4.4" />
+        <path d="M16.2 2.2 18.2 3.4" />
+        <path d="M17.2 3.4 18.8 5" />
+        <path d="M3.2 12.4h11.6c1.5 0 2.8-.5 4-1.6" />
+        <path d="M5 12.4v2.7h11.8v-2.7" />
+        <path d="M7.4 15.1v1.8h6.6v-1.8" />
+        <path d="M5.6 18.5h11.2" />
+        <path d="M6.8 20.5h8.8" />
       </svg>
     );
   }

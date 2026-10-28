@@ -16,7 +16,7 @@ import {
 const INDEX = (import.meta.env?.VITE_GG_INDEX_URL || 'https://index.ggservices.dev').replace(/\/+$/, '');
 
 export const FLOOR_MIN = 5;
-export const FLOOR_MAX = 10;
+export const FLOOR_MAX = 100;
 export const STONK_COLLECTION = 'stonkbrokers-434284142';
 
 // Activation contracts are not on the hourly StonkBrokers config. These are
@@ -91,6 +91,13 @@ const LISTING_QUERY = (limit) => `query {
     }
   }
 }`;
+
+export function feePartsFromPayload(rows) {
+  return (Array.isArray(rows) ? rows : []).map((row) => ({
+    label: String(row?.label || 'Fee'),
+    bps: Number(row?.bps) || 0,
+  })).filter((row) => row.bps > 0);
+}
 
 export function parseFloorCount(raw) {
   const n = Number(raw);
@@ -218,6 +225,7 @@ export async function loadFloorBook(data, limit) {
     return {
       listings,
       floors: liveFloorIndex(data, body.floors),
+      feeParts: feePartsFromPayload(body?.feeParts),
       fetchedAt: body?.fetchedAt || '',
       live: true,
     };
@@ -227,6 +235,7 @@ export async function loadFloorBook(data, limit) {
     return {
       listings: baked,
       floors: liveFloorIndex(data, []),
+      feeParts: [],
       fetchedAt: data?.lastUpdated || '',
       live: false,
     };

@@ -63,7 +63,7 @@ import { parseBrokerId } from '../src/lib/brokerScan';
 import { internAvailability, liveFloorIndex, parseFloorCount, priceHoldings, purchaseCost, stonkBrokerFloor, walletUsd } from '../src/lib/floorCheck';
 import { ANVIL_VAULTS, internRowState, internStatusLine, predictTbaAddress, rankVaultRows, rowsFromVaultBook, snipeCostFor, wallFloorEth, wallStars } from '../src/lib/anvilScan';
 import { cheapestWallEth, listedSeat, mixUsd, revenueRows, snipeSeatUsd } from '../src/lib/seats';
-import { bestEntries } from '../src/lib/entryPaths';
+import { askBreakdown, bestEntries } from '../src/lib/entryPaths';
 import { isProjectLive } from '../src/lib/routes';
 import { typicalNightshadesSeat } from '../src/lib/nightshades';
 import { parseYieldSample } from '../src/lib/yieldSample';
@@ -957,8 +957,12 @@ for (const [name, View, props] of VIEWS) {
     ],
     snipeUsd: 50,
   });
+  const split = askBreakdown(1890, [{ label: 'OpenSea', bps: 100 }, { label: 'Creator', bps: 333 }, { label: 'Creator', bps: 333 }]);
+  const splitSum = split.lines.reduce((sum, line) => sum + line.usd, 0);
   if (
-    parseFloorCount('4') !== 10 || parseFloorCount('7') !== 7 || net !== -90
+    parseFloorCount('4') !== 100 || parseFloorCount('7') !== 7 || net !== -90
+    || Math.abs(split.itemUsd - 1745.226) > 0.001 || Math.abs(splitSum - 1890) > 0.001
+    || split.lines[1]?.label !== 'OpenSea 1%'
     || overlaid['0xabc'] !== 4396 || overlaid['0xdef'] !== 7 || floor.usd !== 110
     || states.join() !== 'dormant,available,activated'
     || ranked[0]?.kind !== 'anvil' || ranked[0]?.id !== 3 || ranked[0]?.purchaseUsd !== -40
