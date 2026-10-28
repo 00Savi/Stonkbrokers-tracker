@@ -9,7 +9,7 @@ import { CopyControl } from '../CopyControl';
 import { PAIR_COLORS, STREAM_COLORS } from '../../lib/charts';
 import { SliceChart } from '../SliceChart';
 import { PROJECTS } from '../../lib/routes';
-import { navNftScanTargets, portfolioProjectLabel } from '../../lib/portfolioScan';
+import { navNftScanTargets, navTokenScanTargets, portfolioProjectLabel } from '../../lib/portfolioScan';
 import { formatMoney, moneyTick, readDisplay, useDisplayCurrency } from '../../lib/money';
 import { formatLabels } from '../../lib/dates';
 import {
@@ -92,7 +92,9 @@ const formatAmount = (val) =>
 const HEADER_NFT_ART = new Set(['Stonkbroker.png', 'Intern.svg', 'logo.png', 'Yardkeepers.png', 'wall.png']);
 
 function officialLogoSrc(asset) {
-  const meta = PROJECTS.find((p) => p.key === asset.projectKey);
+  const raw = String(asset.projectKey || '').replace(/:token$/, '');
+  const metaKey = raw.startsWith('nightshades:') ? 'nightshades' : raw;
+  const meta = PROJECTS.find((p) => p.key === metaKey);
   const file = meta?.logo || asset.logo;
   if (!file || HEADER_NFT_ART.has(file)) return '';
   return `/${file}`;
@@ -213,7 +215,7 @@ function portfolioCsvRows(grouped) {
     if (asset.tokenPosition) {
       rows.push([
         asset.project,
-        '',
+        formatAmount(asset.balance),
         'token',
         asset.wallet || '',
         asset.holdStartTs ? formatDate(asset.holdStartTs) : '',
@@ -585,19 +587,14 @@ export default function PortfolioView({ data }) {
         ownedAssets.push(row.asset);
       }
 
-      setScanProgress('Reading token balances…');
+      setScanProgress('Reading project token balances…');
 
       const tokenJobs = [];
-      for (const [pKey, pData] of Object.entries(data.projects || {})) {
-        const kind = pData.config?.kind;
-        if (kind !== 'cashflow' && kind !== 'vault') continue;
-        const ca = pData.config?.tokenCa;
-        if (!ca) continue;
-        for (const wallet of wallets) tokenJobs.push({ pKey, pData, wallet, ca });
+      for (const target of navTokenScanTargets(data)) {
+        for (const wallet of wallets) tokenJobs.push({ ...target, wallet });
       }
 
-      const tokenChunks = await Promise.all(
-        tokenJobs.map(async ({ pKey, pData, wallet, ca }) => {
+      const tokenChunks = await mapLimited(tokenJobs, 4, async ({ pKey, pData, wallet, ca }) => {
           const token = new ethers.Contract(ca, erc20Abi, provider);
           let decimals = 18;
           try {
@@ -622,13 +619,14 @@ export default function PortfolioView({ data }) {
               holdStart = 0;
             }
             const earnedValue = earnedUsdForTokenPosition(pData, amount, holdStart);
+            const tokenKey = `${pKey}:token`;
             return {
               floor: value,
               yield: yieldValue,
               earned: earnedValue,
               asset: {
-                projectKey: pKey,
-                project: projectName(pKey, pData.config.ticker),
+                projectKey: tokenKey,
+                project: projectName(tokenKey, pData.config.ticker),
                 ticker: pData.config.ticker,
                 logo: pData.config.logo || 'Stonkbroker.png',
                 wallet,
@@ -646,8 +644,7 @@ export default function PortfolioView({ data }) {
             console.error('Token read error', e);
             return null;
           }
-        })
-      );
+      });
 
       for (const row of tokenChunks) {
         if (!row) continue;
@@ -868,12 +865,17 @@ export default function PortfolioView({ data }) {
           const assetRoi = mode === 'history'
             ? roiAgainst(asset.earnedValue, entryCost)
             : roiAgainst((asset.yieldValue || 0) * forecastYears, asset.floorValue);
+          const spotOnly = asset.tokenPosition && !(Number(asset.yieldValue) > 0);
           return {
             name: `${asset.project} (${asset.tokenPosition ? formatAmount(asset.balance) : `${asset.balance} owned`})`,
-            detail: mode === 'history'
+            detail: spotOnly
+              ? `Spot ${formatCurrency(asset.floorValue)}`
+              : mode === 'history'
               ? `Floor today ${formatCurrency(asset.floorValue)} · Entry ${entryCost > 0 ? formatCurrency(entryCost) : '—'} · Since entry ${formatRoi(assetRoi, 1)}`
               : `Floor today ${formatCurrency(asset.floorValue)} · ${forecastYears}y ${formatRoi(assetRoi, 1)}`,
-            value: mode === 'history'
+            value: spotOnly
+              ? formatCurrency(asset.floorValue)
+              : mode === 'history'
               ? formatCurrency(asset.earnedValue || 0)
               : `+ ${formatCurrency((asset.yieldValue || 0) * forecastYears)}`,
             thumb: thumb.src || officialLogoSrc(asset),
@@ -900,9 +902,10 @@ export default function PortfolioView({ data }) {
             Portfolio tracker
           </h2>
           <p className="text-xs text-slate-400 mt-1">
-            Comma-separated wallets. Forecast uses current yield. History counts drops after you
-            received the NFT (and after activation). Basis is the inbound mint or purchase ETH;
-            activation tokens are priced from the daily close nearest that date.
+            Comma-separated wallets. NFTs use current yield. Dashboard project tokens (STONK, MANCER,
+            and the rest) are marked at spot. History counts drops after you received the NFT (and
+            after activation). Basis is the inbound mint or purchase ETH; activation tokens are priced
+            from the daily close nearest that date.
           </p>
         </div>
       </div>
@@ -1029,7 +1032,7 @@ export default function PortfolioView({ data }) {
             </div>
           )}
           {!hasHoldings ? (
-            <p className="text-sm text-slate-400">No ecosystem NFTs found in the provided wallet(s).</p>
+            <p className="text-sm text-slate-400">No ecosystem NFTs or project tokens found in the provided wallet(s).</p>
           ) : (
             <>
           <nav aria-label="In this scan" className="mb-4 flex flex-wrap items-center gap-1.5">
@@ -1090,6 +1093,9 @@ export default function PortfolioView({ data }) {
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3 sm:p-5 shadow-inner">
               <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Total Floor Value</p>
               <p className="text-xl md:text-2xl font-extrabold text-white">{formatCurrency(results.floorUsd)}</p>
+              {grouped.some((a) => a.tokenPosition) && (
+                <p className="text-[10px] text-slate-500 mt-1">NFT floors plus project-token spot</p>
+              )}
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3 sm:p-5 shadow-inner">
               <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Cost at entry</p>
@@ -1250,7 +1256,7 @@ export default function PortfolioView({ data }) {
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {grouped.length === 0 ? (
-              <p className="text-xs text-slate-400 lg:col-span-2">No ecosystem NFTs found in the provided wallet(s).</p>
+              <p className="text-xs text-slate-400 lg:col-span-2">No ecosystem NFTs or project tokens found in the provided wallet(s).</p>
             ) : (
               grouped.map((asset) => {
                 const open = !!openProjects[asset.projectKey];
@@ -1259,6 +1265,7 @@ export default function PortfolioView({ data }) {
                   ? roiAgainst(asset.earnedValue, entryCost)
                   : roiAgainst((asset.yieldValue || 0) * forecastYears, asset.floorValue);
                 const payback = asset.tokenPosition ? null : paybackMonths(entryCost, asset.yieldValue);
+                const spotOnly = asset.tokenPosition && !(Number(asset.yieldValue) > 0);
                 return (
                 <Copyable key={asset.projectKey} id={`holding-${asset.projectKey}`} className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 shadow-inner">
                   <button
@@ -1295,7 +1302,9 @@ export default function PortfolioView({ data }) {
                           </span>
                         ) : (
                           <span className="text-emerald-400">
-                            {mode === 'history'
+                            {spotOnly
+                              ? formatCurrency(asset.floorValue)
+                              : mode === 'history'
                               ? formatCurrency(asset.earnedValue || 0)
                               : `+ ${formatCurrency((asset.yieldValue || 0) * forecastYears)}`}
                           </span>
@@ -1307,12 +1316,18 @@ export default function PortfolioView({ data }) {
                         </p>
                       )}
                       <p className="text-[10px] text-slate-400 mt-1">
-                        Floor today {formatCurrency(asset.floorValue)}
-                        {mode === 'history' && !asset.tokenPosition && entryCost > 0
-                          ? ` · Entry ${formatCurrency(entryCost)}`
-                          : ''}
-                        {' · '}{mode === 'history' ? 'Since entry' : 'ROI'} {formatRoi(assetRoi, 1)}
-                        {payback != null ? ` · Payback ${formatPaybackMonths(payback)}` : ''}
+                        {spotOnly
+                          ? `Spot value · seat yield stays on the NFTs`
+                          : (
+                            <>
+                              Floor today {formatCurrency(asset.floorValue)}
+                              {mode === 'history' && !asset.tokenPosition && entryCost > 0
+                                ? ` · Entry ${formatCurrency(entryCost)}`
+                                : ''}
+                              {' · '}{mode === 'history' ? 'Since entry' : 'ROI'} {formatRoi(assetRoi, 1)}
+                              {payback != null ? ` · Payback ${formatPaybackMonths(payback)}` : ''}
+                            </>
+                          )}
                       </p>
                     </div>
                     <svg
@@ -1327,9 +1342,15 @@ export default function PortfolioView({ data }) {
 
                   {open && asset.tokenPosition && (
                     <p className="text-[11px] text-slate-500 mt-3 border-t border-[#1e2228] pt-3">
-                      Token position. History counts this wallet&apos;s share of protocol cash-flow after the
-                      current hold started
-                      {asset.holdStartTs ? ` (${formatDate(asset.holdStartTs)})` : ''}.
+                      {spotOnly
+                        ? 'Wallet balance of the project token, marked at the dashboard price. Seat yield stays on the NFTs.'
+                        : (
+                          <>
+                            Token position. History counts this wallet&apos;s share of protocol cash-flow after the
+                            current hold started
+                            {asset.holdStartTs ? ` (${formatDate(asset.holdStartTs)})` : ''}.
+                          </>
+                        )}
                     </p>
                   )}
 

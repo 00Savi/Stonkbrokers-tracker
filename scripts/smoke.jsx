@@ -49,7 +49,7 @@ import { dateKey } from '../src/lib/dates';
 import { PROJECTS, tabsForProject } from '../src/lib/routes';
 import { activationTokenCostUsd, nftArtFromUri, tokenPriceAtTs } from '../src/lib/portfolioHistory';
 import { attributedStonkBurn, dailyAttributedBurnSeries, firstInternActivationDay } from '../src/lib/burn';
-import { navNftScanTargets } from '../src/lib/portfolioScan';
+import { navNftScanTargets, navTokenScanTargets } from '../src/lib/portfolioScan';
 import { windowLen } from '../src/lib/yieldHistory';
 import { CHART_WINDOWS, CHART_INTERVALS, DEFAULT_CHART_WINDOW, DEFAULT_CHART_INTERVAL } from '../src/lib/chartWindow';
 import { activityDatasets, divergingAxis, levelAxis, pointValue, xTicksFor } from '../src/lib/charts';
@@ -608,6 +608,24 @@ for (const [name, View, props] of VIEWS) {
     console.error(`FAIL  portfolio scan missing core NFT keys ${keys.join(',')}`);
   } else {
     console.log(`ok    portfolio scan ${keys.length} collections incl. 4 Nightshades factions`);
+  }
+  const tokens = navTokenScanTargets(snapshot);
+  const tokenKeys = tokens.map((t) => t.pKey);
+  const wantTokens = ['stonk', 'mancer', 'tickeryard', 'cardwall', 'mutualfun', 'oakmont', ...factions];
+  const missingTokens = wantTokens.filter((k) => !tokenKeys.includes(k));
+  const cas = tokens.map((t) => t.ca.toLowerCase());
+  const stonkCa = snapshot.projects.stonk.config.tokenCa.toLowerCase();
+  if (missingTokens.length) {
+    failed++;
+    console.error(`FAIL  portfolio token scan missing ${missingTokens.join(',')}`);
+  } else if (tokenKeys.includes('interns') || tokenKeys.includes('index') || tokenKeys.includes('printer') || tokenKeys.includes('coattail')) {
+    failed++;
+    console.error(`FAIL  portfolio token scan includes a non-dashboard or duplicate book ${tokenKeys.join(',')}`);
+  } else if (cas.filter((ca) => ca === stonkCa).length !== 1) {
+    failed++;
+    console.error('FAIL  STONK token counted more than once');
+  } else {
+    console.log(`ok    portfolio token scan ${tokenKeys.length} dashboard tokens, STONK once`);
   }
   if (isProjectLive(PROJECTS.find((p) => p.key === 'coattail')) || isProjectLive(PROJECTS.find((p) => p.key === 'printer'))) {
     failed++;

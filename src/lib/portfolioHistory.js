@@ -353,11 +353,20 @@ function daysFromTs(startTs, through = utcIso()) {
   return out;
 }
 
+/** `stonk:token` and `nightshades:ghosts` both resolve to the book that holds their history. */
+export function portfolioBook(data, projectKey) {
+  const key = String(projectKey || '').replace(/:token$/, '');
+  if (key.startsWith('nightshades:')) {
+    return data?.projects?.nightshades?.factions?.[key.split(':')[1]] || null;
+  }
+  return data?.projects?.[key] || null;
+}
+
 /** Wallet daily USD drops after each NFT / token position started earning. */
 export function walletDailyDrops(ownedAssets, data) {
   const byDate = {};
   for (const asset of ownedAssets || []) {
-    const pData = data?.projects?.[asset.projectKey];
+    const pData = portfolioBook(data, asset.projectKey);
     if (!pData) continue;
 
     if (asset.tokenPosition) {
@@ -464,7 +473,7 @@ export function portfolioCashMarkSeries(ownedAssets, data) {
   const seats = [];
   for (const asset of ownedAssets || []) {
     if (asset?.tokenPosition) continue;
-    const project = data?.projects?.[asset.projectKey];
+    const project = portfolioBook(data, asset.projectKey);
     if (!project) continue;
     const snaps = snapsByDay(project);
     for (const nft of asset.nfts || []) {

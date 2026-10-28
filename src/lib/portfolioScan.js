@@ -3,8 +3,14 @@ import { NIGHTSHADES_FACTION_META, factionLabel } from './nightshades';
 
 export function portfolioProjectLabel(key, ticker) {
   const k = String(key || '');
-  if (k.startsWith('nightshades:')) return `Nightshades ${factionLabel(k.split(':')[1])}`;
-  return PROJECTS.find((p) => p.key === key)?.name || ticker;
+  const token = k.endsWith(':token');
+  const base = token ? k.slice(0, -':token'.length) : k;
+  if (base.startsWith('nightshades:')) {
+    const name = `Nightshades ${factionLabel(base.split(':')[1])}`;
+    return token ? `${name} token` : name;
+  }
+  const name = PROJECTS.find((p) => p.key === base)?.name || ticker;
+  return token ? `${name} token` : name;
 }
 
 /**
@@ -40,6 +46,49 @@ export function navNftScanTargets(data) {
     }
     if (!pData.config?.nftCa) continue;
     targets.push({ pKey, pData });
+  }
+  return targets;
+}
+
+function pushToken(targets, seen, pKey, pData) {
+  const raw = String(pData?.config?.tokenCa || '');
+  const ca = raw.toLowerCase();
+  if (!/^0x[a-f0-9]{40}$/.test(ca) || seen.has(ca)) return;
+  seen.add(ca);
+  targets.push({ pKey, pData, ca: raw });
+}
+
+/**
+ * Project tokens a portfolio scan should read. Live dashboard projects only.
+ * Interns uses the StonkBrokers token, so that contract is counted once.
+ */
+export function navTokenScanTargets(data) {
+  const targets = [];
+  const seen = new Set();
+  for (const meta of PROJECTS) {
+    if (!isProjectLive(meta)) continue;
+    const pData = data?.projects?.[meta.key];
+    if (!pData) continue;
+    if (meta.key === 'nightshades') {
+      for (const f of NIGHTSHADES_FACTION_META) {
+        const slice = pData.factions?.[f.id];
+        if (!slice) continue;
+        pushToken(targets, seen, `nightshades:${f.id}`, {
+          ...slice,
+          config: {
+            ...slice.config,
+            ticker: slice.config?.ticker || f.ticker,
+            logo: slice.config?.logo || pData.config?.logo,
+          },
+          market: {
+            ...slice.market,
+            ethPriceUsd: slice.market?.ethPriceUsd || pData.market?.ethPriceUsd,
+          },
+        });
+      }
+      continue;
+    }
+    pushToken(targets, seen, meta.key, pData);
   }
   return targets;
 }
