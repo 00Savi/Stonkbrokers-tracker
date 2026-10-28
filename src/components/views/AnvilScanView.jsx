@@ -121,7 +121,7 @@ function EntryPortrait({ path, nftCa }) {
   return <VaultThumb nftCa={nftCa} tokenId={path.id} name="StonkBroker" size="md" eager />;
 }
 
-function EntryBoard({ paths, snipeReady, floorBusy, floorNote, nftCa }) {
+function EntryBoard({ paths, snipeReady, floorBusy, floorNote, pricingTail, nftCa }) {
   return (
     <section className="mb-6">
       <div className="mb-3">
@@ -132,6 +132,7 @@ function EntryBoard({ paths, snipeReady, floorBusy, floorNote, nftCa }) {
         </p>
       </div>
       {floorNote ? <p className="mb-3 font-mono text-[12px] text-rose-400">{floorNote}</p> : null}
+      {pricingTail ? <p className="mb-3 text-[11px] text-slate-500">Stocks and memes are still pricing. The order can move.</p> : null}
       {!snipeReady && !floorBusy && paths.length > 0 ? (
         <p className="mb-3 text-[11px] text-slate-500">Scan the vault to put the Anvil snipe on this list.</p>
       ) : null}
@@ -142,7 +143,9 @@ function EntryBoard({ paths, snipeReady, floorBusy, floorNote, nftCa }) {
             const tone = path.purchaseUsd < 0 ? 'text-emerald-300' : 'text-white';
             const href = path.kind === 'opensea' && nftCa
               ? `https://opensea.io/item/robinhood/${nftCa}/${path.id}`
-              : null;
+              : path.kind === 'anvil'
+                ? `https://stonkbrokers.io/marketplace?tab=trade&side=buy&id=${path.id}`
+                : null;
             const interns = entryInterns(path);
             return (
               <div
@@ -154,16 +157,14 @@ function EntryBoard({ paths, snipeReady, floorBusy, floorNote, nftCa }) {
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${best ? 'bg-emerald-500/15 text-emerald-300' : 'bg-white/5 text-slate-400'}`}>
-                        {best ? 'Best' : path.kind === 'anvil' ? 'Anvil' : 'OpenSea'}
+                        {best ? 'Best' : path.kind === 'anvil' ? 'Snipe' : 'OpenSea'}
                       </span>
                       <a href={`/broker?id=${path.id}`} className="text-[15px] font-semibold text-white hover:underline">#{path.id}</a>
                       {href ? (
                         <a href={href} target="_blank" rel="noreferrer" className="font-mono text-[11px] text-slate-500 hover:text-white">
-                          OpenSea
+                          {path.kind === 'anvil' ? 'Snipe' : 'OpenSea'}
                         </a>
-                      ) : (
-                        <span className="text-[11px] text-slate-500">Specific buy</span>
-                      )}
+                      ) : null}
                     </div>
                     {path.ask > 0 && path.symbol ? (
                       <p className="mt-1 font-mono text-[11px] text-slate-500">{path.ask} {path.symbol} ask</p>
@@ -232,15 +233,14 @@ export default function AnvilScanView({ data }) {
     (async () => {
       try {
         const book = await loadFloorBook(source, FLOOR_MAX);
-        const next = await scanFloorListings(book.listings, source, book.floors);
-        if (!cancel) {
-          setFloorRows(next);
-          setFeeParts(book.feeParts || []);
-        }
+        if (!cancel) setFeeParts(book.feeParts || []);
+        const next = await scanFloorListings(book.listings, source, book.floors, {
+          onPartial: (rows) => { if (!cancel) setFloorRows(rows); },
+        });
+        if (!cancel) setFloorRows(next);
       } catch (err) {
         if (!cancel) {
-          setFloorRows(null);
-          setFeeParts([]);
+          setFloorRows((prev) => (prev?.length ? prev : null));
           setFloorNote(err?.shortMessage || err?.message || 'OpenSea sweep failed.');
         }
       } finally {
@@ -335,7 +335,8 @@ export default function AnvilScanView({ data }) {
     });
   }, [projectId, floorRows, feeParts, result, cost]);
   const stonkCa = anvilVaultById('stonk')?.nftCa;
-  const seaStatus = floorBusy ? 'run' : floorNote ? 'error' : floorRows ? 'done' : 'wait';
+  const seaStatus = floorBusy ? 'run' : floorNote && !floorRows?.length ? 'error' : floorRows ? 'done' : 'wait';
+  const pricingTail = !!floorRows?.some((row) => row.partial);
   const colSpan = (showInterns ? 5 : 4) + 2;
 
   const totals = useMemo(() => {
@@ -352,7 +353,7 @@ export default function AnvilScanView({ data }) {
       <div className="mb-6">
         <h2 className="text-lg md:text-xl font-bold text-white">Anvil + Floor</h2>
         <p className="mt-1 text-xs text-slate-400">
-          OpenSea listings and Anvil specific buys, ranked by net cost.
+          OpenSea listings and Anvil snipes, ranked by net cost.
           The picture is that vault NFT, so you can pick the one you want. It loads as the row scrolls into view.
         </p>
       </div>
@@ -388,6 +389,7 @@ export default function AnvilScanView({ data }) {
           snipeReady={result?.vault?.id === 'stonk' && !!cost}
           floorBusy={floorBusy}
           floorNote={floorNote}
+          pricingTail={pricingTail}
           nftCa={stonkCa}
         />
       ) : null}

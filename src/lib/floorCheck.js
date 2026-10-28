@@ -1,7 +1,7 @@
 import { ethers } from 'ethers';
 import { ROBINHOOD_RPC } from './bonusTokenomics';
 import { internIdsForBroker } from './interns';
-import { nftArtFromUri } from './portfolioHistory';
+import { predictTbaAddress } from './anvilScan';
 import {
   buildPriceIndex,
   listKnownAssets,
@@ -31,7 +31,6 @@ const CHAIN = new ethers.Interface([
   'function ownerOf(uint256) view returns (address)',
   'function isDormant(uint256) view returns (bool)',
   'function activationOf(uint256) view returns (uint256 active, uint256 tier)',
-  'function tokenURI(uint256) view returns (string)',
   'function getEthBalance(address) view returns (uint256)',
 ]);
 
@@ -271,46 +270,57 @@ function decodeWord(data) {
   }
 }
 
-function artFromReturn(data) {
-  if (!data || data === '0x') return '';
-  try {
-    return nftArtFromUri(CHAIN.decodeFunctionResult('tokenURI', data)[0]) || '';
-  } catch {
-    return '';
-  }
-}
-
 async function readChain(provider, calls) {
   const mc = new ethers.Contract(MULTICALL, [
     'function tryAggregate(bool requireSuccess, tuple(address target, bytes callData)[] calls) view returns (tuple(bool success, bytes returnData)[])',
   ], provider);
-  const out = [];
-  let last;
-  for (let i = 0; i < calls.length; i += 250) {
-    const slice = calls.slice(i, i + 250);
-    let returned;
-    for (let attempt = 0; attempt < 4; attempt++) {
-      try {
-        returned = await mc.tryAggregate.staticCall(false, slice);
-        break;
-      } catch (err) {
-        last = err;
-        await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
-      }
+  const size = 700;
+  const slices = [];
+  for (let i = 0; i < calls.length; i += size) slices.push(calls.slice(i, i + size));
+  const out = new Array(slices.length);
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < slices.length) {
+      const index = cursor;
+      cursor += 1;
+      out[index] = await aggregateSlice(mc, slices[index]);
     }
-    if (!returned) throw last || new Error('Wallet read failed.');
-    out.push(...returned);
+  };
+  const workers = Math.min(4, slices.length);
+  await Promise.all(Array.from({ length: workers }, () => worker()));
+  return out.flat();
+}
+
+async function aggregateSlice(mc, slice) {
+  let last;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await mc.tryAggregate.staticCall(false, slice);
+    } catch (err) {
+      last = err;
+      await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+    }
   }
-  return out;
+  if (slice.length > 120) {
+    const mid = Math.ceil(slice.length / 2);
+    const [left, right] = await Promise.all([
+      aggregateSlice(mc, slice.slice(0, mid)),
+      aggregateSlice(mc, slice.slice(mid)),
+    ]);
+    return [...left, ...right];
+  }
+  throw last || new Error('Wallet read failed.');
 }
 
 /**
  * Cheapest asks, each token-bound wallet priced, and the listing minus that wallet.
  *
- * Balances go through one multicall. A burst of separate balanceOf calls was
- * coming back empty, which the page then showed as an empty wallet.
+ * ETH, protocol tokens, NFTs, and interns publish first. Stocks and memes are
+ * the long tail, so they fill in after the board is already ranked. Pictures
+ * load on their own. Balances stay on one multicall: separate balanceOf calls
+ * were coming back empty.
  */
-export async function scanFloorListings(listings, data, floors) {
+export async function scanFloorListings(listings, data, floors, { onPartial } = {}) {
   const nftCa = data?.projects?.stonk?.config?.nftCa;
   if (!nftCa || !ethers.isAddress(nftCa)) throw new Error('StonkBrokers collection is not loaded.');
   if (!listings?.length) throw new Error('No OpenSea listings to check.');
@@ -321,14 +331,26 @@ export async function scanFloorListings(listings, data, floors) {
   const internCa = String(internCfg.nftCa || '').toLowerCase();
   const stonkActivation = cfg.activationCa || STONK_ACTIVATION;
   const internActivation = internCfg.activationCa || INTERN_ACTIVATION;
+  const predicted = listings.map((row) => predictTbaAddress(nftCa, row.id));
   const registry = tbaRegistry(provider, { tbaRegistry: cfg.tbaRegistry });
-  const tbas = await Promise.all(listings.map((row) => resolveTbaAddress(registry, nftCa, row.id, {
+  const checked = await resolveTbaAddress(registry, nftCa, listings[0].id, {
     tbaImplementation: cfg.tbaImplementation,
     tbaChainId: cfg.tbaChainId,
     tbaSalt: cfg.tbaSalt,
-  })));
+  });
+  const tbas = String(checked).toLowerCase() === predicted[0].toLowerCase()
+    ? predicted
+    : await Promise.all(listings.map((row) => resolveTbaAddress(registry, nftCa, row.id, {
+      tbaImplementation: cfg.tbaImplementation,
+      tbaChainId: cfg.tbaChainId,
+      tbaSalt: cfg.tbaSalt,
+    })));
 
   const { erc20, erc721 } = listKnownAssets(data);
+  const tailCas = new Set([...(data?.stocks || []), ...(data?.memes || [])].map((tok) => String(tok.ca || '').toLowerCase()));
+  const coreIdx = [];
+  const tailIdx = [];
+  erc20.forEach((tok, t) => (tailCas.has(tok.ca) ? tailIdx : coreIdx).push(t));
   const book = floors || liveFloorIndex(data, []);
   const priceIndex = buildPriceIndex(data);
   const calls = [];
@@ -336,78 +358,72 @@ export async function scanFloorListings(listings, data, floors) {
     calls.push({ target, callData, meta });
   };
 
-  erc20.forEach((tok, i) => {
-    push(tok.ca, CHAIN.encodeFunctionData('decimals', []), { kind: 'decimals', i });
+  coreIdx.forEach((t) => {
+    push(erc20[t].ca, CHAIN.encodeFunctionData('decimals', []), { kind: 'decimals', i: t });
   });
   listings.forEach((row, i) => {
     const tba = tbas[i];
     push(MULTICALL, CHAIN.encodeFunctionData('getEthBalance', [tba]), { kind: 'eth', i });
-    erc20.forEach((tok, t) => {
-      push(tok.ca, CHAIN.encodeFunctionData('balanceOf', [tba]), { kind: 'erc20', i, t });
+    coreIdx.forEach((t) => {
+      push(erc20[t].ca, CHAIN.encodeFunctionData('balanceOf', [tba]), { kind: 'erc20', i, t });
     });
     erc721.forEach((tok, t) => {
       if (tok.ca === internCa) return;
       push(tok.ca, CHAIN.encodeFunctionData('balanceOf', [tba]), { kind: 'erc721', i, t });
     });
-    push(nftCa, CHAIN.encodeFunctionData('tokenURI', [row.id]), { kind: 'art', i });
     push(stonkActivation, CHAIN.encodeFunctionData('activationOf', [row.id]), { kind: 'brokerActive', i });
     for (const spec of internIdsForBroker(row.id)) {
       if (!internCa) continue;
       push(internCa, CHAIN.encodeFunctionData('ownerOf', [spec.id]), { kind: 'internOwner', i, id: spec.id });
       push(internCa, CHAIN.encodeFunctionData('isDormant', [spec.id]), { kind: 'internDormant', i, id: spec.id });
-      push(internCa, CHAIN.encodeFunctionData('tokenURI', [spec.id]), { kind: 'internArt', i, id: spec.id });
       push(internActivation, CHAIN.encodeFunctionData('activationOf', [spec.id]), { kind: 'internActive', i, id: spec.id });
     }
   });
 
-  const returned = await readChain(provider, calls);
   const decimals = erc20.map(() => 18);
   const eth = listings.map(() => null);
   const erc20Bal = listings.map(() => erc20.map(() => null));
   const erc721Bal = listings.map(() => erc721.map(() => null));
-  const art = listings.map(() => '');
   const brokerActive = listings.map(() => false);
   const internBits = listings.map(() => ({}));
 
-  returned.forEach((item, n) => {
-    const meta = calls[n].meta;
-    const ok = item.success && item.returnData && item.returnData !== '0x';
-    if (meta.kind === 'decimals' && ok) {
-      const nDec = Number(decodeUint(item.returnData));
-      if (nDec > 0 && nDec <= 36) decimals[meta.i] = nDec;
-      return;
-    }
-    if (meta.kind === 'eth') {
-      eth[meta.i] = ok ? decodeUint(item.returnData) : null;
-      return;
-    }
-    if (meta.kind === 'erc20') {
-      erc20Bal[meta.i][meta.t] = ok ? decodeUint(item.returnData) : null;
-      return;
-    }
-    if (meta.kind === 'erc721') {
-      erc721Bal[meta.i][meta.t] = ok ? decodeUint(item.returnData) : null;
-      return;
-    }
-    if (meta.kind === 'art') {
-      art[meta.i] = artFromReturn(item.returnData);
-      return;
-    }
-    if (meta.kind === 'brokerActive') {
-      brokerActive[meta.i] = ok && decodeWord(item.returnData) > 0n;
-      return;
-    }
-    const slot = internBits[meta.i][meta.id] || {};
-    if (meta.kind === 'internOwner') slot.owner = ok ? decodeAddress(item.returnData) : null;
-    if (meta.kind === 'internDormant') slot.dormant = ok ? decodeWord(item.returnData) > 0n : null;
-    if (meta.kind === 'internArt') slot.imageUrl = artFromReturn(item.returnData);
-    if (meta.kind === 'internActive') slot.activated = ok && decodeWord(item.returnData) > 0n;
-    internBits[meta.i][meta.id] = slot;
-  });
+  const applyReturns = (packed, returned) => {
+    returned.forEach((item, n) => {
+      const meta = packed[n].meta;
+      const ok = item.success && item.returnData && item.returnData !== '0x';
+      if (meta.kind === 'decimals' && ok) {
+        const nDec = Number(decodeUint(item.returnData));
+        if (nDec > 0 && nDec <= 36) decimals[meta.i] = nDec;
+        return;
+      }
+      if (meta.kind === 'eth') {
+        eth[meta.i] = ok ? decodeUint(item.returnData) : null;
+        return;
+      }
+      if (meta.kind === 'erc20') {
+        erc20Bal[meta.i][meta.t] = ok ? decodeUint(item.returnData) : null;
+        return;
+      }
+      if (meta.kind === 'erc721') {
+        erc721Bal[meta.i][meta.t] = ok ? decodeUint(item.returnData) : null;
+        return;
+      }
+      if (meta.kind === 'brokerActive') {
+        brokerActive[meta.i] = ok && decodeWord(item.returnData) > 0n;
+        return;
+      }
+      const slot = internBits[meta.i][meta.id] || {};
+      if (meta.kind === 'internOwner') slot.owner = ok ? decodeAddress(item.returnData) : null;
+      if (meta.kind === 'internDormant') slot.dormant = ok ? decodeWord(item.returnData) > 0n : null;
+      if (meta.kind === 'internActive') slot.activated = ok && decodeWord(item.returnData) > 0n;
+      internBits[meta.i][meta.id] = slot;
+    });
+  };
 
+  applyReturns(calls, await readChain(provider, calls));
   if (eth.some((bal) => bal == null)) throw new Error('Wallet read failed.');
 
-  return listings.map((row, i) => {
+  const assemble = (partial) => listings.map((row, i) => {
     const tba = tbas[i];
     const held = [];
     const ethAmount = Number(ethers.formatEther(eth[i]));
@@ -464,7 +480,7 @@ export async function scanFloorListings(listings, data, floors) {
         ...spec,
         state,
         inWallet,
-        imageUrl: bit.imageUrl || '',
+        imageUrl: '',
         usd: inWallet && each > 0 ? each : 0,
       };
     });
@@ -474,7 +490,7 @@ export async function scanFloorListings(listings, data, floors) {
       ...row,
       nftCa,
       tba,
-      imageUrl: art[i] || '',
+      imageUrl: '',
       floorAsk: row.ask,
       floorSymbol: row.symbol,
       floorUsd: row.usd,
@@ -484,6 +500,32 @@ export async function scanFloorListings(listings, data, floors) {
       walletUsd: heldUsd,
       purchaseUsd: purchaseCost(row.usd, heldUsd),
       unpricedNfts: wallet.some((tok) => tok.nft && !tok.atFloor && tok.amount > 0),
+      partial,
     };
   });
+
+  if (tailIdx.length && onPartial) onPartial(assemble(true));
+
+  if (tailIdx.length) {
+    const tailCalls = [];
+    tailIdx.forEach((t) => {
+      tailCalls.push({
+        target: erc20[t].ca,
+        callData: CHAIN.encodeFunctionData('decimals', []),
+        meta: { kind: 'decimals', i: t },
+      });
+    });
+    listings.forEach((row, i) => {
+      tailIdx.forEach((t) => {
+        tailCalls.push({
+          target: erc20[t].ca,
+          callData: CHAIN.encodeFunctionData('balanceOf', [tbas[i]]),
+          meta: { kind: 'erc20', i, t },
+        });
+      });
+    });
+    applyReturns(tailCalls, await readChain(provider, tailCalls));
+  }
+
+  return assemble(false);
 }
