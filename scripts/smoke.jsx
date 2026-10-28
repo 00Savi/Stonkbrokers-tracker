@@ -18,7 +18,7 @@ import { renderToString } from 'react-dom/server';
 import { StaticRouter } from 'react-router-dom';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
-import { earnedUsdForNft, earnedUsdForTokenPosition, walletDailyDrops } from '../src/lib/portfolioHistory.js';
+import { earnedUsdForNft, earnedUsdForTokenPosition, nftAcquireCostUsd, portfolioValueSeries, walletDailyDrops } from '../src/lib/portfolioHistory.js';
 import { applyPrices, pricesLanded } from '../src/lib/prices.js';
 import App from '../src/app.jsx';
 import HomeView from '../src/components/views/HomeView';
@@ -1225,6 +1225,46 @@ for (const [name, View, props] of VIEWS) {
     console.error(`FAIL  token drop dates ${drops.labels.join(',')}`);
   } else {
     console.log('ok    portfolio yield starts on the open day');
+  }
+
+  const freeMint = nftAcquireCostUsd({ minted: true, basisKnown: true, basisUsd: 0, entryFloorUsd: 4000 });
+  const pricedBuy = nftAcquireCostUsd({ basisKnown: true, basisUsd: 1200, entryFloorUsd: 4000 });
+  if (freeMint !== 0 || pricedBuy !== 1200) {
+    failed++;
+    console.error(`FAIL  nft acquire cost mint=${freeMint} buy=${pricedBuy}`);
+  } else {
+    console.log('ok    free mint costs nothing against the floor');
+  }
+
+  const book = portfolioValueSeries([
+    {
+      projectKey: 'oak',
+      nfts: [{ lastTransferTs: Date.parse('2026-10-11T00:00:00Z') / 1000, floorValue: 10 }],
+    },
+    {
+      projectKey: 'oak:token',
+      tokenPosition: true,
+      balance: 100,
+      holdStartTs: Date.parse('2026-10-12T00:00:00Z') / 1000,
+      floorValue: 5,
+    },
+  ], {
+    projects: {
+      oak: {
+        dailySnapshots: [
+          { date: '2026-10-11', nftFloorUsd: 8, tokenPriceUsd: 0.02 },
+          { date: '2026-10-12', nftFloorUsd: 10, tokenPriceUsd: 0.05 },
+        ],
+      },
+    },
+  });
+  const openDay = book.total[0];
+  const nextDay = book.labels.indexOf('2026-10-12');
+  if (book.labels[0] !== '2026-10-11' || openDay !== 8 || nextDay < 0 || book.total[nextDay] !== 15 || book.total.at(-1) !== 15) {
+    failed++;
+    console.error(`FAIL  portfolio value line ${book.labels.join(',')} ${book.total.join(',')}`);
+  } else {
+    console.log('ok    portfolio value line marks seats and tokens from the open day');
   }
 
   const base = {

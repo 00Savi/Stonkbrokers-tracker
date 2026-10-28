@@ -416,12 +416,16 @@ export function walletDailyDrops(ownedAssets, data) {
   return { labels, data: labels.map((d) => byDate[d]) };
 }
 
+/** ETH paid to receive the seat. A known mint or buy of $0 stays $0. An unpriced buy uses that day's floor. */
+export function nftAcquireCostUsd(nft) {
+  if (nft?.basisKnown) return Number(nft.basisUsd) || 0;
+  if (nft?.minted) return 0;
+  return Number(nft?.entryFloorUsd) || 0;
+}
+
 /** What this seat cost to open: ETH paid when we know it, otherwise that day's floor, plus activation tokens. */
 export function nftEntryCostUsd(nft) {
-  const act = Number(nft?.activationCostUsd) || 0;
-  const floorThen = Number(nft?.entryFloorUsd) || 0;
-  const paid = nft?.basisKnown && Number(nft?.basisUsd) > 0 ? Number(nft.basisUsd) : floorThen;
-  return paid + act;
+  return nftAcquireCostUsd(nft) + (Number(nft?.activationCostUsd) || 0);
 }
 
 /** Months to earn the entry cost back at the current annual yield. */
@@ -517,6 +521,78 @@ export function portfolioCashMarkSeries(ownedAssets, data) {
     mark.push(moved);
   }
   return { labels, cash, mark };
+}
+
+/**
+ * Mark value of the book each day: seat floors plus token closes, from the
+ * day each position was received. Cash already paid out is not added back.
+ */
+export function portfolioValueSeries(ownedAssets, data) {
+  const seats = [];
+  const tokens = [];
+  for (const asset of ownedAssets || []) {
+    const project = portfolioBook(data, asset.projectKey);
+    const snaps = project ? snapsByDay(project) : [];
+    if (asset?.tokenPosition) {
+      const start = Number(asset.holdStartTs) || 0;
+      tokens.push({
+        open: start ? dayKeyFromSeconds(start) : '',
+        amount: Number(asset.balance) || 0,
+        snaps,
+        spot: Number(asset.floorValue) || 0,
+      });
+      continue;
+    }
+    for (const nft of asset.nfts || []) {
+      const ts = Number(nft.lastTransferTs || nft.activationTs) || 0;
+      const open = ts ? dayKeyFromSeconds(ts) : '';
+      if (!open) continue;
+      seats.push({ open, snaps, floorNow: Number(nft.floorValue) || 0 });
+    }
+  }
+
+  const days = new Set();
+  for (const row of [...seats, ...tokens]) {
+    if (row.open) days.add(row.open);
+    for (const snap of row.snaps || []) {
+      if (!row.open || snap.date >= row.open) days.add(snap.date);
+    }
+  }
+  const today = utcIso();
+  if (today) days.add(today);
+  const labels = [...days].filter(Boolean).sort();
+  if (labels.length < 2) return { labels: [], total: [], seats: [], tokens: [] };
+
+  const last = labels[labels.length - 1];
+  const seatLine = [];
+  const tokenLine = [];
+  const total = [];
+  for (const day of labels) {
+    let seatUsd = 0;
+    for (const seat of seats) {
+      if (seat.open > day) continue;
+      const floor = carried(seat.snaps, day, 'floor');
+      seatUsd += floor > 0 ? floor : (day === last ? seat.floorNow : 0);
+    }
+    let tokenUsd = 0;
+    for (const bag of tokens) {
+      if (bag.open && bag.open > day) continue;
+      if (!bag.open && day !== last) continue;
+      const px = carried(bag.snaps, day, 'px');
+      tokenUsd += px > 0 ? bag.amount * px : (day === last ? bag.spot : 0);
+    }
+    seatLine.push(seatUsd);
+    tokenLine.push(tokenUsd);
+    total.push(seatUsd + tokenUsd);
+  }
+  if (labels[labels.length - 1] === today) {
+    const liveSeats = seats.reduce((sum, seat) => sum + seat.floorNow, 0);
+    const liveTokens = tokens.reduce((sum, bag) => sum + bag.spot, 0);
+    seatLine[seatLine.length - 1] = liveSeats;
+    tokenLine[tokenLine.length - 1] = liveTokens;
+    total[total.length - 1] = liveSeats + liveTokens;
+  }
+  return { labels, total, seats: seatLine, tokens: tokenLine };
 }
 
 export function bucketDropSeries(labels, values, grain = 'd') {

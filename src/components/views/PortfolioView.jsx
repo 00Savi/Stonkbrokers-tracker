@@ -44,7 +44,9 @@ import {
   walletDailyDrops,
   bucketDropSeries,
   portfolioCashMarkSeries,
+  portfolioValueSeries,
   nftEntryCostUsd,
+  nftAcquireCostUsd,
   paybackMonths,
   formatPaybackMonths,
   activationTokenCostUsd,
@@ -158,6 +160,139 @@ function byFloor(a, b) {
   return (Number(b.floorValue) || 0) - (Number(a.floorValue) || 0);
 }
 
+function seatBookRows(assets) {
+  return (assets || []).map((asset) => {
+    const paid = (asset.nfts || []).reduce((sum, nft) => sum + nftAcquireCostUsd(nft), 0);
+    const floor = Number(asset.floorValue) || 0;
+    return {
+      key: asset.projectKey,
+      name: holdingName(asset),
+      count: (asset.nfts || []).length || Number(asset.balance) || 0,
+      floor,
+      paid,
+      pnl: floor - paid,
+    };
+  });
+}
+
+function tokenBookRows(assets) {
+  return (assets || []).map((asset) => {
+    const spot = Number(asset.floorValue) || 0;
+    const cost = Number(asset.entryValueUsd) || 0;
+    const earned = Number(asset.earnedValue) || 0;
+    return {
+      key: asset.projectKey,
+      name: holdingName(asset),
+      amount: `${formatAmount(asset.balance)} ${asset.ticker || ''}`.trim(),
+      spot,
+      cost,
+      pnl: cost > 0 ? spot - cost + earned : null,
+    };
+  });
+}
+
+function cents(formatCurrency, n) {
+  return Math.abs(Number(n) || 0) < 0.01 ? formatCurrency(1).replace('1', '0') : formatCurrency(n);
+}
+
+function DetailTable({ columns, rows }) {
+  if (!rows.length) {
+    return <p className="text-xs text-slate-500">Nothing in this book.</p>;
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-left text-xs">
+        <thead>
+          <tr className="text-[10px] uppercase tracking-wider text-slate-500">
+            {columns.map((col) => (
+              <th key={col.key} className={`py-1.5 pr-3 font-medium ${col.align || ''}`}>{col.label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.key} className="border-t border-[#1e2228]">
+              {columns.map((col) => (
+                <td key={col.key} className={`py-2 pr-3 whitespace-nowrap ${col.align || ''} ${col.tone ? col.tone(row) : 'text-slate-200'}`}>
+                  {col.render(row)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ValueDetail({ series, formatPnl, formatCurrency }) {
+  if (!series?.labels?.length) {
+    return <p className="text-xs text-slate-500">Not enough daily closes to compare yet.</p>;
+  }
+  const start = series.total[0];
+  const now = series.total[series.total.length - 1];
+  const move = now - start;
+  const pct = start > 0 ? (move / start) * 100 : null;
+  return (
+    <div>
+      <p className="text-xs text-slate-400 mb-3">
+        Mark from {series.labels[0]} to {series.labels[series.labels.length - 1]}. First close is only what was already held that day, so the change includes positions added later. Cash already paid out is not in the line.
+      </p>
+      <div className="grid grid-cols-3 gap-3">
+        <div>
+          <p className="text-[10px] uppercase tracking-wider text-slate-500">First close</p>
+          <p className="text-sm font-bold text-white">{formatCurrency(start)}</p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase tracking-wider text-slate-500">Latest</p>
+          <p className="text-sm font-bold text-white">{formatCurrency(now)}</p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase tracking-wider text-slate-500">Change</p>
+          <p className={`text-sm font-bold ${move < -0.01 ? 'text-rose-400' : 'text-emerald-400'}`}>
+            {formatPnl(move)}{pct == null ? '' : ` (${pct > 0 ? '+' : ''}${pct.toFixed(1)}%)`}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SeatDetail({ assets, sort, formatCurrency, formatPnl, pnlTone }) {
+  const rows = seatBookRows(assets).sort((a, b) => (sort === 'pnl' ? b.pnl - a.pnl : b.floor - a.floor));
+  return (
+    <DetailTable
+      rows={rows}
+      columns={[
+        { key: 'name', label: 'Seats', render: (row) => row.name },
+        { key: 'count', label: 'Count', align: 'text-right', render: (row) => row.count },
+        { key: 'paid', label: 'Paid', align: 'text-right', render: (row) => cents(formatCurrency, row.paid) },
+        { key: 'floor', label: 'Floor', align: 'text-right', render: (row) => formatCurrency(row.floor) },
+        { key: 'pnl', label: 'P&L', align: 'text-right', tone: (row) => pnlTone(row.pnl), render: (row) => formatPnl(row.pnl) },
+      ]}
+    />
+  );
+}
+
+function TokenDetail({ assets, sort, formatCurrency, formatPnl, pnlTone }) {
+  const rows = tokenBookRows(assets).sort((a, b) => {
+    if (sort === 'pnl') return (b.pnl ?? -Infinity) - (a.pnl ?? -Infinity);
+    return b.spot - a.spot;
+  });
+  return (
+    <DetailTable
+      rows={rows}
+      columns={[
+        { key: 'name', label: 'Token', render: (row) => row.name },
+        { key: 'amount', label: 'Amount', align: 'text-right', render: (row) => row.amount },
+        { key: 'cost', label: 'Cost', align: 'text-right', render: (row) => (row.cost > 0 ? cents(formatCurrency, row.cost) : '—') },
+        { key: 'spot', label: 'Spot', align: 'text-right', render: (row) => formatCurrency(row.spot) },
+        { key: 'pnl', label: 'P&L', align: 'text-right', tone: (row) => pnlTone(row.pnl), render: (row) => formatPnl(row.pnl) },
+      ]}
+    />
+  );
+}
+
 function groupByProject(ownedAssets) {
   const map = new Map();
   for (const a of ownedAssets) {
@@ -191,6 +326,7 @@ function groupByProject(ownedAssets) {
 /** Cost at entry: ETH paid for the NFT when we know it, otherwise the floor that day, plus activation tokens. */
 function assetEntryCostUsd(asset) {
   if (asset?.tokenPosition) return Number(asset.floorValue) || 0;
+  if (asset?.nfts?.length) return Number(asset.entryCostUsd) || 0;
   if (Number(asset.entryCostUsd) > 0) return Number(asset.entryCostUsd);
   return (Number(asset.entryFloorUsd) || 0) + (Number(asset.activationCostUsd) || 0) + (Number(asset.basisUsd) || 0);
 }
@@ -266,7 +402,7 @@ function sumNftCosts(nfts) {
   for (const nft of nfts || []) {
     const act = Number(nft.activationCostUsd) || 0;
     const floorThen = Number(nft.entryFloorUsd) || 0;
-    const paid = nft.basisKnown && Number(nft.basisUsd) > 0 ? Number(nft.basisUsd) : floorThen;
+    const paid = nftAcquireCostUsd(nft);
     if (nft.basisKnown) {
       basisUsd += Number(nft.basisUsd) || 0;
       basisKnown += 1;
@@ -331,6 +467,7 @@ export default function PortfolioView({ data }) {
   const [forecastYears, setForecastYears] = useState(1);
   const [forecastGrain, setForecastGrain] = useState('d');
   const [historyGrain, setHistoryGrain] = useState('d');
+  const [detail, setDetail] = useState(null);
   const [copyState, setCopyState] = useState('idle');
   const [scanProgress, setScanProgress] = useState('');
   const [thumbs, setThumbs] = useState({});
@@ -350,6 +487,15 @@ export default function PortfolioView({ data }) {
   const pnlTone = (n) => (n == null || !Number.isFinite(n) ? 'text-white' : n < -0.01 ? 'text-rose-400' : 'text-emerald-400');
   const quietCash = (n) => (Math.abs(Number(n) || 0) < 0.01 ? formatCurrency(1).replace('1', '0') : formatCurrency(n));
   const tickMoney = moneyTick(ccy, rates);
+  const valueChartOptions = useMemo(() => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#94a3b8', boxWidth: 10 } } },
+    scales: {
+      x: { ticks: { color: '#94a3b8', maxRotation: 0, autoSkip: true, maxTicksLimit: 8 }, grid: { color: '#1e2228' } },
+      y: { ticks: { color: '#94a3b8', callback: moneyTick(ccy, rates) }, grid: { color: '#1e2228' }, unit: ccy },
+    },
+  }), [ccy, rates]);
 
   const loadInventories = (nfts) => {
     const tbas = [...new Set(nfts.map((n) => n.tba).filter(Boolean))];
@@ -778,11 +924,11 @@ export default function PortfolioView({ data }) {
     return { basisUsd, activationCostUsd, entryCostUsd, basisKnown, nftCount, total: entryCostUsd };
   }, [grouped]);
 
-  const seatEarned = seatAssets.reduce((sum, a) => sum + (Number(a.earnedValue) || 0), 0);
   const tokenEarned = tokenAssets.reduce((sum, a) => sum + (Number(a.earnedValue) || 0), 0);
-  const nftPnl = costTotals.nftCount > 0 && costTotals.total > 0
-    ? seatFloor - costTotals.total + seatEarned
-    : null;
+  const nftPaid = seatAssets.reduce((sum, asset) => (
+    sum + (asset.nfts || []).reduce((inner, nft) => inner + nftAcquireCostUsd(nft), 0)
+  ), 0);
+  const nftPnl = costTotals.nftCount > 0 ? seatFloor - nftPaid : null;
   let tokenCost = 0;
   let tokenMarked = 0;
   let tokenPriced = 0;
@@ -835,6 +981,14 @@ export default function PortfolioView({ data }) {
     () => portfolioCashMarkSeries(results.ownedAssets, data),
     [results.ownedAssets, data],
   );
+  const valueSeries = useMemo(
+    () => portfolioValueSeries(results.ownedAssets, data),
+    [results.ownedAssets, data],
+  );
+  useEffect(() => {
+    if (!detail) return;
+    document.getElementById('portfolio-detail')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [detail]);
 
   const copyLabel =
     copyState === 'busy' ? 'Copying…' :
@@ -1052,6 +1206,7 @@ export default function PortfolioView({ data }) {
             <span className="font-mono text-[10px] uppercase tracking-wider text-faint">In this scan</span>
             {[
               { id: 'totals', label: 'Totals' },
+              { id: 'portfolio-value', label: 'Value' },
               { id: 'portfolio-forecast', label: 'Forecast' },
               seatAssets.length ? { id: 'portfolio-seats', label: 'Seats' } : null,
               tokenAssets.length ? { id: 'portfolio-tokens', label: 'Tokens' } : null,
@@ -1104,46 +1259,133 @@ export default function PortfolioView({ data }) {
 
           <Copyable id="totals" className="mb-8">
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3 sm:p-5 shadow-inner">
-              <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Full value</p>
-              <p className="text-xl md:text-2xl font-extrabold text-white">{formatCurrency(results.floorUsd)}</p>
-              <p className="text-[10px] text-slate-500 mt-1">NFTs and tokens together</p>
-            </div>
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3 sm:p-5 shadow-inner">
-              <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Tokens</p>
-              <p className="text-xl md:text-2xl font-extrabold text-emerald-300">{formatCurrency(tokenSpot)}</p>
-              <p className="text-[10px] text-slate-500 mt-1">
-                {tokenAssets.length} {tokenAssets.length === 1 ? 'balance' : 'balances'} · spot
-              </p>
-            </div>
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3 sm:p-5 shadow-inner">
-              <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">NFTs</p>
-              <p className="text-xl md:text-2xl font-extrabold text-amber-300">{formatCurrency(seatFloor)}</p>
-              <p className="text-[10px] text-slate-500 mt-1">
-                {results.totalUnits} {results.totalUnits === 1 ? 'seat' : 'seats'} · floor today
-              </p>
-            </div>
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3 sm:p-5 shadow-inner">
-              <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Token P&amp;L</p>
-              <p className={`text-xl md:text-2xl font-extrabold ${pnlTone(tokenPnl)}`}>{formatPnl(tokenPnl)}</p>
-              <p className="text-[10px] text-slate-500 mt-1">
-                {tokenPnl == null
+            {[
+              {
+                id: 'value',
+                label: 'Full value',
+                value: formatCurrency(results.floorUsd),
+                valueClass: 'text-white',
+                note: 'NFTs and tokens together',
+              },
+              {
+                id: 'tokens',
+                label: 'Tokens',
+                value: formatCurrency(tokenSpot),
+                valueClass: 'text-emerald-300',
+                note: `${tokenAssets.length} ${tokenAssets.length === 1 ? 'balance' : 'balances'} · spot`,
+              },
+              {
+                id: 'nfts',
+                label: 'NFTs',
+                value: formatCurrency(seatFloor),
+                valueClass: 'text-amber-300',
+                note: `${results.totalUnits} ${results.totalUnits === 1 ? 'seat' : 'seats'} · floor today`,
+              },
+              {
+                id: 'token-pnl',
+                label: 'Token P&L',
+                value: formatPnl(tokenPnl),
+                valueClass: pnlTone(tokenPnl),
+                note: tokenPnl == null
                   ? 'No open price on the tape'
                   : tokenPriced < tokenAssets.length
                     ? `Open price on ${tokenPriced} of ${tokenAssets.length}`
-                    : 'Spot minus the close when the hold started'}
-              </p>
-            </div>
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3 sm:p-5 shadow-inner">
-              <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">NFT P&amp;L</p>
-              <p className={`text-xl md:text-2xl font-extrabold ${pnlTone(nftPnl)}`}>{formatPnl(nftPnl)}</p>
-              <p className="text-[10px] text-slate-500 mt-1">
-                {nftPnl == null
-                  ? 'No open cost on these seats'
-                  : `Floor vs ${formatCurrency(costTotals.total)} open, plus cash paid`}
-              </p>
-            </div>
+                    : 'Spot minus the close when the hold started',
+              },
+              {
+                id: 'nft-pnl',
+                label: 'NFT P&L',
+                value: formatPnl(nftPnl),
+                valueClass: pnlTone(nftPnl),
+                note: nftPnl == null ? 'No seats in this scan' : "Today's floor minus the ETH paid to mint or buy",
+              },
+            ].map((card) => (
+              <button
+                key={card.id}
+                type="button"
+                onClick={() => setDetail((cur) => (cur === card.id ? null : card.id))}
+                className={`bg-[#08090b] border rounded-xl p-3 sm:p-5 shadow-inner text-left transition hover:border-slate-500 ${
+                  detail === card.id ? 'border-emerald-500/70' : 'border-[#1e2228]'
+                }`}
+              >
+                <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">{card.label}</p>
+                <p className={`text-xl md:text-2xl font-extrabold ${card.valueClass}`}>{card.value}</p>
+                <p className="text-[10px] text-slate-500 mt-1">{card.note}</p>
+              </button>
+            ))}
           </div>
+          {detail && (
+            <div id="portfolio-detail" className="mt-4 rounded-xl border border-[#1e2228] bg-black/40 p-4">
+              {detail === 'value' && (
+                <ValueDetail series={valueSeries} formatCurrency={formatCurrency} formatPnl={formatPnl} />
+              )}
+              {detail === 'tokens' && (
+                <TokenDetail assets={tokenAssets} sort="spot" formatCurrency={formatCurrency} formatPnl={formatPnl} pnlTone={pnlTone} />
+              )}
+              {detail === 'nfts' && (
+                <SeatDetail assets={seatAssets} sort="floor" formatCurrency={formatCurrency} formatPnl={formatPnl} pnlTone={pnlTone} />
+              )}
+              {detail === 'token-pnl' && (
+                <TokenDetail assets={tokenAssets} sort="pnl" formatCurrency={formatCurrency} formatPnl={formatPnl} pnlTone={pnlTone} />
+              )}
+              {detail === 'nft-pnl' && (
+                <SeatDetail assets={seatAssets} sort="pnl" formatCurrency={formatCurrency} formatPnl={formatPnl} pnlTone={pnlTone} />
+              )}
+            </div>
+          )}
+          </Copyable>
+
+          <Copyable id="portfolio-value" className="scroll-mt-36 bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-8">
+            <h3 className="text-sm font-bold text-white mb-1 pr-8">Portfolio value</h3>
+            <p className="text-xs text-slate-500 mb-3">
+              Seat floors plus token closes, from the day each position was received. Cash already paid out is not added back. A token with no open date is marked only on the latest day.
+            </p>
+            <div className="relative h-56 w-full">
+              {valueSeries.labels.length > 1 ? (
+                <Line
+                  data={{
+                    labels: formatLabels(valueSeries.labels),
+                    datasets: [
+                      {
+                        label: 'Total',
+                        data: valueSeries.total,
+                        borderColor: '#e7e9ec',
+                        backgroundColor: 'transparent',
+                        tension: 0.25,
+                        pointRadius: 0,
+                        borderWidth: 2,
+                        spanGaps: true,
+                      },
+                      {
+                        label: 'NFTs',
+                        data: valueSeries.seats,
+                        borderColor: '#f7931a',
+                        backgroundColor: 'transparent',
+                        tension: 0.25,
+                        pointRadius: 0,
+                        borderWidth: 1.5,
+                        spanGaps: true,
+                      },
+                      {
+                        label: 'Tokens',
+                        data: valueSeries.tokens,
+                        borderColor: '#34d399',
+                        backgroundColor: 'transparent',
+                        tension: 0.25,
+                        pointRadius: 0,
+                        borderWidth: 1.5,
+                        spanGaps: true,
+                      },
+                    ],
+                  }}
+                  options={valueChartOptions}
+                />
+              ) : (
+                <div className="h-full flex items-center justify-center text-sm text-slate-500 text-center px-4">
+                  Not enough daily closes to draw the book yet
+                </div>
+              )}
+            </div>
           </Copyable>
 
           {(seatAssets.some((g) => g.floorValue > 0) || tokenAssets.some((g) => g.floorValue > 0)) && (
@@ -1311,9 +1553,14 @@ export default function PortfolioView({ data }) {
               {book.assets.map((asset) => {
                 const open = !!openProjects[asset.projectKey];
                 const entryCost = assetEntryCostUsd(asset);
-                const assetRoi = mode === 'history'
-                  ? roiAgainst(asset.earnedValue, entryCost)
-                  : roiAgainst((asset.yieldValue || 0) * forecastYears, asset.floorValue);
+                const paid = asset.tokenPosition
+                  ? 0
+                  : (asset.nfts || []).reduce((sum, nft) => sum + nftAcquireCostUsd(nft), 0);
+                const markPnl = asset.tokenPosition
+                  ? (Number(asset.entryValueUsd) > 0
+                    ? asset.floorValue - asset.entryValueUsd + (Number(asset.earnedValue) || 0)
+                    : null)
+                  : asset.floorValue - paid;
                 const payback = asset.tokenPosition ? null : paybackMonths(entryCost, asset.yieldValue);
                 const spotOnly = asset.tokenPosition && !(Number(asset.yieldValue) > 0);
                 return (
@@ -1351,13 +1598,7 @@ export default function PortfolioView({ data }) {
                             ID Sync Error
                           </span>
                         ) : (
-                          <span className="text-emerald-400">
-                            {spotOnly
-                              ? formatCurrency(asset.floorValue)
-                              : mode === 'history'
-                                ? quietCash(asset.earnedValue || 0)
-                                : `+ ${quietCash((asset.yieldValue || 0) * forecastYears)}`}
-                          </span>
+                          <span className="text-white">{formatCurrency(asset.floorValue)}</span>
                         )}
                       </p>
                       {asset.idsPartial && (
@@ -1366,22 +1607,27 @@ export default function PortfolioView({ data }) {
                         </p>
                       )}
                       <p className="text-[10px] text-slate-400 mt-1">
-                        {asset.tokenPosition
-                          ? `${formatAmount(asset.balance)} ${asset.ticker || ''}`.trim()
-                          : `${asset.balance} ${Number(asset.balance) === 1 ? 'seat' : 'seats'}`}
-                        {' · '}
-                        {spotOnly
-                          ? 'Spot value'
-                          : (
-                            <>
-                              Floor {formatCurrency(asset.floorValue)}
-                              {mode === 'history' && !asset.tokenPosition && entryCost > 0
-                                ? ` · Entry ${formatCurrency(entryCost)}`
+                        {asset.tokenPosition ? (
+                          <>
+                            {`${formatAmount(asset.balance)} ${asset.ticker || ''}`.trim()}
+                            {Number(asset.entryValueUsd) > 0 ? ` · Cost ${quietCash(asset.entryValueUsd)}` : ' · Spot'}
+                            {markPnl != null ? ` · ${formatPnl(markPnl)}` : ''}
+                            {mode === 'history'
+                              ? ` · Earned ${quietCash(asset.earnedValue || 0)}`
+                              : Number(asset.yieldValue) > 0
+                                ? ` · ${forecastYears}y ${quietCash((asset.yieldValue || 0) * forecastYears)}`
                                 : ''}
-                              {' · '}{mode === 'history' ? 'Since entry' : 'ROI'} {formatRoi(assetRoi, 1)}
-                              {payback != null ? ` · Payback ${formatPaybackMonths(payback)}` : ''}
-                            </>
-                          )}
+                          </>
+                        ) : (
+                          <>
+                            {`${asset.balance} ${Number(asset.balance) === 1 ? 'seat' : 'seats'}`}
+                            {` · Paid ${quietCash(paid)} · ${formatPnl(markPnl)}`}
+                            {mode === 'history'
+                              ? ` · Earned ${quietCash(asset.earnedValue || 0)}`
+                              : ` · ${forecastYears}y ${quietCash((asset.yieldValue || 0) * forecastYears)}`}
+                            {payback != null ? ` · Payback ${formatPaybackMonths(payback)}` : ''}
+                          </>
+                        )}
                       </p>
                     </div>
                     <svg
@@ -1465,6 +1711,9 @@ export default function PortfolioView({ data }) {
                                             ? ' · free'
                                             : ' · —'
                                         : ' …'}
+                                    </div>
+                                    <div className={pnlTone((Number(nft.floorValue) || 0) - nftAcquireCostUsd(nft))}>
+                                      vs floor {formatPnl((Number(nft.floorValue) || 0) - nftAcquireCostUsd(nft))}
                                     </div>
                                   </td>
                                   <td className="py-2 px-2 text-[11px] text-slate-300 whitespace-nowrap">
