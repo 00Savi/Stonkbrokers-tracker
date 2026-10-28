@@ -552,6 +552,9 @@ function drawPortfolioCard({
   roiLabel = 'Forecast ROI',
   units = '—',
   basis = '',
+  tokenPnl = '—',
+  nftPnlColor = '#00a804',
+  tokenPnlColor = '#34d399',
   seats = [],
   tokens = [],
 } = {}) {
@@ -652,10 +655,10 @@ function drawPortfolioCard({
   }
 
   const stats = [
-    { label: cashLabel, value: cash, color: '#00a804' },
-    { label: roiLabel, value: roi, color: '#38bdf8' },
-    { label: 'Seats', value: units, color: '#f7931a' },
-    { label: 'Cost at entry', value: basis || '—', color: '#e7e9ec' },
+    { label: 'NFTs', value: cash || '—', color: '#f7931a' },
+    { label: 'Tokens', value: units || '—', color: '#34d399' },
+    { label: roiLabel || 'NFT P&L', value: roi || '—', color: nftPnlColor || '#00a804' },
+    { label: 'Token P&L', value: tokenPnl || '—', color: tokenPnlColor || '#34d399' },
   ];
   const statY = heroY + heroH + 16;
   const statH = 86;

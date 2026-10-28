@@ -45,7 +45,7 @@ function nearestSnap(snaps, ts, ok) {
  * Token USD at a unix second. Prefers priceHistory on clock-in days, then
  * the nearest snapshot, then the live DexScreener print.
  */
-export function tokenPriceAtTs(pData, ts) {
+export function tokenPriceAtTs(pData, ts, { allowLive = true } = {}) {
   const day = utcIsoFromTs(ts);
   const hist = pData?.ownership?.priceHistory;
   if (day && hist?.labels && hist?.data) {
@@ -62,6 +62,7 @@ export function tokenPriceAtTs(pData, ts) {
   );
   const fromSnap = Number(snap?.tokenPriceUsd) || 0;
   if (fromSnap > 0) return fromSnap;
+  if (allowLive === false) return 0;
   return Number(pData?.market?.tokenPriceUsd) || 0;
 }
 
@@ -262,8 +263,8 @@ export function earnedUsdForTokenPosition(pData, amount, startTs) {
 export async function fetchTokenHoldStartTs(tokenCa, wallet) {
   const indexed = await loadHolderPosition(tokenCa, wallet);
   if (indexed?.kind === 'token' && indexed.complete && (indexed.positions || []).length <= 1) {
-    const row = indexed.positions?.[0];
-    return Number(row?.opened_at) || 0;
+    const opened = Number(indexed.positions?.[0]?.opened_at) || 0;
+    if (opened > 0) return opened;
   }
 
   let page = 1;

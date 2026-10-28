@@ -50,6 +50,7 @@ import {
   activationTokenCostUsd,
   ethUsdAtTs,
   floorUsdOn,
+  tokenPriceAtTs,
 } from '../../lib/portfolioHistory';
 
 const FORECAST_YEARS = [1, 3, 5, 10];
@@ -177,6 +178,7 @@ function groupByProject(ownedAssets) {
     prev.activationCostUsd = (prev.activationCostUsd || 0) + (a.activationCostUsd || 0);
     prev.entryFloorUsd = (prev.entryFloorUsd || 0) + (a.entryFloorUsd || 0);
     prev.entryCostUsd = (prev.entryCostUsd || 0) + (a.entryCostUsd || 0);
+    prev.entryValueUsd = (prev.entryValueUsd || 0) + (a.entryValueUsd || 0);
     prev.basisKnown = (prev.basisKnown || 0) + (a.basisKnown || 0);
     prev.idsPartial = prev.idsPartial || a.idsPartial;
     prev.idsFound = (prev.idsFound || 0) + (a.idsFound || 0);
@@ -340,6 +342,12 @@ export default function PortfolioView({ data }) {
   const ethUsd = data?.projects?.stonk?.market?.ethPriceUsd || display.ethUsd || 0;
   const rates = { ethUsd, eurPerUsd: display.eurPerUsd };
   const formatCurrency = (usd) => formatMoney(usd, ccy, rates);
+  const formatPnl = (n) => {
+    if (n == null || !Number.isFinite(n)) return '—';
+    if (Math.abs(n) < 0.01) return formatCurrency(1).replace('1', '0');
+    return n > 0 ? `+${formatCurrency(n)}` : formatCurrency(n);
+  };
+  const pnlTone = (n) => (n == null || !Number.isFinite(n) ? 'text-white' : n < -0.01 ? 'text-rose-400' : 'text-emerald-400');
   const quietCash = (n) => (Math.abs(Number(n) || 0) < 0.01 ? formatCurrency(1).replace('1', '0') : formatCurrency(n));
   const tickMoney = moneyTick(ccy, rates);
 
@@ -622,6 +630,8 @@ export default function PortfolioView({ data }) {
               holdStart = 0;
             }
             const earnedValue = earnedUsdForTokenPosition(pData, amount, holdStart);
+            const entryPx = holdStart > 0 ? tokenPriceAtTs(pData, holdStart, { allowLive: false }) : 0;
+            const entryValueUsd = entryPx > 0 ? amount * entryPx : 0;
             const tokenKey = `${pKey}:token`;
             return {
               floor: value,
@@ -635,6 +645,7 @@ export default function PortfolioView({ data }) {
                 wallet,
                 balance: amount,
                 floorValue: value,
+                entryValueUsd,
                 yieldValue,
                 earnedValue,
                 hasError: false,
@@ -750,9 +761,6 @@ export default function PortfolioView({ data }) {
   const tokenAssets = useMemo(() => grouped.filter((a) => a.tokenPosition).sort(byFloor), [grouped]);
   const seatFloor = seatAssets.reduce((sum, a) => sum + (Number(a.floorValue) || 0), 0);
   const tokenSpot = tokenAssets.reduce((sum, a) => sum + (Number(a.floorValue) || 0), 0);
-  const spotOnlyUsd = tokenAssets.reduce((sum, a) => (
-    Number(a.yieldValue) > 0 ? sum : sum + (Number(a.floorValue) || 0)
-  ), 0);
   const costTotals = useMemo(() => {
     let basisUsd = 0;
     let activationCostUsd = 0;
@@ -769,6 +777,23 @@ export default function PortfolioView({ data }) {
     }
     return { basisUsd, activationCostUsd, entryCostUsd, basisKnown, nftCount, total: entryCostUsd };
   }, [grouped]);
+
+  const seatEarned = seatAssets.reduce((sum, a) => sum + (Number(a.earnedValue) || 0), 0);
+  const tokenEarned = tokenAssets.reduce((sum, a) => sum + (Number(a.earnedValue) || 0), 0);
+  const nftPnl = costTotals.nftCount > 0 && costTotals.total > 0
+    ? seatFloor - costTotals.total + seatEarned
+    : null;
+  let tokenCost = 0;
+  let tokenMarked = 0;
+  let tokenPriced = 0;
+  for (const asset of tokenAssets) {
+    const entry = Number(asset.entryValueUsd) || 0;
+    if (!(entry > 0)) continue;
+    tokenPriced += 1;
+    tokenCost += entry;
+    tokenMarked += Number(asset.floorValue) || 0;
+  }
+  const tokenPnl = tokenPriced > 0 ? tokenMarked - tokenCost + tokenEarned : null;
 
   useEffect(() => {
     if (!grouped.length) return;
@@ -791,15 +816,6 @@ export default function PortfolioView({ data }) {
     return () => { cancelled = true; };
   }, [grouped]);
   const hasHoldings = results.ownedAssets.length > 0;
-  const forecastUsd = results.yieldUsd * forecastYears;
-  const cashLabel = mode === 'history' ? 'Earned in your ownership' : `Forecasted ${forecastYears}y cash-flow`;
-  const cashValue = mode === 'history' ? results.earnedUsd : forecastUsd;
-  const yieldBasis = grouped.reduce((sum, g) => {
-    if (g.tokenPosition && !(Number(g.yieldValue) > 0)) return sum;
-    if (mode === 'history') return sum + assetEntryCostUsd(g);
-    return sum + (Number(g.floorValue) || 0);
-  }, 0);
-  const roiPct = roiAgainst(mode === 'history' ? results.earnedUsd : forecastUsd, yieldBasis);
   const formatRoi = (pct, digits = 2) => (pct == null ? '—' : `${pct.toFixed(digits)}%`);
   const runRate = {
     d: results.yieldUsd / 365,
@@ -869,11 +885,14 @@ export default function PortfolioView({ data }) {
         seatUsd: seatFloor,
         tokenUsd: tokenSpot,
         basis: costTotals.nftCount > 0 ? formatCurrency(costTotals.total) : '',
-        cashLabel,
-        cash: results.hasErrors ? 'ERROR' : formatCurrency(cashValue),
-        roi: results.hasErrors ? 'ERROR' : formatRoi(roiPct),
-        roiLabel: mode === 'history' ? 'On entry cost' : 'Forecast ROI',
-        units: String(results.totalUnits),
+        cashLabel: 'NFTs',
+        cash: formatCurrency(seatFloor),
+        roi: formatPnl(nftPnl),
+        roiLabel: 'NFT P&L',
+        units: formatCurrency(tokenSpot),
+        tokenPnl: formatPnl(tokenPnl),
+        nftPnlColor: nftPnl == null ? '#8b929b' : nftPnl < -0.01 ? '#fb7185' : '#00a804',
+        tokenPnlColor: tokenPnl == null ? '#8b929b' : tokenPnl < -0.01 ? '#fb7185' : '#34d399',
         seats: seatAssets.map(cardRow),
         tokens: tokenAssets.map(cardRow),
       });
@@ -1086,52 +1105,43 @@ export default function PortfolioView({ data }) {
           <Copyable id="totals" className="mb-8">
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3 sm:p-5 shadow-inner">
-              <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Portfolio value</p>
+              <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Full value</p>
               <p className="text-xl md:text-2xl font-extrabold text-white">{formatCurrency(results.floorUsd)}</p>
-              {seatAssets.length > 0 && tokenAssets.length > 0 && (
-                <p className="text-[10px] text-slate-500 mt-1">
-                  Seats {formatCurrency(seatFloor)} · Tokens {formatCurrency(tokenSpot)}
-                </p>
-              )}
+              <p className="text-[10px] text-slate-500 mt-1">NFTs and tokens together</p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3 sm:p-5 shadow-inner">
-              <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Cost at entry</p>
-              <p className="text-xl md:text-2xl font-extrabold text-white">
-                {costTotals.nftCount === 0
-                  ? '—'
-                  : formatCurrency(costTotals.total)}
-              </p>
+              <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Tokens</p>
+              <p className="text-xl md:text-2xl font-extrabold text-emerald-300">{formatCurrency(tokenSpot)}</p>
               <p className="text-[10px] text-slate-500 mt-1">
-                {costTotals.nftCount === 0
-                  ? 'No seats in this scan'
-                  : 'Floor the day the seat opened, or the ETH paid, plus activation tokens'}
+                {tokenAssets.length} {tokenAssets.length === 1 ? 'balance' : 'balances'} · spot
               </p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3 sm:p-5 shadow-inner">
-              <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">{cashLabel}</p>
-              <p className={`text-xl md:text-2xl font-extrabold ${results.hasErrors ? 'text-rose-400' : 'text-emerald-400'}`}>
-                {results.hasErrors ? 'ERROR' : formatCurrency(cashValue)}
+              <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">NFTs</p>
+              <p className="text-xl md:text-2xl font-extrabold text-amber-300">{formatCurrency(seatFloor)}</p>
+              <p className="text-[10px] text-slate-500 mt-1">
+                {results.totalUnits} {results.totalUnits === 1 ? 'seat' : 'seats'} · floor today
               </p>
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3 sm:p-5 shadow-inner">
-              <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">
-                {mode === 'history' ? 'Cash on entry cost' : 'Forecast ROI'}
+              <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Token P&amp;L</p>
+              <p className={`text-xl md:text-2xl font-extrabold ${pnlTone(tokenPnl)}`}>{formatPnl(tokenPnl)}</p>
+              <p className="text-[10px] text-slate-500 mt-1">
+                {tokenPnl == null
+                  ? 'No open price on the tape'
+                  : tokenPriced < tokenAssets.length
+                    ? `Open price on ${tokenPriced} of ${tokenAssets.length}`
+                    : 'Spot minus the close when the hold started'}
               </p>
-              <p className={`text-xl md:text-2xl font-extrabold ${results.hasErrors ? 'text-rose-400' : 'text-blue-400'}`}>
-                {results.hasErrors ? 'ERROR' : formatRoi(roiPct)}
-              </p>
-              {spotOnlyUsd > 0 && (
-                <p className="text-[10px] text-slate-500 mt-1">Token spot stays out of this base</p>
-              )}
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3 sm:p-5 shadow-inner">
-              <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Seats</p>
-              <p className="text-xl md:text-2xl font-extrabold text-purple-400">{results.totalUnits}</p>
-              {tokenAssets.length > 0 && (
-                <p className="text-[10px] text-slate-500 mt-1">
-                  {tokenAssets.length} token {tokenAssets.length === 1 ? 'balance' : 'balances'}
-                </p>
-              )}
+              <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">NFT P&amp;L</p>
+              <p className={`text-xl md:text-2xl font-extrabold ${pnlTone(nftPnl)}`}>{formatPnl(nftPnl)}</p>
+              <p className="text-[10px] text-slate-500 mt-1">
+                {nftPnl == null
+                  ? 'No open cost on these seats'
+                  : `Floor vs ${formatCurrency(costTotals.total)} open, plus cash paid`}
+              </p>
             </div>
           </div>
           </Copyable>
