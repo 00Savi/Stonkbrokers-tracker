@@ -105,6 +105,24 @@ function MoneyLine({ label, value, tone, strong }) {
   );
 }
 
+function EntryWallet({ path }) {
+  const rows = path.holdings || [];
+  if (!rows.length) return null;
+  const shown = rows.slice(0, 6);
+  const extra = rows.length - shown.length;
+  return (
+    <ul className="min-w-0 flex-1 space-y-0.5 lg:max-w-md">
+      {shown.map((holding) => (
+        <li key={`${holding.contract}-${holding.symbol}`} className="flex items-baseline justify-between gap-3 text-[12px]">
+          <span className="min-w-0 truncate text-slate-300">{holdingText(holding, true)}</span>
+          <span className="shrink-0 font-mono text-slate-500">{holding.usd > 0 ? compactUsd(holding.usd) : 'unpriced'}</span>
+        </li>
+      ))}
+      {extra > 0 ? <li className="text-[11px] text-slate-500">+{extra} more in this wallet</li> : null}
+    </ul>
+  );
+}
+
 function EntryPortrait({ path, nftCa }) {
   if (path.imageUrl) {
     return (
@@ -152,7 +170,7 @@ function EntryBoard({ paths, snipeReady, floorBusy, floorNote, pricingTail, nftC
                 key={`${path.kind}-${path.id}`}
                 className={`flex flex-col gap-3 border-t border-[#1e2228] px-3 py-3 first:border-t-0 lg:flex-row lg:items-center ${best ? 'bg-emerald-500/[0.04]' : ''}`}
               >
-                <div className="flex min-w-0 flex-1 items-center gap-3">
+                <div className="flex min-w-0 items-center gap-3 lg:w-72 lg:shrink-0">
                   <EntryPortrait path={path} nftCa={nftCa} />
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -172,6 +190,7 @@ function EntryBoard({ paths, snipeReady, floorBusy, floorNote, pricingTail, nftC
                     {interns ? <p className="mt-1 truncate text-[12px] text-slate-400">{interns}</p> : null}
                   </div>
                 </div>
+                <EntryWallet path={path} />
                 <div className="w-full space-y-1 rounded-xl border border-[#1e2228] bg-[#08090b] px-3 py-2 lg:w-72 lg:shrink-0">
                   {(path.lines || []).map((line, n) => (
                     <MoneyLine key={`${line.label}-${n}`} label={line.label} value={compactUsd(line.usd)} />

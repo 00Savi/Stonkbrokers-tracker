@@ -989,7 +989,7 @@ for (const [name, View, props] of VIEWS) {
   const ranked = bestEntries({
     listings: [
       { id: 10, floorUsd: 100, walletUsd: 40 },
-      { id: 11, floorUsd: 80, walletUsd: 70 },
+      { id: 11, floorUsd: 80, walletUsd: 70, wallet: [{ contract: '0xwall', symbol: 'Wall', amount: 1, usd: 70, nft: true }] },
     ],
     vaultRows: [
       { tokenId: 3, usd: 90 },
@@ -1007,6 +1007,7 @@ for (const [name, View, props] of VIEWS) {
     || states.join() !== 'dormant,available,activated'
     || ranked[0]?.kind !== 'anvil' || ranked[0]?.id !== 3 || ranked[0]?.purchaseUsd !== -40
     || ranked.find((row) => row.id === 11)?.purchaseUsd !== 10
+    || ranked.find((row) => row.id === 11)?.holdings?.[0]?.symbol !== 'Wall'
   ) {
     failed++;
     console.error(`FAIL  floor check net ${net} floor ${overlaid['0xabc']} states ${states}`);

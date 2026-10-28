@@ -73,6 +73,7 @@ export function bestEntries({ listings, vaultRows, snipe, snipeUsd, feeParts, li
       symbol: row.floorSymbol || row.symbol || '',
       imageUrl: row.imageUrl || '',
       interns: row.interns || [],
+      holdings: row.wallet || row.holdings || [],
     });
   }
 
@@ -96,6 +97,7 @@ export function bestEntries({ listings, vaultRows, snipe, snipeUsd, feeParts, li
         symbol: '',
         imageUrl: row.imageUrl || '',
         interns: row.interns || [],
+        holdings: row.holdings || row.wallet || [],
       });
     }
   }
