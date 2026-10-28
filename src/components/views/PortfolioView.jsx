@@ -5,6 +5,7 @@ import { SAVI_X } from '../Shell';
 import { NfaNote } from '../Disclaimer';
 import { copyElement, copyPortfolioSnapshot } from '../../lib/share';
 import { CsvButton } from '../CsvButton';
+import { CopyControl } from '../CopyControl';
 import { PAIR_COLORS, STREAM_COLORS } from '../../lib/charts';
 import { SliceChart } from '../SliceChart';
 import { PROJECTS } from '../../lib/routes';
