@@ -7,6 +7,12 @@ import {
   tbaRegistry,
 } from './tba';
 
+// OpenSea answers the browser with access-control-allow-origin: null, so a
+// sweep cannot read it directly. gg-index fetches the cheapest listings and
+// the collection floors at the moment of the scan. Wallet balances are a
+// separate chain read in the same sweep.
+const INDEX = (import.meta.env?.VITE_GG_INDEX_URL || 'https://index.ggservices.dev').replace(/\/+$/, '');
+
 export const FLOOR_MIN = 5;
 export const FLOOR_MAX = 10;
 export const STONK_COLLECTION = 'stonkbrokers-nft';
@@ -101,7 +107,18 @@ function listingsFromPayload(body, limit) {
   }).filter((row) => row.id > 0 && row.ask > 0).slice(0, limit);
 }
 
-/** Dev server proxies this. The public site cannot call OpenSea directly. */
+/** USD floor per NFT contract. A live OpenSea floor replaces the hourly one. */
+export function liveFloorIndex(data, floors) {
+  const map = nftFloorIndex(data);
+  for (const row of floors || []) {
+    const ca = String(row?.address || '').toLowerCase();
+    const usd = Number(row?.usd);
+    if (ca && Number.isFinite(usd) && usd > 0) map[ca] = usd;
+  }
+  return map;
+}
+
+/** Dev server proxies this. Production goes through gg-index instead. */
 export async function fetchLiveListings(limit) {
   const res = await fetch('/opensea-gql', {
     method: 'POST',
@@ -114,22 +131,51 @@ export async function fetchLiveListings(limit) {
   return listingsFromPayload(body, limit);
 }
 
-export async function loadFloorListings(data, limit) {
-  if (import.meta.env?.DEV) {
-    try {
-      const live = await fetchLiveListings(limit);
-      if (live.length) return live;
-    } catch {
-      // The ledger copy is the fallback when the dev proxy is down.
-    }
+/**
+ * Asks and NFT floors for one sweep.
+ *
+ * `live` is true when OpenSea was read just now. If that read fails and the
+ * hourly ledger still has listings, those are returned with `live: false` so
+ * the page can say the book is the last snapshot rather than a fresh ask.
+ */
+export async function loadFloorBook(data, limit) {
+  const count = parseFloorCount(limit);
+  try {
+    const res = await fetch(`${INDEX}/v1/opensea/floor?limit=${count}`, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`OpenSea floor read failed (${res.status}).`);
+    const body = await res.json();
+    const listings = (Array.isArray(body?.listings) ? body.listings : [])
+      .map((row) => ({
+        id: Number(row?.id),
+        ask: Number(row?.ask) || 0,
+        symbol: String(row?.symbol || ''),
+        usd: Number(row?.usd) || 0,
+      }))
+      .filter((row) => row.id > 0 && row.ask > 0)
+      .slice(0, count);
+    if (!listings.length) throw new Error(body?.error || 'OpenSea returned no listings.');
+    return {
+      listings,
+      floors: liveFloorIndex(data, body.floors),
+      fetchedAt: body?.fetchedAt || '',
+      live: true,
+    };
+  } catch (err) {
+    const baked = bakedListings(data, count);
+    if (!baked.length) throw err;
+    return {
+      listings: baked,
+      floors: nftFloorIndex(data),
+      fetchedAt: data?.lastUpdated || '',
+      live: false,
+    };
   }
-  return bakedListings(data, limit);
 }
 
 /**
  * Cheapest asks, each token-bound wallet priced, and ask minus that wallet.
  */
-export async function scanFloorListings(listings, data) {
+export async function scanFloorListings(listings, data, floors) {
   const nftCa = data?.projects?.stonk?.config?.nftCa;
   if (!nftCa || !ethers.isAddress(nftCa)) throw new Error('StonkBrokers collection is not loaded.');
   if (!listings?.length) throw new Error('No OpenSea listings to check.');
@@ -145,11 +191,11 @@ export async function scanFloorListings(listings, data) {
 
   const inventories = await fetchAllTbaInventories(tbas, data);
   const priceIndex = buildPriceIndex(data);
-  const floors = nftFloorIndex(data);
+  const book = floors || nftFloorIndex(data);
 
   return listings.map((row, i) => {
     const tba = tbas[i];
-    const wallet = priceHoldings(inventories[tba] || [], priceIndex, floors)
+    const wallet = priceHoldings(inventories[tba] || [], priceIndex, book)
       .sort((a, b) => (b.usd - a.usd) || String(a.symbol).localeCompare(String(b.symbol)));
     const held = walletUsd(wallet);
     return {

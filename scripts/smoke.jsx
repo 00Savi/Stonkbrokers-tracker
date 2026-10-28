@@ -60,7 +60,7 @@ import { buildTopicShareCard } from '../src/lib/projectShare';
 import { copySectionEl } from '../src/components/CopyControl';
 import { internIdsForBroker } from '../src/lib/interns';
 import { parseBrokerId } from '../src/lib/brokerScan';
-import { parseFloorCount, priceHoldings, purchaseCost, walletUsd } from '../src/lib/floorCheck';
+import { liveFloorIndex, parseFloorCount, priceHoldings, purchaseCost, walletUsd } from '../src/lib/floorCheck';
 import { ANVIL_VAULTS, internRowState, internStatusLine, predictTbaAddress, rankVaultRows, rowsFromVaultBook, snipeCostFor, wallFloorEth, wallStars } from '../src/lib/anvilScan';
 import { cheapestWallEth, listedSeat, mixUsd, revenueRows, snipeSeatUsd } from '../src/lib/seats';
 import { isProjectLive } from '../src/lib/routes';
@@ -933,9 +933,13 @@ for (const [name, View, props] of VIEWS) {
     { contract: '0xabc', symbol: 'INTERN', amount: 2, nft: true },
   ], {}, { '0xabc': 5 });
   const net = purchaseCost(20, walletUsd(held));
-  if (parseFloorCount('4') !== 10 || parseFloorCount('7') !== 7 || net !== -90) {
+  const overlaid = liveFloorIndex(
+    { projects: { stonk: { config: { nftCa: '0xabc' }, market: { nftFloorEth: 2, ethPriceUsd: 100 } } } },
+    [{ address: '0xABC', usd: 12 }],
+  );
+  if (parseFloorCount('4') !== 10 || parseFloorCount('7') !== 7 || net !== -90 || overlaid['0xabc'] !== 12) {
     failed++;
-    console.error(`FAIL  floor check net ${net}`);
+    console.error(`FAIL  floor check net ${net} floor ${overlaid['0xabc']}`);
   } else {
     console.log('ok    floor check nets ask minus wallet');
   }

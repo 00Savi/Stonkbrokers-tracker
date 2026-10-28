@@ -8,7 +8,7 @@ import {
   FLOOR_MAX,
   FLOOR_MIN,
   STONK_COLLECTION,
-  loadFloorListings,
+  loadFloorBook,
   parseFloorCount,
   scanFloorListings,
 } from '../../lib/floorCheck';
@@ -38,15 +38,18 @@ export default function FloorCheckView({ data }) {
   const [error, setError] = useState('');
   const [rows, setRows] = useState(null);
   const [images, setImages] = useState({});
+  const [live, setLive] = useState(true);
+  const [fetchedAt, setFetchedAt] = useState('');
 
   const run = async (nextCount) => {
     setError('');
     setBusy(true);
     setRows(null);
     try {
-      const listings = await loadFloorListings(data, nextCount);
-      if (!listings.length) throw new Error('No OpenSea listings in the ledger yet.');
-      setRows(await scanFloorListings(listings, data));
+      const book = await loadFloorBook(data, nextCount);
+      setLive(book.live);
+      setFetchedAt(book.fetchedAt || '');
+      setRows(await scanFloorListings(book.listings, data, book.floors));
     } catch (err) {
       setRows(null);
       setError(err?.message || 'Floor check failed.');
@@ -62,10 +65,13 @@ export default function FloorCheckView({ data }) {
       setBusy(true);
       setRows(null);
       try {
-        const listings = await loadFloorListings(data, count);
-        if (!listings.length) throw new Error('No OpenSea listings in the ledger yet.');
-        const next = await scanFloorListings(listings, data);
-        if (!cancel) setRows(next);
+        const book = await loadFloorBook(data, count);
+        const next = await scanFloorListings(book.listings, data, book.floors);
+        if (!cancel) {
+          setLive(book.live);
+          setFetchedAt(book.fetchedAt || '');
+          setRows(next);
+        }
       } catch (err) {
         if (!cancel) {
           setRows(null);
@@ -105,8 +111,9 @@ export default function FloorCheckView({ data }) {
         <div>
           <h2 className="text-lg md:text-xl font-bold text-white">Floor checker</h2>
           <p className="text-xs text-slate-400 mt-1 max-w-xl">
-            The cheapest StonkBroker listings on OpenSea. Purchase cost is the ask minus
-            what that broker&apos;s wallet already holds. Tokens are at spot. NFTs are at the collection floor.
+            The cheapest StonkBroker listings on OpenSea. Each sweep reads the asks and
+            the collection floors, then reads each wallet on chain. Purchase cost is the
+            ask minus what that wallet holds. Tokens are at spot. NFTs are at the floor from this sweep.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -135,7 +142,9 @@ export default function FloorCheckView({ data }) {
       </div>
 
       <p className="mb-4 font-mono text-[11px] text-slate-600">
-        Asks come from{' '}
+        {live ? 'Asks and floors were read from OpenSea for this sweep' : 'OpenSea was unreachable, so this sweep is using the hourly ledger'}
+        {fetchedAt ? ` · ${fetchedAt}` : ''}
+        {' · '}
         <a
           href={`https://opensea.io/collection/${STONK_COLLECTION}?search[sortBy]=PRICE&search[sortAscending]=true`}
           target="_blank"
@@ -245,7 +254,7 @@ export default function FloorCheckView({ data }) {
 
       <NfaNote
         className="mt-8"
-        extra="The ask is the OpenSea listing. The wallet is that NFT's token-bound account, read live. Purchase cost = ask − wallet value."
+        extra="The ask and the NFT floors are read from OpenSea on this sweep. The wallet is that NFT's token-bound account, read from the chain on the same sweep. Purchase cost = ask − wallet value."
       />
     </div>
   );
