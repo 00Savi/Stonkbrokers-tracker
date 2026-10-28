@@ -108,7 +108,7 @@ export default function FloorCheckView({ data }) {
         <div className="max-w-xl">
           <h2 className="text-lg md:text-xl font-bold text-white">Floor checker</h2>
           <p className="mt-1 text-xs leading-relaxed text-slate-400">
-            Cheapest listed StonkBrokers. Purchase cost is the floor minus the wallet.
+            Cheapest listed StonkBrokers. Each floor is that NFT's OpenSea ask. Purchase cost is the floor minus the wallet.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -143,7 +143,7 @@ export default function FloorCheckView({ data }) {
           {clock ? ` · ${clock}` : ''}
         </span>
         <a href={openSeaBook} target="_blank" rel="noreferrer" className="rounded-full border border-[#1e2228] px-2.5 py-1 text-slate-400 hover:text-white">
-          {STONK_COLLECTION}
+          StonkBrokers
         </a>
       </div>
 
@@ -164,10 +164,10 @@ export default function FloorCheckView({ data }) {
             const cheap = row.purchaseUsd < 0;
             return (
               <article key={row.id} className="rounded-2xl border border-[#1e2228] bg-[#08090b] p-3 sm:p-4">
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
-                  <div className="flex min-w-0 flex-1 gap-3 sm:gap-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+                  <div className="flex shrink-0 items-center gap-3">
                     <Portrait src={row.imageUrl} alt={`Broker #${row.id}`} label={`#${row.id}`} size="lg" />
-                    <div className="min-w-0 pt-1">
+                    <div className="min-w-0">
                       <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">StonkBroker</p>
                       <p className="text-3xl font-extrabold leading-none tracking-tight text-white">#{row.id}</p>
                       <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[12px]">
@@ -186,44 +186,43 @@ export default function FloorCheckView({ data }) {
                     </div>
                   </div>
 
-                  <div className="xl:w-[26rem]">
-                    <div className={`rounded-2xl border px-4 py-3 text-right ${cheap ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-[#1e2228] bg-[#0e1013]'}`}>
+                  {row.interns?.length > 0 && (
+                    <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-2">
+                      {row.interns.map((intern) => (
+                        <div key={intern.id} className="flex items-center gap-2 rounded-xl bg-[#0e1013] px-2 py-1.5">
+                          <Portrait src={intern.imageUrl} alt={`${intern.label} #${intern.id}`} label={`#${intern.id}`} />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-[13px] font-semibold text-white">
+                              {intern.label}
+                              <span className="ml-1.5 font-mono text-[11px] font-normal text-slate-500">#{intern.id}</span>
+                            </p>
+                            <p className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                              <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${internPill(intern.state)}`}>
+                                {internStateLabel(intern.state)}
+                              </span>
+                              {intern.inWallet && <span className="text-[10px] text-slate-500">in wallet</span>}
+                            </p>
+                          </div>
+                          <p className="font-mono text-[12px] text-slate-200">{intern.inWallet ? compactUsd(intern.usd) : '—'}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="w-full shrink-0 lg:w-60">
+                    <div className={`rounded-2xl border px-3 py-2 text-right ${cheap ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-[#1e2228] bg-[#0e1013]'}`}>
                       <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Purchase cost</p>
-                      <p className={`mt-1 font-mono text-2xl font-semibold tracking-tight ${cheap ? 'text-emerald-300' : 'text-white'}`}>
+                      <p className={`mt-0.5 font-mono text-xl font-semibold tracking-tight ${cheap ? 'text-emerald-300' : 'text-white'}`}>
                         {compactUsd(row.purchaseUsd)}
                       </p>
                       <p className="font-mono text-[10px] text-slate-500">floor − wallet</p>
                     </div>
-                    <dl className="mt-2 grid grid-cols-3 overflow-hidden rounded-xl border border-[#1e2228] bg-[#1e2228]">
-                      <Stat label="Floor" value={row.floorEth ? `${Number(row.floorEth).toFixed(3)} ETH` : '—'} sub={compactUsd(row.floorUsd)} />
-                      <Stat label="Listing" value={askLabel(row)} sub={compactUsd(row.usd)} />
+                    <dl className="mt-2 grid grid-cols-2 overflow-hidden rounded-xl border border-[#1e2228] bg-[#1e2228]">
+                      <Stat label="Floor" value={askLabel({ ask: row.floorAsk, symbol: row.floorSymbol })} sub={compactUsd(row.floorUsd)} />
                       <Stat label="Wallet" value={compactUsd(row.walletUsd)} sub="contents" />
                     </dl>
                   </div>
                 </div>
-
-                {row.interns?.length > 0 && (
-                  <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {row.interns.map((intern) => (
-                      <div key={intern.id} className="flex items-center gap-2.5 rounded-xl bg-[#0e1013] px-2.5 py-2">
-                        <Portrait src={intern.imageUrl} alt={`${intern.label} #${intern.id}`} label={`#${intern.id}`} />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-white">
-                            {intern.label}
-                            <span className="ml-1.5 font-mono text-[11px] font-normal text-slate-500">#{intern.id}</span>
-                          </p>
-                          <p className="mt-1 flex flex-wrap items-center gap-1.5">
-                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${internPill(intern.state)}`}>
-                              {internStateLabel(intern.state)}
-                            </span>
-                            {intern.inWallet && <span className="text-[10px] text-slate-500">in this wallet</span>}
-                          </p>
-                        </div>
-                        <p className="font-mono text-[13px] text-slate-200">{intern.inWallet ? compactUsd(intern.usd) : '—'}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
 
                 <button
                   type="button"
@@ -295,7 +294,7 @@ export default function FloorCheckView({ data }) {
 
       <NfaNote
         className="mt-8"
-        extra="The floor is the cost of the StonkBroker NFT. The listing is the OpenSea ask. The wallet is that NFT's token-bound account, read on this sweep. Purchase cost = floor − wallet value."
+        extra="Each broker's floor is its own OpenSea listing on StonkBrokers. The wallet is that NFT's token-bound account, read on this sweep. Purchase cost = that floor − wallet value."
       />
     </div>
   );

@@ -938,7 +938,7 @@ for (const [name, View, props] of VIEWS) {
       stonk: { config: { nftCa: '0xabc', unitValue: 100 }, market: { nftFloorEth: 2, ethPriceUsd: 100, tokenPriceUsd: 1 } },
     },
   };
-  const overlaid = liveFloorIndex(floorBook, [{ address: '0xABC', usd: 0.01 }, { address: '0xdef', usd: 7 }]);
+  const overlaid = liveFloorIndex(floorBook, [{ address: '0xABC', usd: 4396 }, { address: '0xdef', usd: 7 }]);
   const floor = stonkBrokerFloor(floorBook);
   const states = [
     internAvailability({ minted: true, inWallet: true, dormant: true, parentActive: false }),
@@ -947,7 +947,7 @@ for (const [name, View, props] of VIEWS) {
   ];
   if (
     parseFloorCount('4') !== 10 || parseFloorCount('7') !== 7 || net !== -90
-    || overlaid['0xabc'] !== 110 || overlaid['0xdef'] !== 7 || floor.usd !== 110
+    || overlaid['0xabc'] !== 4396 || overlaid['0xdef'] !== 7 || floor.usd !== 110
     || states.join() !== 'dormant,available,activated'
   ) {
     failed++;

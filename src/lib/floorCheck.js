@@ -17,7 +17,7 @@ const INDEX = (import.meta.env?.VITE_GG_INDEX_URL || 'https://index.ggservices.d
 
 export const FLOOR_MIN = 5;
 export const FLOOR_MAX = 10;
-export const STONK_COLLECTION = 'stonkbrokers-nft';
+export const STONK_COLLECTION = 'stonkbrokers-434284142';
 
 // Activation contracts are not on the hourly StonkBrokers config. These are
 // the live ones the Anvil scan already reads.
@@ -168,23 +168,13 @@ function listingsFromPayload(body, limit) {
   }).filter((row) => row.id > 0 && row.ask > 0).slice(0, limit);
 }
 
-/**
- * USD floor per NFT contract.
- *
- * A live OpenSea floor replaces the hourly one for every collection except
- * StonkBrokers. That book's cheapest ask is a dust listing, and the floor the
- * rest of the site uses is 666,666 tokens at spot plus 10%.
- */
+/** USD floor per NFT contract. A live OpenSea floor replaces the hourly one. */
 export function liveFloorIndex(data, floors) {
   const map = nftFloorIndex(data);
-  const stonkCa = String(data?.projects?.stonk?.config?.nftCa || '').toLowerCase();
-  const broker = stonkBrokerFloor(data);
-  if (stonkCa && broker.usd > 0) map[stonkCa] = broker.usd;
   for (const row of floors || []) {
     const ca = String(row?.address || '').toLowerCase();
     const usd = Number(row?.usd);
-    if (!ca || ca === stonkCa || !(usd > 0)) continue;
-    map[ca] = usd;
+    if (ca && usd > 0) map[ca] = usd;
   }
   return map;
 }
@@ -332,7 +322,6 @@ export async function scanFloorListings(listings, data, floors) {
   const { erc20, erc721 } = listKnownAssets(data);
   const book = floors || liveFloorIndex(data, []);
   const priceIndex = buildPriceIndex(data);
-  const floor = stonkBrokerFloor(data);
   const calls = [];
   const push = (target, callData, meta) => {
     calls.push({ target, callData, meta });
@@ -477,13 +466,14 @@ export async function scanFloorListings(listings, data, floors) {
       nftCa,
       tba,
       imageUrl: art[i] || '',
-      floorUsd: floor.usd,
-      floorEth: floor.eth,
+      floorAsk: row.ask,
+      floorSymbol: row.symbol,
+      floorUsd: row.usd,
       brokerActive: brokerActive[i],
       wallet,
       interns,
       walletUsd: heldUsd,
-      purchaseUsd: purchaseCost(floor.usd, heldUsd),
+      purchaseUsd: purchaseCost(row.usd, heldUsd),
       unpricedNfts: wallet.some((tok) => tok.nft && !tok.atFloor && tok.amount > 0),
     };
   });

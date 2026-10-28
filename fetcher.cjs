@@ -2762,7 +2762,7 @@ async function fetchStarFloorsRest(slug) {
 async function fetchBrokerFloorListings(limit = 10) {
   const data = await fetchOpenSeaGraphql(`query {
     collectionItems(
-      collectionSlug: "stonkbrokers-nft",
+      collectionSlug: "stonkbrokers-434284142",
       sort: { by: PRICE, direction: ASC },
       limit: ${Number(limit) || 10},
       filter: { isListed: true }
