@@ -3,11 +3,11 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { NfaNote } from '../Disclaimer';
 import { compactNum, compactUsd } from '../kit';
 import { explorerAddressUrl } from '../../lib/tba';
-import { fetchNftImage } from '../../lib/portfolioHistory';
 import {
   FLOOR_MAX,
   FLOOR_MIN,
   STONK_COLLECTION,
+  internStateLabel,
   loadFloorBook,
   parseFloorCount,
   scanFloorListings,
@@ -37,7 +37,6 @@ export default function FloorCheckView({ data }) {
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
   const [rows, setRows] = useState(null);
-  const [images, setImages] = useState({});
   const [live, setLive] = useState(true);
   const [fetchedAt, setFetchedAt] = useState('');
 
@@ -85,20 +84,6 @@ export default function FloorCheckView({ data }) {
     };
   }, [data, count]);
 
-  useEffect(() => {
-    if (!rows?.length) return undefined;
-    let cancel = false;
-    const nftCa = rows[0].nftCa;
-    Promise.all(rows.map(async (row) => [row.id, await fetchNftImage(nftCa, row.id).catch(() => '')]))
-      .then((pairs) => {
-        if (cancel) return;
-        setImages(Object.fromEntries(pairs.filter(([, url]) => url)));
-      });
-    return () => {
-      cancel = true;
-    };
-  }, [rows]);
-
   const setCount = (event) => {
     const next = new URLSearchParams(params);
     next.set('n', event.target.value);
@@ -111,9 +96,9 @@ export default function FloorCheckView({ data }) {
         <div>
           <h2 className="text-lg md:text-xl font-bold text-white">Floor checker</h2>
           <p className="text-xs text-slate-400 mt-1 max-w-xl">
-            The cheapest StonkBroker listings on OpenSea. Each sweep reads the asks and
-            the collection floors, then reads each wallet on chain. Purchase cost is the
-            ask minus what that wallet holds. Tokens are at spot. NFTs are at the floor from this sweep.
+            The cheapest listed StonkBrokers. The floor is the StonkBroker NFT floor,
+            666,666 tokens at spot plus 10%. Purchase cost is the OpenSea ask minus
+            everything in that broker&apos;s wallet. Interns are marked activated, dormant, or available.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -142,7 +127,7 @@ export default function FloorCheckView({ data }) {
       </div>
 
       <p className="mb-4 font-mono text-[11px] text-slate-600">
-        {live ? 'Asks and floors were read from OpenSea for this sweep' : 'OpenSea was unreachable, so this sweep is using the hourly ledger'}
+        {live ? 'Listings and the other collection floors were read from OpenSea for this sweep' : 'OpenSea was unreachable, so this sweep is using the hourly ledger'}
         {fetchedAt ? ` · ${fetchedAt}` : ''}
         {' · '}
         <a
@@ -170,9 +155,14 @@ export default function FloorCheckView({ data }) {
             <article key={row.id} className="rounded-xl border border-[#1e2228] bg-[#08090b] p-4">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
                 <div className="flex min-w-0 flex-1 gap-3">
-                  <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-[#1e2228] bg-[#0e1013]">
-                    {images[row.id] ? (
-                      <img src={images[row.id]} alt={`Broker #${row.id}`} className="h-full w-full object-cover" />
+                  <div className="h-28 w-28 shrink-0 overflow-hidden rounded-2xl border border-[#1e2228] bg-[#0e1013]">
+                    {row.imageUrl ? (
+                      <img
+                        src={row.imageUrl}
+                        alt={`Broker #${row.id}`}
+                        className="h-full w-full object-contain"
+                        style={{ imageRendering: 'pixelated' }}
+                      />
                     ) : (
                       <div className="flex h-full items-center justify-center font-mono text-[10px] text-slate-600">#{row.id}</div>
                     )}
@@ -195,20 +185,51 @@ export default function FloorCheckView({ data }) {
                     </div>
                   </div>
                 </div>
-                <dl className="grid grid-cols-3 gap-2 lg:w-[28rem]">
-                  <Stat label="Ask" value={askLabel(row)} sub={compactUsd(row.usd)} />
-                  <Stat label="Wallet" value={compactUsd(row.walletUsd)} sub="contents" />
+                <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:w-[36rem]">
+                  <Stat label="Floor" value={row.floorEth ? `${Number(row.floorEth).toFixed(3)} ETH` : '—'} sub={compactUsd(row.floorUsd)} />
+                  <Stat label="Listing" value={askLabel(row)} sub={compactUsd(row.usd)} />
+                  <Stat label="Wallet" value={compactUsd(row.walletUsd)} sub="total" />
                   <Stat
                     label="Purchase cost"
                     value={compactUsd(row.purchaseUsd)}
-                    sub="ask − wallet"
+                    sub="listing − wallet"
                     tone={row.purchaseUsd < 0 ? 'text-emerald-300' : 'text-white'}
                   />
                 </dl>
               </div>
 
+              {row.interns?.length > 0 && (
+                <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-2">
+                  {row.interns.map((intern) => (
+                    <div key={intern.id} className="flex items-center gap-3 rounded-xl border border-[#1e2228] bg-[#0e1013] p-3">
+                      <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-[#1e2228] bg-[#08090b]">
+                        {intern.imageUrl ? (
+                          <img
+                            src={intern.imageUrl}
+                            alt={`${intern.label} #${intern.id}`}
+                            className="h-full w-full object-contain"
+                            style={{ imageRendering: 'pixelated' }}
+                          />
+                        ) : (
+                          <div className="flex h-full items-center justify-center font-mono text-[10px] text-slate-600">#{intern.id}</div>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[10px] uppercase tracking-wider text-slate-500">{intern.label}</p>
+                        <p className="font-semibold text-white">Intern #{intern.id}</p>
+                        <p className={`text-[12px] font-semibold ${internTone(intern.state)}`}>
+                          {internStateLabel(intern.state)}
+                          {intern.inWallet ? ' · in this wallet' : ''}
+                        </p>
+                      </div>
+                      <p className="ml-auto font-mono text-[12px] text-slate-200">{intern.inWallet ? compactUsd(intern.usd) : '—'}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div className="mt-4">
-                {row.wallet.length === 0 ? (
+                {row.wallet.length === 0 && !(row.interns || []).some((intern) => intern.inWallet) ? (
                   <p className="text-sm text-slate-500">Nothing detected in this wallet among tracked tokens and collections.</p>
                 ) : (
                   <div className="overflow-x-auto">
@@ -221,6 +242,16 @@ export default function FloorCheckView({ data }) {
                         </tr>
                       </thead>
                       <tbody>
+                        {(row.interns || []).filter((intern) => intern.inWallet).map((intern) => (
+                          <tr key={`intern-${intern.id}`} className="border-t border-[#1e2228]">
+                            <td className="py-2 pr-3">
+                              <span className="font-semibold text-white">{intern.label}</span>
+                              <span className="ml-2 text-[11px] text-slate-500">#{intern.id} · {internStateLabel(intern.state)}</span>
+                            </td>
+                            <td className="py-2 pr-3 text-right font-mono text-slate-200">1</td>
+                            <td className="py-2 text-right font-mono text-slate-200">{compactUsd(intern.usd)}</td>
+                          </tr>
+                        ))}
                         {row.wallet.map((tok) => (
                           <tr key={tok.contract} className="border-t border-[#1e2228]">
                             <td className="py-2 pr-3">
@@ -237,6 +268,10 @@ export default function FloorCheckView({ data }) {
                             </td>
                           </tr>
                         ))}
+                        <tr className="border-t border-[#1e2228]">
+                          <td className="py-2 pr-3 font-semibold text-white" colSpan={2}>Wallet total</td>
+                          <td className="py-2 text-right font-mono font-semibold text-white">{compactUsd(row.walletUsd)}</td>
+                        </tr>
                       </tbody>
                     </table>
                   </div>
@@ -254,10 +289,17 @@ export default function FloorCheckView({ data }) {
 
       <NfaNote
         className="mt-8"
-        extra="The ask and the NFT floors are read from OpenSea on this sweep. The wallet is that NFT's token-bound account, read from the chain on the same sweep. Purchase cost = ask − wallet value."
+        extra="The floor is the StonkBroker NFT floor. The listing is the OpenSea ask. The wallet is that NFT's token-bound account, read on this sweep, including whether each intern is activated, dormant, or available. Purchase cost = listing − wallet value."
       />
     </div>
   );
+}
+
+function internTone(state) {
+  if (state === 'available') return 'text-emerald-300';
+  if (state === 'activated') return 'text-sky-300';
+  if (state === 'dormant') return 'text-amber-300';
+  return 'text-slate-500';
 }
 
 function Stat({ label, value, sub, tone = 'text-white' }) {

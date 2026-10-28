@@ -58,6 +58,10 @@ function uniqByCa(rows) {
   return out;
 }
 
+export function listKnownAssets(data) {
+  return knownAssets(data);
+}
+
 function knownAssets(data) {
   const erc20 = [];
   const erc721 = [];

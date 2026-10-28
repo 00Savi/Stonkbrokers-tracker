@@ -60,7 +60,7 @@ import { buildTopicShareCard } from '../src/lib/projectShare';
 import { copySectionEl } from '../src/components/CopyControl';
 import { internIdsForBroker } from '../src/lib/interns';
 import { parseBrokerId } from '../src/lib/brokerScan';
-import { liveFloorIndex, parseFloorCount, priceHoldings, purchaseCost, walletUsd } from '../src/lib/floorCheck';
+import { internAvailability, liveFloorIndex, parseFloorCount, priceHoldings, purchaseCost, stonkBrokerFloor, walletUsd } from '../src/lib/floorCheck';
 import { ANVIL_VAULTS, internRowState, internStatusLine, predictTbaAddress, rankVaultRows, rowsFromVaultBook, snipeCostFor, wallFloorEth, wallStars } from '../src/lib/anvilScan';
 import { cheapestWallEth, listedSeat, mixUsd, revenueRows, snipeSeatUsd } from '../src/lib/seats';
 import { isProjectLive } from '../src/lib/routes';
@@ -933,13 +933,25 @@ for (const [name, View, props] of VIEWS) {
     { contract: '0xabc', symbol: 'INTERN', amount: 2, nft: true },
   ], {}, { '0xabc': 5 });
   const net = purchaseCost(20, walletUsd(held));
-  const overlaid = liveFloorIndex(
-    { projects: { stonk: { config: { nftCa: '0xabc' }, market: { nftFloorEth: 2, ethPriceUsd: 100 } } } },
-    [{ address: '0xABC', usd: 12 }],
-  );
-  if (parseFloorCount('4') !== 10 || parseFloorCount('7') !== 7 || net !== -90 || overlaid['0xabc'] !== 12) {
+  const floorBook = {
+    projects: {
+      stonk: { config: { nftCa: '0xabc', unitValue: 100 }, market: { nftFloorEth: 2, ethPriceUsd: 100, tokenPriceUsd: 1 } },
+    },
+  };
+  const overlaid = liveFloorIndex(floorBook, [{ address: '0xABC', usd: 0.01 }, { address: '0xdef', usd: 7 }]);
+  const floor = stonkBrokerFloor(floorBook);
+  const states = [
+    internAvailability({ minted: true, inWallet: true, dormant: true, parentActive: false }),
+    internAvailability({ minted: true, inWallet: true, dormant: true, parentActive: true }),
+    internAvailability({ minted: true, inWallet: false, dormant: false, parentActive: true }),
+  ];
+  if (
+    parseFloorCount('4') !== 10 || parseFloorCount('7') !== 7 || net !== -90
+    || overlaid['0xabc'] !== 110 || overlaid['0xdef'] !== 7 || floor.usd !== 110
+    || states.join() !== 'dormant,available,activated'
+  ) {
     failed++;
-    console.error(`FAIL  floor check net ${net} floor ${overlaid['0xabc']}`);
+    console.error(`FAIL  floor check net ${net} floor ${overlaid['0xabc']} states ${states}`);
   } else {
     console.log('ok    floor check nets ask minus wallet');
   }
