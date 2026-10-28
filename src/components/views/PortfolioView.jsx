@@ -163,6 +163,7 @@ function byFloor(a, b) {
 function seatBookRows(assets) {
   return (assets || []).map((asset) => {
     const paid = (asset.nfts || []).reduce((sum, nft) => sum + nftAcquireCostUsd(nft), 0);
+    const activation = (asset.nfts || []).reduce((sum, nft) => sum + (Number(nft.activationCostUsd) || 0), 0);
     const floor = Number(asset.floorValue) || 0;
     return {
       key: asset.projectKey,
@@ -170,6 +171,7 @@ function seatBookRows(assets) {
       count: (asset.nfts || []).length || Number(asset.balance) || 0,
       floor,
       paid,
+      activation,
       pnl: floor - paid,
     };
   });
@@ -261,16 +263,22 @@ function ValueDetail({ series, formatPnl, formatCurrency }) {
 function SeatDetail({ assets, sort, formatCurrency, formatPnl, pnlTone }) {
   const rows = seatBookRows(assets).sort((a, b) => (sort === 'pnl' ? b.pnl - a.pnl : b.floor - a.floor));
   return (
-    <DetailTable
-      rows={rows}
-      columns={[
-        { key: 'name', label: 'Seats', render: (row) => row.name },
-        { key: 'count', label: 'Count', align: 'text-right', render: (row) => row.count },
-        { key: 'paid', label: 'Paid', align: 'text-right', render: (row) => cents(formatCurrency, row.paid) },
-        { key: 'floor', label: 'Floor', align: 'text-right', render: (row) => formatCurrency(row.floor) },
-        { key: 'pnl', label: 'P&L', align: 'text-right', tone: (row) => pnlTone(row.pnl), render: (row) => formatPnl(row.pnl) },
-      ]}
-    />
+    <div>
+      <p className="text-xs text-slate-400 mb-3">
+        NFT is the ETH paid to mint or buy the seat. Activation is the tokens spent to turn it on. P&amp;L is today&apos;s floor minus the NFT price.
+      </p>
+      <DetailTable
+        rows={rows}
+        columns={[
+          { key: 'name', label: 'Seats', render: (row) => row.name },
+          { key: 'count', label: 'Count', align: 'text-right', render: (row) => row.count },
+          { key: 'paid', label: 'NFT', align: 'text-right', render: (row) => cents(formatCurrency, row.paid) },
+          { key: 'activation', label: 'Activation', align: 'text-right', render: (row) => cents(formatCurrency, row.activation) },
+          { key: 'floor', label: 'Floor', align: 'text-right', render: (row) => formatCurrency(row.floor) },
+          { key: 'pnl', label: 'P&L', align: 'text-right', tone: (row) => pnlTone(row.pnl), render: (row) => formatPnl(row.pnl) },
+        ]}
+      />
+    </div>
   );
 }
 
@@ -290,6 +298,82 @@ function TokenDetail({ assets, sort, formatCurrency, formatPnl, pnlTone }) {
         { key: 'pnl', label: 'P&L', align: 'text-right', tone: (row) => pnlTone(row.pnl), render: (row) => formatPnl(row.pnl) },
       ]}
     />
+  );
+}
+
+function returnRows(seatAssets, tokenAssets) {
+  const seats = (seatAssets || []).map((asset) => {
+    const nft = (asset.nfts || []).reduce((sum, nft) => sum + nftAcquireCostUsd(nft), 0);
+    const activation = (asset.nfts || []).reduce((sum, nft) => sum + (Number(nft.activationCostUsd) || 0), 0);
+    const cost = nft + activation;
+    const mark = Number(asset.floorValue) || 0;
+    const earned = Number(asset.earnedValue) || 0;
+    const gain = mark + earned - cost;
+    return {
+      key: asset.projectKey,
+      name: holdingName(asset),
+      cost,
+      mark,
+      earned,
+      gain,
+      roi: cost > 0.01 ? (gain / cost) * 100 : null,
+    };
+  });
+  const tokens = (tokenAssets || []).map((asset) => {
+    const cost = Number(asset.entryValueUsd) || 0;
+    const known = cost > 0;
+    const mark = Number(asset.floorValue) || 0;
+    const earned = Number(asset.earnedValue) || 0;
+    const gain = known ? mark + earned - cost : null;
+    return {
+      key: asset.projectKey,
+      name: asset.ticker || holdingName(asset),
+      cost: known ? cost : null,
+      mark,
+      earned,
+      gain,
+      roi: known && cost > 0.01 ? (gain / cost) * 100 : null,
+    };
+  });
+  return [...seats, ...tokens];
+}
+
+function EarnedDetail({ rows, formatCurrency }) {
+  const ordered = [...rows].sort((a, b) => b.earned - a.earned);
+  return (
+    <div>
+      <p className="text-xs text-slate-400 mb-3">
+        Cash credited after each seat or token position opened. This is money already paid out, not the forecast.
+      </p>
+      <DetailTable
+        rows={ordered}
+        columns={[
+          { key: 'name', label: 'Holding', render: (row) => row.name },
+          { key: 'earned', label: 'Earned', align: 'text-right', render: (row) => cents(formatCurrency, row.earned) },
+        ]}
+      />
+    </div>
+  );
+}
+
+function RoiDetail({ rows, formatCurrency, formatRoi, pnlTone }) {
+  const ordered = [...rows].sort((a, b) => (b.roi ?? -Infinity) - (a.roi ?? -Infinity));
+  return (
+    <div>
+      <p className="text-xs text-slate-400 mb-3">
+        Today&apos;s mark plus cash already earned, divided by what was paid. A seat&apos;s cost is the NFT price plus activation tokens. A position with no cost, and a token with no open price, stay out of this return.
+      </p>
+      <DetailTable
+        rows={ordered}
+        columns={[
+          { key: 'name', label: 'Holding', render: (row) => row.name },
+          { key: 'cost', label: 'Cost', align: 'text-right', render: (row) => (row.cost > 0 ? cents(formatCurrency, row.cost) : '—') },
+          { key: 'mark', label: 'Mark', align: 'text-right', render: (row) => formatCurrency(row.mark) },
+          { key: 'earned', label: 'Earned', align: 'text-right', render: (row) => cents(formatCurrency, row.earned) },
+          { key: 'roi', label: 'ROI', align: 'text-right', tone: (row) => pnlTone(row.roi), render: (row) => formatRoi(row.roi, 1) },
+        ]}
+      />
+    </div>
   );
 }
 
@@ -940,6 +1024,11 @@ export default function PortfolioView({ data }) {
     tokenMarked += Number(asset.floorValue) || 0;
   }
   const tokenPnl = tokenPriced > 0 ? tokenMarked - tokenCost + tokenEarned : null;
+  const bookRows = returnRows(seatAssets, tokenAssets);
+  const earnedTotal = bookRows.reduce((sum, row) => sum + row.earned, 0);
+  const roiCapital = bookRows.reduce((sum, row) => sum + (row.cost > 0 ? row.cost : 0), 0);
+  const roiGain = bookRows.reduce((sum, row) => sum + (row.cost > 0.01 && row.gain != null ? row.gain : 0), 0);
+  const totalRoi = roiCapital > 0.01 ? (roiGain / roiCapital) * 100 : null;
 
   useEffect(() => {
     if (!grouped.length) return;
@@ -1258,7 +1347,7 @@ export default function PortfolioView({ data }) {
           </div>
 
           <Copyable id="totals" className="mb-8">
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[
               {
                 id: 'value',
@@ -1297,7 +1386,23 @@ export default function PortfolioView({ data }) {
                 label: 'NFT P&L',
                 value: formatPnl(nftPnl),
                 valueClass: pnlTone(nftPnl),
-                note: nftPnl == null ? 'No seats in this scan' : "Today's floor minus the ETH paid to mint or buy",
+                note: nftPnl == null ? 'No seats in this scan' : "Floor minus the NFT price. Activation is separate.",
+              },
+              {
+                id: 'earned',
+                label: 'Earned',
+                value: quietCash(earnedTotal),
+                valueClass: 'text-emerald-300',
+                note: 'Cash credited since the positions opened',
+              },
+              {
+                id: 'roi',
+                label: 'Total ROI',
+                value: formatRoi(totalRoi, 1),
+                valueClass: pnlTone(totalRoi),
+                note: totalRoi == null
+                  ? 'No cost on the priced book'
+                  : 'Mark plus cash earned, over what was paid',
               },
             ].map((card) => (
               <button
@@ -1330,6 +1435,12 @@ export default function PortfolioView({ data }) {
               )}
               {detail === 'nft-pnl' && (
                 <SeatDetail assets={seatAssets} sort="pnl" formatCurrency={formatCurrency} formatPnl={formatPnl} pnlTone={pnlTone} />
+              )}
+              {detail === 'earned' && (
+                <EarnedDetail rows={bookRows} formatCurrency={formatCurrency} />
+              )}
+              {detail === 'roi' && (
+                <RoiDetail rows={bookRows} formatCurrency={formatCurrency} formatRoi={formatRoi} pnlTone={pnlTone} />
               )}
             </div>
           )}
@@ -1556,6 +1667,9 @@ export default function PortfolioView({ data }) {
                 const paid = asset.tokenPosition
                   ? 0
                   : (asset.nfts || []).reduce((sum, nft) => sum + nftAcquireCostUsd(nft), 0);
+                const activation = asset.tokenPosition
+                  ? 0
+                  : (asset.nfts || []).reduce((sum, nft) => sum + (Number(nft.activationCostUsd) || 0), 0);
                 const markPnl = asset.tokenPosition
                   ? (Number(asset.entryValueUsd) > 0
                     ? asset.floorValue - asset.entryValueUsd + (Number(asset.earnedValue) || 0)
@@ -1621,7 +1735,7 @@ export default function PortfolioView({ data }) {
                         ) : (
                           <>
                             {`${asset.balance} ${Number(asset.balance) === 1 ? 'seat' : 'seats'}`}
-                            {` · Paid ${quietCash(paid)} · ${formatPnl(markPnl)}`}
+                            {` · NFT ${quietCash(paid)} · Activation ${quietCash(activation)} · ${formatPnl(markPnl)}`}
                             {mode === 'history'
                               ? ` · Earned ${quietCash(asset.earnedValue || 0)}`
                               : ` · ${forecastYears}y ${quietCash((asset.yieldValue || 0) * forecastYears)}`}
@@ -1663,8 +1777,8 @@ export default function PortfolioView({ data }) {
                         <thead>
                           <tr className="text-[10px] uppercase tracking-wider text-slate-500">
                             <th className="py-2 pr-2 font-medium">NFT</th>
-                            <th className="py-2 px-2 font-medium">Basis</th>
-                            <th className="py-2 px-2 font-medium">Activated / ink</th>
+                            <th className="py-2 px-2 font-medium">NFT price</th>
+                            <th className="py-2 px-2 font-medium">Activation</th>
                             <th className="py-2 pl-2 font-medium text-right">{mode === 'history' ? 'Earned' : 'Forecast'}</th>
                           </tr>
                         </thead>
@@ -1701,16 +1815,17 @@ export default function PortfolioView({ data }) {
                                     </div>
                                   </td>
                                   <td className="py-2 px-2 text-[11px] text-slate-300 whitespace-nowrap">
-                                    <div>{formatDate(nft.lastTransferTs)}</div>
-                                    <div className="text-slate-500">
-                                      {nft.minted ? 'Mint' : 'Bought'}
+                                    <div className="text-white">
                                       {nft.basisKnown
-                                        ? basisUsd > 0
-                                          ? ` ${formatCurrency(basisUsd)}`
-                                          : nft.minted
-                                            ? ' · free'
-                                            : ' · —'
-                                        : ' …'}
+                                        ? (basisUsd > 0 ? formatCurrency(basisUsd) : nft.minted ? 'Free' : '—')
+                                        : nft.minted
+                                          ? 'Free'
+                                          : (Number(nft.entryFloorUsd) > 0 ? formatCurrency(nft.entryFloorUsd) : '…')}
+                                    </div>
+                                    <div className="text-slate-500">
+                                      {formatDate(nft.lastTransferTs)}
+                                      {' · '}
+                                      {nft.basisKnown ? (nft.minted ? 'Mint' : 'Buy') : (nft.minted ? 'Mint' : 'Floor that day')}
                                     </div>
                                     <div className={pnlTone((Number(nft.floorValue) || 0) - nftAcquireCostUsd(nft))}>
                                       vs floor {formatPnl((Number(nft.floorValue) || 0) - nftAcquireCostUsd(nft))}
@@ -1719,20 +1834,18 @@ export default function PortfolioView({ data }) {
                                   <td className="py-2 px-2 text-[11px] text-slate-300 whitespace-nowrap">
                                     {nft.machineInk > 0 || nft.machineWeight > 0 ? (
                                       <>
-                                        <div>{nft.isActive ? 'Inked' : 'Dormant'}</div>
+                                        <div className="text-white">{actUsd > 0 ? formatCurrency(actUsd) : '—'}</div>
                                         <div className="text-slate-500">
-                                          {actUsd > 0 ? `~${formatCurrency(actUsd)}` : ''}
+                                          {nft.isActive ? 'Inked' : 'Dormant'}
                                           {nft.machineInk ? ` · ${nft.machineInk.toLocaleString()} ink` : ''}
                                           {nft.machineWeight ? ` · wt ${nft.machineWeight}` : ''}
                                         </div>
                                       </>
                                     ) : nft.isActive ? (
                                       <>
-                                        <div>{formatDate(nft.activationTs)}</div>
+                                        <div className="text-white">{actUsd > 0 ? formatCurrency(actUsd) : '—'}</div>
                                         <div className="text-slate-500">
-                                          {actUsd > 0
-                                            ? `~${formatCurrency(actUsd)}`
-                                            : '—'}
+                                          {formatDate(nft.activationTs)}
                                           {actTokens > 0
                                             ? ` · ${formatAmount(actTokens)} ${nft.ticker || ''}`.trim()
                                             : ''}
