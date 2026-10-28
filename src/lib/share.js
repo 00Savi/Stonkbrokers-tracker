@@ -540,7 +540,7 @@ async function loadShareImage(src) {
 
 /** One-page X card. Height grows so every seat and every token is on the image. */
 function drawPortfolioCard({
-  mode = 'forecast',
+  horizon = 1,
   value = '—',
   seatsValue = '',
   tokensValue = '',
@@ -609,7 +609,7 @@ function drawPortfolioCard({
   ctx.font = '800 40px ui-sans-serif, system-ui, sans-serif';
   const title = 'Portfolio';
   ctx.fillText(title, pad, 58);
-  drawPill(ctx, pad + ctx.measureText(title).width + 18, 68, mode === 'history' ? 'EARNED HISTORY' : 'ANNUAL FORECAST');
+  drawPill(ctx, pad + ctx.measureText(title).width + 18, 68, horizon ? `${horizon}Y FORECAST` : 'PORTFOLIO');
 
   const heroY = 118;
   const heroH = 148;
