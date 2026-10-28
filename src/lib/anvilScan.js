@@ -485,6 +485,32 @@ async function applyToken(mc, rows, token, signal) {
   amounts.forEach((raw, i) => addHolding(rows[i], token, raw));
 }
 
+/** Stock and meme balances for every wallet. Smaller calls, more in flight. */
+async function applyIdleTail(mc, rows, tokens, signal, report) {
+  const size = 400;
+  const jobs = [];
+  for (const token of tokens) {
+    for (let i = 0; i < rows.length; i += size) {
+      jobs.push({ token, slice: rows.slice(i, i + size) });
+    }
+  }
+  let done = 0;
+  await mapPool(jobs, 8, async (job) => {
+    const packed = job.slice.map((row) => ({
+      target: job.token.ca,
+      callData: ERC20.encodeFunctionData('balanceOf', [row.tba]),
+    }));
+    const returned = await tryAggregate(mc, packed, signal);
+    returned.forEach((item, i) => {
+      if (item.success) addHolding(job.slice[i], job.token, decodeUint(item.returnData));
+    });
+    done += 1;
+    if (done % 40 === 0 || done === jobs.length) {
+      report(`Reading stocks and memes…`, done, jobs.length);
+    }
+  }, signal);
+}
+
 /** Several balanceOf reads in one multicall, still capped at CHUNK, three calls in flight. */
 async function applyTokenGroup(mc, rows, tokens, signal, onStep) {
   const list = (tokens || []).filter((token) => token?.ca);
@@ -855,7 +881,7 @@ function sleep(ms) {
  * token-bound wallet. Stocks are priced before memes. `onPlan` is the full
  * checklist; `onStep` flips each item to running, then done.
  */
-export async function scanAnvilVault(vaultId, data, { onProgress, onPartial, onPlan, onStep, signal, include } = {}) {
+export async function scanAnvilVault(vaultId, data, { onProgress, onPartial, onPlan, onStep, signal, include, scanIdle } = {}) {
   const vault = anvilVaultById(vaultId);
   if (!vault) throw new Error('Pick a supported project.');
   const parts = { ...SCAN_INCLUDE, ...(include || {}) };
@@ -1106,17 +1132,26 @@ export async function scanAnvilVault(vaultId, data, { onProgress, onPartial, onP
     publish();
   }
 
-  const funded = rows.filter((row) => row.holdings.length > 0 || (row.interns || []).length > 0);
   const queue = [...stockList, ...memeList];
   await withDecimals(mc, queue, signal);
-  await mapPool(queue, READ_POOL, async (token) => {
-    const id = `${token.kind}:${token.ca}`;
-    mark(id, 'run');
-    report(token.kind === 'stock' ? `Stock ${token.symbol}` : `Meme ${token.symbol}`, 0, 1);
-    if (funded.length) await applyToken(mc, funded, token, signal);
-    mark(id, 'done');
+  if (scanIdle) {
+    // The index has not folded these balances. A wallet with only a seeded
+    // airdrop still counts. The interactive scan keeps the shorter tail.
+    for (const token of queue) mark(`${token.kind}:${token.ca}`, 'run');
+    await applyIdleTail(mc, rows, queue, signal, report);
+    for (const token of queue) mark(`${token.kind}:${token.ca}`, 'done');
     publish();
-  }, signal);
+  } else {
+    const funded = rows.filter((row) => row.holdings.length > 0 || (row.interns || []).length > 0);
+    await mapPool(queue, READ_POOL, async (token) => {
+      const id = `${token.kind}:${token.ca}`;
+      mark(id, 'run');
+      report(token.kind === 'stock' ? `Stock ${token.symbol}` : `Meme ${token.symbol}`, 0, 1);
+      if (funded.length) await applyToken(mc, funded, token, signal);
+      mark(id, 'done');
+      publish();
+    }, signal);
+  }
 
   rows.forEach(priceRow);
   return { vault, vaultBalance, rows: snapshot(rows), include: parts, snipe, book: bookMeta };

@@ -40,6 +40,48 @@ function writeData(payload) {
   return written.map((f) => path.relative(__dirname, f));
 }
 
+// One UTC day of priced StonkBroker TBA contents. Later hours the same day
+// keep the first close. A failed scan leaves the series untouched.
+async function stampStonkAnvilValue(finalJson, previousData) {
+  const stonk = finalJson.projects?.stonk;
+  if (!stonk) return;
+  const previous = previousData.projects?.stonk?.anvilValue;
+  const today = new Date().toISOString().slice(0, 10);
+  if (Array.isArray(previous?.dates) && previous.dates.includes(today)) {
+    stonk.anvilValue = previous;
+    console.log(`  anvil value already stamped ${today}`);
+    return;
+  }
+  const esbuild = require("esbuild");
+  const outfile = path.join(__dirname, "node_modules", ".cache", "anvil-value.cjs");
+  await esbuild.build({
+    entryPoints: [path.join(__dirname, "scripts", "anvilValueEntry.js")],
+    bundle: true,
+    platform: "node",
+    format: "cjs",
+    outfile,
+    logLevel: "error",
+  });
+  delete require.cache[outfile];
+  const { snapshotStonkAnvil } = require(outfile);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 25 * 60 * 1000);
+  try {
+    stonk.anvilValue = await snapshotStonkAnvil(finalJson, {
+      previous,
+      signal: controller.signal,
+      log: (line) => console.log(`  anvil value: ${line}`),
+    });
+    const last = stonk.anvilValue.dates.length - 1;
+    console.log(
+      `  anvil value ${stonk.anvilValue.dates[last]}: $${stonk.anvilValue.usd[last]}` +
+      ` across ${stonk.anvilValue.nfts[last]} NFTs`,
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function snapshotRoi(s) {
   if (Number(s?.roi) > 0) return true;
   return Array.isArray(s?.tiers) && s.tiers.some((t) => Number(t.roi) > 0);
@@ -5238,6 +5280,15 @@ async function run() {
       for (const [id, fac] of Object.entries(proj.factions || {})) stampPriceHistory(id, fac, markets);
     }
     stampPriceHistory(key, proj, markets);
+  }
+
+  try {
+    await stampStonkAnvilValue(finalJson, previousData);
+  } catch (e) {
+    if (finalJson.projects?.stonk && previousData.projects?.stonk?.anvilValue) {
+      finalJson.projects.stonk.anvilValue = previousData.projects.stonk.anvilValue;
+    }
+    console.warn(`[warn] anvil value: ${e.message}`);
   }
 
   const written = writeData(finalJson);

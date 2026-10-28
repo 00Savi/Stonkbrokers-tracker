@@ -64,6 +64,7 @@ import { internAvailability, liveFloorIndex, parseFloorCount, priceHoldings, pur
 import { ANVIL_VAULTS, internRowState, internStatusLine, predictTbaAddress, rankVaultRows, rowsFromVaultBook, snipeCostFor, wallFloorEth, wallStars } from '../src/lib/anvilScan';
 import { cheapestWallEth, listedSeat, mixUsd, revenueRows, snipeSeatUsd } from '../src/lib/seats';
 import { askBreakdown, bestEntries } from '../src/lib/entryPaths';
+import { appendAnvilDay, anvilValueLatest } from '../src/lib/anvilValue';
 import { isProjectLive } from '../src/lib/routes';
 import { typicalNightshadesSeat } from '../src/lib/nightshades';
 import { parseYieldSample } from '../src/lib/yieldSample';
@@ -796,6 +797,45 @@ for (const [name, View, props] of VIEWS) {
     console.error('FAIL  stonk ownership missing AMM in/out/fees');
   } else {
     console.log('ok    stonk AMM exchange shows in, out, net, and fees');
+  }
+  const replaced = appendAnvilDay(
+    { dates: ['2026-10-28', '2026-10-30'], usd: [10, 30], nfts: [1, 3] },
+    { date: '2026-10-29', usd: 20, nfts: 2 },
+  );
+  const restamped = appendAnvilDay(replaced, { date: '2026-10-29', usd: 21, nfts: 2 });
+  const dropped = appendAnvilDay(restamped, { date: '2026-10-31', usd: 0, nfts: 4 });
+  const seriesOk = replaced.dates.join(',') === '2026-10-28,2026-10-29,2026-10-30'
+    && restamped.usd[1] === 21
+    && dropped.dates.length === 3
+    && anvilValueLatest(dropped)?.usd === 30;
+  if (!seriesOk) {
+    failed++;
+    console.error(`FAIL  anvil value series ${JSON.stringify(dropped)}`);
+  } else {
+    console.log('ok    anvil value series inserts by date and replaces the same day');
+  }
+  if (!ammHtml.includes('Value in the Anvil') || !ammHtml.includes('No daily close yet')) {
+    failed++;
+    console.error('FAIL  stonk ownership missing the empty anvil value chart');
+  } else {
+    console.log('ok    stonk ownership shows the anvil value chart');
+  }
+  const anvilSeries = appendAnvilDay(null, { date: '2026-10-28', usd: 1234567.89, nfts: 2317 });
+  const anvilHtml = renderToString(
+    <StaticRouter location="/stonkbrokers/ownership">
+      <AnalysisProvider slug="stonk" project={{ ...snapshot.projects.stonk, anvilValue: anvilSeries }}>
+        <StonkDetailView
+          data={{ ...snapshot, projects: { ...snapshot.projects, stonk: { ...snapshot.projects.stonk, anvilValue: anvilSeries } } }}
+          activeTab="ownership"
+        />
+      </AnalysisProvider>
+    </StaticRouter>,
+  );
+  if (!anvilHtml.includes(compactUsd(1234567.89)) || !anvilHtml.includes('2026-10-28') || anvilHtml.includes('No daily close yet')) {
+    failed++;
+    console.error('FAIL  anvil value close did not render');
+  } else {
+    console.log('ok    anvil value close renders the latest day');
   }
   const tierNames = (snapshot.projects?.stonk?.tiers || []).map((t) => `${t.tier}: ${t.name}`);
   const t0At = ammHtml.indexOf('>T0: Floor Trader<');

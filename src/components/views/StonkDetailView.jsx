@@ -6,6 +6,7 @@ import { Line, Bar } from 'react-chartjs-2';
 import { burnSeries, burnRateSeries, burnOfSupplyPct, attributedStonkBurn, dailyAttributedBurnSeries } from '../../lib/burn';
 import { formatLabels } from '../../lib/dates';
 import { windowSnapshots, tierRoiDatasets, protocolRevenueChart, sliceCols, windowPeriodLabel, seriesHasInk, holderRevenueCol, windowChart } from '../../lib/yieldHistory';
+import { anvilValueLatest } from '../../lib/anvilValue';
 import { compactUsd, compactNum, Card, Figure, Stat, KpiStrip, Tag, SkeletonCard, SplitBar, YieldPeriodToggle, scaleAnnualYield, yieldSuffix } from '../kit';
 import { yieldBasisText } from '../../lib/yieldSample';
 import { feesKeptUsd, sumVersusHold } from '../../lib/lpHold';
@@ -161,6 +162,8 @@ export default function StonkDetailView({ data, activeTab }) {
   const formatNumber = compactNum;
 
   const floorCostUsd = (market.nftFloorEth || 0) * (market.ethPriceUsd || 0);
+  const anvilLatest = anvilValueLatest(project.anvilValue);
+  const anvilWin = windowChart(project.anvilValue?.dates || [], [project.anvilValue?.usd || []], timeframe, interval, ['last']);
 
   const opts = (labs) => baseChartOptions(labs, interval);
 
@@ -888,9 +891,41 @@ export default function StonkDetailView({ data, activeTab }) {
             <Stat label="Max supply" value={formatNumber(ownership.currentMaxSupply || 0, 2)} />
             <Stat label="Burnt NFTs" value={formatNumber(burntNfts, 2)} />
             <Stat label="AMM vault" value={formatNumber(ownership.ammVaultNfts || 0)} />
+            <Stat
+              label="Anvil wallets"
+              value={anvilLatest ? formatCurrency(anvilLatest.usd) : '—'}
+              tone="accent"
+              note={anvilLatest ? anvilLatest.date : 'Daily close'}
+            />
             <Stat label="Activated wallets" value={activation.activeHolders == null ? '—' : formatNumber(activation.activeHolders)} />
           </KpiStrip>
         </Card>
+        <ChartPanel
+          id="anvil-value"
+          title="Value in the Anvil"
+          note="Daily close of the token-bound wallets on NFTs the StonkBrokers AMM holds. ETH, protocol tokens, NFT floors, interns, stocks, and memes, priced the same way as Anvil + Floor. The series starts the first day this close runs. Earlier days are not reconstructed."
+        >
+          {anvilWin.points ? (
+            <Line
+              data={{
+                labels: anvilWin.labels,
+                datasets: [{
+                  label: 'TBA value',
+                  data: anvilWin.cols[0],
+                  borderColor: '#34d399',
+                  backgroundColor: 'rgba(52, 211, 153, 0.12)',
+                  borderWidth: 1.75,
+                  tension: 0.3,
+                  fill: true,
+                  pointRadius: anvilWin.points < 2 ? 3 : 0,
+                }],
+              }}
+              options={baseChartOptions(anvilWin.labels, interval, { yUnit: 'USD', yTick: compactUsdTick })}
+            />
+          ) : (
+            <EmptyChart>No daily close yet. The hourly fetch writes one UTC day at a time.</EmptyChart>
+          )}
+        </ChartPanel>
           <OwnershipHistoryPanels
             snaps={roiSnaps}
             live={{
@@ -907,7 +942,7 @@ export default function StonkDetailView({ data, activeTab }) {
           <p><strong className="text-ink">Yield &amp; ROI:</strong> Live cash-on-cash is a trailing sample of the T4 Partner oracle wallet, scaled by total network weight / 333, annualized, then divided by (NFT floor USD + activation tokens at DexScreener spot). From 2026-08-20 that oracle is live. Earlier ROI days estimate the same CoC from Clock In v1, v2, and Overtime pot inflows ÷ reconstructed active weight, with cost basis frozen at the first oracle snapshot. Mid-August is a real FOMO / revenue spike (NFT trades printed around 12 ETH); the % uses the later ~4 ETH floor so it tracks that yield spike rather than repricing entry cost day by day. A one-day collapse between two hot UTC sessions is treated as a bucket hole, not a crash. Clock In 3.0 (0xf412…dbc58, 2026-09-21) is the live pot; v2 DirectedClockInBooster is retired.</p>
           <p><strong className="text-ink">Protocol revenue (StonkBooster mix):</strong> Booster reward is the share of AMM and OpenSea fees routed to seats. It is the T4 oracle sample scaled by total seat weight / 333, and it is inside the headline. Clock In locker fees (v1 retired, v2 retired, v3 live, Overtime retired), launchpad tax, Partner Revenue Share (Nightshades 13.33% civ-pad + Mancer 25% dex), and Smart LP skim are counted at the source. Clock In is Safety Deposit lock/collect fees (90% community / 10% protocol), not a raffle. Nightshades Night vault WETH is The Night inventory and is never counted here. Bonding swap volume is notional and is not revenue.</p>
           <p><strong className="text-ink">Payback:</strong> Entry cost ÷ annualized trailing yield. Charts reprice cost at the last sync.</p>
-          <p><strong className="text-ink">Ownership:</strong> Circulating NFTs are collection size minus AMM vault inventory. Holder breadth is unique NFT wallets (vault and burn addresses excluded) divided by that circulating number. Activated-wallet count is unique current owners of NFTs that still have an open activation — a sale clears it. Chain onboard is unique EOAs whose first cluster buy or mint of this project was one of their first 10 txs.</p>
+          <p><strong className="text-ink">Ownership:</strong> Circulating NFTs are collection size minus AMM vault inventory. Holder breadth is unique NFT wallets (vault and burn addresses excluded) divided by that circulating number. Activated-wallet count is unique current owners of NFTs that still have an open activation — a sale clears it. Chain onboard is unique EOAs whose first cluster buy or mint of this project was one of their first 10 txs. Value in the Anvil is the priced contents of those vault wallets, not the NFT count and not Smart LP TVL. One close is kept per UTC day, the first successful hourly read of that day.</p>
           <p><strong className="text-ink">Burn:</strong> Token-wide $STONKBROKER destroyed (supply deflation + dead + tokens locked in the broker activation manager). The cumulative chart is that token total. Pre-snapshot days reconstruct burns that lower totalSupply, plus dead, scaled to the first trusted supply read. On All, flywheel days above 10M are clipped so later burns stay readable. Intern activations use a different manager and burn into the same token; that intern total is subtracted out of the StonkBrokers tile. The daily chart starts on the first intern activation. Once a snapshot stamps internBurnTokens, that day's intern bar is the change in the stamp and StonkBrokers is the rest of the day's token burn. Earlier days estimate the intern share from activations. A day with broker activations keeps at least the floor-tier burn, so the broker bar cannot print as zero. Past about 40 days the two series stack.</p>
       </MethodologyCard>
 
