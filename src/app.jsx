@@ -7,7 +7,6 @@ import HomeView from './components/views/HomeView';
 import EcosystemView from './components/views/EcosystemView';
 import PortfolioView from './components/views/PortfolioView';
 import BrokerScanView from './components/views/BrokerScanView';
-import FloorCheckView from './components/views/FloorCheckView';
 import AnvilScanView from './components/views/AnvilScanView';
 import StonkDetailView from './components/views/StonkDetailView';
 import InternDetailView from './components/views/InternDetailView';
@@ -196,18 +195,11 @@ export default function App() {
               </Section>
             }
           />
-          <Route
-            path="/floor"
-            element={
-              <Section title="Floor checker">
-                {data ? <FloorCheckView data={shown} /> : <SkeletonCard rows={5} />}
-              </Section>
-            }
-          />
+          <Route path="/floor" element={<Navigate to="/anvil?project=stonk" replace />} />
           <Route
             path="/anvil"
             element={
-              <Section title="Anvil scan">
+              <Section title="Anvil + Floor">
                 {data ? <AnvilScanView data={shown} /> : <SkeletonCard rows={5} />}
               </Section>
             }

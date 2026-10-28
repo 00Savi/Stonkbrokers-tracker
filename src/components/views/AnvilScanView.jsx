@@ -4,6 +4,8 @@ import { compactNum, compactUsd } from '../kit';
 import { explorerAddressUrl } from '../../lib/tba';
 import { fetchNftImage } from '../../lib/portfolioHistory';
 import { ANVIL_VAULTS, SCAN_INCLUDE, anvilVaultById, rankVaultRows, scanAnvilVault, snipeCostFor } from '../../lib/anvilScan';
+import { internStateLabel, loadFloorBook, scanFloorListings } from '../../lib/floorCheck';
+import { bestEntries } from '../../lib/entryPaths';
 
 const SCAN_PARTS = [
   { id: 'tokens', label: 'Anvil tokens' },
@@ -89,6 +91,82 @@ function holdingLine(row) {
   return top.map((h) => holdingText(h, true)).join(' · ');
 }
 
+function entryInterns(path) {
+  return (path.interns || []).map((intern) => {
+    const name = intern.label || (intern.klass === 'sigma' ? 'Sigma' : intern.klass === 'divergent' ? 'Divergent' : '');
+    if (!name) return '';
+    const state = intern.state === 'canActivate' ? 'can activate' : internStateLabel(intern.state).toLowerCase();
+    return `${name} ${state}`;
+  }).filter(Boolean).join(' · ');
+}
+
+function EntryBoard({ paths, snipeReady, floorBusy, floorNote, nftCa }) {
+  return (
+    <section className="mb-6">
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h3 className="text-[15px] font-semibold text-white">Best entry</h3>
+          <p className="mt-1 text-[11px] text-slate-500">
+            Purchase cost is that path&apos;s price minus the wallet you get. The lowest number is the better way in.
+          </p>
+        </div>
+        {floorBusy ? <span className="font-mono text-[10px] text-slate-500">Reading OpenSea…</span> : null}
+      </div>
+      {floorNote ? <p className="mb-3 font-mono text-[12px] text-rose-400">{floorNote}</p> : null}
+      {!snipeReady && !floorBusy ? (
+        <p className="mb-3 text-[11px] text-slate-500">Scan the vault to put the Anvil snipe next to these OpenSea listings.</p>
+      ) : null}
+      {paths.length > 0 ? (
+        <div className="overflow-hidden rounded-xl border border-[#1e2228]">
+          {paths.map((path, i) => {
+            const best = i === 0;
+            const tone = path.purchaseUsd < 0 ? 'text-emerald-300' : 'text-white';
+            const href = path.kind === 'opensea' && nftCa
+              ? `https://opensea.io/item/robinhood/${nftCa}/${path.id}`
+              : null;
+            return (
+              <div key={`${path.kind}-${path.id}`} className="flex flex-col gap-2 border-t border-[#1e2228] px-3 py-3 first:border-t-0 sm:flex-row sm:items-center">
+                <div className="sm:w-40">
+                  <span className={`mr-2 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${best ? 'bg-emerald-500/15 text-emerald-300' : 'bg-white/5 text-slate-400'}`}>
+                    {best ? 'Best' : path.kind === 'anvil' ? 'Anvil' : 'OpenSea'}
+                  </span>
+                  <a href={`/broker?id=${path.id}`} className="font-semibold text-white hover:underline">#{path.id}</a>
+                </div>
+                <div className="min-w-0 flex-1 text-[12px] text-slate-400">
+                  <div>
+                    {path.kind === 'anvil' ? 'Anvil specific buy' : 'OpenSea listing'}
+                    {path.ask > 0 && path.symbol ? ` · ${path.ask} ${path.symbol}` : ''}
+                  </div>
+                  {entryInterns(path) ? <div className="mt-0.5 truncate text-slate-500">{entryInterns(path)}</div> : null}
+                </div>
+                <div className="grid grid-cols-3 gap-3 sm:w-72 sm:shrink-0">
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider text-slate-500">Cost</div>
+                    <div className="font-mono text-[13px] text-slate-200">{compactUsd(path.costUsd)}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider text-slate-500">Wallet</div>
+                    <div className="font-mono text-[13px] text-slate-200">{compactUsd(path.walletUsd)}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider text-slate-500">You pay</div>
+                    <div className={`font-mono text-[13px] ${tone}`}>{compactUsd(path.purchaseUsd)}</div>
+                  </div>
+                </div>
+                {href ? (
+                  <a href={href} target="_blank" rel="noreferrer" className="font-mono text-[11px] text-slate-500 hover:text-white sm:w-16 sm:text-right">
+                    OpenSea
+                  </a>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 export default function AnvilScanView({ data }) {
   const [params, setParams] = useSearchParams();
   const urlProject = params.get('project') || 'stonk';
@@ -106,7 +184,43 @@ export default function AnvilScanView({ data }) {
   const [include, setInclude] = useState(SCAN_INCLUDE);
   const [scannedInclude, setScannedInclude] = useState(SCAN_INCLUDE);
   const [costUnit, setCostUnit] = useState('usd');
+  const [floorRows, setFloorRows] = useState(null);
+  const [floorBusy, setFloorBusy] = useState(false);
+  const [floorNote, setFloorNote] = useState('');
+  const [floorSweep, setFloorSweep] = useState(0);
   const runRef = useRef(0);
+  const dataRef = useRef(data);
+  dataRef.current = data;
+
+  useEffect(() => {
+    if (projectId !== 'stonk') {
+      setFloorRows(null);
+      setFloorNote('');
+      setFloorBusy(false);
+      return undefined;
+    }
+    const ready = !!data;
+    const source = dataRef.current;
+    if (!ready || !source) return undefined;
+    let cancel = false;
+    setFloorBusy(true);
+    setFloorNote('');
+    (async () => {
+      try {
+        const book = await loadFloorBook(source, 10);
+        const next = await scanFloorListings(book.listings, source, book.floors);
+        if (!cancel) setFloorRows(next);
+      } catch (err) {
+        if (!cancel) {
+          setFloorRows(null);
+          setFloorNote(err?.shortMessage || err?.message || 'OpenSea sweep failed.');
+        }
+      } finally {
+        if (!cancel) setFloorBusy(false);
+      }
+    })();
+    return () => { cancel = true; };
+  }, [projectId, floorSweep, !!data]);
 
   const run = async (id, parts) => {
     const ticket = ++runRef.current;
@@ -164,6 +278,7 @@ export default function AnvilScanView({ data }) {
     const next = new URLSearchParams(params);
     next.set('project', projectId);
     setParams(next, { replace: true });
+    if (projectId === 'stonk') setFloorSweep((n) => n + 1);
     run(projectId, include);
   };
 
@@ -182,6 +297,16 @@ export default function AnvilScanView({ data }) {
     () => snipeCostFor(data, result?.vault, result?.snipe),
     [data, result],
   );
+  const entries = useMemo(() => {
+    if (projectId !== 'stonk') return [];
+    const vaultRows = result?.vault?.id === 'stonk' ? result.rows : [];
+    return bestEntries({
+      listings: floorRows,
+      vaultRows,
+      snipeUsd: result?.vault?.id === 'stonk' ? cost?.usd : 0,
+    });
+  }, [projectId, floorRows, result, cost]);
+  const stonkCa = anvilVaultById('stonk')?.nftCa;
   const colSpan = (showInterns ? 5 : 4) + 2;
 
   const totals = useMemo(() => {
@@ -196,13 +321,11 @@ export default function AnvilScanView({ data }) {
   return (
     <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl">
       <div className="mb-6">
-        <h2 className="text-lg md:text-xl font-bold text-white">Anvil scan</h2>
+        <h2 className="text-lg md:text-xl font-bold text-white">Anvil + Floor</h2>
         <p className="text-xs text-slate-400 mt-1">
-          NFTs sitting in a project&apos;s AMM vault, listed by the value in each token-bound wallet.
-          The dollar figure is ETH, Anvil tokens, each Wall at its own star floor, then stocks, then memes.
-          A dormant intern still in an activated broker&apos;s wallet is added at the Intern OpenSea floor.
+          For StonkBrokers, the board compares every live way in: an OpenSea listing of a specific NFT, and an Anvil specific buy of a vault NFT. Each path is its price minus the wallet that comes with it.
+          The vault table is still every NFT sitting in the AMM, priced from ETH, Anvil tokens, each Wall at its own star floor, then stocks, then memes.
           The picture is that vault NFT, so you can pick the one you want. It loads as the row scrolls into view.
-          Uncheck stocks or memes when you want the vault pass to finish sooner.
         </p>
       </div>
 
@@ -226,6 +349,16 @@ export default function AnvilScanView({ data }) {
           {busy ? 'Scanning…' : 'Scan vault'}
         </button>
       </form>
+
+      {projectId === 'stonk' ? (
+        <EntryBoard
+          paths={entries}
+          snipeReady={result?.vault?.id === 'stonk' && !!cost}
+          floorBusy={floorBusy}
+          floorNote={floorNote}
+          nftCa={stonkCa}
+        />
+      ) : null}
 
       <fieldset data-share-omit className="mb-4">
         <legend className="mb-2 text-[10px] uppercase tracking-wider text-slate-500">Include in this scan</legend>

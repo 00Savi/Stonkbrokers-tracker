@@ -209,7 +209,7 @@ export default function HomeView({ data }) {
         </section>
       </div>
 
-      <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-3">
         <Link
           to="/broker"
           className="card group flex flex-col p-5 transition-colors hover:bg-panel-2 sm:p-6"
@@ -226,33 +226,18 @@ export default function HomeView({ data }) {
           </span>
         </Link>
         <Link
-          to="/floor"
+          to="/anvil?project=stonk"
           className="card group flex flex-col p-5 transition-colors hover:bg-panel-2 sm:p-6"
         >
-          <p className="eyebrow text-[#34d399]">Floor</p>
+          <p className="eyebrow text-[#fbbf24]">Anvil + Floor</p>
           <h2 className="mt-3 text-[20px] font-semibold tracking-tight text-ink">
-            Ask minus the wallet.
+            The cheapest way in.
           </h2>
           <p className="mt-2 flex-1 text-[13px] leading-relaxed text-muted">
-            The cheapest StonkBroker listings, what each wallet holds, and the purchase cost after that.
+            OpenSea listings and Anvil snipes, each priced as that path&apos;s cost minus the wallet you receive.
           </p>
           <span className="mt-5 text-[13px] font-medium text-ink">
-            Open floor checker <span className="text-muted transition-colors group-hover:text-ink">→</span>
-          </span>
-        </Link>
-        <Link
-          to="/anvil"
-          className="card group flex flex-col p-5 transition-colors hover:bg-panel-2 sm:p-6"
-        >
-          <p className="eyebrow text-[#fbbf24]">Anvil</p>
-          <h2 className="mt-3 text-[20px] font-semibold tracking-tight text-ink">
-            Vault NFTs, by wallet.
-          </h2>
-          <p className="mt-2 flex-1 text-[13px] leading-relaxed text-muted">
-            Every supported AMM. Lists the NFTs in the vault by what each token-bound wallet holds.
-          </p>
-          <span className="mt-5 text-[13px] font-medium text-ink">
-            Open Anvil scan <span className="text-muted transition-colors group-hover:text-ink">→</span>
+            Open Anvil + Floor <span className="text-muted transition-colors group-hover:text-ink">→</span>
           </span>
         </Link>
         <Link

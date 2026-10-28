@@ -63,6 +63,7 @@ import { parseBrokerId } from '../src/lib/brokerScan';
 import { internAvailability, liveFloorIndex, parseFloorCount, priceHoldings, purchaseCost, stonkBrokerFloor, walletUsd } from '../src/lib/floorCheck';
 import { ANVIL_VAULTS, internRowState, internStatusLine, predictTbaAddress, rankVaultRows, rowsFromVaultBook, snipeCostFor, wallFloorEth, wallStars } from '../src/lib/anvilScan';
 import { cheapestWallEth, listedSeat, mixUsd, revenueRows, snipeSeatUsd } from '../src/lib/seats';
+import { bestEntries } from '../src/lib/entryPaths';
 import { isProjectLive } from '../src/lib/routes';
 import { typicalNightshadesSeat } from '../src/lib/nightshades';
 import { parseYieldSample } from '../src/lib/yieldSample';
@@ -945,10 +946,23 @@ for (const [name, View, props] of VIEWS) {
     internAvailability({ minted: true, inWallet: true, dormant: true, parentActive: true }),
     internAvailability({ minted: true, inWallet: false, dormant: false, parentActive: true }),
   ];
+  const ranked = bestEntries({
+    listings: [
+      { id: 10, floorUsd: 100, walletUsd: 40 },
+      { id: 11, floorUsd: 80, walletUsd: 70 },
+    ],
+    vaultRows: [
+      { tokenId: 3, usd: 90 },
+      { tokenId: 4, usd: 10 },
+    ],
+    snipeUsd: 50,
+  });
   if (
     parseFloorCount('4') !== 10 || parseFloorCount('7') !== 7 || net !== -90
     || overlaid['0xabc'] !== 4396 || overlaid['0xdef'] !== 7 || floor.usd !== 110
     || states.join() !== 'dormant,available,activated'
+    || ranked[0]?.kind !== 'anvil' || ranked[0]?.id !== 3 || ranked[0]?.purchaseUsd !== -40
+    || ranked.find((row) => row.id === 11)?.purchaseUsd !== 10
   ) {
     failed++;
     console.error(`FAIL  floor check net ${net} floor ${overlaid['0xabc']} states ${states}`);
@@ -999,7 +1013,7 @@ for (const [name, View, props] of VIEWS) {
       <AnvilScanView data={snapshot} />
     </StaticRouter>,
   );
-  if (!anvilHtml.includes('vault NFT') || !anvilHtml.includes('scrolls into view')) {
+  if (!anvilHtml.includes('vault NFT') || !anvilHtml.includes('scrolls into view') || !anvilHtml.includes('Best entry')) {
     failed++;
     console.error('FAIL  anvil scan picture note');
   } else {
