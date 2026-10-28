@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { NfaNote } from '../Disclaimer';
 import { compactNum, compactUsd } from '../kit';
@@ -39,50 +39,53 @@ export default function FloorCheckView({ data }) {
   const [rows, setRows] = useState(null);
   const [live, setLive] = useState(true);
   const [fetchedAt, setFetchedAt] = useState('');
+  const [openWallets, setOpenWallets] = useState({});
+  const dataRef = useRef(data);
+  dataRef.current = data;
+  const armed = !!data;
 
   const run = async (nextCount) => {
+    const source = dataRef.current;
+    if (!source) return;
     setError('');
     setBusy(true);
-    setRows(null);
     try {
-      const book = await loadFloorBook(data, nextCount);
+      const book = await loadFloorBook(source, nextCount);
       setLive(book.live);
       setFetchedAt(book.fetchedAt || '');
-      setRows(await scanFloorListings(book.listings, data, book.floors));
+      setRows(await scanFloorListings(book.listings, source, book.floors));
+      setOpenWallets({});
     } catch (err) {
-      setRows(null);
       setError(err?.message || 'Floor check failed.');
     }
     setBusy(false);
   };
 
   useEffect(() => {
-    if (!data) return undefined;
+    const source = dataRef.current;
+    if (!source) return undefined;
     let cancel = false;
     (async () => {
       setError('');
       setBusy(true);
-      setRows(null);
       try {
-        const book = await loadFloorBook(data, count);
-        const next = await scanFloorListings(book.listings, data, book.floors);
+        const book = await loadFloorBook(source, count);
+        const next = await scanFloorListings(book.listings, source, book.floors);
         if (!cancel) {
           setLive(book.live);
           setFetchedAt(book.fetchedAt || '');
           setRows(next);
+          setOpenWallets({});
         }
       } catch (err) {
-        if (!cancel) {
-          setRows(null);
-          setError(err?.message || 'Floor check failed.');
-        }
+        if (!cancel) setError(err?.message || 'Floor check failed.');
       }
       if (!cancel) setBusy(false);
     })();
     return () => {
       cancel = true;
     };
-  }, [data, count]);
+  }, [armed, count]);
 
   const setCount = (event) => {
     const next = new URLSearchParams(params);
@@ -97,8 +100,8 @@ export default function FloorCheckView({ data }) {
           <h2 className="text-lg md:text-xl font-bold text-white">Floor checker</h2>
           <p className="text-xs text-slate-400 mt-1 max-w-xl">
             The cheapest listed StonkBrokers. The floor is the StonkBroker NFT floor,
-            666,666 tokens at spot plus 10%. Purchase cost is the OpenSea ask minus
-            everything in that broker&apos;s wallet. Interns are marked activated, dormant, or available.
+            666,666 tokens at spot plus 10%. Purchase cost is that floor minus
+            everything in the wallet. Interns are marked activated, dormant, or available.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -138,7 +141,7 @@ export default function FloorCheckView({ data }) {
         >
           {STONK_COLLECTION}
         </a>
-        . A negative purchase cost means the wallet is worth more than the ask.
+        . Purchase cost is the floor minus the wallet. A negative number means the wallet is worth more than the floor.
       </p>
 
       {error && <p className="mb-4 font-mono text-[12px] text-rose-400">{error}</p>}
@@ -192,7 +195,7 @@ export default function FloorCheckView({ data }) {
                   <Stat
                     label="Purchase cost"
                     value={compactUsd(row.purchaseUsd)}
-                    sub="listing − wallet"
+                    sub="floor − wallet"
                     tone={row.purchaseUsd < 0 ? 'text-emerald-300' : 'text-white'}
                   />
                 </dl>
@@ -228,11 +231,20 @@ export default function FloorCheckView({ data }) {
                 </div>
               )}
 
-              <div className="mt-4">
-                {row.wallet.length === 0 && !(row.interns || []).some((intern) => intern.inWallet) ? (
-                  <p className="text-sm text-slate-500">Nothing detected in this wallet among tracked tokens and collections.</p>
-                ) : (
-                  <div className="overflow-x-auto">
+              <div className="mt-3">
+                <button
+                  type="button"
+                  aria-expanded={!!openWallets[row.id]}
+                  onClick={() => setOpenWallets((cur) => ({ ...cur, [row.id]: !cur[row.id] }))}
+                  className="font-mono text-[11px] uppercase tracking-wider text-slate-500 hover:text-white"
+                >
+                  {openWallets[row.id] ? '▾ Hide wallet' : '▸ In the wallet'}
+                </button>
+                {openWallets[row.id] && row.wallet.length === 0 && !(row.interns || []).some((intern) => intern.inWallet) ? (
+                  <p className="mt-2 text-sm text-slate-500">Nothing detected in this wallet among tracked tokens and collections.</p>
+                ) : null}
+                {openWallets[row.id] && (row.wallet.length > 0 || (row.interns || []).some((intern) => intern.inWallet)) ? (
+                  <div className="mt-2 overflow-x-auto">
                     <table className="w-full text-left text-sm">
                       <thead className="text-[10px] uppercase tracking-wider text-slate-500">
                         <tr>
@@ -274,13 +286,13 @@ export default function FloorCheckView({ data }) {
                         </tr>
                       </tbody>
                     </table>
+                    {row.unpricedNfts && (
+                      <p className="mt-2 font-mono text-[11px] text-slate-500">
+                        An NFT without a floor is shown and not counted in the wallet value.
+                      </p>
+                    )}
                   </div>
-                )}
-                {row.unpricedNfts && (
-                  <p className="mt-2 font-mono text-[11px] text-slate-500">
-                    An NFT without a floor is shown and not counted in the wallet value.
-                  </p>
-                )}
+                ) : null}
               </div>
             </article>
           ))}
@@ -289,7 +301,7 @@ export default function FloorCheckView({ data }) {
 
       <NfaNote
         className="mt-8"
-        extra="The floor is the StonkBroker NFT floor. The listing is the OpenSea ask. The wallet is that NFT's token-bound account, read on this sweep, including whether each intern is activated, dormant, or available. Purchase cost = listing − wallet value."
+        extra="The floor is the cost of the StonkBroker NFT. The listing is the OpenSea ask. The wallet is that NFT's token-bound account, read on this sweep. Purchase cost = floor − wallet value."
       />
     </div>
   );

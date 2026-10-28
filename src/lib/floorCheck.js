@@ -483,7 +483,7 @@ export async function scanFloorListings(listings, data, floors) {
       wallet,
       interns,
       walletUsd: heldUsd,
-      purchaseUsd: purchaseCost(row.usd, heldUsd),
+      purchaseUsd: purchaseCost(floor.usd, heldUsd),
       unpricedNfts: wallet.some((tok) => tok.nft && !tok.atFloor && tok.amount > 0),
     };
   });
