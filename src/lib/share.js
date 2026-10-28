@@ -538,26 +538,32 @@ async function loadShareImage(src) {
   return null;
 }
 
-/** One-page 4:5 X card (1080×1350). Fits the mobile feed without a long screenshot. */
+/** One-page X card. Height grows so every seat and every token is on the image. */
 function drawPortfolioCard({
   mode = 'forecast',
-  floor = '—',
+  value = '—',
+  seatsValue = '',
+  tokensValue = '',
+  seatUsd = 0,
+  tokenUsd = 0,
   cashLabel = 'Cash-flow',
   cash = '—',
   roi = '—',
+  roiLabel = 'Forecast ROI',
   units = '—',
   basis = '',
-  basisDetail = '',
-  assets = [],
-  pie = [],
-  bars = null,
+  seats = [],
+  tokens = [],
 } = {}) {
   const W = 1080;
-  const H = 1350;
   const S = 2;
-  const pad = 36;
-  const foot = 58;
-  const gap = 14;
+  const pad = 40;
+  const foot = 56;
+  const both = seats.length > 0 && tokens.length > 0;
+  const rows = Math.max(seats.length, tokens.length, 1);
+  const listTop = 430;
+  const rowH = rows > 12 ? 54 : 74;
+  const H = listTop + 32 + rows * rowH + foot + 8;
 
   const out = document.createElement('canvas');
   out.width = W * S;
@@ -568,17 +574,22 @@ function drawPortfolioCard({
 
   ctx.fillStyle = '#07080a';
   ctx.fillRect(0, 0, W, H);
-  const glow = ctx.createRadialGradient(W * 0.82, -40, 20, W * 0.82, 160, 520);
-  glow.addColorStop(0, 'rgba(0,168,4,0.20)');
-  glow.addColorStop(1, 'rgba(0,168,4,0)');
+  const glow = ctx.createRadialGradient(W * 0.15, 0, 20, W * 0.2, 180, 560);
+  glow.addColorStop(0, 'rgba(247,147,26,0.16)');
+  glow.addColorStop(1, 'rgba(247,147,26,0)');
   ctx.fillStyle = glow;
-  ctx.fillRect(0, 0, W, 340);
+  ctx.fillRect(0, 0, W, 420);
+  const glow2 = ctx.createRadialGradient(W * 0.9, 80, 10, W * 0.85, 160, 420);
+  glow2.addColorStop(0, 'rgba(0,168,4,0.18)');
+  glow2.addColorStop(1, 'rgba(0,168,4,0)');
+  ctx.fillStyle = glow2;
+  ctx.fillRect(0, 0, W, 420);
   ctx.fillStyle = '#00a804';
   ctx.fillRect(0, 0, 5, H);
 
   ctx.fillStyle = '#8b929b';
   ctx.font = '600 13px ui-sans-serif, system-ui, sans-serif';
-  ctx.fillText(SITE_MARK, pad, 22);
+  ctx.fillText(SITE_MARK, pad, 24);
 
   const follow = FOLLOW_MARK;
   ctx.font = '700 13px ui-sans-serif, system-ui, sans-serif';
@@ -592,109 +603,123 @@ function drawPortfolioCard({
   ctx.textBaseline = 'top';
 
   ctx.fillStyle = '#f4f6f8';
-  ctx.font = '800 36px ui-sans-serif, system-ui, sans-serif';
-  ctx.fillText('Portfolio scan', pad, 54);
-  drawPill(ctx, pad + 268, 60, mode === 'history' ? 'EARNED HISTORY' : 'ANNUAL FORECAST');
+  ctx.font = '800 40px ui-sans-serif, system-ui, sans-serif';
+  const title = 'Portfolio';
+  ctx.fillText(title, pad, 58);
+  drawPill(ctx, pad + ctx.measureText(title).width + 18, 68, mode === 'history' ? 'EARNED HISTORY' : 'ANNUAL FORECAST');
 
-  const heroY = 110;
-  const heroH = 126;
+  const heroY = 118;
+  const heroH = 148;
   cardPanel(ctx, pad, heroY, W - pad * 2, heroH);
   ctx.fillStyle = '#6b7280';
   ctx.font = '700 11px ui-sans-serif, system-ui, sans-serif';
-  ctx.fillText(String(cashLabel).toUpperCase(), pad + 22, heroY + 18);
-  ctx.fillStyle = '#00a804';
-  ctx.font = '800 52px ui-sans-serif, system-ui, sans-serif';
-  ctx.fillText(fitText(ctx, cash, W - pad * 2 - 48), pad + 22, heroY + 42);
-  if (basisDetail) {
-    ctx.fillStyle = '#8b929b';
-    ctx.font = '600 13px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText(fitText(ctx, basisDetail, W - pad * 2 - 48), pad + 22, heroY + 100);
+  ctx.fillText('PORTFOLIO VALUE', pad + 24, heroY + 18);
+  ctx.fillStyle = '#f4f6f8';
+  ctx.font = '800 48px ui-sans-serif, system-ui, sans-serif';
+  ctx.fillText(fitText(ctx, value, W - pad * 2 - 64), pad + 24, heroY + 40);
+
+  const barX = pad + 24;
+  const barY = heroY + 104;
+  const barW = W - pad * 2 - 48;
+  const parts = [
+    { value: Number(seatUsd) || 0, color: '#f7931a' },
+    { value: Number(tokenUsd) || 0, color: '#00a804' },
+  ].filter((p) => p.value > 0);
+  if (parts.length) {
+    ctx.save();
+    roundRect(ctx, barX, barY, barW, 8, 4);
+    ctx.clip();
+    const total = parts.reduce((s, p) => s + p.value, 0);
+    let cursor = barX;
+    parts.forEach((p) => {
+      const pw = (p.value / total) * barW;
+      ctx.fillStyle = p.color;
+      ctx.fillRect(cursor, barY, pw + 0.5, 8);
+      cursor += pw;
+    });
+    ctx.restore();
+  }
+  ctx.font = '600 13px ui-sans-serif, system-ui, sans-serif';
+  if (seats.length) {
+    ctx.fillStyle = '#f7931a';
+    ctx.fillText(`Seats  ${seatsValue || '—'}`, barX, heroY + 120);
+  }
+  if (tokens.length) {
+    ctx.fillStyle = '#34d399';
+    const tokenLine = `Tokens  ${tokensValue || '—'}`;
+    const tw = ctx.measureText(tokenLine).width;
+    ctx.fillText(tokenLine, seats.length ? barX + barW - tw : barX, heroY + 120);
   }
 
   const stats = [
-    { label: 'Floor today', value: floor, color: '#e7e9ec' },
-    { label: 'Cost at entry', value: basis || '—', color: '#e7e9ec' },
-    { label: mode === 'history' ? 'On entry cost' : 'Forecast ROI', value: roi, color: '#38bdf8' },
+    { label: cashLabel, value: cash, color: '#00a804' },
+    { label: roiLabel, value: roi, color: '#38bdf8' },
     { label: 'Seats', value: units, color: '#f7931a' },
+    { label: 'Cost at entry', value: basis || '—', color: '#e7e9ec' },
   ];
-  const statY = heroY + heroH + gap;
-  const statH = 92;
-  const statW = (W - pad * 2 - gap * 3) / 4;
+  const statY = heroY + heroH + 16;
+  const statH = 86;
+  const statGap = 12;
+  const statW = (W - pad * 2 - statGap * 3) / 4;
   stats.forEach((t, i) => {
-    const x = pad + i * (statW + gap);
+    const x = pad + i * (statW + statGap);
     cardPanel(ctx, x, statY, statW, statH);
     ctx.fillStyle = '#6b7280';
     ctx.font = '700 10px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText(t.label.toUpperCase(), x + 12, statY + 14);
+    ctx.fillText(fitText(ctx, String(t.label).toUpperCase(), statW - 24), x + 14, statY + 14);
     ctx.fillStyle = t.color;
-    ctx.font = '800 22px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText(fitText(ctx, t.value, statW - 24), x + 12, statY + 42);
+    ctx.font = '800 20px ui-sans-serif, system-ui, sans-serif';
+    ctx.fillText(fitText(ctx, t.value, statW - 28), x + 14, statY + 40);
   });
 
-  const chartY = statY + statH + gap;
-  const chartH = 340;
-  const chartW = (W - pad * 2 - gap) / 2;
-  cardPanel(ctx, pad, chartY, chartW, chartH);
-  ctx.fillStyle = '#6b7280';
-  ctx.font = '700 10px ui-sans-serif, system-ui, sans-serif';
-  ctx.fillText('FLOOR ALLOCATION', pad + 16, chartY + 14);
-  drawDonut(ctx, pad, chartY + 28, chartW, chartH - 36, pie);
+  const inner = W - pad * 2;
+  const colGap = 18;
+  const colW = both ? (inner - colGap) / 2 : inner;
+  const drawBook = (x, title, accent, totalLabel, items) => {
+    ctx.fillStyle = accent;
+    ctx.font = '800 13px ui-sans-serif, system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(title, x, listTop);
+    ctx.fillStyle = '#f4f6f8';
+    ctx.font = '800 16px ui-sans-serif, system-ui, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(fitText(ctx, totalLabel, colW * 0.5), x + colW, listTop - 2);
+    ctx.textAlign = 'left';
+    items.forEach((a, i) => {
+      const y = listTop + 28 + i * rowH;
+      ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.035)' : 'rgba(255,255,255,0.015)';
+      roundRect(ctx, x, y, colW, rowH - 8, 12);
+      ctx.fill();
+      const thumb = Math.min(40, rowH - 24);
+      const mid = y + (rowH - 8) / 2;
+      drawThumb(ctx, a.img, x + 10, mid - thumb / 2, thumb, a.mark || a.name);
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#00a804';
+      ctx.font = '800 16px ui-sans-serif, system-ui, sans-serif';
+      const valueText = a.value || '—';
+      const valueW = Math.min(168, ctx.measureText(valueText).width + 8);
+      ctx.textAlign = 'right';
+      ctx.fillText(fitText(ctx, valueText, valueW), x + colW - 14, mid);
+      ctx.textAlign = 'left';
+      const textX = x + thumb + 22;
+      const textW = colW - (textX - x) - valueW - 18;
+      ctx.fillStyle = '#f4f6f8';
+      ctx.font = '700 15px ui-sans-serif, system-ui, sans-serif';
+      ctx.fillText(fitText(ctx, a.name || 'Project', textW), textX, mid - 11);
+      ctx.fillStyle = '#8b929b';
+      ctx.font = '600 12px ui-sans-serif, system-ui, sans-serif';
+      ctx.fillText(fitText(ctx, a.detail || '', textW), textX, mid + 10);
+      ctx.textBaseline = 'top';
+    });
+  };
 
-  cardPanel(ctx, pad + chartW + gap, chartY, chartW, chartH);
-  ctx.fillStyle = '#6b7280';
-  ctx.font = '700 10px ui-sans-serif, system-ui, sans-serif';
-  ctx.fillText(String(bars?.title || (mode === 'history' ? 'Daily drops' : 'Forecasted cash-flow')).toUpperCase(), pad + chartW + gap + 16, chartY + 14);
-  if (bars?.headline) {
-    ctx.fillStyle = bars.headlineColor || '#00a804';
-    ctx.font = '800 22px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText(fitText(ctx, bars.headline, chartW - 32), pad + chartW + gap + 16, chartY + 34);
-  }
-  const barTop = chartY + (bars?.headline ? 66 : 40);
-  if (bars?.values?.length) {
-    drawBars(ctx, pad + chartW + gap, barTop, chartW, chartY + chartH - barTop - 10, bars);
-  } else if (bars?.note) {
+  if (seats.length) drawBook(pad, 'SEATS', '#f7931a', seatsValue, seats);
+  if (tokens.length) drawBook(both ? pad + colW + colGap : pad, 'TOKENS', '#34d399', tokensValue, tokens);
+  if (!seats.length && !tokens.length) {
     ctx.fillStyle = '#8b929b';
     ctx.font = '600 16px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText(fitText(ctx, bars.note, chartW - 48), pad + chartW + gap + 16, barTop + 8);
+    ctx.fillText('No seats or project tokens in this scan', pad, listTop);
   }
-
-  const listY = chartY + chartH + 18;
-  const shown = assets.slice(0, 8);
-  const extra = assets.length - shown.length;
-  ctx.fillStyle = '#f4f6f8';
-  ctx.font = '700 16px ui-sans-serif, system-ui, sans-serif';
-  ctx.fillText(extra > 0 ? `Holdings · ${shown.length} of ${assets.length}` : 'Holdings', pad, listY);
-
-  const listTop = listY + 26;
-  const listBot = H - foot - 16;
-  const rowH = shown.length ? Math.min(64, (listBot - listTop) / shown.length) : 56;
-  shown.forEach((a, i) => {
-    const y = listTop + i * rowH;
-    if (i % 2 === 0) {
-      ctx.fillStyle = 'rgba(255,255,255,0.03)';
-      roundRect(ctx, pad, y, W - pad * 2, rowH - 4, 12);
-      ctx.fill();
-    }
-    const thumb = Math.min(44, Math.round(rowH - 18));
-    const mid = y + (rowH - 4) / 2;
-    drawThumb(ctx, a.img, pad + 10, mid - thumb / 2, thumb, a.mark || a.name);
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#00a804';
-    ctx.font = '800 18px ui-sans-serif, system-ui, sans-serif';
-    const value = a.value || '—';
-    ctx.textAlign = 'right';
-    ctx.fillText(fitText(ctx, value, 170), W - pad - 16, mid);
-    ctx.textAlign = 'left';
-    const textX = pad + thumb + 24;
-    const textW = W - pad - 190 - textX;
-    ctx.fillStyle = '#f4f6f8';
-    ctx.font = '700 16px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText(fitText(ctx, a.name || 'Project', textW), textX, mid - 12);
-    ctx.fillStyle = '#8b929b';
-    ctx.font = '600 12px ui-sans-serif, system-ui, sans-serif';
-    ctx.fillText(fitText(ctx, a.detail || '', textW), textX, mid + 10);
-    ctx.textBaseline = 'top';
-  });
 
   ctx.fillStyle = '#0a0c0e';
   ctx.fillRect(0, H - foot, W, foot);
@@ -709,24 +734,28 @@ function drawPortfolioCard({
   ctx.font = '700 14px ui-sans-serif, system-ui, sans-serif';
   const followW = ctx.measureText(FOLLOW_MARK).width;
   ctx.fillText(FOLLOW_MARK, W - pad - followW, mid);
+  ctx.textBaseline = 'top';
   return out;
 }
 
 /** Portfolio PNG built on a canvas so Tailwind oklch cannot break the copy. */
 export async function copyPortfolioSnapshot(payload) {
   if (typeof window === 'undefined') return false;
-  const assets = await Promise.all((payload.assets || []).map(async (a) => ({
+  const loadRows = async (rows) => Promise.all((rows || []).map(async (a) => ({
     ...a,
     img: await loadShareImage(a.thumb),
   })));
-  let canvas = drawPortfolioCard({ ...payload, assets });
+  const seats = await loadRows(payload.seats?.length ? payload.seats : payload.assets);
+  const tokens = await loadRows(payload.tokens);
+  let canvas = drawPortfolioCard({ ...payload, seats, tokens });
   try {
     const blob = await pngBlobFromCanvas(canvas);
     const copied = await writeClipboardPng(blob);
     if (!copied) downloadPng(blob, 'savi-portfolio.png');
     return copied;
   } catch {
-    canvas = drawPortfolioCard({ ...payload, assets: assets.map((a) => ({ ...a, img: null })) });
+    const plain = (rows) => (rows || []).map((a) => ({ ...a, img: null }));
+    canvas = drawPortfolioCard({ ...payload, seats: plain(seats), tokens: plain(tokens) });
     const blob = await pngBlobFromCanvas(canvas);
     const copied = await writeClipboardPng(blob);
     if (!copied) downloadPng(blob, 'savi-portfolio.png');

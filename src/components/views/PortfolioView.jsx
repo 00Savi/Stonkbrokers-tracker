@@ -123,11 +123,6 @@ async function resolveThumb(asset, existing) {
   return { src, tokenId: pick?.tokenId ?? existing?.tokenId };
 }
 
-function chartCanvas(ref) {
-  const inst = ref?.current;
-  return inst?.canvas || (inst instanceof HTMLCanvasElement ? inst : null);
-}
-
 function HoldingRows({ tokens, priceIndex, formatCurrency }) {
   if (!tokens.length) {
     return <p className="text-xs text-slate-500">No tokens or NFTs in this tokenbound wallet.</p>;
@@ -152,6 +147,14 @@ function HoldingRows({ tokens, priceIndex, formatCurrency }) {
       })}
     </ul>
   );
+}
+
+function holdingName(asset) {
+  return String(asset.project || asset.ticker || 'Holding').replace(/ token$/, '');
+}
+
+function byFloor(a, b) {
+  return (Number(b.floorValue) || 0) - (Number(a.floorValue) || 0);
 }
 
 function groupByProject(ownedAssets) {
@@ -330,7 +333,6 @@ export default function PortfolioView({ data }) {
   const [scanProgress, setScanProgress] = useState('');
   const [thumbs, setThumbs] = useState({});
   const pickedThumb = useRef({});
-  const barRef = useRef(null);
 
   const priceIndex = buildPriceIndex(data);
   const [ccy] = useDisplayCurrency();
@@ -338,6 +340,7 @@ export default function PortfolioView({ data }) {
   const ethUsd = data?.projects?.stonk?.market?.ethPriceUsd || display.ethUsd || 0;
   const rates = { ethUsd, eurPerUsd: display.eurPerUsd };
   const formatCurrency = (usd) => formatMoney(usd, ccy, rates);
+  const quietCash = (n) => (Math.abs(Number(n) || 0) < 0.01 ? formatCurrency(1).replace('1', '0') : formatCurrency(n));
   const tickMoney = moneyTick(ccy, rates);
 
   const loadInventories = (nfts) => {
@@ -743,6 +746,13 @@ export default function PortfolioView({ data }) {
   const aggregate = aggregateTbaHoldings(allNfts, inventories, priceIndex);
   const inventoriesPending = allNfts.some((n) => n.tba && inventories[n.tba]?.status === 'loading');
   const grouped = useMemo(() => groupByProject(results.ownedAssets), [results.ownedAssets]);
+  const seatAssets = useMemo(() => grouped.filter((a) => !a.tokenPosition).sort(byFloor), [grouped]);
+  const tokenAssets = useMemo(() => grouped.filter((a) => a.tokenPosition).sort(byFloor), [grouped]);
+  const seatFloor = seatAssets.reduce((sum, a) => sum + (Number(a.floorValue) || 0), 0);
+  const tokenSpot = tokenAssets.reduce((sum, a) => sum + (Number(a.floorValue) || 0), 0);
+  const spotOnlyUsd = tokenAssets.reduce((sum, a) => (
+    Number(a.yieldValue) > 0 ? sum : sum + (Number(a.floorValue) || 0)
+  ), 0);
   const costTotals = useMemo(() => {
     let basisUsd = 0;
     let activationCostUsd = 0;
@@ -784,10 +794,12 @@ export default function PortfolioView({ data }) {
   const forecastUsd = results.yieldUsd * forecastYears;
   const cashLabel = mode === 'history' ? 'Earned in your ownership' : `Forecasted ${forecastYears}y cash-flow`;
   const cashValue = mode === 'history' ? results.earnedUsd : forecastUsd;
-  const realizedDenom = grouped.reduce((sum, g) => sum + assetEntryCostUsd(g), 0);
-  const roiPct = mode === 'history'
-    ? roiAgainst(results.earnedUsd, realizedDenom)
-    : roiAgainst(forecastUsd, results.floorUsd);
+  const yieldBasis = grouped.reduce((sum, g) => {
+    if (g.tokenPosition && !(Number(g.yieldValue) > 0)) return sum;
+    if (mode === 'history') return sum + assetEntryCostUsd(g);
+    return sum + (Number(g.floorValue) || 0);
+  }, 0);
+  const roiPct = roiAgainst(mode === 'history' ? results.earnedUsd : forecastUsd, yieldBasis);
   const formatRoi = (pct, digits = 2) => (pct == null ? '—' : `${pct.toFixed(digits)}%`);
   const runRate = {
     d: results.yieldUsd / 365,
@@ -821,7 +833,6 @@ export default function PortfolioView({ data }) {
     if (copyState === 'busy') return;
     setCopyState('busy');
     try {
-      const pieGroups = grouped.filter((g) => g.floorValue > 0);
       const resolved = {};
       await Promise.all(grouped.map(async (asset) => {
         const thumb = await resolveThumb(asset, thumbs[asset.projectKey] || pickedThumb.current[asset.projectKey]);
@@ -829,59 +840,42 @@ export default function PortfolioView({ data }) {
         resolved[asset.projectKey] = thumb;
       }));
       setThumbs((cur) => ({ ...cur, ...resolved }));
+      const cardRow = (asset) => {
+        const thumb = resolved[asset.projectKey] || {};
+        const entryCost = assetEntryCostUsd(asset);
+        const assetRoi = mode === 'history'
+          ? roiAgainst(asset.earnedValue, entryCost)
+          : roiAgainst((asset.yieldValue || 0) * forecastYears, asset.floorValue);
+        const spotOnly = asset.tokenPosition && !(Number(asset.yieldValue) > 0);
+        return {
+          name: holdingName(asset),
+          detail: asset.tokenPosition
+            ? `${formatAmount(asset.balance)} ${asset.ticker || ''} · dashboard price`.trim()
+            : `${asset.balance} ${Number(asset.balance) === 1 ? 'seat' : 'seats'} · floor ${formatCurrency(asset.floorValue)} · ${mode === 'history' ? `since entry ${formatRoi(assetRoi, 1)}` : `${forecastYears}y ${formatRoi(assetRoi, 1)}`}`,
+          value: spotOnly
+            ? formatCurrency(asset.floorValue)
+            : mode === 'history'
+              ? quietCash(asset.earnedValue || 0)
+              : `+ ${quietCash((asset.yieldValue || 0) * forecastYears)}`,
+          thumb: thumb.src || officialLogoSrc(asset),
+          mark: asset.ticker,
+        };
+      };
       const copied = await copyPortfolioSnapshot({
         mode,
-        floor: formatCurrency(results.floorUsd),
+        value: formatCurrency(results.floorUsd),
+        seatsValue: formatCurrency(seatFloor),
+        tokensValue: formatCurrency(tokenSpot),
+        seatUsd: seatFloor,
+        tokenUsd: tokenSpot,
         basis: costTotals.nftCount > 0 ? formatCurrency(costTotals.total) : '',
-        basisDetail: mode === 'history'
-          ? 'Cash credited after each seat opened and activated'
-          : `${forecastYears}y at the current run rate. Not compounded.`,
         cashLabel,
         cash: results.hasErrors ? 'ERROR' : formatCurrency(cashValue),
         roi: results.hasErrors ? 'ERROR' : formatRoi(roiPct),
-        units: `${results.totalUnits} Units`,
-        pie: pieGroups.map((g, i) => ({
-          label: projectName(g.projectKey, g.ticker),
-          value: g.floorValue,
-          color: PIE_COLORS[i % PIE_COLORS.length],
-        })),
-        barCanvas: chartCanvas(barRef),
-        bars: mode === 'forecast'
-          ? {
-            title: 'Forecasted cash-flow',
-            headline: `${formatCurrency(runRate[forecastGrain] || 0)} / ${GRAINS.find((g) => g.id === forecastGrain)?.title.toLowerCase()}`,
-            headlineColor: '#00a804',
-            note: 'Current wallet yield as a run-rate. Not compounded.',
-          }
-          : {
-            title: 'Daily drops',
-            labels: historyGrain === 'd' ? formatLabels(historyChart.labels) : historyChart.labels,
-            values: historyChart.data,
-            colors: historyChart.data.map(() => STREAM_COLORS.holdersRev),
-          },
-        assets: grouped.map((asset) => {
-          const thumb = resolved[asset.projectKey] || {};
-          const entryCost = assetEntryCostUsd(asset);
-          const assetRoi = mode === 'history'
-            ? roiAgainst(asset.earnedValue, entryCost)
-            : roiAgainst((asset.yieldValue || 0) * forecastYears, asset.floorValue);
-          const spotOnly = asset.tokenPosition && !(Number(asset.yieldValue) > 0);
-          return {
-            name: `${asset.project} (${asset.tokenPosition ? formatAmount(asset.balance) : `${asset.balance} owned`})`,
-            detail: spotOnly
-              ? `Spot ${formatCurrency(asset.floorValue)}`
-              : mode === 'history'
-              ? `Floor today ${formatCurrency(asset.floorValue)} · Entry ${entryCost > 0 ? formatCurrency(entryCost) : '—'} · Since entry ${formatRoi(assetRoi, 1)}`
-              : `Floor today ${formatCurrency(asset.floorValue)} · ${forecastYears}y ${formatRoi(assetRoi, 1)}`,
-            value: spotOnly
-              ? formatCurrency(asset.floorValue)
-              : mode === 'history'
-              ? formatCurrency(asset.earnedValue || 0)
-              : `+ ${formatCurrency((asset.yieldValue || 0) * forecastYears)}`,
-            thumb: thumb.src || officialLogoSrc(asset),
-            mark: asset.ticker,
-          };
-        }),
+        roiLabel: mode === 'history' ? 'On entry cost' : 'Forecast ROI',
+        units: String(results.totalUnits),
+        seats: seatAssets.map(cardRow),
+        tokens: tokenAssets.map(cardRow),
       });
       setCopyState(copied ? 'copied' : 'saved');
     } catch (err) {
@@ -931,7 +925,7 @@ export default function PortfolioView({ data }) {
             data-share-omit
             onClick={handleCopySnapshot}
             disabled={copyState === 'busy'}
-            title="Copy a 4:5 portfolio card for X (no addresses)"
+            title="Copy the whole portfolio for X"
             className={`sm:min-w-[11.5rem] inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-extrabold shadow-md transition disabled:opacity-60 ${
               copyOk
                 ? 'bg-emerald-950 text-emerald-300 ring-2 ring-emerald-500/70'
@@ -1001,7 +995,7 @@ export default function PortfolioView({ data }) {
               <div>
                 <p className="text-sm font-extrabold text-white">Share this wallet on X</p>
                 <p className="text-[11px] text-emerald-200/80 mt-0.5">
-                  Copies a one-page card for X. Each chart below has its own Copy. Addresses stay off the image.
+                  Copies the whole portfolio for X. Seats and tokens stay in their own columns. Addresses stay off the image.
                 </p>
               </div>
               <button
@@ -1040,8 +1034,9 @@ export default function PortfolioView({ data }) {
             {[
               { id: 'totals', label: 'Totals' },
               { id: 'portfolio-forecast', label: 'Forecast' },
-              { id: 'portfolio-holdings', label: 'Holdings' },
-            ].map((row) => (
+              seatAssets.length ? { id: 'portfolio-seats', label: 'Seats' } : null,
+              tokenAssets.length ? { id: 'portfolio-tokens', label: 'Tokens' } : null,
+            ].filter(Boolean).map((row) => (
               <button
                 key={row.id}
                 type="button"
@@ -1091,10 +1086,12 @@ export default function PortfolioView({ data }) {
           <Copyable id="totals" className="mb-8">
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3 sm:p-5 shadow-inner">
-              <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Total Floor Value</p>
+              <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Portfolio value</p>
               <p className="text-xl md:text-2xl font-extrabold text-white">{formatCurrency(results.floorUsd)}</p>
-              {grouped.some((a) => a.tokenPosition) && (
-                <p className="text-[10px] text-slate-500 mt-1">NFT floors plus project-token spot</p>
+              {seatAssets.length > 0 && tokenAssets.length > 0 && (
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Seats {formatCurrency(seatFloor)} · Tokens {formatCurrency(tokenSpot)}
+                </p>
               )}
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3 sm:p-5 shadow-inner">
@@ -1118,35 +1115,59 @@ export default function PortfolioView({ data }) {
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3 sm:p-5 shadow-inner">
               <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">
-                {mode === 'history' ? 'Cash on entry cost' : 'Combined Portfolio ROI'}
+                {mode === 'history' ? 'Cash on entry cost' : 'Forecast ROI'}
               </p>
               <p className={`text-xl md:text-2xl font-extrabold ${results.hasErrors ? 'text-rose-400' : 'text-blue-400'}`}>
                 {results.hasErrors ? 'ERROR' : formatRoi(roiPct)}
               </p>
+              {spotOnlyUsd > 0 && (
+                <p className="text-[10px] text-slate-500 mt-1">Token spot stays out of this base</p>
+              )}
             </div>
             <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3 sm:p-5 shadow-inner">
-              <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Total Active Units</p>
-              <p className="text-xl md:text-2xl font-extrabold text-purple-400">{results.totalUnits} Units</p>
+              <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Seats</p>
+              <p className="text-xl md:text-2xl font-extrabold text-purple-400">{results.totalUnits}</p>
+              {tokenAssets.length > 0 && (
+                <p className="text-[10px] text-slate-500 mt-1">
+                  {tokenAssets.length} token {tokenAssets.length === 1 ? 'balance' : 'balances'}
+                </p>
+              )}
             </div>
           </div>
           </Copyable>
 
-          {grouped.some((g) => g.floorValue > 0) && (
+          {(seatAssets.some((g) => g.floorValue > 0) || tokenAssets.some((g) => g.floorValue > 0)) && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-              <Copyable id="floor" className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
-                <h3 className="text-sm font-bold text-white mb-4 pr-8">Floor allocation</h3>
-                <SliceChart
-                  noun="Floor"
-                  format={formatCurrency}
-                  slices={grouped.filter((g) => g.floorValue > 0).map((g, i) => ({
-                    label: projectName(g.projectKey, g.ticker),
-                    value: g.floorValue,
-                    color: PIE_COLORS[i % PIE_COLORS.length],
-                  }))}
-                />
-              </Copyable>
+              {seatAssets.some((g) => g.floorValue > 0) && (
+                <Copyable id="floor" className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
+                  <h3 className="text-sm font-bold text-white mb-4 pr-8">Seat floors</h3>
+                  <SliceChart
+                    noun="Seats"
+                    format={formatCurrency}
+                    slices={seatAssets.filter((g) => g.floorValue > 0).map((g, i) => ({
+                      label: projectName(g.projectKey, g.ticker),
+                      value: g.floorValue,
+                      color: PIE_COLORS[i % PIE_COLORS.length],
+                    }))}
+                  />
+                </Copyable>
+              )}
+              {tokenAssets.some((g) => g.floorValue > 0) && (
+                <Copyable id="tokens" className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
+                  <h3 className="text-sm font-bold text-white mb-4 pr-8">Token spot</h3>
+                  <SliceChart
+                    noun="Tokens"
+                    format={formatCurrency}
+                    slices={tokenAssets.filter((g) => g.floorValue > 0).map((g, i) => ({
+                      label: g.ticker || projectName(g.projectKey, g.ticker),
+                      value: g.floorValue,
+                      color: PIE_COLORS[i % PIE_COLORS.length],
+                    }))}
+                  />
+                </Copyable>
+              )}
               {mode === 'forecast' ? (
-                <Copyable id="forecast" className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
+                <Copyable id="forecast" className={`bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6${seatAssets.some((g) => g.floorValue > 0) && tokenAssets.some((g) => g.floorValue > 0) ? ' md:col-span-2' : ''}`}>
                   <div className="flex items-center justify-between gap-2 mb-2 pr-8">
                     <h3 className="text-sm font-bold text-white">Forecasted cash-flow</h3>
                     <div data-share-omit><GrainBar value={forecastGrain} onChange={setForecastGrain} /></div>
@@ -1160,7 +1181,7 @@ export default function PortfolioView({ data }) {
                   <p className="text-xs text-slate-500">Current wallet yield as a run-rate. Not compounded.</p>
                 </Copyable>
               ) : (
-                <Copyable id="drops" className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
+                <Copyable id="drops" className={`bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6${seatAssets.some((g) => g.floorValue > 0) && tokenAssets.some((g) => g.floorValue > 0) ? ' md:col-span-2' : ''}`}>
                   <div className="flex items-center justify-between gap-2 mb-2 pr-8">
                     <h3 className="text-sm font-bold text-white">Daily drops</h3>
                     <div data-share-omit><GrainBar value={historyGrain} onChange={setHistoryGrain} /></div>
@@ -1171,7 +1192,6 @@ export default function PortfolioView({ data }) {
                   <div className="relative h-44 w-full">
                     {historyChart.labels.length ? (
                       <Bar
-                        ref={barRef}
                         data={{
                           labels: historyGrain === 'd' ? formatLabels(historyChart.labels) : historyChart.labels,
                           datasets: [{
@@ -1248,17 +1268,37 @@ export default function PortfolioView({ data }) {
             </Copyable>
           )}
 
-          <div id="portfolio-holdings" className="scroll-mt-36 mb-4 flex items-center justify-between gap-3 border-b border-[#1e2228] pb-2">
-            <h3 className="text-sm font-bold text-white">Owned Asset Breakdown</h3>
-            {grouped.length > 0 && (
+          {(() => {
+            const books = [
+              seatAssets.length ? {
+                id: 'portfolio-seats',
+                title: 'Seats',
+                note: `${results.totalUnits} ${results.totalUnits === 1 ? 'seat' : 'seats'} · floor ${formatCurrency(seatFloor)}`,
+                assets: seatAssets,
+              } : null,
+              tokenAssets.length ? {
+                id: 'portfolio-tokens',
+                title: 'Tokens',
+                note: `${tokenAssets.length} ${tokenAssets.length === 1 ? 'balance' : 'balances'} · spot ${formatCurrency(tokenSpot)}`,
+                assets: tokenAssets,
+              } : null,
+            ].filter(Boolean);
+            if (!books.length) {
+              return <p className="text-xs text-slate-400">No ecosystem NFTs or project tokens found in the provided wallet(s).</p>;
+            }
+            return books.map((book, bookIndex) => (
+          <section key={book.id} id={book.id} className="scroll-mt-36 mb-8">
+          <div className="mb-4 flex items-center justify-between gap-3 border-b border-[#1e2228] pb-2">
+            <div>
+              <h3 className="text-sm font-bold text-white">{book.title}</h3>
+              <p className="text-[11px] text-slate-500 mt-0.5">{book.note}</p>
+            </div>
+            {bookIndex === 0 && (
               <CsvButton filename="savi-portfolio.csv" rows={portfolioCsvRows(grouped)} />
             )}
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {grouped.length === 0 ? (
-              <p className="text-xs text-slate-400 lg:col-span-2">No ecosystem NFTs or project tokens found in the provided wallet(s).</p>
-            ) : (
-              grouped.map((asset) => {
+              {book.assets.map((asset) => {
                 const open = !!openProjects[asset.projectKey];
                 const entryCost = assetEntryCostUsd(asset);
                 const assetRoi = mode === 'history'
@@ -1286,8 +1326,8 @@ export default function PortfolioView({ data }) {
                         </div>
                       )}
                       <div className="min-w-0">
-                        <h4 className="text-sm font-bold text-white">
-                          {asset.project} ({asset.tokenPosition ? formatAmount(asset.balance) : `${asset.balance} owned`})
+                        <h4 className="text-sm font-bold text-white truncate">
+                          {holdingName(asset)}
                         </h4>
                         <p data-share-omit className="text-[10px] text-slate-400 font-mono">
                           {(asset.wallets || [asset.wallet]).map((w) => `${w.slice(0, 6)}...${w.slice(-4)}`).join(' · ')}
@@ -1305,8 +1345,8 @@ export default function PortfolioView({ data }) {
                             {spotOnly
                               ? formatCurrency(asset.floorValue)
                               : mode === 'history'
-                              ? formatCurrency(asset.earnedValue || 0)
-                              : `+ ${formatCurrency((asset.yieldValue || 0) * forecastYears)}`}
+                                ? quietCash(asset.earnedValue || 0)
+                                : `+ ${quietCash((asset.yieldValue || 0) * forecastYears)}`}
                           </span>
                         )}
                       </p>
@@ -1316,11 +1356,15 @@ export default function PortfolioView({ data }) {
                         </p>
                       )}
                       <p className="text-[10px] text-slate-400 mt-1">
+                        {asset.tokenPosition
+                          ? `${formatAmount(asset.balance)} ${asset.ticker || ''}`.trim()
+                          : `${asset.balance} ${Number(asset.balance) === 1 ? 'seat' : 'seats'}`}
+                        {' · '}
                         {spotOnly
-                          ? `Spot value · seat yield stays on the NFTs`
+                          ? 'Spot value'
                           : (
                             <>
-                              Floor today {formatCurrency(asset.floorValue)}
+                              Floor {formatCurrency(asset.floorValue)}
                               {mode === 'history' && !asset.tokenPosition && entryCost > 0
                                 ? ` · Entry ${formatCurrency(entryCost)}`
                                 : ''}
@@ -1494,10 +1538,12 @@ export default function PortfolioView({ data }) {
                     </div>
                   )}
                 </Copyable>
-                );
-              })
-            )}
+              );
+              })}
           </div>
+          </section>
+            ));
+          })()}
 
           {allNfts.length > 0 && (
             <Copyable id="tokenbound" className="mt-6 bg-[#08090b] border border-[#1e2228] rounded-xl overflow-hidden">
