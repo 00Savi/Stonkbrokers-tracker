@@ -7,6 +7,7 @@ import HomeView from './components/views/HomeView';
 import EcosystemView from './components/views/EcosystemView';
 import PortfolioView from './components/views/PortfolioView';
 import BrokerScanView from './components/views/BrokerScanView';
+import FloorCheckView from './components/views/FloorCheckView';
 import AnvilScanView from './components/views/AnvilScanView';
 import StonkDetailView from './components/views/StonkDetailView';
 import InternDetailView from './components/views/InternDetailView';
@@ -192,6 +193,14 @@ export default function App() {
             element={
               <Section title="Broker scan">
                 {data ? <BrokerScanView data={shown} /> : <SkeletonCard rows={5} />}
+              </Section>
+            }
+          />
+          <Route
+            path="/floor"
+            element={
+              <Section title="Floor checker">
+                {data ? <FloorCheckView data={shown} /> : <SkeletonCard rows={5} />}
               </Section>
             }
           />

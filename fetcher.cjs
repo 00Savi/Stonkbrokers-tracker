@@ -1304,6 +1304,21 @@ async function loadMarketPrices() {
     };
   }
 
+  if (markets.stonk) {
+    try {
+      const listings = await fetchBrokerFloorListings(10);
+      if (listings.length) {
+        markets.stonk.floorListings = listings;
+        const cheap = listings[0];
+        console.log(`  stonk floor listings ${listings.length} · cheapest ${cheap.ask} ${cheap.symbol}`);
+      }
+    } catch (e) {
+      console.warn(`[warn] stonk floor listings: ${e.message}`);
+      const prev = previous.projects?.stonk?.market?.floorListings;
+      if (Array.isArray(prev) && prev.length) markets.stonk.floorListings = prev;
+    }
+  }
+
   return markets;
 }
 
@@ -2741,6 +2756,34 @@ async function fetchStarFloorsRest(slug) {
     await sleep(250);
   }
   return stars;
+}
+
+/** Cheapest OpenSea asks on StonkBrokers, lowest USD first. The floor checker nets these against the TBA. */
+async function fetchBrokerFloorListings(limit = 10) {
+  const data = await fetchOpenSeaGraphql(`query {
+    collectionItems(
+      collectionSlug: "stonkbrokers-nft",
+      sort: { by: PRICE, direction: ASC },
+      limit: ${Number(limit) || 10},
+      filter: { isListed: true }
+    ) {
+      items {
+        tokenId
+        bestListing { pricePerItem { usd token { unit symbol } } }
+      }
+    }
+  }`);
+  const items = data?.collectionItems?.items || [];
+  return items.map((it) => {
+    const token = it?.bestListing?.pricePerItem?.token || {};
+    const usd = Number(it?.bestListing?.pricePerItem?.usd);
+    return {
+      id: Number(it.tokenId),
+      ask: Number(token.unit) || 0,
+      symbol: String(token.symbol || ""),
+      usd: Number.isFinite(usd) ? usd : 0,
+    };
+  }).filter((row) => row.id > 0 && row.ask > 0);
 }
 
 async function fetchCollectionFloorGraphql(slug) {

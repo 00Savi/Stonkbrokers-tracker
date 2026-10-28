@@ -50,4 +50,13 @@ export default defineConfig({
   build: {
     outDir: 'docs',
   },
+  server: {
+    proxy: {
+      '/opensea-gql': {
+        target: 'https://gql.opensea.io',
+        changeOrigin: true,
+        rewrite: () => '/graphql',
+      },
+    },
+  },
 });

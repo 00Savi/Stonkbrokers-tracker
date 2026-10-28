@@ -226,6 +226,21 @@ export default function HomeView({ data }) {
           </span>
         </Link>
         <Link
+          to="/floor"
+          className="card group flex flex-col p-5 transition-colors hover:bg-panel-2 sm:p-6"
+        >
+          <p className="eyebrow text-[#34d399]">Floor</p>
+          <h2 className="mt-3 text-[20px] font-semibold tracking-tight text-ink">
+            Ask minus the wallet.
+          </h2>
+          <p className="mt-2 flex-1 text-[13px] leading-relaxed text-muted">
+            The cheapest StonkBroker listings, what each wallet holds, and the purchase cost after that.
+          </p>
+          <span className="mt-5 text-[13px] font-medium text-ink">
+            Open floor checker <span className="text-muted transition-colors group-hover:text-ink">→</span>
+          </span>
+        </Link>
+        <Link
           to="/anvil"
           className="card group flex flex-col p-5 transition-colors hover:bg-panel-2 sm:p-6"
         >

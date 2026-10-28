@@ -26,6 +26,7 @@ import OverviewView from '../src/components/views/OverviewView';
 import EcosystemView from '../src/components/views/EcosystemView';
 import PortfolioView from '../src/components/views/PortfolioView';
 import BrokerScanView from '../src/components/views/BrokerScanView';
+import FloorCheckView from '../src/components/views/FloorCheckView';
 import AnvilScanView from '../src/components/views/AnvilScanView';
 import MemesTokensView from '../src/components/views/MemesTokensView';
 import StonkDetailView from '../src/components/views/StonkDetailView';
@@ -59,6 +60,7 @@ import { buildTopicShareCard } from '../src/lib/projectShare';
 import { copySectionEl } from '../src/components/CopyControl';
 import { internIdsForBroker } from '../src/lib/interns';
 import { parseBrokerId } from '../src/lib/brokerScan';
+import { parseFloorCount, priceHoldings, purchaseCost, walletUsd } from '../src/lib/floorCheck';
 import { ANVIL_VAULTS, internRowState, internStatusLine, predictTbaAddress, rankVaultRows, rowsFromVaultBook, snipeCostFor, wallFloorEth, wallStars } from '../src/lib/anvilScan';
 import { cheapestWallEth, listedSeat, mixUsd, revenueRows, snipeSeatUsd } from '../src/lib/seats';
 import { isProjectLive } from '../src/lib/routes';
@@ -88,6 +90,8 @@ const ROUTES = [
   '/portfolio',
   '/broker',
   '/broker?id=1',
+  '/floor',
+  '/floor?n=5',
   '/anvil',
   '/anvil?project=cardwall',
   '/tokens',
@@ -170,6 +174,7 @@ const VIEWS = [
   ['EcosystemView', EcosystemView, { data: snapshot }],
   ['PortfolioView', PortfolioView, { data: snapshot }],
   ['BrokerScanView', BrokerScanView, { data: snapshot }],
+  ['FloorCheckView', FloorCheckView, { data: snapshot }],
   ['AnvilScanView', AnvilScanView, { data: snapshot }],
   ['MemesTokensView·memes', MemesTokensView, { data: snapshot, type: 'memes' }],
   ['MemesTokensView·stocks', MemesTokensView, { data: snapshot, type: 'stocks' }],
@@ -919,6 +924,20 @@ for (const [name, View, props] of VIEWS) {
     console.error(`FAIL  broker scan ids ${JSON.stringify(ids)} intern ${parsedIntern}`);
   } else {
     console.log('ok    broker scan maps #1 → interns 1 / 4445');
+  }
+}
+
+{
+  const held = priceHoldings([
+    { contract: 'native', symbol: 'ETH', amount: 1, nft: false, usdHint: 100 },
+    { contract: '0xabc', symbol: 'INTERN', amount: 2, nft: true },
+  ], {}, { '0xabc': 5 });
+  const net = purchaseCost(20, walletUsd(held));
+  if (parseFloorCount('4') !== 10 || parseFloorCount('7') !== 7 || net !== -90) {
+    failed++;
+    console.error(`FAIL  floor check net ${net}`);
+  } else {
+    console.log('ok    floor check nets ask minus wallet');
   }
 }
 

@@ -19,7 +19,8 @@ export const NAV_GROUPS = [
 export const NAV_ITEMS = [
   { to: '/', label: 'Home', group: 'tools', icon: 'home' },
   { to: '/portfolio', label: 'Portfolio Tracker', group: 'tools', icon: 'chart' },
-  { to: '/broker', label: 'Broker Scan', group: 'tools', logo: 'Stonkbroker.png' },
+  { to: '/broker', label: 'Broker Scan', group: 'tools', icon: 'search' },
+  { to: '/floor', label: 'Floor Checker', group: 'tools', icon: 'broom' },
   { to: '/anvil', label: 'Anvil Scan', group: 'tools', icon: 'anvil' },
   { to: '/ecosystem', label: 'Ecosystem Overview', group: 'tools', icon: 'system' },
   { to: '/index/roi', label: 'Index', group: 'yield-tokens', logo: 'Index.png' },
@@ -47,6 +48,7 @@ function titleForPath(pathname) {
   if (first === 'ecosystem') return 'Ecosystem';
   if (first === 'portfolio') return 'Portfolio';
   if (first === 'broker') return 'Broker Scan';
+  if (first === 'floor') return 'Floor Checker';
   if (first === 'anvil') return 'Anvil Scan';
   if (first === 'rankings') return 'Rankings';
   if (first === 'tokens' || first === 'stocks') return 'Markets & Swap';
@@ -88,6 +90,26 @@ function NavIcon({ name }) {
         <path d="M4 19V5" />
         <path d="M4 19h16" />
         <path d="M7.5 15.2 11.4 11l3.1 2.3L19 7.5" />
+      </svg>
+    );
+  }
+  if (name === 'search') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true" {...pen}>
+        <circle cx="10.2" cy="10.2" r="5.4" />
+        <path d="m14.4 14.4 5.1 5.1" />
+      </svg>
+    );
+  }
+  if (name === 'broom') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true" {...pen}>
+        <path d="M14.2 4.2 8.4 13.4" />
+        <path d="M5.2 14.2h9.4" />
+        <path d="M6.1 14.2 5.2 20" />
+        <path d="M8.3 14.2 8 20" />
+        <path d="M10.5 14.2V20" />
+        <path d="M12.6 14.2 13.3 20" />
       </svg>
     );
   }
