@@ -156,6 +156,7 @@ function overlayDailyStreams(snaps, revenue, extraDates) {
     s.revSmartLpGross = Number(revenue.dailySmartLpGross?.[j]) || 0;
     s.revPairTokens = Number(revenue.dailyPairTokens?.[j]) || 0;
     s.revPairTokensGross = Number(revenue.dailyPairTokensGross?.[j]) || 0;
+    s.revBooks = Number(revenue.dailyBooks?.[j]) || 0;
   }
   overlaySmartLpDaily(snaps, revenue);
   overlayPairDaily(snaps, revenue);
@@ -242,6 +243,7 @@ const LIVE_TODAY_STREAMS = [
   ["dailyBooster", "historyBooster"],
   ["dailySmartLp", "historySmartLp"],
   ["dailyPairTokens", "historyPairTokens"],
+  ["dailyBooks", "historyBooks"],
 ];
 
 /**
@@ -560,6 +562,11 @@ const priceDays = require("./lib/priceDays.cjs");
 const { foldOnboarding, emptySummary, keepOnboardingHistory } = require("./lib/onboarding.cjs");
 const { fetchGachaRevenue } = require("./lib/gacha.cjs");
 const { walkAmmFlow, mergeAmmFlow } = require("./lib/ammFlow.cjs");
+const {
+  fetchTraderBooks,
+  applyBooksShareToStonk,
+  applyBooksRevenueToMancer,
+} = require("./lib/traderBooks.cjs");
 
 const gg = new GgIndex();
 const rpc = new Rpc();
@@ -3065,6 +3072,7 @@ function ingestHistoryArrays(byIso, prev) {
     ["smartLp", prev.historySmartLp],
     ["booster", prev.historyBooster],
     ["pairTokens", prev.historyPairTokens],
+    ["books", prev.historyBooks],
     ["holders", prev.historyHolder],
   ];
   for (let i = 0; i < dates.length; i++) {
@@ -3177,6 +3185,7 @@ async function attachRevenueHistory(projectKey, revenue, scale, yieldMode, prevR
   revenue.historySmartLp = col("smartLp");
   revenue.historyPairTokens = col("pairTokens");
   revenue.historyBooster = col("booster");
+  revenue.historyBooks = col("books");
   revenue.historyHolder = col("holders");
   revenue.historyGapAmm = gap("amm");
   revenue.historyGapPaid = gap("paid");
@@ -3188,6 +3197,7 @@ async function attachRevenueHistory(projectKey, revenue, scale, yieldMode, prevR
   revenue.historyGapSmartLp = gap("smartLp");
   revenue.historyGapPairTokens = gap("pairTokens");
   revenue.historyGapBooster = gap("booster");
+  revenue.historyGapBooks = gap("books");
   revenue.historyTotalUsd = revenue.historyAmm;
 }
 
@@ -5152,6 +5162,47 @@ async function run() {
       } catch (e) {
         console.warn(`[warn] stonk booster share: ${e.message}`);
       }
+    }
+  }
+
+  {
+    const mancer = finalJson.projects.mancer;
+    const stonk = finalJson.projects.stonk;
+    const prevBooks = previousData.projects?.mancer?.books || null;
+    try {
+      const books = await fetchTraderBooks();
+      if (mancer) {
+        mancer.books = books;
+        applyBooksRevenueToMancer(mancer, books);
+        if (mancer.revenue) {
+          mergeLiveTodayHistory(mancer.revenue);
+          persistStreamDays("mancer", mancer.revenue);
+        }
+        console.log(
+          `  books: ${books.counts?.total || 0} open, raise $${(books.raise?.raisedUsd || 0).toFixed(0)}, ` +
+            `mancer close ${books.fees?.estimated ? "est" : "accrued"} $${(books.fees?.mancerUsd || 0).toFixed(0)}`,
+        );
+      }
+      if (stonk?.revenue && books) {
+        const credited = applyBooksShareToStonk(stonk, books);
+        stonk.booksShare = {
+          protocolAccruedUsd: books.fees?.protocolAccruedUsd || 0,
+          protocolEstimatedUsd: books.fees?.protocolEstimatedUsd || 0,
+          protocolUsd: books.fees?.protocolUsd || 0,
+          estimated: !!books.fees?.estimated,
+          closeBps: books.fees?.closeBps || 200,
+          fetchedAt: books.fetchedAt,
+        };
+        if (credited > 0) {
+          persistStreamDays("stonk", stonk.revenue);
+          mergeLiveTodayHistory(stonk.revenue);
+          overlayDailyStreams(stonk.dailySnapshots, stonk.revenue, stonk.tiers?.[0]?.dailyDates);
+          console.log(`  stonk books close share: $${credited.toFixed(0)}`);
+        }
+      }
+    } catch (e) {
+      if (mancer && prevBooks) mancer.books = prevBooks;
+      console.warn(`[warn] books: ${e.message}`);
     }
   }
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { compactNum, compactUsd } from '../kit';
+import { Card, KpiStrip, SkeletonCard, Stat, Tag, compactNum, compactUsd } from '../kit';
 import { explorerAddressUrl } from '../../lib/tba';
 import { fetchNftImage } from '../../lib/portfolioHistory';
 import { ANVIL_VAULTS, SCAN_INCLUDE, anvilVaultById, rankVaultRows, scanAnvilVault, snipeCostFor } from '../../lib/anvilScan';
@@ -70,10 +70,10 @@ function formatNet(tbaUsd, cost, unit) {
 
 function netTone(tbaUsd, cost) {
   const net = netCostUsd(tbaUsd, cost);
-  if (net == null) return 'text-slate-500';
-  if (net < 0) return 'text-emerald-300';
-  if (net > 0) return 'text-rose-300';
-  return 'text-slate-300';
+  if (net == null) return 'text-faint';
+  if (net < 0) return 'text-accent';
+  if (net > 0) return 'text-danger';
+  return 'text-ink';
 }
 
 function costTitle(cost) {
@@ -99,8 +99,8 @@ function entryInterns(path) {
 function MoneyLine({ label, value, tone, strong }) {
   return (
     <div className="flex items-baseline justify-between gap-4">
-      <span className={`text-[10px] uppercase tracking-wider ${strong ? 'text-slate-300' : 'text-slate-500'}`}>{label}</span>
-      <span className={`font-mono tabular-nums ${strong ? 'text-[14px]' : 'text-[12px]'} ${tone || 'text-slate-200'}`}>{value}</span>
+      <span className={`eyebrow text-[10px] ${strong ? 'text-ink' : 'text-faint'}`}>{label}</span>
+      <span className={`num ${strong ? 'text-[14px]' : 'text-[12px]'} ${tone || 'text-ink'}`}>{value}</span>
     </div>
   );
 }
@@ -114,11 +114,11 @@ function EntryWallet({ path }) {
     <ul className="min-w-0 flex-1 space-y-0.5 lg:max-w-md">
       {shown.map((holding) => (
         <li key={`${holding.contract}-${holding.symbol}`} className="flex items-baseline justify-between gap-3 text-[12px]">
-          <span className="min-w-0 truncate text-slate-300">{holdingText(holding, true)}</span>
-          <span className="shrink-0 font-mono text-slate-500">{holding.usd > 0 ? compactUsd(holding.usd) : 'unpriced'}</span>
+          <span className="min-w-0 truncate text-ink">{holdingText(holding, true)}</span>
+          <span className="shrink-0 font-mono text-faint">{holding.usd > 0 ? compactUsd(holding.usd) : 'unpriced'}</span>
         </li>
       ))}
-      {extra > 0 ? <li className="text-[11px] text-slate-500">+{extra} more in this wallet</li> : null}
+      {extra > 0 ? <li className="text-[11px] text-faint">+{extra} more in this wallet</li> : null}
     </ul>
   );
 }
@@ -126,7 +126,7 @@ function EntryWallet({ path }) {
 function EntryPortrait({ path, nftCa }) {
   if (path.imageUrl) {
     return (
-      <span className="inline-flex h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-[#1e2228] bg-[#08090b]">
+      <span className="inline-flex h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-line bg-bg">
         <img
           src={path.imageUrl}
           alt={`StonkBroker #${path.id}`}
@@ -141,24 +141,20 @@ function EntryPortrait({ path, nftCa }) {
 
 function EntryBoard({ paths, snipeReady, floorBusy, floorNote, pricingTail, nftCa }) {
   return (
-    <section className="mb-6">
-      <div className="mb-3">
-        <h3 className="text-[15px] font-semibold text-white">Best entry</h3>
-        <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-slate-500">
-          Every listed StonkBroker is here, not only the cheap asks. A high price can still win when the wallet is full.
-          Net cost is the total you pay minus that wallet. You pay the total. The wallet is what you then own.
-        </p>
-      </div>
-      {floorNote ? <p className="mb-3 font-mono text-[12px] text-rose-400">{floorNote}</p> : null}
-      {pricingTail ? <p className="mb-3 text-[11px] text-slate-500">Stocks and memes are still pricing. The order can move.</p> : null}
+    <Card
+      eyebrow="Best entry"
+      sub="Every listed StonkBroker is here, not only the cheap asks. A high price can still win when the wallet is full. Net cost is the total you pay minus that wallet. You pay the total. The wallet is what you then own."
+    >
+      {floorNote ? <p className="mb-3 font-mono text-[12px] text-danger">{floorNote}</p> : null}
+      {pricingTail ? <p className="mb-3 text-[11px] text-faint">Stocks and memes are still pricing. The order can move.</p> : null}
       {!snipeReady && !floorBusy && paths.length > 0 ? (
-        <p className="mb-3 text-[11px] text-slate-500">Scan the vault to put the Anvil snipe on this list.</p>
+        <p className="mb-3 text-[11px] text-faint">Scan the vault to put the Anvil snipe on this list.</p>
       ) : null}
       {paths.length > 0 ? (
-        <div className="overflow-hidden rounded-xl border border-[#1e2228]">
+        <div className="overflow-hidden rounded-xl border border-line">
           {paths.map((path, i) => {
             const best = i === 0;
-            const tone = path.purchaseUsd < 0 ? 'text-emerald-300' : 'text-white';
+            const tone = path.purchaseUsd < 0 ? 'text-accent' : 'text-ink';
             const href = path.kind === 'opensea' && nftCa
               ? `https://opensea.io/item/robinhood/${nftCa}/${path.id}`
               : path.kind === 'anvil'
@@ -168,34 +164,34 @@ function EntryBoard({ paths, snipeReady, floorBusy, floorNote, pricingTail, nftC
             return (
               <div
                 key={`${path.kind}-${path.id}`}
-                className={`flex flex-col gap-3 border-t border-[#1e2228] px-3 py-3 first:border-t-0 lg:flex-row lg:items-center ${best ? 'bg-emerald-500/[0.04]' : ''}`}
+                className={`flex flex-col gap-3 border-t border-line px-3 py-3 first:border-t-0 lg:flex-row lg:items-center ${best ? 'bg-accent/5' : ''}`}
               >
                 <div className="flex min-w-0 items-center gap-3 lg:w-72 lg:shrink-0">
                   <EntryPortrait path={path} nftCa={nftCa} />
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${best ? 'bg-emerald-500/15 text-emerald-300' : 'bg-white/5 text-slate-400'}`}>
-                        {best ? 'Best' : path.kind === 'anvil' ? 'Snipe' : 'OpenSea'}
-                      </span>
-                      <a href={`/broker?id=${path.id}`} className="text-[15px] font-semibold text-white hover:underline">#{path.id}</a>
+                      <Tag tone={best ? 'good' : 'plain'}>
+                        {best ? 'best' : path.kind === 'anvil' ? 'snipe' : 'opensea'}
+                      </Tag>
+                      <a href={`/broker?id=${path.id}`} className="num text-[15px] text-ink hover:text-accent">#{path.id}</a>
                       {href ? (
-                        <a href={href} target="_blank" rel="noreferrer" className="font-mono text-[11px] text-slate-500 hover:text-white">
+                        <a href={href} target="_blank" rel="noreferrer" className="font-mono text-[11px] text-faint hover:text-accent">
                           {path.kind === 'anvil' ? 'Snipe' : 'OpenSea'}
                         </a>
                       ) : null}
                     </div>
                     {path.ask > 0 && path.symbol ? (
-                      <p className="mt-1 font-mono text-[11px] text-slate-500">{path.ask} {path.symbol} ask</p>
+                      <p className="mt-1 font-mono text-[11px] text-faint">{path.ask} {path.symbol} ask</p>
                     ) : null}
-                    {interns ? <p className="mt-1 truncate text-[12px] text-slate-400">{interns}</p> : null}
+                    {interns ? <p className="mt-1 truncate text-[12px] text-muted">{interns}</p> : null}
                   </div>
                 </div>
                 <EntryWallet path={path} />
-                <div className="w-full space-y-1 rounded-xl border border-[#1e2228] bg-[#08090b] px-3 py-2 lg:w-72 lg:shrink-0">
+                <div className="w-full space-y-1 rounded-xl border border-line bg-panel-2 px-3 py-2 lg:w-72 lg:shrink-0">
                   {(path.lines || []).map((line, n) => (
                     <MoneyLine key={`${line.label}-${n}`} label={line.label} value={compactUsd(line.usd)} />
                   ))}
-                  <div className="my-1 border-t border-[#1e2228]" />
+                  <div className="my-1 border-t border-line" />
                   <MoneyLine label="Total" value={compactUsd(path.costUsd)} strong />
                   <MoneyLine label="Wallet" value={compactUsd(path.walletUsd)} />
                   <MoneyLine label="Net cost" value={compactUsd(path.purchaseUsd)} tone={tone} strong />
@@ -205,9 +201,9 @@ function EntryBoard({ paths, snipeReady, floorBusy, floorNote, pricingTail, nftC
           })}
         </div>
       ) : floorBusy ? (
-        <div className="h-24 animate-pulse rounded-xl border border-[#1e2228] bg-[#12151a]" />
+        <div className="skeleton h-24 w-full rounded-xl" />
       ) : null}
-    </section>
+    </Card>
   );
 }
 
@@ -241,11 +237,13 @@ export default function AnvilScanView({ data }) {
       setFeeParts([]);
       setFloorNote('');
       setFloorBusy(false);
+      if (floorSweep) setFloorSweep(0);
       return undefined;
     }
-    const ready = !!data;
+    // Only with Scan vault. A load of /anvil must not start an OpenSea-only pass.
+    if (!floorSweep) return undefined;
     const source = dataRef.current;
-    if (!ready || !source) return undefined;
+    if (!source) return undefined;
     let cancel = false;
     setFloorBusy(true);
     setFloorNote('');
@@ -267,7 +265,7 @@ export default function AnvilScanView({ data }) {
       }
     })();
     return () => { cancel = true; };
-  }, [projectId, floorSweep, !!data]);
+  }, [projectId, floorSweep]);
 
   const run = async (id) => {
     const ticket = ++runRef.current;
@@ -368,35 +366,32 @@ export default function AnvilScanView({ data }) {
   }, [result]);
 
   return (
-    <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl">
-      <div className="mb-6">
-        <h2 className="text-lg md:text-xl font-bold text-white">Anvil + Floor</h2>
-        <p className="mt-1 text-xs text-slate-400">
-          OpenSea listings and Anvil snipes, ranked by net cost.
-          The picture is that vault NFT, so you can pick the one you want. It loads as the row scrolls into view.
-        </p>
-      </div>
-
-      <form data-share-omit onSubmit={submit} className="flex flex-col sm:flex-row gap-3 mb-4">
-        <label className="sr-only" htmlFor="anvil-project">Project</label>
-        <select
-          id="anvil-project"
-          value={projectId}
-          onChange={(e) => setProjectId(e.target.value)}
-          className="flex-1 rounded-xl border border-[#1e2228] bg-[#08090b] px-4 py-3 text-[14px] text-white focus:border-blue-500 focus:outline-none"
-        >
-          {ANVIL_VAULTS.map((vault) => (
-            <option key={vault.id} value={vault.id}>{vault.name}</option>
-          ))}
-        </select>
-        <button
-          type="submit"
-          disabled={busy || !data}
-          className="rounded-xl bg-blue-500 px-5 py-3 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60 sm:shrink-0"
-        >
-          {busy ? 'Scanning…' : 'Scan vault'}
-        </button>
-      </form>
+    <div className="space-y-6 pt-4">
+      <Card
+        eyebrow="Anvil + Floor"
+        sub="OpenSea listings and Anvil snipes, ranked by net cost. The picture is that vault NFT, so you can pick the one you want. It loads as the row scrolls into view."
+      >
+        <form data-share-omit onSubmit={submit} className="flex flex-col gap-3 sm:flex-row">
+          <label className="sr-only" htmlFor="anvil-project">Project</label>
+          <select
+            id="anvil-project"
+            value={projectId}
+            onChange={(e) => setProjectId(e.target.value)}
+            className="flex-1 rounded-xl border border-line bg-bg px-4 py-3 text-[14px] text-ink [color-scheme:dark] focus:border-accent focus:outline-none"
+          >
+            {ANVIL_VAULTS.map((vault) => (
+              <option key={vault.id} value={vault.id}>{vault.name}</option>
+            ))}
+          </select>
+          <button
+            type="submit"
+            disabled={busy || !data}
+            className="rounded-xl bg-accent px-5 py-3 text-[13px] font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-60 sm:shrink-0"
+          >
+            {busy ? 'Scanning…' : 'Scan vault'}
+          </button>
+        </form>
+      </Card>
 
       {(projectId === 'stonk' || steps.length > 0) && (floorBusy || floorRows || floorNote || steps.length > 0) ? (
         <ScanProgress steps={steps} label={progress} showSea={projectId === 'stonk'} seaStatus={seaStatus} />
@@ -414,28 +409,36 @@ export default function AnvilScanView({ data }) {
       ) : null}
 
       {result?.book?.throughBlock ? (
-        <p className="mb-4 font-mono text-[11px] text-slate-500">
+        <p className="font-mono text-[11px] text-faint">
           Holdings from the index at block {Number(result.book.throughBlock).toLocaleString('en-US')}. ETH, stocks, memes, and the snipe quote are live.
         </p>
       ) : null}
       {error ? (
-        <p className="mb-4 font-mono text-[12px] text-rose-400">{error}</p>
+        <p className="font-mono text-[12px] text-danger">{error}</p>
       ) : null}
+
+      {busy && !result && <SkeletonCard rows={4} />}
 
       {result && (
         <>
-          <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Tile label="NFTs in the vault" value={compactNum(totals.nfts)} />
-            <Tile label="Wallets with a balance" value={compactNum(totals.funded)} />
-            <Tile label="Priced TBA value" value={compactUsd(totals.usd)} />
-          </div>
+          <Card eyebrow="Vault" sub={result.vault?.name ? `${result.vault.name} token-bound wallets, priced.` : undefined}>
+            <KpiStrip>
+              <Stat label="NFTs in the vault" value={compactNum(totals.nfts)} />
+              <Stat label="Wallets with a balance" value={compactNum(totals.funded)} />
+              <Stat label="Priced TBA value" value={compactUsd(totals.usd)} tone="accent" />
+            </KpiStrip>
+          </Card>
 
+          <Card eyebrow="Wallets" sub={cost
+            ? `Anvil total is ${Math.round(cost.tokens).toLocaleString('en-US')} ${cost.ticker} plus the ${cost.feeBps / 100}% ETH fee. Net cost is that total minus the wallet.`
+            : undefined}
+          >
           <div data-share-omit className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center">
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Filter by token id"
-              className="rounded-xl border border-[#1e2228] bg-[#08090b] px-3 py-2 text-[13px] text-white placeholder:text-slate-600 focus:border-blue-500 focus:outline-none sm:w-48"
+              className="rounded-xl border border-line bg-bg px-3 py-2 text-[13px] text-ink placeholder:text-faint focus:border-accent focus:outline-none sm:w-48"
             />
             <div className="flex flex-wrap gap-2">
               <SortButton active={sort === 'value'} onClick={() => setSort('value')}>Value</SortButton>
@@ -447,20 +450,14 @@ export default function AnvilScanView({ data }) {
               <SortButton active={costUnit === 'eth'} onClick={() => setCostUnit('eth')}>ETH</SortButton>
             </div>
             {result.partial && (
-              <span className="font-mono text-[10px] text-slate-500">Still pricing</span>
+              <span className="font-mono text-[10px] text-faint">Still pricing</span>
             )}
           </div>
-          {cost && (
-            <p className="mb-3 text-[11px] text-slate-500">
-              Anvil total is {Math.round(cost.tokens).toLocaleString('en-US')} {cost.ticker} plus the {cost.feeBps / 100}% ETH fee.
-              Net cost is that total minus the wallet.
-            </p>
-          )}
 
-          <div className="overflow-hidden rounded-xl border border-[#1e2228]">
+          <div className="overflow-hidden rounded-xl border border-line">
             <div className="max-h-[32rem] overflow-auto">
               <table className="w-full text-left text-[13px]">
-                <thead className="sticky top-0 bg-[#12151a] text-[10px] uppercase tracking-wider text-slate-500">
+                <thead className="eyebrow sticky top-0 bg-panel-2 text-[10px] text-faint">
                   <tr>
                     <th className="px-3 py-2 font-medium">#</th>
                     <th className="px-3 py-2 font-medium">NFT</th>
@@ -474,55 +471,55 @@ export default function AnvilScanView({ data }) {
                 <tbody>
                   {rows.length === 0 ? (
                     <tr>
-                      <td colSpan={colSpan} className="px-3 py-6 text-center text-slate-500">
+                      <td colSpan={colSpan} className="px-3 py-6 text-center text-faint">
                         {fundedOnly ? 'No vault NFT has a priced balance yet.' : 'This vault has no NFTs.'}
                       </td>
                     </tr>
                   ) : rows.map((row, i) => (
                     <React.Fragment key={row.tokenId}>
                       <tr
-                        className="cursor-pointer border-t border-[#1e2228] hover:bg-[#12151a]"
+                        className="cursor-pointer border-t border-line-soft transition-colors hover:bg-panel-2"
                         onClick={() => setOpenId(openId === row.tokenId ? null : row.tokenId)}
                       >
-                        <td className="px-3 py-2 font-mono text-slate-500">{i + 1}</td>
+                        <td className="num px-3 py-2 text-faint">{i + 1}</td>
                         <td className="px-3 py-2">
                           <span className="flex items-center gap-2">
                             <VaultThumb nftCa={result.vault?.nftCa} tokenId={row.tokenId} name={result.vault?.name} />
-                            <span className="font-semibold text-white">#{row.tokenId}</span>
+                            <span className="num text-ink">#{row.tokenId}</span>
                           </span>
                         </td>
-                        <td className="px-3 py-2 font-mono text-emerald-300">{row.usd > 0 ? compactUsd(row.usd) : '—'}</td>
+                        <td className="num px-3 py-2 text-accent">{row.usd > 0 ? compactUsd(row.usd) : '—'}</td>
                         {showInterns && (
                           <td className="px-3 py-2">
                             <InternCell interns={row.interns} />
                           </td>
                         )}
-                        <td className="px-3 py-2 text-slate-300">
+                        <td className="px-3 py-2 text-ink">
                           <span>{holdingLine(row)}</span>
                           <a
                             href={explorerAddressUrl(row.tba)}
                             target="_blank"
                             rel="noreferrer"
                             onClick={(e) => e.stopPropagation()}
-                            className="ml-2 font-mono text-[11px] text-slate-500 hover:text-white"
+                            className="ml-2 font-mono text-[11px] text-faint hover:text-accent"
                           >
                             {shortAddr(row.tba)}
                           </a>
                         </td>
-                        <td className="px-3 py-2 font-mono text-slate-200" title={costTitle(cost)}>
+                        <td className="num px-3 py-2 text-ink" title={costTitle(cost)}>
                           <div>{formatSnipe(cost, costUnit)}</div>
                           {cost ? (
-                            <div className="text-[10px] font-normal text-slate-500">
+                            <div className="text-[10px] font-normal text-faint">
                               {Math.round(cost.tokens).toLocaleString('en-US')} {cost.ticker} + {cost.feeBps / 100}% fee
                             </div>
                           ) : null}
                         </td>
-                        <td className={`px-3 py-2 font-mono ${netTone(row.usd, cost)}`} title={costTitle(cost)}>
+                        <td className={`num px-3 py-2 ${netTone(row.usd, cost)}`} title={costTitle(cost)}>
                           {formatNet(row.usd, cost, costUnit)}
                         </td>
                       </tr>
                       {openId === row.tokenId && (
-                        <tr className="border-t border-[#1e2228] bg-[#08090b]">
+                        <tr className="border-t border-line-soft bg-bg">
                           <td colSpan={colSpan} className="px-3 py-3">
                             <div className="flex flex-col gap-3 sm:flex-row">
                             <VaultThumb nftCa={result.vault?.nftCa} tokenId={row.tokenId} name={result.vault?.name} size="lg" eager />
@@ -534,21 +531,21 @@ export default function AnvilScanView({ data }) {
                                     <span className={internTone(intern.state)}>
                                       {INTERN_MARK[intern.klass] || 'Intern'} #{intern.id} · {INTERN_LABEL[intern.state] || intern.state}
                                     </span>
-                                    <span className="font-mono text-slate-500">{intern.usd > 0 ? compactUsd(intern.usd) : 'not in total'}</span>
+                                    <span className="font-mono text-faint">{intern.usd > 0 ? compactUsd(intern.usd) : 'not in total'}</span>
                                   </li>
                                 ))}
                               </ul>
                             )}
                             {row.holdings.length === 0 ? (
                               (row.interns || []).length > 0 ? null : (
-                                <p className="text-xs text-slate-500">Nothing priced in this wallet.</p>
+                                <p className="text-xs text-faint">Nothing priced in this wallet.</p>
                               )
                             ) : (
                               <ul className="grid grid-cols-1 gap-1 sm:grid-cols-2">
                                 {row.holdings.map((h) => (
                                   <li key={`${h.contract}-${h.symbol}`} className="flex items-baseline justify-between gap-3 text-xs">
-                                    <span className="text-slate-300">{holdingText(h, false)}</span>
-                                    <span className="font-mono text-slate-500">{h.usd > 0 ? compactUsd(h.usd) : 'unpriced'}</span>
+                                    <span className="text-ink">{holdingText(h, false)}</span>
+                                    <span className="font-mono text-faint">{h.usd > 0 ? compactUsd(h.usd) : 'unpriced'}</span>
                                   </li>
                                 ))}
                               </ul>
@@ -564,6 +561,7 @@ export default function AnvilScanView({ data }) {
               </table>
             </div>
           </div>
+          </Card>
         </>
       )}
     </div>
@@ -598,13 +596,13 @@ function ScanProgress({ steps, label, showSea, seaStatus }) {
   const pct = units ? Math.max((done / units) * 100, running && done === 0 ? 8 : 0) : 0;
 
   return (
-    <div className="mb-4 rounded-xl border border-[#1e2228] bg-[#08090b] p-3">
+    <div className="card p-4">
       <div className="mb-2 flex items-baseline justify-between gap-3">
-        <p className="text-[12px] text-slate-300">{label || (running ? 'Scanning' : 'Scan')}</p>
-        <p className="font-mono text-[11px] text-slate-400">{done} / {units || headings.length}</p>
+        <p className="text-[12px] text-ink">{label || (running ? 'Scanning' : 'Scan')}</p>
+        <p className="font-mono text-[11px] text-muted">{done} / {units || headings.length}</p>
       </div>
-      <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-[#1e2228]">
-        <div className="h-full rounded-full bg-emerald-400 transition-[width] duration-300" style={{ width: `${Math.min(pct, 100)}%` }} />
+      <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-line">
+        <div className="h-full rounded-full bg-accent transition-[width] duration-300" style={{ width: `${Math.min(pct, 100)}%` }} />
       </div>
       <div className="flex flex-wrap gap-1.5">
         {headings.map((heading) => (
@@ -623,17 +621,17 @@ function HeadingCheck({ heading }) {
     <span
       className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[11px] leading-none ${
         done
-          ? 'border-emerald-700/60 text-emerald-300'
+          ? 'border-accent/40 text-accent'
           : running
-            ? 'border-blue-500/50 text-blue-200'
+            ? 'border-mark-sky/50 text-mark-sky'
             : failed
-              ? 'border-rose-500/50 text-rose-300'
-              : 'border-[#1e2228] text-slate-500'
+              ? 'border-danger/50 text-danger'
+              : 'border-line text-faint'
       }`}
     >
       <span
         className={`inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] border text-[9px] ${
-          done ? 'border-emerald-400 bg-emerald-400 text-[#04140c]' : 'border-current'
+          done ? 'border-accent bg-accent text-black' : 'border-current'
         }`}
         aria-hidden="true"
       >
@@ -641,15 +639,6 @@ function HeadingCheck({ heading }) {
       </span>
       {heading.label}
     </span>
-  );
-}
-
-function Tile({ label, value }) {
-  return (
-    <div className="rounded-xl border border-[#1e2228] bg-[#08090b] px-4 py-3">
-      <p className="text-[10px] uppercase tracking-wider text-slate-500">{label}</p>
-      <p className="mt-1 text-xl font-extrabold text-white">{value}</p>
-    </div>
   );
 }
 
@@ -761,7 +750,7 @@ function VaultThumb({ nftCa, tokenId, name, size = 'sm', eager = false }) {
 
   const box = size === 'lg' ? 'h-28 w-28 rounded-2xl' : size === 'md' ? 'h-16 w-16 rounded-xl' : 'h-12 w-12 rounded-lg';
   return (
-    <span ref={ref} className={`inline-flex shrink-0 overflow-hidden border border-[#1e2228] bg-[#08090b] ${box}`}>
+    <span ref={ref} className={`inline-flex shrink-0 overflow-hidden border border-line bg-bg ${box}`}>
       {src ? (
         <img
           src={src}
@@ -775,7 +764,7 @@ function VaultThumb({ nftCa, tokenId, name, size = 'sm', eager = false }) {
           }}
         />
       ) : miss ? (
-        <span className="flex h-full w-full items-center justify-center px-1 text-center font-mono text-[9px] leading-tight text-slate-600">
+        <span className="flex h-full w-full items-center justify-center px-1 text-center font-mono text-[9px] leading-tight text-faint">
           #{tokenId}
         </span>
       ) : null}
@@ -785,7 +774,7 @@ function VaultThumb({ nftCa, tokenId, name, size = 'sm', eager = false }) {
 
 function InternCell({ interns }) {
   const shown = interns || [];
-  if (!shown.length) return <span className="text-slate-600">—</span>;
+  if (!shown.length) return <span className="text-faint">—</span>;
   return (
     <span className="flex flex-col gap-0.5 text-[12px] leading-tight">
       {shown.map((intern) => (
@@ -798,9 +787,9 @@ function InternCell({ interns }) {
 }
 
 function internTone(state) {
-  if (state === 'canActivate') return 'text-emerald-300';
-  if (state === 'activated') return 'text-sky-300';
-  return 'text-amber-300';
+  if (state === 'canActivate') return 'text-accent';
+  if (state === 'activated') return 'text-mark-sky';
+  return 'text-warn';
 }
 
 function SortButton({ active, onClick, children }) {
@@ -808,8 +797,8 @@ function SortButton({ active, onClick, children }) {
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-lg border px-3 py-1.5 text-[12px] font-semibold ${
-        active ? 'border-blue-500/50 text-white' : 'border-[#1e2228] text-slate-400'
+      className={`rounded-lg border px-3 py-1.5 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+        active ? 'border-accent/50 bg-accent/10 text-ink' : 'border-line text-muted hover:text-ink'
       }`}
     >
       {children}

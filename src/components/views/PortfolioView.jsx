@@ -6,8 +6,9 @@ import { NfaNote } from '../Disclaimer';
 import { copyElement, copyPortfolioSnapshot } from '../../lib/share';
 import { CsvButton } from '../CsvButton';
 import { CopyControl } from '../CopyControl';
-import { PAIR_COLORS, STREAM_COLORS } from '../../lib/charts';
+import { PAIR_COLORS, STREAM_COLORS, baseChartOptions, compactUsdTick } from '../../lib/charts';
 import { SliceChart } from '../SliceChart';
+import { ChartPanel } from '../HistoryCharts';
 import { PROJECTS } from '../../lib/routes';
 import { navNftScanTargets, navTokenScanTargets, portfolioProjectLabel } from '../../lib/portfolioScan';
 import { formatMoney, moneyTick, readDisplay, useDisplayCurrency } from '../../lib/money';
@@ -16,6 +17,9 @@ import {
   Chart as ChartJS, ArcElement, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend, Filler
 } from 'chart.js';
 import { Bar, Line } from 'react-chartjs-2';
+import {
+  Card, Figure, Stat, KpiStrip, SkeletonCard,
+} from '../kit';
 import {
   aggregateTbaHoldings,
   buildPriceIndex,
@@ -67,15 +71,15 @@ ChartJS.register(ArcElement, CategoryScale, LinearScale, PointElement, LineEleme
 
 function GrainBar({ value, onChange }) {
   return (
-    <div className="flex bg-[#0e1013] rounded-lg p-0.5 border border-[#1e2228]">
+    <div className="inline-flex rounded-md border border-line bg-panel p-0.5">
       {GRAINS.map((g) => (
         <button
           key={g.id}
           type="button"
           title={g.title}
           onClick={() => onChange(g.id)}
-          className={`px-2 py-1 text-[10px] font-bold rounded-md transition ${
-            value === g.id ? 'bg-[#1e2228] text-white' : 'text-slate-400 hover:text-white'
+          className={`min-w-[1.5rem] rounded px-1.5 py-0.5 font-mono text-[10px] ${
+            value === g.id ? 'bg-panel-2 text-ink' : 'text-muted hover:text-ink'
           }`}
         >
           {g.label}
@@ -606,15 +610,6 @@ export default function PortfolioView({ data }) {
   const pnlTone = (n) => (n == null || !Number.isFinite(n) ? 'text-white' : n < -0.01 ? 'text-rose-400' : 'text-emerald-400');
   const quietCash = (n) => (Math.abs(Number(n) || 0) < 0.01 ? formatCurrency(1).replace('1', '0') : formatCurrency(n));
   const tickMoney = moneyTick(ccy, rates);
-  const valueChartOptions = useMemo(() => ({
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: { legend: { labels: { color: '#94a3b8', boxWidth: 10 } } },
-    scales: {
-      x: { ticks: { color: '#94a3b8', maxRotation: 0, autoSkip: true, maxTicksLimit: 8 }, grid: { color: '#1e2228' } },
-      y: { ticks: { color: '#94a3b8', callback: moneyTick(ccy, rates) }, grid: { color: '#1e2228' }, unit: ccy },
-    },
-  }), [ccy, rates]);
 
   const loadInventories = (nfts) => {
     const tbas = [...new Set(nfts.map((n) => n.tba).filter(Boolean))];
@@ -1195,174 +1190,111 @@ export default function PortfolioView({ data }) {
   };
 
   return (
-    <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl mt-6">
-      <div className="mb-6 flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
-            <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-            </svg>
-            Portfolio tracker
-          </h2>
-          <p className="text-xs text-slate-400 mt-1">
-            Comma-separated wallets. NFTs use current yield. Dashboard project tokens (STONK, MANCER,
-            and the rest) are marked at spot. History counts drops after you received the NFT (and
-            after activation). Basis is the inbound mint or purchase ETH; activation tokens are priced
-            from the daily close nearest that date.
-          </p>
-        </div>
-      </div>
-
-      <div data-share-omit className="flex flex-col sm:flex-row gap-3 mb-6">
-        <input
-          type="text"
-          value={inputVal}
-          onChange={(e) => setInputVal(e.target.value)}
-          placeholder="Paste Wallet Address (e.g. 0x123..., 0x456...)"
-          className="bg-[#08090b] border border-[#1e2228] text-white px-4 py-2.5 rounded-lg text-sm flex-1 focus:outline-none focus:border-blue-500"
-        />
-        <button
-          onClick={handleScan}
-          disabled={isScanning}
-          className={`${isScanning ? 'bg-slate-600' : 'bg-emerald-500 hover:bg-emerald-600'} text-white font-bold px-6 py-2.5 rounded-lg text-sm transition flex items-center justify-center gap-2 shadow-md`}
-        >
-          {isScanning ? 'Scanning Ledger...' : 'Scan Portfolio'}
-        </button>
-        {scanComplete && hasHoldings && (
+    <div className="mt-6 space-y-4">
+      <Card
+        eyebrow="Portfolio"
+        sub="Comma-separated wallets. NFTs use current yield. Project tokens are marked at spot. Basis is inbound mint or purchase ETH; activation tokens use the daily close nearest that date."
+        corner={scanComplete && hasHoldings ? (
           <button
             type="button"
             data-share-omit
             onClick={handleCopySnapshot}
             disabled={copyState === 'busy'}
             title="Copy the whole portfolio for X"
-            className={`sm:min-w-[11.5rem] inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-extrabold shadow-md transition disabled:opacity-60 ${
+            className={`rounded-lg border px-3 py-1.5 text-[12px] transition disabled:opacity-60 ${
               copyOk
-                ? 'bg-emerald-950 text-emerald-300 ring-2 ring-emerald-500/70'
+                ? 'border-accent/40 bg-accent/10 text-accent'
                 : copyState === 'fail'
-                  ? 'bg-rose-950 text-rose-300 ring-2 ring-rose-500/60'
-                  : 'bg-white text-[#08090b] hover:bg-emerald-200'
+                  ? 'border-danger/40 bg-danger/10 text-danger'
+                  : 'border-line text-muted hover:text-ink'
             }`}
           >
-            {copyOk ? (
-              <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
-                <path d="M5 12l5 5L20 7" />
-              </svg>
-            ) : (
-              <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                <path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7" />
-                <path d="M16 6l-4-4-4 4" />
-                <path d="M12 2v14" />
-              </svg>
-            )}
             {copyLabel}
           </button>
+        ) : null}
+      >
+        <div data-share-omit className="flex flex-col gap-3 sm:flex-row">
+          <input
+            type="text"
+            value={inputVal}
+            onChange={(e) => setInputVal(e.target.value)}
+            placeholder="Paste wallet address (0x…)"
+            className="flex-1 rounded-xl border border-line bg-panel-2 px-4 py-3 text-[14px] text-ink placeholder:text-faint focus:border-accent focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={handleScan}
+            disabled={isScanning}
+            className="rounded-xl bg-accent px-5 py-3 text-[13px] font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-60 sm:shrink-0"
+          >
+            {isScanning ? 'Scanning…' : 'Scan'}
+          </button>
+        </div>
+        {!isScanning && !scanComplete && (
+          <p className="mt-4 text-[13px] leading-relaxed text-muted">
+            Paste a wallet to load holdings. Or open{' '}
+            <Link to="/ecosystem" className="text-ink underline underline-offset-2 hover:text-accent">
+              Ecosystem
+            </Link>
+            {' / '}
+            <Link to="/" className="text-ink underline underline-offset-2 hover:text-accent">
+              a project
+            </Link>{' '}
+            first.
+          </p>
         )}
-      </div>
-
-      {!isScanning && !scanComplete && (
-        <p className="text-sm text-slate-400 mb-6 leading-relaxed">
-          Paste a wallet to load holdings. Or open{' '}
-          <Link to="/ecosystem" className="text-slate-200 underline underline-offset-2 hover:text-white">
-            Ecosystem
-          </Link>
-          {' / '}
-          <Link to="/" className="text-slate-200 underline underline-offset-2 hover:text-white">
-            a project
-          </Link>{' '}
-          to browse live stats first.
-        </p>
-      )}
+      </Card>
 
       {isScanning && (
-        <p className="text-xs text-slate-300 text-center mb-6">
-          <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 animate-pulse mr-2 align-middle" />
-          {scanProgress || 'Scanning owned Token IDs, last transfers, and activations…'}
-          <span className="block text-slate-500 mt-1">Large wallets are read one collection at a time so the explorer does not drop the request.</span>
-        </p>
+        <div className="space-y-3">
+          <SkeletonCard rows={2} />
+          <p className="text-center font-mono text-[11px] text-faint">
+            {scanProgress || 'Resolving NFTs → TBAs → costs…'}
+          </p>
+        </div>
       )}
 
       {scanComplete && (
-        <div>
-          <p className="text-sm text-slate-400 mb-5 leading-relaxed">
+        <div className="space-y-4">
+          <p className="text-[13px] leading-relaxed text-muted">
             This view stays public.{' '}
             <a
               href={SAVI_X}
               target="_blank"
               rel="noreferrer"
-              className="text-slate-200 underline underline-offset-2 hover:text-white"
+              className="text-ink underline underline-offset-2 hover:text-accent"
             >
               Follow @SaviCrypto
             </a>{' '}
             for new projects and daily changes.
           </p>
           <NfaNote
-            className="mb-5"
+            className="mb-1"
             extra="The 1Y / 3Y / 5Y / 10Y figures multiply the current trailing run-rate. They are not a prediction that yield stays constant."
           />
-          {hasHoldings && (
-            <div data-share-omit className="mb-5 flex flex-col gap-3 rounded-xl border border-emerald-500/40 bg-emerald-950/40 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-extrabold text-white">Share this wallet on X</p>
-                <p className="text-[11px] text-emerald-200/80 mt-0.5">
-                  Copies the whole portfolio for X. Seats and tokens stay in their own columns. Addresses stay off the image.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={handleCopySnapshot}
-                disabled={copyState === 'busy'}
-                className={`shrink-0 inline-flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-extrabold shadow-lg shadow-emerald-500/20 transition disabled:opacity-60 ${
-                  copyOk
-                    ? 'bg-emerald-500 text-black'
-                    : copyState === 'fail'
-                      ? 'bg-rose-500 text-white'
-                      : 'bg-emerald-400 text-black hover:bg-emerald-300'
-                }`}
-              >
-                {copyOk ? (
-                  <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
-                    <path d="M5 12l5 5L20 7" />
-                  </svg>
-                ) : (
-                  <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                    <path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7" />
-                    <path d="M16 6l-4-4-4 4" />
-                    <path d="M12 2v14" />
-                  </svg>
-                )}
-                {copyLabel}
-              </button>
-            </div>
-          )}
           {!hasHoldings ? (
-            <p className="text-sm text-slate-400">No ecosystem NFTs or project tokens found in the provided wallet(s).</p>
+            <Card eyebrow="Holdings">
+              <p className="text-[13px] text-muted">No ecosystem NFTs or project tokens found in the provided wallet(s).</p>
+            </Card>
           ) : (
             <>
-          <Copyable id="portfolio-value" className="scroll-mt-36 bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-4">
-            <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="min-w-0">
-                <h3 className="text-sm font-bold text-white">Portfolio value</h3>
-                <p className="mt-1 max-w-xl text-xs text-slate-500">
-                  Seat floors plus token closes, from the day each position was received. Cash already paid out is not added back.
-                </p>
-              </div>
-              <div className="flex shrink-0 flex-wrap justify-end gap-1.5 pr-10">
-                {[
-                  { label: 'Total value', value: formatCurrency(results.floorUsd) },
-                  { label: 'Token value', value: formatCurrency(tokenSpot) },
-                  { label: 'NFT value', value: formatCurrency(seatFloor) },
-                ].map((view) => (
-                  <div
-                    key={view.label}
-                    className="min-w-[7.5rem] rounded-lg border border-[#1e2228] px-3 py-1.5 text-right"
-                  >
-                    <span className="block text-[10px] uppercase tracking-wider text-slate-400">{view.label}</span>
-                    <span className="block text-sm font-extrabold text-white">{view.value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="relative h-56 w-full">
+          <Card
+            eyebrow="Portfolio value"
+            sub="Seat floors plus token closes, from the day each position was received. Cash already paid out is not added back."
+          >
+            <Figure value={formatCurrency(results.floorUsd)} />
+            <KpiStrip className="mt-5">
+              <Stat label="Total" value={formatCurrency(results.floorUsd)} />
+              <Stat label="NFTs" value={formatCurrency(seatFloor)} />
+              <Stat label="Tokens" value={formatCurrency(tokenSpot)} />
+            </KpiStrip>
+          </Card>
+          <ChartPanel
+            id="portfolio-value"
+            title="Mark over time"
+            note="Total, NFT floors, and token closes from the day each position was received."
+            empty={valueSeries.labels.length <= 1 ? 'Not enough history yet' : null}
+          >
               {valueSeries.labels.length > 1 ? (
                 <Line
                   data={{
@@ -1381,7 +1313,7 @@ export default function PortfolioView({ data }) {
                       {
                         label: 'NFTs',
                         data: valueSeries.seats,
-                        borderColor: '#f7931a',
+                        borderColor: '#f5b700',
                         backgroundColor: 'transparent',
                         tension: 0.25,
                         pointRadius: 0,
@@ -1391,7 +1323,7 @@ export default function PortfolioView({ data }) {
                       {
                         label: 'Tokens',
                         data: valueSeries.tokens,
-                        borderColor: '#34d399',
+                        borderColor: '#00a804',
                         backgroundColor: 'transparent',
                         tension: 0.25,
                         pointRadius: 0,
@@ -1400,42 +1332,39 @@ export default function PortfolioView({ data }) {
                       },
                     ],
                   }}
-                  options={valueChartOptions}
+                  options={baseChartOptions(formatLabels(valueSeries.labels), 'daily', { yUnit: 'USD', yTick: compactUsdTick })}
                 />
-              ) : (
-                <div className="flex h-full items-center justify-center px-4 text-center text-sm text-slate-500">
-                  Not enough daily closes to draw the book yet
-                </div>
-              )}
-            </div>
-          </Copyable>
+              ) : null}
+          </ChartPanel>
 
-          <div className="mb-4 flex flex-wrap items-center gap-2">
-            <span className="font-mono text-[10px] uppercase tracking-wider text-faint">Forecast window</span>
-            <div className="flex bg-[#08090b] rounded-lg p-1 border border-[#1e2228]">
-              {FORECAST_YEARS.map((y) => (
-                <button
-                  key={y}
-                  type="button"
-                  onClick={() => setForecastYears(y)}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-md transition ${
-                    forecastYears === y ? 'bg-[#1e2228] text-white shadow-sm' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  {y}y
-                </button>
-              ))}
-            </div>
-            <span className="text-[11px] text-slate-500">Moves the forecast on the summaries. Earned stays the cash already paid.</span>
-          </div>
-
-          <div className="mb-8 flex flex-col gap-4">
-            <p className="text-[11px] text-slate-500">
+          <Card
+            eyebrow="Forecast"
+            sub="Moves the forecast on the summaries. Earned stays the cash already paid."
+            corner={(
+              <div className="inline-flex rounded-md border border-line bg-panel p-0.5">
+                {FORECAST_YEARS.map((y) => (
+                  <button
+                    key={y}
+                    type="button"
+                    onClick={() => setForecastYears(y)}
+                    className={`min-w-[2rem] rounded px-2 py-0.5 font-mono text-[10px] ${
+                      forecastYears === y ? 'bg-panel-2 text-ink' : 'text-muted hover:text-ink'
+                    }`}
+                  >
+                    {y}y
+                  </button>
+                ))}
+              </div>
+            )}
+          >
+            <p className="font-mono text-[11px] text-faint">
               Together {quietCash(earnedTotal)} cashflow · ROI {formatRoi(totalRoi, 1)}. Cashflow is money already paid. ROI is mark plus that cash, over what was paid.
             </p>
+          </Card>
+
+          <div className="flex flex-col gap-4">
             {tokenAssets.length > 0 && (
-              <section className="rounded-xl border border-[#1e2228] bg-[#08090b] p-4 md:p-6">
-                <h3 className="mb-4 text-sm font-bold text-emerald-300">Tokens</h3>
+              <Card eyebrow="Tokens">
                 <StatStrip
                   rows={[
                     { label: 'Value', value: formatCurrency(tokenSpot) },
@@ -1447,11 +1376,10 @@ export default function PortfolioView({ data }) {
                   ]}
                 />
                 <TokenDetail assets={tokenAssets} sort="spot" formatCurrency={formatCurrency} formatPnl={formatPnl} pnlTone={pnlTone} />
-              </section>
+              </Card>
             )}
             {seatAssets.length > 0 && (
-              <section className="rounded-xl border border-[#1e2228] bg-[#08090b] p-4 md:p-6">
-                <h3 className="mb-4 text-sm font-bold text-amber-300">NFTs</h3>
+              <Card eyebrow="NFTs">
                 <StatStrip
                   rows={[
                     { label: 'Value', value: formatCurrency(seatFloor) },
@@ -1466,15 +1394,14 @@ export default function PortfolioView({ data }) {
                   ]}
                 />
                 <SeatDetail assets={seatAssets} sort="floor" formatCurrency={formatCurrency} formatPnl={formatPnl} formatRoi={formatRoi} pnlTone={pnlTone} />
-              </section>
+              </Card>
             )}
           </div>
 
           {(seatAssets.some((g) => g.floorValue > 0) || tokenAssets.some((g) => g.floorValue > 0)) && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               {seatAssets.some((g) => g.floorValue > 0) && (
-                <Copyable id="floor" className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
-                  <h3 className="text-sm font-bold text-white mb-4 pr-8">Seat floors</h3>
+                <Card eyebrow="Seat floors">
                   <SliceChart
                     noun="Seats"
                     format={formatCurrency}
@@ -1484,11 +1411,10 @@ export default function PortfolioView({ data }) {
                       color: PIE_COLORS[i % PIE_COLORS.length],
                     }))}
                   />
-                </Copyable>
+                </Card>
               )}
               {tokenAssets.some((g) => g.floorValue > 0) && (
-                <Copyable id="tokens" className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
-                  <h3 className="text-sm font-bold text-white mb-4 pr-8">Token spot</h3>
+                <Card eyebrow="Token spot">
                   <SliceChart
                     noun="Tokens"
                     format={formatCurrency}
@@ -1498,59 +1424,47 @@ export default function PortfolioView({ data }) {
                       color: PIE_COLORS[i % PIE_COLORS.length],
                     }))}
                   />
-                </Copyable>
+                </Card>
               )}
             </div>
           )}
 
           {seatAssets.length > 0 && (
-            <Copyable id="portfolio-drops" className="scroll-mt-36 bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-8">
-              <div className="flex items-center justify-between gap-2 mb-2 pr-8">
-                <h3 className="text-sm font-bold text-white">Earned drops</h3>
-                <div data-share-omit><GrainBar value={historyGrain} onChange={setHistoryGrain} /></div>
-              </div>
-              <p className="text-xs text-slate-500 mb-3">
-                Cash credited after each seat opened. {GRAINS.find((g) => g.id === historyGrain)?.title} buckets. The forecast window does not change this chart.
-              </p>
-              <div className="relative h-44 w-full">
-                {historyChart.labels.length ? (
-                  <Bar
-                    data={{
-                      labels: historyGrain === 'd' ? formatLabels(historyChart.labels) : historyChart.labels,
-                      datasets: [{
-                        label: 'Drops',
-                        data: historyChart.data,
-                        backgroundColor: STREAM_COLORS.holdersRev,
-                        borderRadius: 3,
-                        maxBarThickness: 22,
-                      }],
-                    }}
-                    options={{
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      plugins: { legend: { display: false } },
-                      scales: {
-                        x: { ticks: { color: '#94a3b8', maxRotation: 0, autoSkip: true, maxTicksLimit: 8 }, grid: { color: '#1e2228' } },
-                        y: { ticks: { color: '#94a3b8', callback: tickMoney }, grid: { color: '#1e2228' }, beginAtZero: true, unit: ccy },
-                      },
-                    }}
-                  />
-                ) : (
-                  <div className="h-full flex items-center justify-center text-sm text-slate-500 text-center px-4">
-                    No dated drops in this wallet yet
-                  </div>
-                )}
-              </div>
-            </Copyable>
+            <ChartPanel
+              id="portfolio-drops"
+              title="Earned drops"
+              note={`Cash credited after each seat opened. ${GRAINS.find((g) => g.id === historyGrain)?.title} buckets.`}
+              corner={<div data-share-omit><GrainBar value={historyGrain} onChange={setHistoryGrain} /></div>}
+              empty={!historyChart.labels.length ? 'No dated drops in this wallet yet' : null}
+            >
+              {historyChart.labels.length ? (
+                <Bar
+                  data={{
+                    labels: historyGrain === 'd' ? formatLabels(historyChart.labels) : historyChart.labels,
+                    datasets: [{
+                      label: 'Drops',
+                      data: historyChart.data,
+                      backgroundColor: STREAM_COLORS.holdersRev,
+                      borderRadius: 3,
+                      maxBarThickness: 22,
+                    }],
+                  }}
+                  options={baseChartOptions(
+                    historyGrain === 'd' ? formatLabels(historyChart.labels) : historyChart.labels,
+                    historyGrain === 'd' ? 'daily' : historyGrain === 'w' ? 'weekly' : 'monthly',
+                    { yUnit: ccy, yTick: tickMoney },
+                  )}
+                />
+              ) : null}
+            </ChartPanel>
           )}
 
           {cashMark.labels.length > 1 && (
-            <Copyable id="cash-mark" className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-8">
-              <h3 className="text-sm font-bold text-white mb-1 pr-8">Cash vs mark</h3>
-              <p className="text-xs text-slate-500 mb-3">
-                Cash is what these seats were paid after they opened. Mark is the replacement cost that day, floor plus activation tokens, minus what the seat cost to open.
-              </p>
-              <div className="relative h-52 w-full">
+            <ChartPanel
+              id="cash-mark"
+              title="Cash vs mark"
+              note="Cash is what these seats were paid after they opened. Mark is the replacement cost that day, floor plus activation tokens, minus what the seat cost to open."
+            >
                 <Line
                   data={{
                     labels: formatLabels(cashMark.labels),
@@ -1575,18 +1489,9 @@ export default function PortfolioView({ data }) {
                       },
                     ],
                   }}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { labels: { color: '#94a3b8', boxWidth: 10 } } },
-                    scales: {
-                      x: { ticks: { color: '#94a3b8', maxRotation: 0, autoSkip: true, maxTicksLimit: 8 }, grid: { color: '#1e2228' } },
-                      y: { ticks: { color: '#94a3b8', callback: tickMoney }, grid: { color: '#1e2228' }, unit: ccy },
-                    },
-                  }}
+                  options={baseChartOptions(formatLabels(cashMark.labels), 'daily', { yUnit: ccy, yTick: tickMoney })}
                 />
-              </div>
-            </Copyable>
+            </ChartPanel>
           )}
 
           {(() => {
@@ -1606,17 +1511,15 @@ export default function PortfolioView({ data }) {
             ].filter(Boolean);
             if (!books.length) return null;
             return books.map((book, bookIndex) => (
-          <section key={book.id} id={book.id} className="scroll-mt-36 mb-8">
-          <div className="mb-4 flex items-center justify-between gap-3 border-b border-[#1e2228] pb-2">
-            <div>
-              <h3 className="text-sm font-bold text-white">{book.title}</h3>
-              <p className="text-[11px] text-slate-500 mt-0.5">{book.note}</p>
-            </div>
-            {bookIndex === 0 && (
-              <CsvButton filename="savi-portfolio.csv" rows={portfolioCsvRows(grouped)} />
-            )}
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Card
+            key={book.id}
+            id={book.id}
+            className="scroll-mt-36"
+            eyebrow={book.title}
+            sub={book.note}
+            corner={bookIndex === 0 ? <CsvButton filename="savi-portfolio.csv" rows={portfolioCsvRows(grouped)} /> : null}
+          >
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               {book.assets.map((asset) => {
                 const open = !!openProjects[asset.projectKey];
                 const entryCost = assetEntryCostUsd(asset);
@@ -1638,21 +1541,21 @@ export default function PortfolioView({ data }) {
                 const payback = asset.tokenPosition ? null : paybackMonths(entryCost, asset.yieldValue);
                 const spotOnly = asset.tokenPosition && !(Number(asset.yieldValue) > 0);
                 return (
-                <Copyable key={asset.projectKey} id={`holding-${asset.projectKey}`} className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 shadow-inner">
+                <Copyable key={asset.projectKey} id={`holding-${asset.projectKey}`} className="rounded-xl border border-line bg-panel-2 p-4">
                   <button
                     type="button"
                     onClick={() => toggleProject(asset.projectKey)}
-                    className="w-full flex items-center justify-between gap-3 pr-8 text-left"
+                    className="flex w-full items-center justify-between gap-3 pr-8 text-left"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex min-w-0 items-center gap-3">
                       {thumbs[asset.projectKey]?.src || officialLogoSrc(asset) ? (
                         <img
                           src={thumbs[asset.projectKey]?.src || officialLogoSrc(asset)}
-                          className="w-10 h-10 rounded-lg object-cover border border-[#1e2228] bg-[#0e1013]"
+                          className="h-10 w-10 rounded-lg border border-line bg-panel object-cover"
                           alt={thumbs[asset.projectKey]?.tokenId != null ? `#${thumbs[asset.projectKey].tokenId}` : asset.ticker}
                         />
                       ) : (
-                        <div className="w-10 h-10 rounded-lg border border-[#1e2228] bg-[#0e1013] flex items-center justify-center text-[10px] font-extrabold text-slate-400">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-line bg-panel font-mono text-[10px] text-faint">
                           {(asset.ticker || '?').slice(0, 2)}
                         </div>
                       )}
@@ -1760,10 +1663,10 @@ export default function PortfolioView({ data }) {
                                         <img
                                           src={nft.imageUrl}
                                           alt={`#${nft.tokenId}`}
-                                          className="h-10 w-10 rounded-md object-cover border border-[#1e2228] bg-[#0e1013]"
+                                          className="h-10 w-10 rounded-md border border-line bg-panel object-cover"
                                         />
                                       ) : (
-                                        <div className="h-10 w-10 rounded-md border border-[#1e2228] bg-[#0e1013]" />
+                                        <div className="h-10 w-10 rounded-md border border-line bg-panel" />
                                       )}
                                       <div className="min-w-0">
                                         <p className="text-xs font-semibold text-white truncate">
@@ -1869,45 +1772,38 @@ export default function PortfolioView({ data }) {
               );
               })}
           </div>
-          </section>
+          </Card>
             ));
           })()}
 
           {allNfts.length > 0 && (
-            <Copyable id="tokenbound" className="mt-6 bg-[#08090b] border border-[#1e2228] rounded-xl overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setAggregateOpen((v) => !v)}
-                className="w-full flex items-center justify-between px-4 py-3 pr-12 text-left hover:bg-[#1e2228]/30 transition"
-              >
-                <span className="text-sm font-bold text-white">All assets in tokenbound wallets</span>
-                <span className="flex items-center gap-2">
-                  <span className="text-[10px] text-slate-500">
-                    {inventoriesPending ? 'loading…' : `${aggregate.length} asset${aggregate.length === 1 ? '' : 's'}`}
-                  </span>
-                  <svg
-                    className={`w-4 h-4 text-slate-500 transition-transform ${aggregateOpen ? 'rotate-180' : ''}`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </span>
-              </button>
-              {aggregateOpen && (
-                <div className="px-4 pb-4 border-t border-[#1e2228] pt-3">
-                  <p className="text-[10px] text-slate-500 mb-3">
-                    Combined ERC-20 and NFT balances across every resolved TBA for supported collections in this scan.
-                  </p>
-                  {inventoriesPending && aggregate.length === 0 ? (
-                    <p className="text-xs text-slate-500 animate-pulse">Reading tokenbound wallets...</p>
-                  ) : (
-                    <HoldingRows tokens={aggregate} priceIndex={priceIndex} formatCurrency={formatCurrency} />
-                  )}
-                </div>
+            <Card
+              id="tokenbound"
+              eyebrow="Tokenbound wallets"
+              sub="Combined ERC-20 and NFT balances across every resolved TBA for supported collections in this scan."
+              corner={(
+                <button
+                  type="button"
+                  data-share-omit
+                  onClick={() => setAggregateOpen((v) => !v)}
+                  className="rounded-lg border border-line px-3 py-1.5 text-[12px] text-muted hover:text-ink"
+                >
+                  {aggregateOpen ? 'Hide' : (inventoriesPending ? 'loading…' : `Show ${aggregate.length}`)}
+                </button>
               )}
-            </Copyable>
+            >
+              {aggregateOpen ? (
+                inventoriesPending && aggregate.length === 0 ? (
+                  <SkeletonCard rows={2} />
+                ) : (
+                  <HoldingRows tokens={aggregate} priceIndex={priceIndex} formatCurrency={formatCurrency} />
+                )
+              ) : (
+                <p className="font-mono text-[11px] text-faint">
+                  {inventoriesPending ? 'Reading tokenbound wallets…' : `${aggregate.length} asset${aggregate.length === 1 ? '' : 's'} across TBAs`}
+                </p>
+              )}
+            </Card>
           )}
             </>
           )}

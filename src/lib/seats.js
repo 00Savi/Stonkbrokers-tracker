@@ -1,5 +1,6 @@
 import { NIGHTSHADES_FACTIONS, typicalNightshadesSeat } from './nightshades';
-import { protocolFeeCols, protocolRevenueChart, windowLen } from './yieldHistory';
+import { dateKey } from './dates';
+import { protocolFeeCols, protocolRevenueChart, seriesHasInk, windowLen } from './yieldHistory';
 
 function coc(annual, cost) {
   return cost > 0 && annual > 0 ? (annual / cost) * 100 : 0;
@@ -131,9 +132,22 @@ function seriesUsd(values, timeframe) {
   return sumTail(values, n);
 }
 
+/** Daily Alley/Claw spread = money in − posted card value. Estimate, not profit. */
+export function gachaSpreadByDate(gacha) {
+  const dates = gacha?.historyDates || [];
+  const money = gacha?.historyUsd || [];
+  const value = gacha?.historyValue || [];
+  if (!dates.length || !money.length || !value.length) return [];
+  return dates.map((d, i) => ({
+    date: d,
+    usd: (Number(money[i]) || 0) - (Number(value[i]) || 0),
+  }));
+}
+
 /**
  * Trailing protocol-kept fees. Cash already paid to seats, cash still in the
- * pot, gacha pulls, and yield÷365 stay visible and out of the mix.
+ * pot, gacha pull notional, and yield÷365 stay visible and out of the mix.
+ * Card Wall Alley/Claw spread is an estimated protocol take (not profit).
  */
 export function revenueRows(project, timeframe = '30d') {
   const rows = [];
@@ -146,10 +160,22 @@ export function revenueRows(project, timeframe = '30d') {
     const usd = seriesUsd(ledger.historyDelivered, timeframe);
     if (usd > 0) rows.push({ usd, inMix: false, source: 'holders', note: 'Paid to members' });
   }
-  const gacha = project?.gacha?.historyUsd;
-  if (gacha?.length) {
-    const usd = seriesUsd(gacha, timeframe);
+  const gacha = project?.gacha;
+  if (gacha?.historyUsd?.length) {
+    const usd = seriesUsd(gacha.historyUsd, timeframe);
     if (usd > 0) rows.push({ usd, inMix: false, source: 'gacha', note: 'Pulls, not fees kept' });
+  }
+  const spreadDays = gachaSpreadByDate(gacha);
+  if (spreadDays.length) {
+    const usd = seriesUsd(spreadDays.map((d) => d.usd), timeframe);
+    if (Math.abs(usd) > 0.5) {
+      rows.push({
+        usd,
+        inMix: true,
+        source: 'gacha_spread',
+        note: 'Alley/Claw spread (est., not profit)',
+      });
+    }
   }
   if (paid > 0 && !rows.some((r) => r.source === 'holders')) {
     rows.push({ usd: paid, inMix: false, source: 'paid', note: 'Paid to holders' });
@@ -167,16 +193,64 @@ export function mixUsd(rows) {
   return (rows || []).reduce((s, r) => s + (r.inMix ? Number(r.usd) || 0 : 0), 0);
 }
 
-/** One number per day of protocol-kept fees. Empty when the project has none. */
+/**
+ * Home / board figure for a project.
+ * Fees kept + Alley/Claw spread + seat payouts + Stonk booster float.
+ * Raw gacha pull notional and yield÷365 estimates stay out.
+ */
+export function boardUsd(rows) {
+  return (rows || []).reduce((s, r) => {
+    if (r.source === 'gacha' || r.source === 'estimate') return s;
+    return s + (Number(r.usd) || 0);
+  }, 0);
+}
+
+function sumColsDaily(cols, labels) {
+  return (labels || []).map((_, i) => (
+    (cols || []).reduce((s, c) => s + (Number(c.data?.[i]) || 0), 0)
+  ));
+}
+
+/** Daily board series: kept fees + float/paid streams + Card Wall spread. */
 export function protocolFeeSeries(project) {
   const chart = protocolRevenueChart(project, { skipLedger: true });
-  if (chart.kind !== 'protocol' && chart.kind !== 'cashflow') return { labels: [], data: [] };
-  const cols = chart.kind === 'cashflow'
+  if (chart.kind !== 'protocol' && chart.kind !== 'cashflow') {
+    return gachaSpreadSeriesOnAxis(project) || { labels: [], data: [] };
+  }
+  const axis = chart.rawLabels || chart.labels || [];
+  let cols = chart.kind === 'cashflow'
     ? (chart.cols || []).filter((c) => c.key === 'fees')
     : protocolFeeCols(chart.cols);
-  const data = (chart.rawLabels || chart.labels || []).map((_, i) => (
-    cols.reduce((s, c) => s + (Number(c.data?.[i]) || 0), 0)
-  ));
-  if (!data.some((v) => v > 0)) return { labels: [], data: [] };
-  return { labels: chart.labels, data };
+  let data = sumColsDaily(cols, axis);
+  if (chart.kind === 'protocol') {
+    const extra = (chart.cols || []).filter((c) => (
+      (c.role === 'float' || c.role === 'paid') && seriesHasInk(c.data)
+    ));
+    if (extra.length) {
+      const add = sumColsDaily(extra, axis);
+      data = data.map((v, i) => (Number(v) || 0) + (Number(add[i]) || 0));
+    }
+  }
+  const spreadMap = new Map(
+    gachaSpreadByDate(project?.gacha).map((row) => [dateKey(row.date), row.usd]),
+  );
+  if (spreadMap.size) {
+    data = axis.map((d, i) => (Number(data[i]) || 0) + (Number(spreadMap.get(dateKey(d))) || 0));
+  }
+  if (!data.some((v) => Number(v) !== 0)) return { labels: [], data: [] };
+  return {
+    labels: chart.labels,
+    data,
+    rawLabels: axis,
+  };
+}
+
+function gachaSpreadSeriesOnAxis(project) {
+  const rows = gachaSpreadByDate(project?.gacha);
+  if (!rows.length || !rows.some((r) => Number(r.usd) !== 0)) return null;
+  return {
+    labels: rows.map((r) => r.date),
+    data: rows.map((r) => r.usd),
+    rawLabels: rows.map((r) => r.date),
+  };
 }

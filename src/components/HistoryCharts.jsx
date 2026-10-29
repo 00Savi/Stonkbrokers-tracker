@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Line, Bar } from 'react-chartjs-2';
-import { compactUsd } from './kit';
+import { compactUsd, Skeleton } from './kit';
 import { SliceChart } from './SliceChart';
 import { formatLabels } from '../lib/dates';
 import {
@@ -44,8 +44,46 @@ export function EmptyChart({ children = 'No series recorded yet' }) {
   );
 }
 
-export function ChartPanel({ id, title, note, children, className = '', tall = false, corner = null, fit = false, toolbar = null, footer = null, frameClass = '' }) {
+function ChartSkeleton() {
+  return (
+    <div className="flex h-full flex-col justify-end gap-2 px-1 pb-1" aria-hidden="true">
+      <Skeleton ch={12} height="10px" className="mb-auto" />
+      <div className="flex items-end gap-1.5" style={{ height: '70%' }}>
+        {[42, 58, 36, 72, 48, 64, 40, 55].map((h, i) => (
+          <span key={i} className="skeleton min-w-0 flex-1 rounded-sm" style={{ height: `${h}%` }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Shared chart frame. Prefer `pending` while the series is still loading;
+ * use EmptyChart (or `empty`) only once settled with nothing to draw.
+ */
+export function ChartPanel({
+  id,
+  title,
+  note,
+  children,
+  className = '',
+  tall = false,
+  corner = null,
+  fit = false,
+  toolbar = null,
+  footer = null,
+  frameClass = '',
+  pending = false,
+  empty = null,
+}) {
   const frame = frameClass || (fit ? '' : (tall ? 'h-72 sm:h-[28rem]' : 'h-52 sm:h-64 md:h-80'));
+  let body = children;
+  if (pending) body = <ChartSkeleton />;
+  else if (empty != null && (empty === true || typeof empty === 'string' || React.isValidElement(empty))) {
+    body = typeof empty === 'string' || empty === true
+      ? <EmptyChart>{empty === true ? undefined : empty}</EmptyChart>
+      : empty;
+  }
   return (
     <section id={id} className={`card scroll-mt-36 ${className}`}>
       {(title || note || corner || toolbar) ? (
@@ -59,7 +97,7 @@ export function ChartPanel({ id, title, note, children, className = '', tall = f
         </header>
       ) : null}
       <div className={`relative w-full overflow-hidden px-4 pb-4 sm:px-5 sm:pb-5 ${frame}`}>
-        {children}
+        {body}
       </div>
       {footer ? <div className="px-4 pb-4 sm:px-5 sm:pb-5">{footer}</div> : null}
     </section>
@@ -391,6 +429,21 @@ export function HolderRevenuePanel({ labels, data, note, title, interval = 'dail
   );
 }
 
+/**
+ * Fee bars for the protocol panel. Prefer true kept streams. When a project
+ * books AMM/DEX as seat payout (Mancer, Yard) those columns still carry the
+ * ink the KPI strip totals — fall back to them so the stack is not blank.
+ */
+function feeBarCols(cols) {
+  const kept = protocolFeeCols(cols).filter((c) => seriesHasInk(c.data));
+  if (kept.length) return kept;
+  return (cols || []).filter((c) => (
+    (c.key === 'amm' || c.key === 'dex' || c.key === 'box' || c.key === 'tax'
+      || c.key === 'booster' || c.key === 'smartLp' || c.key === 'pairTokens' || c.key === 'fees')
+    && seriesHasInk(c.data)
+  ));
+}
+
 export function ProtocolFeeVolumePanels({ labels, cols, kind, holder, note, title, interval = 'daily' }) {
   const holderInk = holder && seriesHasInk(holder.data);
   const holderView = holderInk ? {
@@ -409,7 +462,13 @@ export function ProtocolFeeVolumePanels({ labels, cols, kind, holder, note, titl
     ) : null;
   }
 
-  const fees = protocolFeeCols(cols).filter((c) => seriesHasInk(c.data));
+  const fees = feeBarCols(cols);
+  const feesArePayout = fees.length > 0 && fees.every((c) => c.role === 'paid' || c.role === 'float');
+  const keptTitle = title || (feesArePayout ? 'Vault and routing' : 'Protocol kept');
+  const keptNote = note
+    || (feesArePayout
+      ? 'Soft-staking vault RewardPaid and DEX collector fees by day. Same cash as Paid to seats below, split by stream. The tooltip total is the stack.'
+      : 'What the protocol charged or kept that day. The tooltip total is the stack.');
   const pots = (cols || []).filter((c) => c.role === 'float' && seriesHasInk(c.data));
   const mix = mixPercentCols(fees).filter((c) => seriesHasInk(c.data));
   const totals = dailyTotals(fees);
@@ -432,8 +491,8 @@ export function ProtocolFeeVolumePanels({ labels, cols, kind, holder, note, titl
     {
       id: 'dollars',
       label: 'Dollars',
-      title: 'Protocol kept',
-      note: note || title || 'What the protocol charged or kept that day. The tooltip total is the stack.',
+      title: keptTitle,
+      note: keptNote,
       body: fees.length ? (
         <Bar data={{ labels, datasets: dollarSets }} options={usdStackOptions(labels, interval)} />
       ) : (
@@ -450,7 +509,7 @@ export function ProtocolFeeVolumePanels({ labels, cols, kind, holder, note, titl
       id: 'mix',
       label: 'Mix',
       title: 'Revenue mix',
-      note: 'Share of protocol revenue that day. Days with no rev are blank.',
+      note: 'Share of that day\'s stack. Days with no rev are blank.',
       body: (
         <Bar
           data={{ labels, datasets: barDatasets(mix, { stacked: true }) }}
@@ -460,7 +519,7 @@ export function ProtocolFeeVolumePanels({ labels, cols, kind, holder, note, titl
     });
   }
   const jumps = [
-    { id: 'revenue-kept', label: 'Protocol kept' },
+    { id: 'revenue-kept', label: keptTitle },
     holderView ? { id: 'revenue-seats', label: 'Paid to seats' } : null,
     pots.length ? { id: 'revenue-pot', label: 'Still in the pot' } : null,
   ];
@@ -672,7 +731,7 @@ export function BlackHoleChartPanels({ snaps, lockedLp, ticker = 'STONK' }) {
         <Bar
           data={{
             labels: top.labels,
-            datasets: [{ label: 'Pool liquidity (USD)', data: top.data, backgroundColor: '#fb923c', borderRadius: 4 }],
+            datasets: [{ label: 'Pool liquidity (USD)', data: top.data, backgroundColor: '#8b5cf6', borderRadius: 4 }],
           }}
           options={{
             ...usdStackOptions(),

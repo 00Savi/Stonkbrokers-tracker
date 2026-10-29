@@ -1,4 +1,9 @@
-import { holderStreams } from './books';
+import { bookSlugOf, holderStreams } from './books';
+
+/** Nightshades civ Safe Launch withholds ~99% as anti-snipe — not protocol-kept. */
+const ANTI_SNIPE_TAX_SLUGS = new Set([
+  'nightshades', 'ghosts', 'zombies', 'knights', 'watchers',
+]);
 import { STREAM_COLORS, TIER_COLORS, barThickness } from './charts';
 import { dateKey, formatLabels, utcIso } from './dates';
 import { trailingSnapshots, usableSnapshots } from './snapshots';
@@ -214,6 +219,7 @@ const FEE_COL_META = [
   { key: 'booster', label: 'Partner Revenue Share', color: STREAM_COLORS.booster, snap: ['revBooster'], daily: 'dailyBooster', hist: 'historyBooster', gap: 'historyGapBooster' },
   { key: 'smartLp', label: 'Smart LP Protocol Revenue', color: STREAM_COLORS.smartLp, snap: ['revSmartLp'], daily: 'dailySmartLp', hist: 'historySmartLp', gap: 'historyGapSmartLp' },
   { key: 'pairTokens', label: 'Pair Tokens', color: STREAM_COLORS.pairTokens, snap: ['revPairTokens'], daily: 'dailyPairTokens', hist: 'historyPairTokens', gap: 'historyGapPairTokens' },
+  { key: 'books', label: 'Books close fees', color: STREAM_COLORS.books, snap: ['revBooks'], daily: 'dailyBooks', hist: 'historyBooks', gap: 'historyGapBooks' },
 ];
 
 const HOLDER_COL_META = [
@@ -358,11 +364,22 @@ export function protocolRevenueChart(project, { skipLedger = false } = {}) {
   })());
   const hasSmart = !!(r.smartLp || r.dailySmartLp?.length || snaps.some((s) => s.revSmartLp != null));
   const hasPair = !!(r.pairTokens || r.dailyPairTokens?.length || snaps.some((s) => s.revPairTokens != null));
+  const hasBooks = !!(
+    r.booksUsd
+    || r.dailyBooks?.length
+    || r.historyBooks?.length
+    || project?.books?.fees
+    || snaps.some((s) => s.revBooks != null)
+  );
   const rWin = { ...r, dailyDates: short };
 
   const extras = HOLDER_COL_META.filter((m) => seriesHasInk(r[m.hist]));
   const cols = applyHolderRoles(project, FEE_COL_META
-    .filter((m) => (m.key !== 'smartLp' || hasSmart) && (m.key !== 'pairTokens' || hasPair))
+    .filter((m) => (
+      (m.key !== 'smartLp' || hasSmart)
+      && (m.key !== 'pairTokens' || hasPair)
+      && (m.key !== 'books' || hasBooks)
+    ))
     .concat(extras)
     .map((m) => ({
       key: m.key,
@@ -371,27 +388,30 @@ export function protocolRevenueChart(project, { skipLedger = false } = {}) {
       data: streamOnLabels(labels, snaps, rWin, m),
     })));
 
-  // Nightshades 99% anti-snipe is curve withhold, not protocol-kept. A tax
-  // bar that is a large fraction of the same day's bonding volume is that
-  // withhold (and used to be stacked on top of the 13.33% StonkBooster cut).
-  const vol = streamOnLabels(labels, snaps, rWin, VOLUME_META);
-  const tax = cols.find((c) => c.key === 'tax');
-  if (tax) {
-    tax.data = tax.data.map((t, i) => {
-      const n = Number(t);
-      const v = Number(vol[i]);
-      if (n > 0 && v > 0 && n > v * 0.2) return 0;
-      return t;
-    });
+  // Nightshades civ Safe Launch withholds ~99% as anti-snipe. That is curve
+  // withhold, not protocol-kept — and used to stack on top of the 13.33%
+  // StonkBooster cut. Only wipe tax on Nightshades books; Stonk bonding tax
+  // can be a large fraction of the same day's launchpad volume and is real.
+  if (ANTI_SNIPE_TAX_SLUGS.has(bookSlugOf(project))) {
+    const vol = streamOnLabels(labels, snaps, rWin, VOLUME_META);
+    const tax = cols.find((c) => c.key === 'tax');
+    if (tax) {
+      tax.data = tax.data.map((t, i) => {
+        const n = Number(t);
+        const v = Number(vol[i]);
+        if (n > 0 && v > 0 && n > v * 0.2) return 0;
+        return t;
+      });
+    }
   }
 
   return { labels: formatLabels(labels), rawLabels: labels, kind: 'protocol', cols };
 }
 
-export const FEE_KEYS = ['amm', 'dex', 'box', 'tax', 'booster', 'smartLp', 'pairTokens', 'fees'];
+export const FEE_KEYS = ['amm', 'dex', 'box', 'tax', 'booster', 'smartLp', 'pairTokens', 'books', 'fees'];
 export const VOLUME_KEYS = ['volume', 'launch'];
 
-const KEPT_KEYS = ['amm', 'dex', 'box', 'tax', 'booster', 'smartLp', 'pairTokens', 'fees'];
+const KEPT_KEYS = ['amm', 'dex', 'box', 'tax', 'booster', 'smartLp', 'pairTokens', 'books', 'fees'];
 
 function holderRole(col) {
   return col?.role === 'paid' || col?.role === 'float';

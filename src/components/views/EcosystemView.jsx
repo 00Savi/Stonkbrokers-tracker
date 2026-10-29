@@ -5,6 +5,9 @@ import { projectPath, RANKING_PROJECTS, isProjectLive, PROJECTS } from '../../li
 import { ANVIL_VAULTS, quoteAnvilSnipe } from '../../lib/anvilScan';
 import { ROBINHOOD_RPC } from '../../lib/bonusTokenomics';
 import { listedSeat, mixUsd, nightshadesSnipeUsd, protocolFeeSeries, revenueRows, snipeSeatUsd } from '../../lib/seats';
+import {
+  entryEdgePct, entryHistorySeries, floorNftUsd, impliedNftUsd,
+} from '../../lib/entryArb';
 import { NIGHTSHADES_FACTIONS, NIGHTSHADES_FACTION_META } from '../../lib/nightshades';
 import { loadFlows, loadRetentions, loadStructures, loadVaultCensus } from '../../lib/ggindex';
 import {
@@ -12,7 +15,7 @@ import {
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 import {
-  compactUsd, compactNum, ViewControls, Card, Stat, Tag, KpiStrip,
+  compactUsd, compactNum, ViewControls, Card, Stat, Tag, KpiStrip, MiniSpark,
 } from '../kit';
 import { dateKey, formatLabels } from '../../lib/dates';
 import { burnSeries } from '../../lib/burn';
@@ -20,8 +23,8 @@ import { cashflowRoiByDate, seriesHasInk, bucketKey, windowLen, windowPeriodLabe
 import { useChartView } from '../../lib/chartWindow';
 import { setYieldSampleId, useYieldSampleId } from '../../lib/yieldSample';
 import { useSectionScrollSpy } from '../../lib/projectScroll';
-import { baseChartOptions, compactTick, compactUsdTick, PROJECT_COLORS, levelAxis } from '../../lib/charts';
-import { OnboardClusterPanel } from '../HistoryCharts';
+import { baseChartOptions, compactTick, compactUsdTick, PROJECT_COLORS, dualAxisOptions, levelAxis } from '../../lib/charts';
+import { ChartPanel, OnboardClusterPanel } from '../HistoryCharts';
 import { MethodologyCard } from '../Disclaimer';
 import { CopyControl, shareSlug, ShareSection } from '../CopyControl';
 import { OverlapPanel } from '../SectionInsights';
@@ -32,7 +35,10 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, T
 const ECO_TABS = [
   { id: 'seats', label: 'Seats' },
   { id: 'revenue', label: 'Revenue' },
+  { id: 'burn', label: 'Burn' },
+  { id: 'activation', label: 'Activation' },
   { id: 'ownership', label: 'Ownership' },
+  { id: 'entry', label: 'Entry' },
   { id: 'history', label: 'History' },
 ];
 
@@ -41,8 +47,6 @@ const TAB_ALIAS = {
   historical: 'history',
   yield: 'history',
   rankings: 'seats',
-  burn: 'history',
-  activation: 'history',
 };
 
 const FALLBACK_LOGO = {
@@ -323,7 +327,12 @@ export default function EcosystemView({ data, pending = false }) {
     () => (data?.projects ? RANKING_PROJECTS.filter((m) => data.projects[m.key] && !hidden.has(m.key)) : []),
     [data, hidden],
   );
+  const activationBoard = useMemo(
+    () => board.filter((m) => m.kind !== 'cashflow' && m.kind !== 'vault'),
+    [board],
+  );
   const order = board.map((m) => m.key);
+  const activationOrder = activationBoard.map((m) => m.key);
   const orderKey = order.join(',');
 
   useEffect(() => {
@@ -468,6 +477,75 @@ export default function EcosystemView({ data, pending = false }) {
     href: projectPath(r.meta.key, 'revenue'),
   }))).filter((r) => r.value > 0);
 
+  const burnRows = board.map((meta) => {
+    const caps = burnCap(data.projects[meta.key]);
+    return {
+      key: meta.key,
+      name: meta.name,
+      color: projectColors[meta.key],
+      value: caps.tokenPct,
+      href: meta.key === 'interns' ? projectPath(meta.key, 'activation') : projectPath(meta.key, 'burn'),
+      note: caps.nftPct == null ? 'Token supply' : `NFT ${caps.nftPct.toFixed(2)}%`,
+    };
+  }).sort((a, b) => b.value - a.value);
+  const burnNftRows = board
+    .map((meta) => {
+      const caps = burnCap(data.projects[meta.key]);
+      if (caps.nftPct == null) return null;
+      return {
+        key: meta.key,
+        name: meta.name,
+        color: projectColors[meta.key],
+        value: caps.nftPct,
+        href: projectPath(meta.key, 'burn'),
+        note: 'NFT-equivalent removed',
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.value - a.value);
+  const burnLeader = burnRows.find((r) => r.value > 0);
+  const burnInkCount = burnRows.filter((r) => r.value > 0).length;
+
+  const actRows = activationBoard.map((meta) => {
+    const p = data.projects[meta.key];
+    const active = Number(p?.activation?.activeCount) || 0;
+    const pctAct = Number(p?.activation?.percentActivated) || 0;
+    return {
+      key: meta.key,
+      name: meta.name,
+      color: projectColors[meta.key],
+      value: pctAct,
+      href: projectPath(meta.key, 'activation'),
+      note: `${compactNum(active)} active`,
+    };
+  }).sort((a, b) => b.value - a.value);
+  const actLeader = actRows.find((r) => r.value > 0);
+
+  const burnVelocityRows = board.map((meta) => {
+    const p = data.projects[meta.key];
+    const caps = burnCap(p);
+    const series = burnSeries(p, '30d', 'daily');
+    const pts = series.data || [];
+    let first = null;
+    let last = null;
+    for (const v of pts) {
+      const n = Number(v);
+      if (!Number.isFinite(n)) continue;
+      if (first == null) first = n;
+      last = n;
+    }
+    const delta = first != null && last != null ? Math.max(0, last - first) : 0;
+    const pct = caps.maxToken > 0 ? Math.min(100, (delta / caps.maxToken) * 100) : 0;
+    return {
+      key: meta.key,
+      name: meta.name,
+      color: projectColors[meta.key],
+      value: pct,
+      href: meta.key === 'interns' ? projectPath(meta.key, 'activation') : projectPath(meta.key, 'burn'),
+      note: delta > 0 ? `${compactNum(delta)} tokens · 30d` : 'No burn in 30d',
+    };
+  }).sort((a, b) => b.value - a.value);
+
   const breadthRows = board.map((meta) => {
     const p = data.projects[meta.key];
     const ratio = Number(p?.ownership?.ownershipRatio);
@@ -554,7 +632,9 @@ export default function EcosystemView({ data, pending = false }) {
       caps.maxToken > 0 ? +Math.min(100, ((Number(burn) || 0) / caps.maxToken) * 100).toFixed(2) : null
     )));
     const histAct = p?.activation?.history || {};
-    actMaps[k] = seriesToMap(histAct.labels, histAct.cumulative);
+    if (activationOrder.includes(k)) {
+      actMaps[k] = seriesToMap(histAct.labels, histAct.cumulative);
+    }
     concMaps[k] = seriesToMap(
       (p?.dailySnapshots || []).map((s) => s.date),
       (p?.dailySnapshots || []).map((s) => (s.ownershipRatio == null ? null : Number(s.ownershipRatio))),
@@ -582,9 +662,53 @@ export default function EcosystemView({ data, pending = false }) {
       return nft ? `NFT ${compactNum(nft)}` : null;
     })(),
   })).sort((a, b) => b.value - a.value);
+  const onboardTotal = onboardRows.reduce((s, r) => s + (Number(r.value) || 0), 0);
+  const onboardShareRows = onboardRows.map((r) => ({
+    ...r,
+    value: onboardTotal > 0 ? ((Number(r.value) || 0) / onboardTotal) * 100 : 0,
+    note: r.value > 0 ? `${compactNum(r.value)} wallets` : r.note,
+  }));
   const onboardNote = onboard.complete === false && (onboard.pending || 0) > 0
     ? `Still folding ${compactNum(onboard.pending)} txs`
     : 'NFT or AMM buy · nonce 0–9';
+
+  const anvilKeys = new Set(ANVIL_VAULTS.map((v) => v.key));
+  const entryGapRows = board
+    .filter((meta) => anvilKeys.has(meta.key) && meta.key !== 'nightshades')
+    .map((meta) => {
+      const p = data.projects[meta.key];
+      const seat = listedSeat(meta, p);
+      const floorNft = floorNftUsd(p);
+      const implied = impliedNftUsd(p, meta.key);
+      const quoteUsd = Number(quotes[meta.key]?.usd) || 0;
+      const snipe = seat.act != null && quoteUsd > 0 ? snipeSeatUsd(quoteUsd, seat.act) : 0;
+      const floorEdge = entryEdgePct(floorNft, implied);
+      const snipeEdge = quoteUsd > 0 ? entryEdgePct(quoteUsd, implied) : null;
+      return {
+        meta,
+        p,
+        floorSeat: seat.listed,
+        snipe,
+        implied,
+        floorEdge,
+        snipeEdge,
+        quoting: anvilKeys.has(meta.key) && !Object.keys(quotes).length,
+      };
+    })
+    .filter((r) => r.implied > 0 || r.floorSeat > 0)
+    .sort((a, b) => (Number(b.floorEdge) || -999) - (Number(a.floorEdge) || -999));
+
+  const entryHistoryKeys = board
+    .map((m) => m.key)
+    .filter((k) => {
+      const p = data.projects[k];
+      if (!(Number(p?.config?.unitValue) > 0)) return false;
+      const hist = entryHistorySeries(p, { key: k, timeframe, interval });
+      return (hist.floor || []).some((v) => v != null && v > 0)
+        && (hist.implied || []).some((v) => v != null && v > 0);
+    });
+  // Stonk first — deepest unitValue + snapshot history.
+  entryHistoryKeys.sort((a, b) => (a === 'stonk' ? -1 : b === 'stonk' ? 1 : 0));
 
   const hrefFor = (tab) => (ds) => projectPath(ds.key, tab);
   const flowPairs = (flows?.pairs || []).slice(0, 8);
@@ -642,12 +766,16 @@ export default function EcosystemView({ data, pending = false }) {
                   <th className="px-3 py-3 font-normal">Floor</th>
                   <th className="px-3 py-3 font-normal">Snipe</th>
                   <th className="px-3 py-3 font-normal">Yield</th>
+                  <th className="hidden px-3 py-3 font-normal lg:table-cell">30d fees</th>
                   <th className="px-3 py-3 font-normal">Floor CoC</th>
                   <th className="px-5 py-3 text-right font-normal">Snipe CoC</th>
                 </tr>
               </thead>
               <tbody>
-                {seatRows.map(({ meta, p, seat, snipe, snipeRoi }) => (
+                {seatRows.map(({ meta, p, seat, snipe, snipeRoi }) => {
+                  const spark = (protocolFeeSeries(p).data || []).slice(-30);
+                  const mark = PROJECT_COLORS[meta.key] || '#00a804';
+                  return (
                   <tr key={meta.key} className="border-b border-line-soft">
                     <td className="px-5 py-3">
                       <Link to={projectPath(meta.key, 'roi')} className="flex items-center gap-3">
@@ -666,6 +794,13 @@ export default function EcosystemView({ data, pending = false }) {
                       {snipe > 0 ? compactUsd(snipe) : (ANVIL_VAULTS.some((v) => v.key === meta.key) && !Object.keys(quotes).length ? '…' : '—')}
                     </td>
                     <td className="num px-3 py-3 text-[13px] text-ink">{p?.underConstruction ? 'TBD' : compactUsd(seat.annual)}</td>
+                    <td className="hidden px-3 py-3 lg:table-cell">
+                      {!p?.underConstruction && spark.length > 1 ? (
+                        <MiniSpark data={spark} color={mark} width={64} height={20} />
+                      ) : (
+                        <span className="font-mono text-[11px] text-faint">—</span>
+                      )}
+                    </td>
                     <td className={`num px-3 py-3 text-[13px] ${seat.roi > 0 ? 'text-accent' : 'text-faint'}`}>
                       {p?.underConstruction || !(seat.roi > 0) ? '—' : pct1(seat.roi)}
                     </td>
@@ -673,7 +808,8 @@ export default function EcosystemView({ data, pending = false }) {
                       {snipeRoi > 0 ? pct1(snipeRoi) : '—'}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -684,7 +820,7 @@ export default function EcosystemView({ data, pending = false }) {
         <Card
           ref={revMixRef}
           eyebrow="Trailing 30 days"
-          sub="Fees the protocol kept. Holder payouts, gacha pulls, and yield divided by 365 are listed under the bar and are not in the total."
+          sub="Fees the protocol kept, plus Card Wall Alley/Claw spread as an estimate. Holder payouts, raw gacha pulls, and yield÷365 sit under the bar."
           corner={(
             <CopyControl
               heading
@@ -720,6 +856,55 @@ export default function EcosystemView({ data, pending = false }) {
             </div>
           </Card>
         ) : null}
+      </ShareSection>
+
+      <ShareSection id="burn" className="scroll-mt-32 space-y-4">
+        <Card
+          eyebrow="Share of own supply burnt"
+          sub="Normalized to each token’s cap, so a 3k collection is comparable to a million-supply ERC-20. Raw token counts are not."
+        >
+          <KpiStrip className="mb-5">
+            <Stat label="Leader" value={burnLeader ? `${burnLeader.value.toFixed(2)}%` : '—'} tone="accent" note={burnLeader?.name} />
+            <Stat label="With burn ink" value={String(burnInkCount)} note={`of ${board.length}`} />
+          </KpiStrip>
+          <RankBar rows={burnRows} format={(v) => `${Number(v).toFixed(2)}%`} />
+        </Card>
+        {burnNftRows.length ? (
+          <Card
+            eyebrow="NFT-equivalent % removed"
+            sub="Burn translated into collection supply when unitValue exists. Machines and brokers use real NFT burns only."
+          >
+            <RankBar rows={burnNftRows} format={(v) => `${Number(v).toFixed(2)}%`} />
+          </Card>
+        ) : null}
+        <SparkGrid
+          overlay={overlayFromMaps(tokenMaps, { fill: true })}
+          hrefFor={(ds) => (ds.key === 'interns' ? projectPath(ds.key, 'activation') : projectPath(ds.key, 'burn'))}
+          tick={(v) => `${compactTick(v)}%`}
+          formatValue={(ds) => {
+            const v = lastInk(ds.data);
+            return v == null ? '—' : `${v.toFixed(2)}%`;
+          }}
+        />
+      </ShareSection>
+
+      <ShareSection id="activation" className="scroll-mt-32 space-y-4">
+        <Card
+          eyebrow="% of own collection earning"
+          sub="Percent activated on each supply — not raw active units. Cashflow and vault seats stay off this board."
+        >
+          <KpiStrip className="mb-5">
+            <Stat label="Leader" value={actLeader ? `${actLeader.value.toFixed(1)}%` : '—'} tone="accent" note={actLeader?.name} />
+            <Stat label="Projects" value={String(actRows.length)} />
+          </KpiStrip>
+          <RankBar rows={actRows} format={(v) => `${Number(v).toFixed(1)}%`} />
+        </Card>
+        <SparkGrid
+          overlay={overlayFromMaps(actMaps, { keys: activationOrder })}
+          hrefFor={hrefFor('activation')}
+          formatValue={(ds) => compactNum(lastInk(ds.data) || 0)}
+          noteFor={() => 'Net active · own scale'}
+        />
       </ShareSection>
 
       <ShareSection id="ownership" className="scroll-mt-32 space-y-4">
@@ -793,8 +978,104 @@ export default function EcosystemView({ data, pending = false }) {
           </KpiStrip>
           <RankBar rows={onboardRows} format={compactNum} />
         </Card>
+        {onboardTotal > 0 ? (
+          <Card
+            eyebrow="Onboard share"
+            sub="Each project’s share of classified first-touch wallets. Same fold as the count above."
+          >
+            <RankBar rows={onboardShareRows} format={(v) => `${Number(v).toFixed(1)}%`} />
+          </Card>
+        ) : null}
+        <Card
+          eyebrow="Burn velocity · 30d"
+          sub="Trailing thirty-day burn as a percent of each token’s own supply cap — pace, not the cumulative level on the Burn tab."
+        >
+          <RankBar rows={burnVelocityRows} format={(v) => `${Number(v).toFixed(3)}%`} />
+        </Card>
         <OnboardClusterPanel data={data} timeframe="30d" interval="daily" />
         <OverlapPanel />
+      </ShareSection>
+
+      <ShareSection id="entry" className="scroll-mt-32 space-y-4">
+        <Card
+          flush
+          eyebrow="Live gap"
+          sub="Anvil vaults only. Floor seat is OpenSea (or star) plus T0 tokens. Snipe replaces the listing with the AMM specific-buy. Implied is unit × token (Stonk × 1.10). Edge % compares the NFT legs — OpenSea floor or AMM quote — to implied."
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left">
+              <thead>
+                <tr className="eyebrow border-b border-line text-faint">
+                  <th className="px-5 py-3 font-normal">Project</th>
+                  <th className="px-3 py-3 font-normal">Floor seat</th>
+                  <th className="px-3 py-3 font-normal">Snipe seat</th>
+                  <th className="px-3 py-3 font-normal">Implied</th>
+                  <th className="px-3 py-3 font-normal">Floor vs implied</th>
+                  <th className="px-5 py-3 text-right font-normal">Snipe vs implied</th>
+                </tr>
+              </thead>
+              <tbody>
+                {entryGapRows.map((row) => (
+                  <tr key={row.meta.key} className="border-b border-line-soft">
+                    <td className="px-5 py-3">
+                      <Link to={`/anvil?project=${row.meta.key}`} className="flex items-center gap-3">
+                        <img
+                          src={logoSrc(row.meta, row.p)}
+                          alt=""
+                          className="h-8 w-8 rounded-md border border-line object-cover bg-panel"
+                        />
+                        <span className="text-[13px] text-ink">{row.meta.name}</span>
+                      </Link>
+                    </td>
+                    <td className="num px-3 py-3 text-[13px] text-ink">
+                      {row.floorSeat > 0 ? compactUsd(row.floorSeat) : '—'}
+                    </td>
+                    <td className="num px-3 py-3 text-[13px] text-ink">
+                      {row.snipe > 0 ? compactUsd(row.snipe) : (row.quoting ? '…' : '—')}
+                    </td>
+                    <td className="num px-3 py-3 text-[13px] text-ink">
+                      {row.implied > 0 ? compactUsd(row.implied) : '—'}
+                    </td>
+                    <td className={`num px-3 py-3 text-[13px] ${edgeTone(row.floorEdge)}`}>
+                      {row.floorEdge == null ? '—' : pct1(row.floorEdge)}
+                    </td>
+                    <td className={`num px-5 py-3 text-right text-[13px] ${edgeTone(row.snipeEdge)}`}>
+                      {row.snipeEdge == null ? '—' : pct1(row.snipeEdge)}
+                    </td>
+                  </tr>
+                ))}
+                {!entryGapRows.length ? (
+                  <tr>
+                    <td colSpan={6} className="px-5 py-6 text-[13px] text-muted">No Anvil vaults with a readable floor or implied yet.</td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+        {entryHistoryKeys.map((key) => {
+          const p = data.projects[key];
+          return (
+            <div key={key} className="space-y-4">
+              <EntryFloorImpliedChart
+                project={p}
+                projectKey={key}
+                timeframe={timeframe}
+                interval={interval}
+                color={projectColors[key]}
+              />
+              {key === 'stonk' || entryHistoryKeys.length === 1 ? (
+                <EntryEdgeChart
+                  project={p}
+                  projectKey={key}
+                  timeframe={timeframe}
+                  interval={interval}
+                  color={projectColors[key]}
+                />
+              ) : null}
+            </div>
+          );
+        })}
       </ShareSection>
 
       <ShareSection id="history" className="scroll-mt-32 space-y-4">
@@ -825,7 +1106,7 @@ export default function EcosystemView({ data, pending = false }) {
         />
         <p className="font-mono text-[11px] text-faint">Net active</p>
         <SparkGrid
-          overlay={overlayFromMaps(actMaps)}
+          overlay={overlayFromMaps(actMaps, { keys: activationOrder })}
           hrefFor={hrefFor('activation')}
           formatValue={(ds) => compactNum(lastInk(ds.data) || 0)}
           noteFor={() => 'Own scale'}
@@ -842,7 +1123,10 @@ export default function EcosystemView({ data, pending = false }) {
       <MethodologyCard>
         <p><strong className="text-white">Seats:</strong> Floor cost is the cheapest listing plus the T0 token requirement, at the last sync. For The Card Wall that listing is the cheapest star, and the row lists the rest. Snipe cost is the AMM specific-buy quote for one NFT plus those same activation tokens. Nightshades is one typical faction, weighted by how many are active, not the sum of four.</p>
         <p><strong className="text-white">Revenue:</strong> The bar is fees the protocol kept over the trailing 30 days. Cash already paid to seats, cash still sitting in the oracle or vault, gacha pulls, and a yield divided by 365 stay on the page and out of that total. Seat yield follows the Run rate on the bar above. Range and Interval only change the charts.</p>
-        <p><strong className="text-white">Ownership:</strong> Wallets per 100 NFTs is unique wallets divided by circulating supply, times 100. Top 10 is the share those wallets hold. Still holding is written when the activity rebuild records who entered and who left. NFTs in the AMM are a count. The Anvil scan is where a vault’s contents are priced.</p>
+        <p><strong className="text-white">Burn:</strong> Ranked as percent of each project’s own token supply cap permanently removed. NFT-equivalent % uses burnt units ÷ collection supply when unitValue exists.</p>
+        <p><strong className="text-white">Activation:</strong> Percent of that collection currently earning. Cashflow and vault seats are excluded. Sparks are net active on each project’s own scale.</p>
+        <p><strong className="text-white">Ownership:</strong> Wallets per 100 NFTs is unique wallets divided by circulating supply, times 100. Top 10 is the share those wallets hold. Still holding is written when the activity rebuild records who entered and who left. Onboard share is each project’s cut of first-touch wallets. Burn velocity is the trailing 30-day burn as % of own supply. NFTs in the AMM are a count. The Anvil scan is where a vault’s contents are priced.</p>
+        <p><strong className="text-white">Entry:</strong> Floor seat = OpenSea (or star) + T0 tokens. Snipe = AMM specific-buy + the same T0. Implied = unitValue × token (Stonk × 1.10). Edge % is (implied − floor) ÷ implied on the NFT legs — not guaranteed profit after fees, TBA contents, and exit liquidity.</p>
         <p><strong className="text-white">Chain onboard:</strong> Unique EOAs that sent a transaction with nonce 0–9 which received or minted a StonkBrokers, Mancer, Card Wall, TickerYard, or Interns NFT, or bought that project’s token off its AMM. Airdrops and peer transfers do not count.</p>
       </MethodologyCard>
     </div>
@@ -868,5 +1152,140 @@ function burnCap(p) {
       else maxToken = nftSupply * 1000000;
     }
   }
-  return { maxToken };
+  const tokenPct = maxToken > 0 ? Math.min(100, (burntTok / maxToken) * 100) : 0;
+  let nftPct = null;
+  if (!tokenOnly && nftSupply > 0) {
+    const realNft = Number(p?.ownership?.burntNfts || 0);
+    const units = Number(p?.ownership?.permanentlyBurntUnits || 0);
+    const equiv = Number(p?.activation?.dualBurn?.equivalentBrokersBurnt || 0);
+    const nftBurned = (kind === 'machines' || kind === 'brokers')
+      ? realNft
+      : Math.max(realNft, units, equiv);
+    nftPct = Math.min(100, (nftBurned / nftSupply) * 100);
+  }
+  return { tokenPct, nftPct, maxToken, burntTok, tokenOnly };
+}
+
+function edgeTone(pct) {
+  if (pct == null || !Number.isFinite(pct)) return 'text-faint';
+  if (pct > 0) return 'text-accent';
+  if (pct < 0) return 'text-danger';
+  return 'text-muted';
+}
+
+function EntryFloorImpliedChart({ project, projectKey, timeframe, interval, color }) {
+  const hist = entryHistorySeries(project, { key: projectKey, timeframe, interval });
+  const labels = formatLabels(hist.dates);
+  const has = (hist.floor || []).some((v) => v != null) && (hist.implied || []).some((v) => v != null);
+  if (!has) return null;
+  const tokenColor = '#8b929b';
+  return (
+    <ChartPanel
+      title={`${PROJECTS.find((p) => p.key === projectKey)?.name || projectKey} · floor vs implied`}
+      note="OpenSea floor USD against token-implied NFT value (unit × spot; Stonk × 1.10). Token price on the right axis."
+      footer={(
+        <p className="text-[12px] leading-relaxed text-muted">
+          When implied runs above floor, buying the NFT to access token value is incentivized.
+        </p>
+      )}
+    >
+      <Line
+        data={{
+          labels,
+          datasets: [
+            {
+              label: 'OpenSea floor',
+              data: hist.floor,
+              borderColor: color || '#00a804',
+              backgroundColor: `${color || '#00a804'}18`,
+              borderWidth: 2,
+              tension: 0.3,
+              pointRadius: 0,
+              spanGaps: true,
+              yAxisID: 'y',
+            },
+            {
+              label: 'Implied NFT',
+              data: hist.implied,
+              borderColor: '#e8eaed',
+              backgroundColor: 'transparent',
+              borderWidth: 2,
+              borderDash: [4, 3],
+              tension: 0.3,
+              pointRadius: 0,
+              spanGaps: true,
+              yAxisID: 'y',
+            },
+            {
+              label: 'Token',
+              data: hist.token,
+              borderColor: tokenColor,
+              backgroundColor: 'transparent',
+              borderWidth: 1.5,
+              tension: 0.3,
+              pointRadius: 0,
+              spanGaps: true,
+              yAxisID: 'y1',
+            },
+          ],
+        }}
+        options={dualAxisOptions({
+          labels,
+          interval,
+          leftTick: compactUsdTick,
+          rightTick: compactUsdTick,
+          rightColor: tokenColor,
+          leftKind: 'level',
+          rightKind: 'level',
+          leftValues: [...(hist.floor || []), ...(hist.implied || [])],
+          rightValues: hist.token,
+          leftUnit: 'USD',
+          rightUnit: 'token',
+        })}
+      />
+    </ChartPanel>
+  );
+}
+
+function EntryEdgeChart({ project, projectKey, timeframe, interval, color }) {
+  const hist = entryHistorySeries(project, { key: projectKey, timeframe, interval });
+  const labels = formatLabels(hist.dates);
+  const has = (hist.edge || []).some((v) => v != null && Number.isFinite(v));
+  if (!has) return null;
+  return (
+    <ChartPanel
+      title="Arb room"
+      note="(implied − floor) ÷ implied. Positive = floor cheap vs token value."
+    >
+      <Line
+        data={{
+          labels,
+          datasets: [{
+            label: 'Edge %',
+            data: hist.edge,
+            borderColor: color || '#00a804',
+            backgroundColor: `${color || '#00a804'}22`,
+            borderWidth: 2,
+            tension: 0.3,
+            pointRadius: 0,
+            spanGaps: true,
+            fill: true,
+          }],
+        }}
+        options={{
+          ...baseChartOptions(labels, interval),
+          scales: {
+            ...baseChartOptions(labels, interval).scales,
+            y: {
+              ...baseChartOptions(labels, interval).scales.y,
+              ...levelAxis(
+                { ...baseChartOptions(labels, interval).scales.y.ticks, callback: (v) => `${compactTick(v)}%` },
+                hist.edge,
+              ),
+            },
+          },
+        }}
+      />
+    </ChartPanel>
+  );
 }

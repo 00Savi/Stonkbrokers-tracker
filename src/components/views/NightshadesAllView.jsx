@@ -3,7 +3,7 @@ import { Line } from 'react-chartjs-2';
 import { burnSeries, burnOfSupplyPct } from '../../lib/burn';
 import { dateKey, formatLabels } from '../../lib/dates';
 import { seriesHasInk, bucketKey } from '../../lib/yieldHistory';
-import { compactUsd, compactNum, YieldPeriodToggle, scaleAnnualYield, yieldSuffix, yieldPeriodLabel } from '../kit';
+import { Card, Stat, KpiStrip, Tag, YieldPeriodToggle, scaleAnnualYield, yieldSuffix, yieldPeriodLabel, compactUsd, compactNum } from '../kit';
 import { yieldBasisText } from '../../lib/yieldSample';
 import { ShareSection } from '../CopyControl';
 import { axisTitle, baseChartOptions, compactTick, compactUsdTick, percentTick } from '../../lib/charts';
@@ -54,18 +54,27 @@ function Together({ title, note, labels, datasets, options }) {
 }
 
 function TeamPills({ ids, empty = '—' }) {
-  if (!ids?.length) return <span className="text-slate-500">{empty}</span>;
+  if (!ids?.length) return <span className="text-faint">{empty}</span>;
   return (
     <span className="inline-flex flex-wrap gap-1">
       {ids.map((id) => (
         <span
           key={id}
-          className="px-2 py-0.5 rounded-md text-[11px] font-bold"
-          style={{ backgroundColor: `${FACTION_COLORS[id] || '#818cf8'}22`, color: FACTION_COLORS[id] || '#818cf8' }}
+          className="rounded px-1.5 py-0.5 font-mono text-[10px]"
+          style={{ backgroundColor: `${FACTION_COLORS[id] || '#00a804'}22`, color: FACTION_COLORS[id] || '#00a804' }}
         >
           {factionLabel(id)}
         </span>
       ))}
+    </span>
+  );
+}
+
+function FactionLabel({ color, children }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+      {children}
     </span>
   );
 }
@@ -86,14 +95,9 @@ function fmtEthRange(min, max) {
 
 function EthStat({ label, eth, usd, note, range }) {
   return (
-    <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-3">
-      <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">{label}</p>
-      <p className="text-white font-bold">
-        {range || fmtEth(eth)}
-        <span className="ml-1 text-sm font-semibold text-slate-400">ETH</span>
-      </p>
-      {Number(usd) > 0 ? <p className="text-xs text-slate-400">{compactUsd(usd)}</p> : null}
-      {note ? <p className="text-[11px] text-slate-500 mt-1">{note}</p> : null}
+    <div>
+      <Stat label={label} value={`${range || fmtEth(eth)} ETH`} note={Number(usd) > 0 ? compactUsd(usd) : null} />
+      {note ? <p className="mt-1 text-[11px] leading-snug text-faint">{note}</p> : null}
     </div>
   );
 }
@@ -101,10 +105,10 @@ function EthStat({ label, eth, usd, note, range }) {
 function NightCard({ night }) {
   if (!night?.nightId) {
     return (
-      <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6">
-        <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">The Night</p>
-        <p className="text-sm text-slate-400">Daily VRF strike is live on-chain. Waiting for the next snapshot to land the first cycle here.</p>
-      </div>
+      <Card
+        eyebrow="The Night"
+        sub="Daily VRF strike is live on-chain. Waiting for the next snapshot to land the first cycle here."
+      />
     );
   }
   const magPct = nightMagnitudePct(night.magnitudeBps);
@@ -113,114 +117,108 @@ function NightCard({ night }) {
   const movePct = (Number(night.moveBps) / 100).toFixed(0);
   const sunrisePct = (Number(night.sunriseBps) / 100).toFixed(0);
   return (
-    <div className="bg-[#0e1013] border border-[#818cf8]/30 rounded-2xl p-4 md:p-6 shadow-xl">
-      <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
-        <div>
-          <p className="text-[10px] uppercase tracking-wider text-indigo-300 mb-1">The Night</p>
-          <h3 className="text-lg font-bold text-white">
-            Night #{night.nightId}
-            <span className="ml-2 text-sm font-semibold text-slate-400">{nightPhaseLabel(night.phase)}</span>
-          </h3>
-          <p className="text-xs text-slate-400 mt-1">
+    <div className="space-y-4">
+      <Card
+        eyebrow={`The Night · #${night.nightId} · ${nightPhaseLabel(night.phase)}`}
+        sub={(
+          <>
             {formatNightClock(night.startedAt)} → {formatNightClock(night.endsAt)}
             {night.nextStartsAt ? ` · next ${formatNightClock(night.nextStartsAt)}` : ''}
             {night.lastStrikeTx ? (
               <>
                 {' · '}
-                <a href={explorerTxUrl(night.lastStrikeTx)} target="_blank" rel="noreferrer" className="text-indigo-300 hover:text-white">
+                <a href={explorerTxUrl(night.lastStrikeTx)} target="_blank" rel="noreferrer" className="text-ink hover:underline">
                   strike tx
                 </a>
               </>
             ) : null}
-          </p>
-        </div>
-      </div>
-
-      <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 mb-4">
-        <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">This window</p>
-        <div className="flex flex-wrap items-center gap-2 text-sm">
+          </>
+        )}
+      >
+        <div className="flex flex-wrap items-center gap-2 text-[13px]">
           <TeamPills ids={night.favored} />
-          <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400/80">favored</span>
-          <span className="text-slate-600">vs</span>
+          <Tag tone="good">favored</Tag>
+          <span className="text-faint">vs</span>
           <TeamPills ids={night.struck} />
-          <span className="text-[11px] font-bold uppercase tracking-wider text-rose-400/80">struck</span>
-          <span className="text-slate-500">·</span>
-          <span className="text-white font-bold">{magPct}</span>
-          <span className="text-[11px] text-slate-500">magnitude</span>
+          <Tag tone="danger">struck</Tag>
+          <span className="text-faint">·</span>
+          <span className="num text-ink">{magPct}</span>
+          <span className="font-mono text-[11px] text-faint">magnitude</span>
         </div>
-        <p className="text-[12px] text-slate-400 mt-3 leading-relaxed">
-          Favored factions keep their pools. The Night can pull {movePct}% of WETH from the <strong className="text-white">struck</strong> pair
+        <p className="mt-3 text-[12px] leading-relaxed text-muted">
+          Favored factions keep their pools. The Night can pull {movePct}% of WETH from the <strong className="text-ink">struck</strong> pair
           ({factionList(night.struck)}) and sell those tokens into the vault. Sunrise tax is {sunrisePct}%.
         </p>
-      </div>
+      </Card>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-sm mb-4">
-        <EthStat
-          label="Night vault"
-          eth={weth}
-          usd={wethUsd}
-          note={night.vault ? (
-            <a href={explorerAddressUrl(night.vault)} target="_blank" rel="noreferrer" className="hover:text-indigo-300">Vault contract</a>
-          ) : 'WETH sitting in the vault'}
-        />
-        <EthStat
-          label="Pool liquidity"
-          eth={night.poolsWeth}
-          usd={night.poolsWethUsd}
-          note="WETH in all four faction pools — system health"
-        />
-        <EthStat
-          label="Sunrise fees"
-          eth={night.sunriseWeth}
-          usd={night.sunriseWethUsd}
-          note="Swap fees accrued since last sunrise"
-        />
-        <EthStat
-          label="LP Night can move"
-          range={fmtEthRange(night.moveWethMin, night.moveWethMax)}
-          usd={night.moveWethMaxUsd}
-          note={`${movePct}% of a two-faction pair (thinnest–fattest)`}
-        />
-      </div>
+      <Card eyebrow="Night vault" sub="WETH the Night holds, what sits in the pools, and what the next strike can move.">
+        <KpiStrip>
+          <EthStat
+            label="Night vault"
+            eth={weth}
+            usd={wethUsd}
+            note={night.vault ? (
+              <a href={explorerAddressUrl(night.vault)} target="_blank" rel="noreferrer" className="hover:text-ink hover:underline">Vault contract</a>
+            ) : 'WETH sitting in the vault'}
+          />
+          <EthStat
+            label="Pool liquidity"
+            eth={night.poolsWeth}
+            usd={night.poolsWethUsd}
+            note="WETH in all four faction pools — system health"
+          />
+          <EthStat
+            label="Sunrise fees"
+            eth={night.sunriseWeth}
+            usd={night.sunriseWethUsd}
+            note="Swap fees accrued since last sunrise"
+          />
+          <EthStat
+            label="LP Night can move"
+            range={fmtEthRange(night.moveWethMin, night.moveWethMax)}
+            usd={night.moveWethMaxUsd}
+            note={`${movePct}% of a two-faction pair (thinnest–fattest)`}
+          />
+        </KpiStrip>
+      </Card>
 
-      <div className="mb-4">
-        <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Pool WETH by faction</p>
-        <p className="text-[11px] text-slate-500 mb-2">Uniswap v4 WETH on each token pair. After a night, struck pools should dip then stick — not drain to zero.</p>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+      <Card
+        eyebrow="Pool WETH by faction"
+        sub="Uniswap v4 WETH on each token pair. After a night, struck pools should dip then stick — not drain to zero."
+      >
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {NIGHTSHADES_FACTION_META.map((f) => {
             const pool = night.pools?.[f.id];
             const poolWeth = Number(pool?.weth);
             const hit = (night.struck || []).includes(f.id);
             return (
-              <div key={f.id} className={`bg-[#08090b] border rounded-lg px-3 py-2 ${hit ? 'border-rose-500/40' : 'border-[#1e2228]'}`}>
-                <p className="text-[10px] uppercase tracking-wider" style={{ color: FACTION_COLORS[f.id] }}>
-                  {f.label}{hit ? ' · struck' : ''}
-                </p>
-                <p className="text-sm font-bold text-white">{poolWeth > 0 ? `${poolWeth.toFixed(2)} ETH` : '—'}</p>
-                {Number(pool?.usd) > 0 ? <p className="text-[11px] text-slate-500">{compactUsd(pool.usd)}</p> : null}
+              <div key={f.id} className={`rounded-xl border px-3 py-2.5 ${hit ? 'border-danger/40' : 'border-line'}`}>
+                <Stat
+                  label={<FactionLabel color={FACTION_COLORS[f.id]}>{f.label}{hit ? ' · struck' : ''}</FactionLabel>}
+                  value={poolWeth > 0 ? `${poolWeth.toFixed(2)} ETH` : '—'}
+                  note={Number(pool?.usd) > 0 ? compactUsd(pool.usd) : null}
+                />
               </div>
             );
           })}
         </div>
-      </div>
+      </Card>
 
-      <div>
-        <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Vault token inventory</p>
-        <p className="text-[11px] text-slate-500 mb-2">
-          Faction tokens the Night vault is holding — loot from past strikes, not “how hard they were hit.”
-        </p>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+      <Card
+        eyebrow="Vault token inventory"
+        sub="Faction tokens the Night vault is holding — loot from past strikes, not “how hard they were hit.”"
+      >
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {NIGHTSHADES_FACTION_META.map((f) => {
             const amt = Number(night.vaultTokens?.[f.id]);
             return (
-              <div key={f.id} className="bg-[#08090b] border border-[#1e2228] rounded-lg px-3 py-2">
-                <p className="text-[10px] uppercase tracking-wider" style={{ color: FACTION_COLORS[f.id] }}>{f.ticker}</p>
-                <p className="text-sm font-bold text-white">{amt > 0 ? compactNum(amt) : '—'}</p>
+              <div key={f.id} className="rounded-xl border border-line px-3 py-2.5">
+                <Stat label={<FactionLabel color={FACTION_COLORS[f.id]}>{f.ticker}</FactionLabel>} value={amt > 0 ? compactNum(amt) : '—'} />
               </div>
             );
           })}
         </div>
-      </div>
+      </Card>
     </div>
   );
 }
@@ -328,8 +326,8 @@ function NightLiquidity({ night, timeframe, interval, faction }) {
             datasets: [{
               label: 'All four pools',
               data: sliced.map((r) => Number(r.totalWeth) || 0),
-              borderColor: '#818cf8',
-              backgroundColor: '#818cf815',
+              borderColor: '#00a804',
+              backgroundColor: '#00a80415',
               borderWidth: 3,
               tension: 0.3,
               pointRadius: dots,
@@ -348,57 +346,57 @@ function NightHistory({ night }) {
   const rows = [...(night?.history || [])].sort((a, b) => (b.nightId || 0) - (a.nightId || 0));
   if (!rows.length) return null;
   return (
-    <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6">
-      <div className="mb-4">
-        <h3 className="text-sm font-bold text-white">Night history</h3>
-        <p className="text-xs text-slate-400 mt-1">One row per VRF strike. Favored vs struck is the matchup. Pool WETH is the four-faction total when we had a stamp for that night.</p>
-      </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-4">
+    <Card
+      eyebrow="Night history"
+      sub="One row per VRF strike. Favored vs struck is the matchup. Pool WETH is the four-faction total when we had a stamp for that night."
+    >
+      <KpiStrip>
         {NIGHTSHADES_FACTION_META.map((f) => {
           const rec = factionNightRecord(rows, f.id);
           return (
-            <div key={f.id} className="bg-[#08090b] border border-[#1e2228] rounded-lg px-3 py-2">
-              <p className="text-[10px] uppercase tracking-wider" style={{ color: FACTION_COLORS[f.id] }}>{f.label}</p>
-              <p className="text-sm text-white font-bold">{rec.favored} favored</p>
-              <p className="text-[11px] text-slate-500">{rec.struck} struck</p>
-            </div>
+            <Stat
+              key={f.id}
+              label={<FactionLabel color={FACTION_COLORS[f.id]}>{f.label}</FactionLabel>}
+              value={`${rec.favored} favored`}
+              note={`${rec.struck} struck`}
+            />
           );
         })}
-      </div>
-      <div className="overflow-x-auto -mx-1 sm:mx-0">
-        <table className="w-full text-left border-collapse">
+      </KpiStrip>
+      <div className="-mx-4 mt-5 overflow-x-auto border-t border-line sm:-mx-5">
+        <table className="w-full min-w-[640px] text-left">
           <thead>
-            <tr className="border-b border-[#1e2228] text-slate-500 text-xs uppercase tracking-wider">
-              <th className="pb-3 font-medium pl-2">Night</th>
-              <th className="pb-3 font-medium">Window</th>
-              <th className="pb-3 font-medium">Favored</th>
-              <th className="pb-3 font-medium">Struck</th>
-              <th className="pb-3 font-medium">Magnitude</th>
-              <th className="pb-3 font-medium text-right">Pools</th>
-              <th className="pb-3 font-medium text-right pr-2">Strike</th>
+            <tr className="eyebrow border-b border-line text-faint">
+              <th className="px-4 py-3 font-normal sm:px-5">Night</th>
+              <th className="px-3 py-3 font-normal">Window</th>
+              <th className="px-3 py-3 font-normal">Favored</th>
+              <th className="px-3 py-3 font-normal">Struck</th>
+              <th className="px-3 py-3 font-normal">Magnitude</th>
+              <th className="px-3 py-3 text-right font-normal">Pools</th>
+              <th className="px-4 py-3 text-right font-normal sm:px-5">Strike</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#1e2228]/50 text-sm">
+          <tbody>
             {rows.map((row) => (
-              <tr key={row.nightId}>
-                <td className="py-3 pl-2 font-bold text-white">#{row.nightId}</td>
-                <td className="py-3 text-slate-400 whitespace-nowrap">
+              <tr key={row.nightId} className="border-b border-line-soft">
+                <td className="num px-4 py-3 text-[13px] text-ink sm:px-5">#{row.nightId}</td>
+                <td className="whitespace-nowrap px-3 py-3 font-mono text-[11px] text-muted">
                   {formatNightClock(row.startedAt)}
                   {row.endsAt ? ` → ${formatNightClock(row.endsAt)}` : ''}
                 </td>
-                <td className="py-3"><TeamPills ids={row.favored} /></td>
-                <td className="py-3"><TeamPills ids={row.struck} /></td>
-                <td className="py-3 text-white font-semibold">{nightMagnitudePct(row.magnitudeBps)}</td>
-                <td className="py-3 text-right text-slate-300">
+                <td className="px-3 py-3"><TeamPills ids={row.favored} /></td>
+                <td className="px-3 py-3"><TeamPills ids={row.struck} /></td>
+                <td className="num px-3 py-3 text-[13px] text-ink">{nightMagnitudePct(row.magnitudeBps)}</td>
+                <td className="num px-3 py-3 text-right text-[13px] text-ink">
                   {Number(row.poolsWeth) > 0 ? `${Number(row.poolsWeth).toFixed(1)} ETH` : '—'}
                 </td>
-                <td className="py-3 text-right pr-2">
+                <td className="px-4 py-3 text-right sm:px-5">
                   {row.tx ? (
                     <a
                       href={explorerTxUrl(row.tx)}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-indigo-300 hover:text-white text-xs font-bold"
+                      className="font-mono text-[11px] text-muted hover:text-ink hover:underline"
                     >
                       tx
                     </a>
@@ -409,7 +407,7 @@ function NightHistory({ night }) {
           </tbody>
         </table>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -417,7 +415,7 @@ function NightHistory({ night }) {
 export function NightshadesNightSection({ night, faction }) {
   const { range: timeframe, interval } = useChartView();
   return (
-    <ShareSection id="night" className="scroll-mt-32 space-y-6">
+    <ShareSection id="night" className="scroll-mt-32 space-y-4">
       <NightCard night={night} />
       <NightLiquidity night={night} timeframe={timeframe} interval={interval} faction={faction} />
       <NightHistory night={night} />
@@ -544,9 +542,24 @@ export default function NightshadesAllView({ project, setFaction }) {
     { timeframe, interval },
   );
 
+  const roiRows = slices.map((f) => {
+    const p = f.slice;
+    const t0 = p.tiers?.[0];
+    const floorCost = (p.market?.nftFloorEth || 0) * (p.market?.ethPriceUsd || 0);
+    const actCost = (t0?.reqTokens || 0) * (p.market?.tokenPriceUsd || 0);
+    const totalCost = floorCost + actCost;
+    const roi = totalCost > 0 && t0 ? ((t0.trackedAnnualYieldUsd || 0) / totalCost) * 100 : 0;
+    return { f, p, t0, floorCost, actCost, totalCost, roi };
+  });
+  const bestRoiRow = roiRows.reduce((a, b) => (b.roi > a.roi ? b : a), roiRows[0] || { roi: 0 });
+  const cheapestRow = roiRows.reduce((a, b) => {
+    if (!(b.totalCost > 0)) return a;
+    return !a || b.totalCost < a.totalCost ? b : a;
+  }, null);
+
   return (
     <div className="space-y-6 relative">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {slices.map((f) => {
           const fm = f.slice.market || {};
           return (
@@ -554,14 +567,10 @@ export default function NightshadesAllView({ project, setFaction }) {
               key={f.id}
               type="button"
               onClick={() => setFaction(f.id)}
-              className="text-left bg-[#0e1013] border border-[#1e2228] rounded-xl p-4 hover:border-[#818cf8]/50 transition"
+              className="card p-4 text-left transition-colors hover:border-muted"
             >
-              <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: f.color }} />
-                {f.label}
-              </p>
-              <p className="text-lg font-extrabold text-white">{formatPrice(fm.tokenPriceUsd)}</p>
-              <p className="text-xs mt-1" style={{ color: f.color }}>
+              <Stat label={<FactionLabel color={f.color}>{f.label}</FactionLabel>} value={formatPrice(fm.tokenPriceUsd)} />
+              <p className="mt-1.5 font-mono text-[11px] text-muted">
                 {fm.nftFloorEth > 0 ? `${fm.nftFloorEth} ETH floor` : 'Floor pending'}
               </p>
             </button>
@@ -569,87 +578,92 @@ export default function NightshadesAllView({ project, setFaction }) {
         })}
       </div>
 
-      <ShareSection id="roi" className="scroll-mt-32">
-        <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl">
-          <div className="flex justify-between items-start mb-6 gap-4">
-            <div>
-              <h3 className="text-lg font-bold text-white">Nightshades faction ROI</h3>
-              <p className="text-xs text-slate-400 mt-1">
-                Cash-on-cash for a T0 Shade: annualized vault yield ÷ (NFT floor USD + activation tokens at spot). {yieldBasisText(project)} Open a faction for the full table and volume slider.
-              </p>
-            </div>
-          </div>
-          <div className="overflow-x-auto -mx-1 sm:mx-0">
-            <table className="w-full text-left border-collapse">
+      <ShareSection id="roi" className="scroll-mt-32 space-y-4">
+        <Card
+          eyebrow="Faction ROI"
+          sub={`Cash-on-cash for a T0 Shade: annualized vault yield ÷ (NFT floor USD + activation tokens at spot). ${yieldBasisText(project)} Open a faction for the full table and volume slider.`}
+        >
+          <KpiStrip>
+            <Stat
+              label="Best CoC"
+              value={bestRoiRow?.roi != null ? `${bestRoiRow.roi.toFixed(1)}%` : '—'}
+              tone="accent"
+              note={bestRoiRow?.f?.label}
+            />
+            <Stat
+              label="Best yield"
+              value={formatCurrency(scaleYield(bestRoiRow?.t0?.trackedAnnualYieldUsd || 0))}
+              note={yieldUnit}
+            />
+            <Stat
+              label="Cheapest entry"
+              value={cheapestRow ? formatCurrency(cheapestRow.totalCost) : '—'}
+              note={cheapestRow?.f?.label}
+            />
+          </KpiStrip>
+        </Card>
+
+        <Card flush eyebrow="Factions">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-left">
               <thead>
-                <tr className="border-b border-[#1e2228] text-slate-500 text-xs uppercase tracking-wider">
-                  <th className="pb-4 font-medium pl-2">Faction</th>
-                  <th className="pb-4 font-medium">Base Tier (T0)</th>
-                  <th className="pb-4 font-medium">Floor</th>
-                  <th className="pb-4 font-medium">Act. cost</th>
-                  <th className="pb-4 font-medium">
+                <tr className="eyebrow border-b border-line text-faint">
+                  <th className="px-5 py-3 font-normal">Faction</th>
+                  <th className="px-3 py-3 font-normal">Base tier (T0)</th>
+                  <th className="px-3 py-3 font-normal">Floor</th>
+                  <th className="px-3 py-3 font-normal">Act. cost</th>
+                  <th className="px-3 py-3 font-normal">
                     <div className="flex items-center gap-2">
-                      <span>Expected Yield <span className="normal-case">({yieldLabel})</span></span>
+                      <span>Yield <span className="normal-case">({yieldLabel})</span></span>
                       <YieldPeriodToggle value={yieldPeriod} onChange={setYieldPeriod} />
                     </div>
                   </th>
-                  <th className="pb-4 font-medium text-right pr-4">Est. ROI (CoC)</th>
+                  <th className="px-5 py-3 text-right font-normal">CoC</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#1e2228]/50 text-sm">
-                {slices.map((f) => {
-                  const p = f.slice;
-                  const t0 = p.tiers?.[0];
-                  const floorCost = (p.market?.nftFloorEth || 0) * (p.market?.ethPriceUsd || 0);
-                  const actCost = (t0?.reqTokens || 0) * (p.market?.tokenPriceUsd || 0);
-                  const totalCost = floorCost + actCost;
-                  const roi = totalCost > 0 && t0 ? ((t0.trackedAnnualYieldUsd || 0) / totalCost) * 100 : 0;
+              <tbody>
+                {roiRows.map(({ f, p, t0, floorCost, actCost, roi }) => {
                   const isExpanded = expanded === f.id;
+                  const leader = bestRoiRow?.f?.id === f.id && roi > 0;
                   return (
                     <React.Fragment key={f.id}>
                       <tr
                         onClick={() => setExpanded(isExpanded ? null : f.id)}
-                        className="hover:bg-[#1e2228]/20 transition cursor-pointer group"
+                        className="cursor-pointer border-b border-line-soft transition-colors hover:bg-panel-2"
                       >
-                        <td className="py-5 pl-2">
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); setFaction(f.id); }}
-                            className="flex items-center gap-3 rounded-md hover:opacity-90"
-                          >
-                            <span className="w-3 h-3 rounded-md" style={{ backgroundColor: f.color }} />
-                            <span className="font-bold text-white underline-offset-2 hover:underline">{f.label}</span>
-                          </button>
-                        </td>
-                        <td className="py-5">
-                          <div className="font-bold text-white">{t0?.name || 'Shade'}</div>
-                          <div className="text-xs text-slate-500 mt-0.5">{formatNumber(t0?.reqTokens || 0)} {p.config?.ticker || f.ticker}</div>
-                        </td>
-                        <td className="py-5">
-                          <div className="font-bold text-white">{floorCost > 0 ? formatCurrency(floorCost) : '—'}</div>
-                        </td>
-                        <td className="py-5">
-                          <div className="font-bold text-white">{actCost > 0 ? formatCurrency(actCost) : '—'}</div>
-                        </td>
-                        <td className="py-5">
-                          <span className="text-white font-bold text-base">{formatCurrency(scaleYield(t0?.trackedAnnualYieldUsd || 0))}</span>
-                          {' '}
-                          <span className="text-slate-500">{yieldUnit}</span>
-                        </td>
-                        <td className="py-5 text-right pr-4">
-                          <div className="flex items-center justify-end gap-3">
-                            <span className="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-2.5 py-1 rounded text-sm font-bold shadow-sm">{roi.toFixed(2)}%</span>
-                            <svg className={`w-4 h-4 text-slate-500 transition-transform duration-200 group-hover:text-white ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                        <td className="px-5 py-3">
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setFaction(f.id); }}
+                              className="flex items-center gap-2 text-[13px] text-ink hover:underline"
+                            >
+                              <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: f.color }} />
+                              {f.label}
+                            </button>
+                            {leader && <Tag tone="good">best</Tag>}
                           </div>
+                        </td>
+                        <td className="px-3 py-3">
+                          <div className="text-[13px] text-ink">{t0?.name || 'Shade'}</div>
+                          <div className="font-mono text-[11px] text-faint">{formatNumber(t0?.reqTokens || 0)} {p.config?.ticker || f.ticker}</div>
+                        </td>
+                        <td className="num px-3 py-3 text-[13px] text-ink">{floorCost > 0 ? formatCurrency(floorCost) : '—'}</td>
+                        <td className="num px-3 py-3 text-[13px] text-ink">{actCost > 0 ? formatCurrency(actCost) : '—'}</td>
+                        <td className="num px-3 py-3 text-[13px] text-ink">
+                          {formatCurrency(scaleYield(t0?.trackedAnnualYieldUsd || 0))}
+                          {' '}
+                          <span className="text-muted">{yieldUnit}</span>
+                        </td>
+                        <td className="px-5 py-3 text-right">
+                          <Tag tone="good">{roi.toFixed(2)}%</Tag>
                         </td>
                       </tr>
                       {isExpanded && (
-                        <tr className="bg-[#08090b]/40 border-b border-[#1e2228]/50">
-                          <td colSpan="6" className="p-4 md:p-6">
-                            <div className="flex justify-between items-center mb-3">
-                              <h4 className="text-sm font-bold text-slate-300">Daily yield ({t0?.name})</h4>
-                            </div>
-                            <div className="relative h-32 md:h-40 w-full">
+                        <tr className="border-b border-line-soft bg-panel-2/40">
+                          <td colSpan="6" className="px-5 py-4">
+                            <p className="eyebrow mb-3 text-faint">Daily yield · {t0?.name}</p>
+                            <div className="relative h-32 w-full md:h-40">
                               {seriesHasInk(t0?.dailyYields) ? (
                                 <Line
                                   data={{
@@ -658,10 +672,8 @@ export default function NightshadesAllView({ project, setFaction }) {
                                       label: 'Daily Yield (USD)',
                                       data: t0.dailyYields,
                                       borderColor: f.color,
-                                      backgroundColor: `${f.color}15`,
-                                      borderWidth: 2,
-                                      fill: true,
-                                      tension: 0.4,
+                                      borderWidth: 1.75,
+                                      tension: 0.3,
                                       pointRadius: 0,
                                     }],
                                   }}
@@ -680,7 +692,7 @@ export default function NightshadesAllView({ project, setFaction }) {
               </tbody>
             </table>
           </div>
-        </div>
+        </Card>
       </ShareSection>
 
       <ShareSection id="yield" className="scroll-mt-32">
@@ -695,10 +707,9 @@ export default function NightshadesAllView({ project, setFaction }) {
 
       <NightshadesNightSection night={night} />
 
-      <ShareSection id="burn" className="scroll-mt-32">
-        <div className="space-y-6">
-          <h2 className="text-lg md:text-xl font-bold text-white">Token burn by faction</h2>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <ShareSection id="burn" className="scroll-mt-32 space-y-4">
+        <Card eyebrow="Burn" sub="Each faction burns its own token. Open one to see its cumulative burn and price.">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             {slices.map((f) => {
               const p = f.slice;
               const burnt = Math.max(
@@ -716,52 +727,49 @@ export default function NightshadesAllView({ project, setFaction }) {
                   key={f.id}
                   type="button"
                   onClick={() => setFaction(f.id)}
-                  className="text-left bg-[#0e1013] border border-[#1e2228] rounded-xl p-4 shadow-sm transition hover:border-slate-500"
+                  className="rounded-xl border border-line p-4 text-left transition-colors hover:border-muted"
                 >
-                  <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: f.color }} />
-                    {f.label}
+                  <Stat label={<FactionLabel color={f.color}>{f.label}</FactionLabel>} value={formatNumber(burnt)} />
+                  <p className="mt-1.5 font-mono text-[11px] text-muted">
+                    {pct == null ? '—' : `${pct.toFixed(2)}%`} of supply · {formatNumber(units, 2)} units
                   </p>
-                  <p className="text-xl font-extrabold text-orange-400">{formatNumber(burnt)}</p>
-                  <p className="text-xs text-slate-400 mt-1">{pct == null ? '—' : `${pct.toFixed(2)}%`} of supply · {formatNumber(units, 2)} units</p>
                 </button>
               );
             })}
           </div>
-          <ChartSwitch
-            initial="tokens"
-            views={[
-              {
-                id: 'tokens',
-                label: 'Cumulative',
-                title: 'Cumulative tokens burnt',
-                note: 'Each faction’s own token. Quiet days carry the last cumulative — a burn cannot reset.',
-                body: togetherBody({
-                  labels: burnOverlay.labels,
-                  datasets: burnOverlay.datasets,
-                  options: countChartOptions('Tokens'),
-                }),
-              },
-              {
-                id: 'share',
-                label: 'Share',
-                title: 'Share of each faction’s token supply burnt (%)',
-                note: 'Percent of that market’s cap, so a 3,000-NFT collection is comparable to the others.',
-                body: togetherBody({
-                  labels: burnPctOverlay.labels,
-                  datasets: burnPctOverlay.datasets,
-                  options: percentChartOptions,
-                }),
-              },
-            ]}
-          />
-        </div>
+        </Card>
+        <ChartSwitch
+          initial="tokens"
+          views={[
+            {
+              id: 'tokens',
+              label: 'Cumulative',
+              title: 'Cumulative tokens burnt',
+              note: 'Each faction’s own token. Quiet days carry the last cumulative — a burn cannot reset.',
+              body: togetherBody({
+                labels: burnOverlay.labels,
+                datasets: burnOverlay.datasets,
+                options: countChartOptions('Tokens'),
+              }),
+            },
+            {
+              id: 'share',
+              label: 'Share',
+              title: 'Share of each faction’s token supply burnt (%)',
+              note: 'Percent of that market’s cap, so a 3,000-NFT collection is comparable to the others.',
+              body: togetherBody({
+                labels: burnPctOverlay.labels,
+                datasets: burnPctOverlay.datasets,
+                options: percentChartOptions,
+              }),
+            },
+          ]}
+        />
       </ShareSection>
 
-      <ShareSection id="activation" className="scroll-mt-32">
-        <div className="space-y-6">
-          <h2 className="text-lg md:text-xl font-bold text-white">Activation by faction</h2>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <ShareSection id="activation" className="scroll-mt-32 space-y-4">
+        <Card eyebrow="Activation" sub="Active units per faction vault. Open one for its tier flow.">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             {slices.map((f) => {
               const act = f.slice.activation || {};
               return (
@@ -769,44 +777,38 @@ export default function NightshadesAllView({ project, setFaction }) {
                   key={f.id}
                   type="button"
                   onClick={() => setFaction(f.id)}
-                  className="text-left bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm transition hover:border-slate-500"
+                  className="rounded-xl border border-line p-4 text-left transition-colors hover:border-muted"
                 >
-                  <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: f.color }} />
-                    {f.label} Active
-                  </p>
-                  <p className="text-2xl font-extrabold text-white">{formatNumber(act.activeCount || 0)}</p>
-                  <p className="text-xs text-slate-500 mt-1">{(act.percentActivated || 0).toFixed(1)}% of 3,000</p>
+                  <Stat label={<FactionLabel color={f.color}>{f.label} active</FactionLabel>} value={formatNumber(act.activeCount || 0)} />
+                  <p className="mt-1.5 font-mono text-[11px] text-muted">{(act.percentActivated || 0).toFixed(1)}% of 3,000</p>
                 </button>
               );
             })}
           </div>
-          <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-4 md:p-6">
-            <h3 className="text-sm font-bold text-white mb-6">Share of Nightshades active units</h3>
-            <SliceChart
-              noun="Active"
-              format={formatNumber}
-              slices={slices.map((f) => ({
-                label: f.label,
-                value: f.slice.activation?.activeCount || 0,
-                color: f.color,
-              }))}
-            />
-          </div>
-          <Together
-            title="Net active units"
-            note="From each vault’s activation history. Missing days stay blank."
-            labels={actOverlay.labels}
-            datasets={actOverlay.datasets}
-            options={countChartOptions('Units')}
+        </Card>
+        <Card eyebrow="Active share" sub="Share of Nightshades active units">
+          <SliceChart
+            noun="Active"
+            format={formatNumber}
+            slices={slices.map((f) => ({
+              label: f.label,
+              value: f.slice.activation?.activeCount || 0,
+              color: f.color,
+            }))}
           />
-        </div>
+        </Card>
+        <Together
+          title="Net active units"
+          note="From each vault’s activation history. Missing days stay blank."
+          labels={actOverlay.labels}
+          datasets={actOverlay.datasets}
+          options={countChartOptions('Units')}
+        />
       </ShareSection>
 
-      <ShareSection id="ownership" className="scroll-mt-32">
-        <div className="space-y-6">
-          <h2 className="text-lg md:text-xl font-bold text-white">Holders by faction</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <ShareSection id="ownership" className="scroll-mt-32 space-y-4">
+        <Card eyebrow="Holders" sub="NFT and token wallets per faction.">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             {slices.map((f) => {
               const o = f.slice.ownership || {};
               const tokens = Number(o.tokenHolders) || Number(o.stonkHolders) || 0;
@@ -815,58 +817,51 @@ export default function NightshadesAllView({ project, setFaction }) {
                   key={f.id}
                   type="button"
                   onClick={() => setFaction(f.id)}
-                  className="text-left bg-[#0e1013] border border-[#1e2228] rounded-xl p-4 shadow-sm transition hover:border-slate-500"
+                  className="rounded-xl border border-line p-4 text-left transition-colors hover:border-muted"
                 >
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: f.color }} />
-                    <span className="font-bold text-white text-sm">{f.label}</span>
-                  </div>
-                  <div className="flex justify-between items-end mb-1">
-                    <span className="text-[10px] text-slate-400 uppercase">NFT Holders</span>
-                    <span className="text-white font-bold">{formatNumber(o.nftHolders || 0)}</span>
-                  </div>
-                  <div className="flex justify-between items-end">
-                    <span className="text-[10px] text-slate-400 uppercase">Token Holders</span>
-                    <span className="text-white font-bold">{formatNumber(tokens)}</span>
+                  <p className="eyebrow mb-3 text-muted"><FactionLabel color={f.color}>{f.label}</FactionLabel></p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Stat label="NFT" value={formatNumber(o.nftHolders || 0)} />
+                    <Stat label="Token" value={formatNumber(tokens)} />
                   </div>
                 </button>
               );
             })}
           </div>
-          <ChartStack
-            label="In holders"
-            views={[
-              {
-                id: 'ns-nft',
-                jump: 'NFT holders',
-                title: 'NFT holders',
-                note: 'Snapshot nftHolders when present; otherwise the live count as the latest point.',
-                body: togetherBody({
-                  labels: nftOverlay.labels,
-                  datasets: nftOverlay.datasets,
-                  options: countChartOptions('Wallets'),
-                }),
-              },
-              {
-                id: 'ns-token',
-                jump: 'Token holders',
-                title: 'Token holders',
-                note: 'hourly historicalGrowth when it exists; else snapshot tokenHolders.',
-                body: togetherBody({
-                  labels: tokOverlay.labels,
-                  datasets: tokOverlay.datasets,
-                  options: countChartOptions('Wallets'),
-                }),
-              },
-            ]}
-          />
-        </div>
+        </Card>
+        <ChartStack
+          label="In holders"
+          views={[
+            {
+              id: 'ns-nft',
+              jump: 'NFT holders',
+              title: 'NFT holders',
+              note: 'Snapshot nftHolders when present; otherwise the live count as the latest point.',
+              body: togetherBody({
+                labels: nftOverlay.labels,
+                datasets: nftOverlay.datasets,
+                options: countChartOptions('Wallets'),
+              }),
+            },
+            {
+              id: 'ns-token',
+              jump: 'Token holders',
+              title: 'Token holders',
+              note: 'hourly historicalGrowth when it exists; else snapshot tokenHolders.',
+              body: togetherBody({
+                labels: tokOverlay.labels,
+                datasets: tokOverlay.datasets,
+                options: countChartOptions('Wallets'),
+              }),
+            },
+          ]}
+        />
       </ShareSection>
 
-      <MethodologyCard accent="text-indigo-400">
-          <p><strong className="text-white">All is a comparison, not a rollup:</strong> Ghosts, Zombies, Knights, and Watchers stay four series on one axis. Totals are not added together except on the Night LP health chart&apos;s combined line. Open a faction for that market&apos;s tiers, simulator, and vault detail.</p>
-          <p><strong className="text-white">Yield &amp; ROI:</strong> Cash-on-cash for a Shade is annualized vault RewardPaid ÷ (NFT floor USD + activation tokens at spot), split by Anvil tier weight. {yieldBasisText(project)} Night vault WETH is loot for The Night and is never counted as StonkBrokers StonkBooster.</p>
-          <p><strong className="text-white">The Night</strong> is the daily VRF strike. Favored factions keep their pools; struck factions can lose 20% of that pair&apos;s WETH to the vault (tokens sold for WETH). Unlabeled millions under Struck are vault token inventory, not strike size. Pool WETH over time overwrites the same UTC day on each hourly run until the series grows.</p>
+      <MethodologyCard>
+        <p><strong className="text-ink">All is a comparison, not a rollup:</strong> Ghosts, Zombies, Knights, and Watchers stay four series on one axis. Totals are not added together except on the Night LP health chart&apos;s combined line. Open a faction for that market&apos;s tiers, simulator, and vault detail.</p>
+        <p><strong className="text-ink">Yield &amp; ROI:</strong> Cash-on-cash for a Shade is annualized vault RewardPaid ÷ (NFT floor USD + activation tokens at spot), split by Anvil tier weight. {yieldBasisText(project)} Night vault WETH is loot for The Night and is never counted as StonkBrokers StonkBooster.</p>
+        <p><strong className="text-ink">The Night</strong> is the daily VRF strike. Favored factions keep their pools; struck factions can lose 20% of that pair&apos;s WETH to the vault (tokens sold for WETH). Unlabeled millions under Struck are vault token inventory, not strike size. Pool WETH over time overwrites the same UTC day on each hourly run until the series grows.</p>
       </MethodologyCard>
     </div>
   );

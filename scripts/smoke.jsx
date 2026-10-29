@@ -22,11 +22,9 @@ import { earnedUsdForNft, earnedUsdForTokenPosition, nftAcquireCostUsd, paymentP
 import { applyPrices, pricesLanded } from '../src/lib/prices.js';
 import App from '../src/app.jsx';
 import HomeView from '../src/components/views/HomeView';
-import OverviewView from '../src/components/views/OverviewView';
 import EcosystemView from '../src/components/views/EcosystemView';
 import PortfolioView from '../src/components/views/PortfolioView';
 import BrokerScanView from '../src/components/views/BrokerScanView';
-import FloorCheckView from '../src/components/views/FloorCheckView';
 import AnvilScanView from '../src/components/views/AnvilScanView';
 import MemesTokensView from '../src/components/views/MemesTokensView';
 import StonkDetailView from '../src/components/views/StonkDetailView';
@@ -78,6 +76,67 @@ import { PayoutCalendar } from '../src/components/PayoutCalendar';
 
 const snapshot = JSON.parse(fs.readFileSync('public/data.json', 'utf8'));
 
+// Books (Clutch + Mancer) sidecar — enough for SSR of the Mancer Books tab and
+// Stonk Partner share note without hitting api.mancer.xyz in smoke.
+if (snapshot.projects?.mancer) {
+  snapshot.projects.mancer.books = {
+    fetchedAt: '2026-10-28T00:00:00.000Z',
+    factory: '0xa727e7af47a965afd0341afcef7bc3f86be876b0',
+    counts: { total: 2, byPhase: { raising: 1, trading: 1 } },
+    raise: { raisedUsd: 1200, buys: 12, sells: 1 },
+    fees: {
+      closeBps: 200,
+      ethUsd: 2300,
+      mancerAccruedUsd: 0,
+      protocolAccruedUsd: 0,
+      mancerEstimatedUsd: 40,
+      protocolEstimatedUsd: 40,
+      mancerUsd: 40,
+      protocolUsd: 40,
+      estimated: true,
+    },
+    board: [
+      {
+        token: '0xabba87821bae3c224e87348b83d3f79799ec31bf',
+        bookId: '4',
+        name: 'Books',
+        symbol: 'Books',
+        phase: 'trading',
+        quoteSymbol: 'STONKBROKER',
+        raisedUsd: 800,
+        progressBps: null,
+        closeFeeMancerUsd: 20,
+        closeFeeProtocolUsd: 20,
+        timeLeftSecs: 86400,
+        href: 'https://mancer.xyz/books/0xabba87821bae3c224e87348b83d3f79799ec31bf',
+      },
+      {
+        token: '0x40683d1ba909284c88e5d2ad019cbe8dbf256c9f',
+        bookId: '23',
+        name: 'Demo Raise',
+        symbol: 'DEMO',
+        phase: 'raising',
+        quoteSymbol: 'WETH',
+        raisedUsd: 400,
+        progressBps: 3500,
+        closeFeeMancerUsd: 0,
+        closeFeeProtocolUsd: 0,
+        timeLeftSecs: 3600,
+        href: 'https://mancer.xyz/books/0x40683d1ba909284c88e5d2ad019cbe8dbf256c9f',
+      },
+    ],
+  };
+}
+if (snapshot.projects?.stonk) {
+  snapshot.projects.stonk.booksShare = {
+    protocolAccruedUsd: 0,
+    protocolEstimatedUsd: 40,
+    protocolUsd: 40,
+    estimated: true,
+    closeBps: 200,
+  };
+}
+
 // The loader fires on mount, which never happens here; every route is
 // therefore exercised in its skeleton state, which is the state this change
 // introduced and so the one most worth proving renders.
@@ -89,6 +148,9 @@ const ROUTES = [
   '/rankings',
   '/ecosystem',
   '/ecosystem?tab=rankings',
+  '/ecosystem?tab=burn',
+  '/ecosystem?tab=activation',
+  '/ecosystem?tab=entry',
   '/portfolio',
   '/broker',
   '/broker?id=1',
@@ -114,6 +176,8 @@ const ROUTES = [
   '/interns/burn',
   '/mancer/roi',
   '/mancer/yield',
+  '/mancer/books',
+  '/mancer/revenue',
   '/tickeryard/revenue',
   '/tickeryard/roi',
   '/tickeryard/yield',
@@ -172,11 +236,9 @@ for (const route of ROUTES) {
 console.log('\nviews (populated with public/data.json)');
 const VIEWS = [
   ['HomeView', HomeView, { data: snapshot }],
-  ['OverviewView', OverviewView, { data: snapshot, pending: false }],
   ['EcosystemView', EcosystemView, { data: snapshot }],
   ['PortfolioView', PortfolioView, { data: snapshot }],
   ['BrokerScanView', BrokerScanView, { data: snapshot }],
-  ['FloorCheckView', FloorCheckView, { data: snapshot }],
   ['AnvilScanView', AnvilScanView, { data: snapshot }],
   ['MemesTokensView·memes', MemesTokensView, { data: snapshot, type: 'memes' }],
   ['MemesTokensView·stocks', MemesTokensView, { data: snapshot, type: 'stocks' }],
@@ -215,6 +277,7 @@ for (const [label, View] of [
     VIEWS.push([`${label}·${tab}`, View, { data: snapshot, activeTab: tab }]);
   }
 }
+VIEWS.push(['Mancer·books', MancerDetailView, { data: snapshot, activeTab: 'books' }]);
 VIEWS.push(['Nightshades·all', NightshadesDetailView, { data: snapshot, activeTab: 'roi' }]);
 
 {
@@ -225,10 +288,10 @@ VIEWS.push(['Nightshades·all', NightshadesDetailView, { data: snapshot, activeT
   );
   const funds = snapshot.projects?.mutualfun?.funds || [];
   if (
-    !html.includes('The Mutual Fun')
-    || !html.includes('Argon')
+    !html.includes('Argon')
     || !html.includes('Retail')
     || !html.includes('Open Market')
+    || !html.includes('Funds')
     || funds.length !== 5
     || !html.includes('401,000')
     || !html.includes('beta')
@@ -322,15 +385,18 @@ VIEWS.push(['Nightshades·all', NightshadesDetailView, { data: snapshot, activeT
   const homeOk = homeHtml.includes('StonkBrokers Ecosystem Analytics')
     && homeHtml.includes('No trackers. No wallet connects. Just data.')
     && homeHtml.includes('Look up')
+    && homeHtml.includes('Follow @savicrypto')
+    && homeHtml.includes('Follow for daily data &amp; updates')
     && homeHtml.includes('Cheapest way in')
     && homeHtml.includes('Your bags')
-    && homeHtml.includes('Listed seat, trailing yield')
+    && homeHtml.includes('Trailing 30d protocol cash')
+    && homeHtml.includes('Go deeper')
     && homeHtml.includes('StonkBrokers');
   if (!homeOk) {
     failed++;
-    console.error('FAIL  homepage missing the lookup, tools, or seat list');
+    console.error('FAIL  homepage missing lookup, follow, tools, or fee ranking');
   } else {
-    console.log('ok    homepage leads with lookup, tools, and seat yield');
+    console.log('ok    homepage leads with lookup, follow, tools, and fee ranking');
   }
 }
 
@@ -419,19 +485,25 @@ for (const [name, View, props] of VIEWS) {
   delete stripped.projects.cardwall.gacha;
   const withGacha = renderToString(
     <StaticRouter location="/ecosystem">
-      <OverviewView data={snapshot} />
+      <EcosystemView data={snapshot} />
     </StaticRouter>
   );
   const without = renderToString(
     <StaticRouter location="/ecosystem">
-      <OverviewView data={stripped} />
+      <EcosystemView data={stripped} />
     </StaticRouter>
   );
-  if (withGacha !== without) {
+  // Gacha stays visible under "Outside the mix" and must not disappear from
+  // the page when present — but it is not added into the protocol fee bar.
+  if (
+    !withGacha.includes('Outside the mix')
+    || !withGacha.includes('Pulls, not fees kept')
+    || without.includes('Pulls, not fees kept')
+  ) {
     failed++;
-    console.error('FAIL  overview protocol revenue still includes gacha');
+    console.error('FAIL  ecosystem gacha should sit outside the protocol fee mix');
   } else {
-    console.log('ok    overview protocol revenue leaves gacha out');
+    console.log('ok    ecosystem protocol revenue leaves gacha out of the mix');
   }
 }
 
@@ -477,7 +549,7 @@ for (const [name, View, props] of VIEWS) {
   } else if (html.includes('id="liquidity"') || html.includes('id="burn"')) {
     failed++;
     console.error('FAIL  intern page still has liquidity/burn sections');
-  } else if (!html.includes('Parent burn chart') || !html.includes('Interns burnt') || !html.includes('StonkBrokers burnt') || !html.includes('do not share an activation manager')) {
+  } else if (!html.includes('parent burn chart') || !html.includes('interns burnt') || !html.includes('StonkBrokers burnt') || !html.includes('do not share an activation manager')) {
     failed++;
     console.error('FAIL  intern activation burn split missing');
   } else if (intern?.underConstruction || !intern?.config?.nftCa || !(live > 0)) {
@@ -508,7 +580,7 @@ for (const [name, View, props] of VIEWS) {
     </StaticRouter>
   );
   const banned = ['Protocol Vault Inflows', 'Yard AMM Protocol Rev', 'Snipe / Curve Tax', 'Protocol Revenue & Ecosystem Liquidity'];
-  const missing = ['Vault distributions', 'Holder payout', 'yBTC wrap fee'];
+  const missing = ['Vault distributions', 'Holder payout', 'yBTC wrap'];
   const leftover = banned.filter((s) => html.includes(s));
   const absent = missing.filter((s) => !html.includes(s));
   if (leftover.length || absent.length) {
@@ -965,8 +1037,52 @@ for (const [name, View, props] of VIEWS) {
   } else if (!ecoOwnHtml.includes('Copy Robinhood Chain onboard for X')) {
     failed++;
     console.error('FAIL  ecosystem onboard card has no copy button');
+  } else if (!ecoOwnHtml.includes('Onboard share') || !ecoOwnHtml.includes('Burn velocity')) {
+    failed++;
+    console.error('FAIL  ecosystem ownership strength charts missing');
   } else {
     console.log('ok    ecosystem shows combined onboard chart');
+  }
+  const ecoBurnHtml = renderToString(
+    <StaticRouter location="/ecosystem?tab=burn">
+      <EcosystemView data={snapshot} />
+    </StaticRouter>
+  );
+  if (!ecoBurnHtml.includes('Share of own supply burnt') || !ecoBurnHtml.includes('Jump')) {
+    failed++;
+    console.error('FAIL  ecosystem burn tab missing');
+  } else {
+    console.log('ok    ecosystem burn tab restored');
+  }
+  const ecoActHtml = renderToString(
+    <StaticRouter location="/ecosystem?tab=activation">
+      <EcosystemView data={snapshot} />
+    </StaticRouter>
+  );
+  if (!ecoActHtml.includes('% of own collection earning') || !ecoActHtml.includes('Net active')) {
+    failed++;
+    console.error('FAIL  ecosystem activation tab missing');
+  } else {
+    console.log('ok    ecosystem activation tab restored');
+  }
+  const ecoEntryHtml = renderToString(
+    <StaticRouter location="/ecosystem?tab=entry">
+      <EcosystemView data={snapshot} />
+    </StaticRouter>
+  );
+  if (
+    !ecoEntryHtml.includes('Live gap')
+    || !ecoEntryHtml.includes('Floor vs implied')
+    || !ecoEntryHtml.includes('Implied')
+    || !/buying the NFT to access token value/i.test(ecoEntryHtml)
+  ) {
+    failed++;
+    console.error('FAIL  ecosystem entry tab missing floor/implied board');
+  } else if (!ecoEntryHtml.includes('not guaranteed profit')) {
+    failed++;
+    console.error('FAIL  ecosystem entry methodology missing');
+  } else {
+    console.log('ok    ecosystem entry tab charts floor vs implied');
   }
 }
 
@@ -1745,8 +1861,47 @@ for (const [name, View, props] of VIEWS) {
   if (holder[0] !== 125 || holder[1] !== 50 || html.includes('No revenue days in this window')) {
     failed++;
     console.error('FAIL  mancer holder revenue', holder);
+  } else if (
+    html.includes('This cash was paid to seats')
+    || !html.includes('Vault and routing')
+  ) {
+    failed++;
+    console.error('FAIL  mancer vault/DEX stack should draw above Paid to seats');
   } else {
     console.log('ok    mancer payout stays on the holder chart');
+  }
+}
+
+{
+  const booksHtml = renderToString(
+    <StaticRouter location="/mancer/books">
+      <MancerDetailView data={snapshot} activeTab="books" />
+    </StaticRouter>
+  );
+  if (
+    !booksHtml.includes('Books · Social Capital Markets')
+    || !booksHtml.includes('Live board')
+    || !booksHtml.includes('Mancer close fee')
+    || !booksHtml.includes('Stonk share')
+  ) {
+    failed++;
+    console.error('FAIL  mancer books tab missing live board / fee KPIs');
+  } else if (!booksHtml.includes('Books close fees')) {
+    failed++;
+    console.error('FAIL  mancer revenue stack missing Books close fees');
+  } else {
+    console.log('ok    mancer books tab shows live board and close fees');
+  }
+  const stonkRev = renderToString(
+    <StaticRouter location="/stonkbrokers/revenue">
+      <StonkDetailView data={snapshot} activeTab="revenue" />
+    </StaticRouter>
+  );
+  if (!stonkRev.includes('Partner share') || !/Books close/i.test(stonkRev)) {
+    failed++;
+    console.error('FAIL  stonk partner share missing Books close stream');
+  } else {
+    console.log('ok    stonk partner share includes Books close fees');
   }
 }
 

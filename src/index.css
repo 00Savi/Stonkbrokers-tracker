@@ -300,10 +300,61 @@ body {
   animation: skeleton-sweep 1.6s infinite;
 }
 
+/* Homepage: orange rail left/right of the heading (gap = the title box). */
+@keyframes home-rail-in {
+  from {
+    opacity: 0;
+    transform: scaleX(0.35);
+  }
+  to {
+    opacity: 0.7;
+    transform: scaleX(1);
+  }
+}
+@keyframes home-signal-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.home-hero-rail {
+  height: 1.5px;
+  border-radius: 999px;
+  background: var(--color-brand);
+  opacity: 0.7;
+  transform-origin: center;
+  animation: home-rail-in 0.7s ease-out both;
+}
+.home-hero-rail-left {
+  transform-origin: right center;
+  mask-image: linear-gradient(to right, transparent, #000 28%);
+}
+.home-hero-rail-right {
+  transform-origin: left center;
+  mask-image: linear-gradient(to left, transparent, #000 28%);
+  animation-delay: 0.08s;
+}
+.home-tool-signal {
+  animation: home-signal-in 0.55s ease-out both;
+}
+.home-project-lead {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-brand) 25%, transparent);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .live-dot,
-  .skeleton::after {
+  .skeleton::after,
+  .home-hero-rail,
+  .home-tool-signal {
     animation: none;
+  }
+  .home-hero-rail {
+    opacity: 0.7;
+    transform: none;
   }
 }
 

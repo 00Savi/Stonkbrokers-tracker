@@ -8,17 +8,17 @@ import { holderSeries } from '../../lib/snapshots';
 import { formatLabels } from '../../lib/dates';
 import { windowSnapshots, protocolRevenueChart, sliceCols, windowPeriodLabel, windowChart } from '../../lib/yieldHistory';
 import { PROJECTS } from '../../lib/routes';
-import { BetaTag, compactUsd, compactNum, YieldPeriodToggle, scaleAnnualYield, yieldSuffix } from '../kit';
+import { BetaTag, Card, KpiStrip, SkeletonCard, Stat, Tag, compactUsd, compactNum, YieldPeriodToggle, scaleAnnualYield, yieldSuffix } from '../kit';
 import { yieldBasisText } from '../../lib/yieldSample';
 import { ShareSection } from '../CopyControl';
 import {
   OAKMONT_ACTIONS, OAKMONT_BASKET, OAKMONT_DOCS, OAKMONT_DAPP, OAKMONT_SITE, OAKMONT_FEES,
   fetchGeckoTokenHolders,
 } from '../../lib/oakmont';
-import { baseChartOptions, compactTick, compactUsdTick, cumulativeBurnDataset, percentTick } from '../../lib/charts';
+import { baseChartOptions, compactTick, compactUsdTick, cumulativeBurnDataset, percentTick, STREAM_COLORS } from '../../lib/charts';
 import { useChartView } from '../../lib/chartWindow';
-import { YieldHistorySwitch, ChartStack, BurnHistorySwitch, EmptyChart } from '../HistoryCharts';
-import { DisclaimerCopy } from '../Disclaimer';
+import { YieldHistorySwitch, ChartStack, ChartPanel, BurnHistorySwitch, EmptyChart } from '../HistoryCharts';
+import { MethodologyCard } from '../Disclaimer';
 import { tokenValuation } from '../../lib/valuation';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler);
@@ -31,7 +31,12 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
   const meta = PROJECTS.find((p) => p.key === projectKey);
   const project = data?.projects?.[projectKey];
   if (!project) {
-    return <div className="text-center text-slate-400 p-12">{meta?.name || projectKey} data loading...</div>;
+    return (
+      <div className="space-y-4 pt-4">
+        <SkeletonCard rows={4} />
+        <p className="text-center font-mono text-[11px] text-faint">{meta?.name || projectKey} data loading…</p>
+      </div>
+    );
   }
 
   const { config = {}, market = {}, tiers = [], activation = {}, ownership = {}, cashflow = {}, lockedLp = null, dailySnapshots = [], vault = null } = project;
@@ -119,89 +124,75 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
   return (
     <div className="space-y-6 relative">
       <ShareSection id="roi" className="scroll-mt-32">
-        <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl">
-          <h3 className="mb-2 flex items-center gap-2 text-lg font-bold text-white">
-            {meta?.name} cash-on-cash
-            {meta?.beta && <BetaTag />}
-          </h3>
-          <p className="text-xs text-slate-400 mb-6">
-            {kind === 'cashflow' && `Holders revenue against circulating $INDEX, for wallets with at least 10,000 INDEX. ${yieldBasisText(project)}`}
-            {kind === 'machines' && 'Only awake (inked) Machines earn. Base ink is 4,250 $PRINTER to wake at 1× weight; more ink or a Proton fuse raises weight. The pot (fees → daily USDG+WETH during the test, else weekly stock) is split by weight across the awake fleet. See rhmachines.com/dashboard.'}
-            {kind === 'brokers' && `One active Broker earns one equal share of Booster stock buys. Cost is NFT floor plus 36,750 $COAT burned on activate(). Transfer turns the Broker off; the buyer must burn again. ${yieldBasisText(project)} Unclaimed salary stays in the Booster by token id.`}
-          </p>
+        <div className="space-y-4">
+          <Card
+            eyebrow={`${meta?.name || ''} cash-on-cash`}
+            corner={meta?.beta ? <BetaTag /> : null}
+            sub={
+              (kind === 'cashflow' && `Holders revenue against circulating $INDEX, for wallets with at least 10,000 INDEX. ${yieldBasisText(project)}`)
+              || (kind === 'machines' && 'Only awake (inked) Machines earn. Base ink is 4,250 $PRINTER to wake at 1× weight; more ink or a Proton fuse raises weight. The pot (fees → daily USDG+WETH during the test, else weekly stock) is split by weight across the awake fleet. See rhmachines.com/dashboard.')
+              || (kind === 'brokers' && `One active Broker earns one equal share of Booster stock buys. Cost is NFT floor plus 36,750 $COAT burned on activate(). Transfer turns the Broker off; the buyer must burn again. ${yieldBasisText(project)} Unclaimed salary stays in the Booster by token id.`)
+              || undefined
+            }
+          >
+            <KpiStrip>
+              <Stat label={`$${ticker} price`} value={fmt(tokenUsd)} />
+              <Stat label="Annual cash-flow" value={fmt(annual)} tone="accent" />
+              <Stat label="CoC ROI" value={`${roi.toFixed(2)}%`} tone="accent" />
+              <Stat label="Payback" value={payback == null ? '—' : `${payback.toFixed(1)}y`} />
+            </KpiStrip>
+          </Card>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4">
-              <p className="text-[10px] uppercase text-slate-400 mb-1">${ticker} price</p>
-              <p className="text-xl font-extrabold text-white">{fmt(tokenUsd)}</p>
+          <Card flush eyebrow="Units">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[560px] text-left">
+                <thead>
+                  <tr className="eyebrow border-b border-line text-faint">
+                    <th className="px-5 py-3 font-normal">Unit</th>
+                    <th className="px-3 py-3 font-normal">Floor</th>
+                    <th className="px-3 py-3 font-normal">Act. cost</th>
+                    <th className="px-3 py-3 font-normal">
+                      <div className="flex items-center gap-2">
+                        <span>Expected yield</span>
+                        <YieldPeriodToggle value={yieldPeriod} onChange={setYieldPeriod} />
+                      </div>
+                    </th>
+                    <th className="px-5 py-3 text-right font-normal">Est. ROI</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tiers.map((t) => {
+                    const floorPart = kind === 'machines' || kind === 'brokers' ? floorUsd : 0;
+                    const actPart = kind === 'machines'
+                      ? (t.reqTokens || 0) * tokenUsd * 1.15
+                      : (t.reqTokens || 0) * tokenUsd;
+                    const cost = t.entryUsd || floorPart + actPart;
+                    const y = t.trackedAnnualYieldUsd || 0;
+                    const r = cost > 0 ? (y / cost) * 100 : 0;
+                    return (
+                      <tr key={t.tier} className="border-b border-line-soft">
+                        <td className="px-5 py-3">
+                          <div className="text-[13px] text-ink">{t.name}</div>
+                          <div className="font-mono text-[11px] text-faint">{num(t.reqTokens)} ${ticker}</div>
+                        </td>
+                        <td className="num px-3 py-3 text-[13px] text-ink">{floorPart > 0 ? fmt(floorPart) : '—'}</td>
+                        <td className="num px-3 py-3 text-[13px] text-ink">{actPart > 0 ? fmt(actPart) : (cost > 0 && !(floorPart > 0) ? fmt(cost) : '—')}</td>
+                        <td className="num px-3 py-3 text-[13px] text-ink">{y > 0 ? `${fmt(scaleAnnualYield(y, yieldPeriod))} ${yieldSuffix(yieldPeriod)}` : '—'}</td>
+                        <td className="px-5 py-3 text-right">
+                          {y > 0 ? <Tag tone="good">{`${r.toFixed(2)}%`}</Tag> : <span className="num text-[13px] text-faint">—</span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4">
-              <p className="text-[10px] uppercase text-slate-400 mb-1">Annual cash-flow</p>
-              <p className="text-xl font-extrabold text-emerald-400">{fmt(annual)}</p>
-            </div>
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4">
-              <p className="text-[10px] uppercase text-slate-400 mb-1">CoC ROI</p>
-              <p className="text-xl font-extrabold text-blue-400">{roi.toFixed(2)}%</p>
-            </div>
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4">
-              <p className="text-[10px] uppercase text-slate-400 mb-1">Payback</p>
-              <p className="text-xl font-extrabold text-purple-400">{payback == null ? '—' : `${payback.toFixed(1)}y`}</p>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-[#1e2228] text-slate-500 text-xs uppercase">
-                  <th className="pb-3">Unit</th>
-                  <th className="pb-3">Floor</th>
-                  <th className="pb-3">Act. cost</th>
-                  <th className="pb-3">
-                    <div className="flex items-center gap-2">
-                      <span>Expected yield</span>
-                      <YieldPeriodToggle value={yieldPeriod} onChange={setYieldPeriod} />
-                    </div>
-                  </th>
-                  <th className="pb-3 text-right">Est. ROI</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#1e2228]/50">
-                {tiers.map((t) => {
-                  const floorPart = kind === 'machines' || kind === 'brokers' ? floorUsd : 0;
-                  const actPart = kind === 'machines'
-                    ? (t.reqTokens || 0) * tokenUsd * 1.15
-                    : (t.reqTokens || 0) * tokenUsd;
-                  const cost = t.entryUsd || floorPart + actPart;
-                  const y = t.trackedAnnualYieldUsd || 0;
-                  const r = cost > 0 ? (y / cost) * 100 : 0;
-                  return (
-                    <tr key={t.tier}>
-                      <td className="py-4">
-                        <div className="font-bold text-white">{t.name}</div>
-                        <div className="text-xs text-slate-500">{num(t.reqTokens)} ${ticker}</div>
-                      </td>
-                      <td className="py-4 text-white font-bold">{floorPart > 0 ? fmt(floorPart) : '—'}</td>
-                      <td className="py-4 text-white font-bold">{actPart > 0 ? fmt(actPart) : (cost > 0 && !(floorPart > 0) ? fmt(cost) : '—')}</td>
-                      <td className="py-4 text-white font-bold">{y > 0 ? `${fmt(scaleAnnualYield(y, yieldPeriod))} ${yieldSuffix(yieldPeriod)}` : '—'}</td>
-                      <td className="py-4 text-right">
-                        <span className="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-2.5 py-1 rounded text-sm font-bold">
-                          {y > 0 ? `${r.toFixed(2)}%` : '—'}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          </Card>
         </div>
       </ShareSection>
 
       <ShareSection id="yield" className="scroll-mt-32">
-        <div className="bg-[#0e1013] border border-[#1e2228] p-6 rounded-2xl space-y-6">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <h2 className="text-xl font-bold text-white">Historical yield & payback</h2>
-          </div>
+        <Card eyebrow="Historical yield & payback">
           <YieldHistorySwitch
             labels={histLabels}
             datasets={histRoi.length
@@ -220,28 +211,18 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
               : 'Revenue that reached holders. Protocol-kept fees are on the Revenue tab.'}
             empty="Snapshots start after the first hourly run."
           />
-        </div>
+        </Card>
       </ShareSection>
 
       <ShareSection id="revenue" className="scroll-mt-32">
-        <div className="space-y-6">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <h2 className="text-xl font-bold text-white">Protocol revenue</h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5">
-              <p className="text-xs uppercase text-slate-400 mb-1">Protocol Rev ({revPeriod})</p>
-              <p className="text-2xl font-extrabold" style={{ color: MARK.green }}>{fmt(revCols[0]?.total || 0)}</p>
-            </div>
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5">
-              <p className="text-xs uppercase text-slate-400 mb-1">Holders / revenue ({revPeriod})</p>
-              <p className="text-2xl font-extrabold" style={{ color: '#f7931a' }}>{fmt(revCols[1]?.total || 0)}</p>
-            </div>
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5">
-              <p className="text-xs uppercase text-slate-400 mb-1">Annualized</p>
-              <p className="text-2xl font-extrabold" style={{ color: MARK.violet }}>{fmt(annual)}</p>
-            </div>
-          </div>
+        <div className="space-y-4">
+          <Card eyebrow="Protocol revenue">
+            <KpiStrip>
+              <Stat label={`Protocol Rev (${revPeriod})`} value={fmt(revCols[0]?.total || 0)} tone="accent" />
+              <Stat label={`Holders / revenue (${revPeriod})`} value={fmt(revCols[1]?.total || 0)} />
+              <Stat label="Annualized" value={fmt(annual)} />
+            </KpiStrip>
+          </Card>
           <ChartStack
             label="In revenue"
             views={[
@@ -280,7 +261,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
                       datasets: [{
                         label: 'Holder revenue',
                         data: revCols[1]?.data || [],
-                        backgroundColor: '#f7931a',
+                        backgroundColor: STREAM_COLORS.holdersRev,
                         borderRadius: 3,
                       }],
                     }}
@@ -294,46 +275,49 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
       </ShareSection>
 
       <ShareSection id="liquidity" className="scroll-mt-32">
-        <div className="space-y-6">
-          <h2 className="text-xl font-bold text-white">Liquidity</h2>
-          {lockedLp?.pools?.length > 0 ? (
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4">
-              <h3 className="text-sm font-bold text-white mb-2">Liquidity pools · {fmt(lockedLp.totalLpUsd)}</h3>
-              <table className="w-full text-xs">
-                <thead><tr className="text-slate-400 border-b border-[#1e2228]"><th className="pb-2 text-left">Pair</th><th className="pb-2">DEX</th><th className="pb-2 text-right">Liquidity</th></tr></thead>
+        {lockedLp?.pools?.length > 0 ? (
+          <Card flush eyebrow={`Liquidity pools · ${fmt(lockedLp.totalLpUsd)}`}>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[420px] text-left">
+                <thead>
+                  <tr className="eyebrow border-b border-line text-faint">
+                    <th className="px-5 py-3 font-normal">Pair</th>
+                    <th className="px-3 py-3 font-normal">DEX</th>
+                    <th className="px-5 py-3 text-right font-normal">Liquidity</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {lockedLp.pools.map((p, i) => (
-                    <tr key={i} className="border-b border-[#1e2228]/40">
-                      <td className="py-2 text-white font-bold">{p.pairName}</td>
-                      <td className="py-2 text-slate-400">{p.dex}</td>
-                      <td className="py-2 text-right">{fmt(p.liquidityUsd)}</td>
+                    <tr key={i} className="border-b border-line-soft">
+                      <td className="px-5 py-3 text-[13px] text-ink">{p.pairName}</td>
+                      <td className="px-3 py-3 font-mono text-[11px] text-muted">{p.dex}</td>
+                      <td className="num px-5 py-3 text-right text-[13px] text-ink">{fmt(p.liquidityUsd)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          ) : (
-            <p className="text-sm text-slate-500">No tracked pools for this project yet.</p>
-          )}
-        </div>
+          </Card>
+        ) : (
+          <Card eyebrow="Liquidity pools">
+            <p className="text-[13px] text-muted">No tracked pools for this project yet.</p>
+          </Card>
+        )}
       </ShareSection>
 
       <ShareSection id="burn" className="scroll-mt-32">
-        <div className="space-y-6">
-          <h2 className="text-xl font-bold text-white">Supply deflation</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5">
-              <p className="text-xs uppercase text-slate-400 mb-1">Tokens burnt / missing</p>
-              <p className="text-2xl font-extrabold text-orange-400">{num(burnTokens)} {ticker}</p>
-              {burnPct != null && (
-                <p className="text-xs text-slate-400 mt-1">{burnPct.toFixed(2)}% of total supply</p>
-              )}
-            </div>
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5">
-              <p className="text-xs uppercase text-slate-400 mb-1">Circulating</p>
-              <p className="text-2xl font-extrabold text-blue-400">{num(circulating)} {ticker}</p>
-            </div>
-          </div>
+        <div className="space-y-4">
+          <Card eyebrow="Supply deflation">
+            <KpiStrip>
+              <Stat
+                label="Tokens burnt / missing"
+                value={<span className="text-mark-violet">{num(burnTokens)} {ticker}</span>}
+                note={burnPct != null ? `${burnPct.toFixed(2)}% of supply` : null}
+                ch={10}
+              />
+              <Stat label="Circulating" value={`${num(circulating)} ${ticker}`} ch={10} />
+            </KpiStrip>
+          </Card>
 
           <BurnHistorySwitch
             cumulative={{
@@ -343,15 +327,15 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
                 <Line
                   data={{
                     labels: burn.labels,
-                    datasets: [cumulativeBurnDataset(burn.data, '#fb923c')],
+                    datasets: [cumulativeBurnDataset(burn.data, MARK.violet)],
                   }}
                   options={{
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: { legend: { display: false } },
                     scales: {
-                      x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
-                      y: { unit: 'Tokens', grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactTick } },
+                      x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#8b929b' } },
+                      y: { unit: 'Tokens', grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#8b929b', callback: compactTick } },
                     },
                   }}
                 />
@@ -365,7 +349,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
               burn: flywheel.burn,
               prices: flywheel.prices,
               priceColor: '#00a804',
-              burnColor: 'rgba(249, 115, 22, 0.8)',
+              burnColor: MARK.violet,
               leftMax: flywheel.burnAxisMax,
             }}
           />
@@ -373,127 +357,91 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
       </ShareSection>
 
       <ShareSection id="activation" className="scroll-mt-32">
-        <div className="space-y-6">
-          <h2 className="text-xl font-bold text-white">
-            {kind === 'cashflow' ? 'Eligible wallets' : kind === 'brokers' ? 'Active Brokers' : 'Inked machines'}
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5">
-              <p className="text-xs uppercase text-slate-400 mb-1">
-                {kind === 'cashflow' ? `Wallets ≥ ${num(activation.eligibleMin || 10000)} INDEX` : kind === 'brokers' ? 'Active & earning' : 'Awake machines'}
-              </p>
-              <p className="text-2xl font-extrabold text-emerald-400">{num(activation.activeCount ?? activation.eligibleWallets)}</p>
-            </div>
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5">
-              <p className="text-xs uppercase text-slate-400 mb-1">{kind === 'cashflow' ? 'Token holders' : kind === 'brokers' ? 'Collection' : 'Collection / holders'}</p>
-              <p className="text-2xl font-extrabold text-blue-400">{num(activation.totalSupply ?? ownership.tokenHolders)}</p>
-            </div>
-          </div>
-          {kind === 'machines' && (
-            <p className="text-xs text-slate-500">
-              Awake count uses the live fleet figure from the RH Machines dashboard ({num(activation.activeCount || 7458)} earning)
-              until the Mine/ink controller is indexed. Payouts are weight-weighted, not 1-per-NFT.
-            </p>
-          )}
-          {kind === 'brokers' && (
-            <p className="text-xs text-slate-500">
-              {num(activation.percentActivated || 0)}% of 1,776 Brokers are ON. A transfer deactivates that token; unclaimed Booster claims and TBA holdings follow the NFT. Equal share per active Broker — no tiers.
-            </p>
-          )}
-        </div>
+        <Card
+          eyebrow={kind === 'cashflow' ? 'Eligible wallets' : kind === 'brokers' ? 'Active Brokers' : 'Inked machines'}
+          sub={
+            (kind === 'machines' && `Awake count uses the live fleet figure from the RH Machines dashboard (${num(activation.activeCount || 7458)} earning) until the Mine/ink controller is indexed. Payouts are weight-weighted, not 1-per-NFT.`)
+            || (kind === 'brokers' && `${num(activation.percentActivated || 0)}% of 1,776 Brokers are ON. A transfer deactivates that token; unclaimed Booster claims and TBA holdings follow the NFT. Equal share per active Broker — no tiers.`)
+            || undefined
+          }
+        >
+          <KpiStrip>
+            <Stat
+              label={kind === 'cashflow' ? `Wallets ≥ ${num(activation.eligibleMin || 10000)} INDEX` : kind === 'brokers' ? 'Active & earning' : 'Awake machines'}
+              value={num(activation.activeCount ?? activation.eligibleWallets)}
+              tone="accent"
+            />
+            <Stat
+              label={kind === 'cashflow' ? 'Token holders' : kind === 'brokers' ? 'Collection' : 'Collection / holders'}
+              value={num(activation.totalSupply ?? ownership.tokenHolders)}
+            />
+          </KpiStrip>
+        </Card>
       </ShareSection>
 
       <ShareSection id="ownership" className="scroll-mt-32">
-        <div className="space-y-6">
-          <h2 className="text-xl font-bold text-white">Ownership</h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5">
-              <p className="text-xs uppercase text-slate-400 mb-1">${ticker} holders</p>
-              <p className="text-2xl font-extrabold text-purple-400">{num(ownership.tokenHolders)}</p>
-            </div>
-            {kind === 'machines' && (
-              <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5">
-                <p className="text-xs uppercase text-slate-400 mb-1">Machine holders</p>
-                <p className="text-2xl font-extrabold text-purple-400">{num(ownership.nftHolders)}</p>
-              </div>
-            )}
-            {kind === 'brokers' && (
-              <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5">
-                <p className="text-xs uppercase text-slate-400 mb-1">Broker holders</p>
-                <p className="text-2xl font-extrabold text-purple-400">{num(ownership.nftHolders)}</p>
-              </div>
-            )}
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5">
-              <p className="text-xs uppercase text-slate-400 mb-1">Market cap</p>
-              <p className="text-2xl font-extrabold text-white">{fmt(marketCap)}</p>
-            </div>
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5">
-              <p className="text-xs uppercase text-slate-400 mb-1">FDV</p>
-              <p className="text-2xl font-extrabold text-white">{fmt(fdv)}</p>
-            </div>
-          </div>
+        <div className="space-y-4">
+          <Card eyebrow="Ownership">
+            <KpiStrip>
+              <Stat label={`$${ticker} holders`} value={num(ownership.tokenHolders)} />
+              {kind === 'machines' && <Stat label="Machine holders" value={num(ownership.nftHolders)} />}
+              {kind === 'brokers' && <Stat label="Broker holders" value={num(ownership.nftHolders)} />}
+              <Stat label="Market cap" value={fmt(marketCap)} />
+              <Stat label="FDV" value={fmt(fdv)} />
+            </KpiStrip>
+          </Card>
 
-          <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
-            <h3 className="text-sm font-bold text-white mb-4">${ticker} holders over time</h3>
-            <div className="relative h-52 sm:h-64 md:h-80 w-full">
-              {holders.data.length > 0 ? (
-                <Line
-                  data={{
-                    labels: holders.labels,
-                    datasets: [{
-                      label: `$${ticker} holders`,
-                      data: holders.data,
-                      borderColor: '#8b5cf6',
-                      backgroundColor: 'rgba(139, 92, 246, 0.1)',
-                      borderWidth: 3,
-                      fill: true,
-                      tension: 0.3,
-                    }],
-                  }}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                      x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } },
-                      y: { unit: 'Wallets', grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8', callback: compactTick } },
-                    },
-                  }}
-                />
-              ) : (
-                <div className="h-full flex items-center justify-center text-sm text-slate-500">Holder history starts after the next hourly run.</div>
-              )}
-            </div>
-          </div>
+          <ChartPanel
+            title={`$${ticker} holders over time`}
+            empty={holders.data.length > 0 ? null : 'Holder history starts after the next hourly run.'}
+          >
+            <Line
+              data={{
+                labels: holders.labels,
+                datasets: [{
+                  label: `$${ticker} holders`,
+                  data: holders.data,
+                  borderColor: MARK.violet,
+                  backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                  borderWidth: 3,
+                  fill: true,
+                  tension: 0.3,
+                }],
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                  x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#8b929b' } },
+                  y: { unit: 'Wallets', grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#8b929b', callback: compactTick } },
+                },
+              }}
+            />
+          </ChartPanel>
         </div>
       </ShareSection>
 
-      <div data-share-omit className="bg-[#0e1013] rounded-xl p-5 border border-[#1e2228] mt-8">
-        <h3 className="text-base font-bold text-white mb-3">Methodology &amp; Disclaimer</h3>
-        <p className="text-xs text-slate-300 leading-relaxed">
+      <MethodologyCard>
+        <p>
           {kind === 'cashflow' && 'Fees and holders revenue are DefiLlama The Index (original INDEX swap tax settled into tokenized stocks). CoC is annualized holders revenue ÷ circulating supply ÷ token price. That is cash-flow against INDEX cost basis, not a points program.'}
           {kind === 'machines' && 'PRINTER burn is max supply minus live totalSupply plus dead/zero balances. Yield is the fee pot split across awake Machines by on-chain weight (ink + Proton fuses). Floor uses 4,250 ink × 1.10. Dormant (un-inked) Machines do not earn.'}
           {kind === 'brokers' && 'Stock buys are from coattail.cash/api/stats (Booster purchases, CDN-cached up to 1h). Annual yield is all-time USD spent on the Congress basket annualized by days live, split equally across active Brokers. Cost is OpenSea floor plus 36,750 $COAT. Activate burns and v4 buy-side burns both shrink $COAT; they are not the same number. Rewards are trading-volume funded and never guaranteed.'}
         </p>
         {config.site && (
-          <p className="text-xs text-slate-500 mt-3">
+          <p>
             Source:{' '}
-            <a className="text-slate-300 underline" href={config.site} target="_blank" rel="noreferrer">{config.site}</a>
+            <a className="text-ink underline hover:text-accent" href={config.site} target="_blank" rel="noreferrer">{config.site}</a>
           </p>
         )}
-        <DisclaimerCopy />
-      </div>
+      </MethodologyCard>
     </div>
   );
 }
 
-function Panel({ label, value, color }) {
-  return (
-    <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4">
-      <p className="text-[10px] uppercase text-slate-400 mb-1">{label}</p>
-      <p className="text-xl font-extrabold" style={{ color: color || '#fff' }}>{value}</p>
-    </div>
-  );
+/** One labelled figure in a KpiStrip. `tone="accent"` is for the headline positive. */
+function Panel({ label, value, tone = 'ink' }) {
+  return <Stat label={label} value={value} tone={tone} ch={8} />;
 }
 
 function VaultView({
@@ -541,61 +489,63 @@ function VaultView({
   return (
     <div className="space-y-6 relative">
       <ShareSection id="roi" title="Protocol" className="scroll-mt-32">
-        <div className="space-y-6">
-          <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl">
-            <h3 className="mb-2 flex items-center gap-2 text-lg font-bold text-white">
-              {meta?.name}
-              {meta?.beta && <BetaTag />}
-            </h3>
-            <p className="text-xs text-slate-400 mb-6">
-              Two tokens by design: <strong className="text-slate-300">$STRIKE</strong> is the fixed-supply float.
-              {' '}<strong className="text-slate-300">$RESERVE</strong> is the vault receipt. Fees buy the basket (NAV) and burn a slice of $RESERVE (claim quality).
-              Those are separate: do not add claim APY to fee CoC.
-            </p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-              <Panel label="Reserve holder APY" value={claimApy == null ? '—' : `${claimApy.toFixed(2)}%`} color={MARK.lime} />
-              <Panel label={market.vaultNavKind === 'wrapped-strike' ? 'Wrapped $STRIKE (on-chain)' : 'Vault NAV (USDG)'} value={fmt(liveNav)} color={MARK.green} />
-              <Panel label="STRIKE per $RESERVE" value={market.protocolExchangeRate > 0 ? market.protocolExchangeRate.toFixed(4) : '—'} color={MARK.sky} />
-              <Panel label="ETH fees → vault /yr" value={fmt(feeAnnual)} color={MARK.amber} />
-            </div>
-            <p className="text-[11px] text-slate-500 mb-4">
+        <div className="space-y-4">
+          <Card
+            eyebrow={meta?.name}
+            corner={meta?.beta ? <BetaTag /> : null}
+            sub={(
+              <>
+                Two tokens by design: <strong className="text-ink">$STRIKE</strong> is the fixed-supply float.
+                {' '}<strong className="text-ink">$RESERVE</strong> is the vault receipt. Fees buy the basket (NAV) and burn a slice of $RESERVE (claim quality).
+                Those are separate: do not add claim APY to fee CoC.
+              </>
+            )}
+          >
+            <KpiStrip>
+              <Panel label="Reserve holder APY" value={claimApy == null ? '—' : `${claimApy.toFixed(2)}%`} tone="accent" />
+              <Panel label={market.vaultNavKind === 'wrapped-strike' ? 'Wrapped $STRIKE (on-chain)' : 'Vault NAV (USDG)'} value={fmt(liveNav)} />
+              <Panel label="STRIKE per $RESERVE" value={market.protocolExchangeRate > 0 ? market.protocolExchangeRate.toFixed(4) : '—'} />
+              <Panel label="ETH fees → vault /yr" value={fmt(feeAnnual)} />
+            </KpiStrip>
+            <p className="mt-4 font-mono text-[11px] leading-relaxed text-faint">
               Claim APY matches Oakmont: annualized growth of the protocol STRIKE:RESERVE rate above 1.0.
               {market.vaultSource === 'onchain-erc4626'
                 ? ' The dapp indexer is down, so the rate is read on-chain from $RESERVE.convertToAssets and NAV is escrowed $STRIKE × DexScreener spot — not the basket appraisal.'
                 : ' Fee CoC is annualized ETH fee revenue (2% wrap/unwrap leg, plus other ETH fees) ÷ spot cost. Indexer NAV is USDG; USDG is treated as $1.'}
             </p>
-            <div className="overflow-x-auto mb-6">
-              <table className="w-full text-left text-sm">
+          </Card>
+
+          <Card flush eyebrow="Holders">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[560px] text-left">
                 <thead>
-                  <tr className="border-b border-[#1e2228] text-slate-500 text-xs uppercase">
-                    <th className="pb-3">Holder</th>
-                    <th className="pb-3">Spot</th>
-                    <th className="pb-3">
+                  <tr className="eyebrow border-b border-line text-faint">
+                    <th className="px-5 py-3 font-normal">Holder</th>
+                    <th className="px-3 py-3 font-normal">Spot</th>
+                    <th className="px-3 py-3 font-normal">
                       <div className="flex items-center gap-2">
                         <span>Fee accretion / token</span>
                         <YieldPeriodToggle value={yieldPeriod} onChange={setYieldPeriod} />
                       </div>
                     </th>
-                    <th className="pb-3 text-right">Fee CoC</th>
-                    <th className="pb-3 text-right">Claim APY</th>
+                    <th className="px-3 py-3 text-right font-normal">Fee CoC</th>
+                    <th className="px-5 py-3 text-right font-normal">Claim APY</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#1e2228]/50">
+                <tbody>
                   {(tiers || []).map((t) => {
                     const cost = t.entryUsd || 0;
                     const y = t.trackedAnnualYieldUsd || 0;
                     const r = cost > 0 ? (y / cost) * 100 : 0;
                     return (
-                      <tr key={t.tier}>
-                        <td className="py-3 font-bold text-white">{t.name}</td>
-                        <td className="py-3 text-white font-bold">{fmt(cost)}</td>
-                        <td className="py-3 text-white font-bold">{y > 0 ? `${fmt(scaleAnnualYield(y, yieldPeriod))} ${yieldSuffix(yieldPeriod)}` : '—'}</td>
-                        <td className="py-3 text-right">
-                          <span className="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-2.5 py-1 rounded text-sm font-bold">
-                            {y > 0 ? `${r.toFixed(2)}%` : '—'}
-                          </span>
+                      <tr key={t.tier} className="border-b border-line-soft">
+                        <td className="px-5 py-3 text-[13px] text-ink">{t.name}</td>
+                        <td className="num px-3 py-3 text-[13px] text-ink">{fmt(cost)}</td>
+                        <td className="num px-3 py-3 text-[13px] text-ink">{y > 0 ? `${fmt(scaleAnnualYield(y, yieldPeriod))} ${yieldSuffix(yieldPeriod)}` : '—'}</td>
+                        <td className="px-3 py-3 text-right">
+                          {y > 0 ? <Tag tone="good">{`${r.toFixed(2)}%`}</Tag> : <span className="num text-[13px] text-faint">—</span>}
                         </td>
-                        <td className="py-3 text-right text-slate-400 text-sm">
+                        <td className="num px-5 py-3 text-right text-[13px] text-muted">
                           {t.claimApyPct != null ? `${Number(t.claimApyPct).toFixed(2)}%` : '—'}
                         </td>
                       </tr>
@@ -604,134 +554,131 @@ function VaultView({
                 </tbody>
               </table>
             </div>
+          </Card>
+
+          <Card flush eyebrow="Actions">
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
+              <table className="w-full min-w-[480px] text-left">
                 <thead>
-                  <tr className="border-b border-[#1e2228] text-slate-500 text-xs uppercase">
-                    <th className="pb-3">Action</th>
-                    <th className="pb-3">Fee / LTV</th>
-                    <th className="pb-3">What you get</th>
+                  <tr className="eyebrow border-b border-line text-faint">
+                    <th className="px-5 py-3 font-normal">Action</th>
+                    <th className="px-3 py-3 font-normal">Fee / LTV</th>
+                    <th className="px-5 py-3 font-normal">What you get</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#1e2228]/50">
+                <tbody>
                   {OAKMONT_ACTIONS.map((row) => (
-                    <tr key={row.name}>
-                      <td className="py-3 font-bold text-white">{row.name}</td>
-                      <td className="py-3 text-[#e879f9] font-bold whitespace-nowrap">{row.cost}</td>
-                      <td className="py-3 text-slate-400 text-xs leading-relaxed">{row.note}</td>
+                    <tr key={row.name} className="border-b border-line-soft">
+                      <td className="px-5 py-3 text-[13px] text-ink">{row.name}</td>
+                      <td className="num whitespace-nowrap px-3 py-3 text-[13px] text-ink">{row.cost}</td>
+                      <td className="px-5 py-3 text-[12px] leading-relaxed text-muted">{row.note}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          </div>
-          <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5">
-            <h3 className="text-sm font-bold text-white mb-2">Vault basket (new revenue split)</h3>
-            <p className="text-xs text-slate-500 mb-4">
-              All protocol fees buy this basket (dapp target weights). Weights are for new deposits only — the index does not rebalance, so winners keep weight.
-            </p>
-            <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
+          </Card>
+
+          <Card
+            eyebrow="Vault basket (new revenue split)"
+            sub="All protocol fees buy this basket (dapp target weights). Weights are for new deposits only — the index does not rebalance, so winners keep weight."
+          >
+            <div className="grid grid-cols-3 gap-2 md:grid-cols-5">
               {OAKMONT_BASKET.map((b) => (
-                <div key={b.asset} className="bg-[#0e1013] border border-[#1e2228] rounded-lg p-3">
-                  <p className="text-[10px] text-slate-500 uppercase">{b.asset}</p>
-                  <p className="text-sm font-bold text-white">{b.share}%</p>
+                <div key={b.asset} className="rounded-lg border border-line bg-panel-2 p-3">
+                  <p className="eyebrow text-[10px] text-faint">{b.asset}</p>
+                  <p className="num mt-1 text-[15px] text-ink">{b.share}%</p>
                 </div>
               ))}
             </div>
-          </div>
+          </Card>
         </div>
       </ShareSection>
 
       <ShareSection id="yield" title="Markets" className="scroll-mt-32">
-        <div className="bg-[#0e1013] border border-[#1e2228] p-6 rounded-2xl space-y-6">
-          <h2 className="text-xl font-bold text-white">Markets</h2>
-          <p className="text-xs text-slate-400">
-            $STRIKE and $RESERVE should stay linked by wrap/unwrap (2.5% each way) and by the ~7.5% wrap-and-redeem floor versus Reserve Price. Spreads persist when volume is thin.
-          </p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <Panel label="$STRIKE" value={fmt(tokenUsd)} />
-            <Panel label="$RESERVE" value={fmt(market.reservePriceUsd)} color={MARK.lime} />
-            <Panel label="STRIKE per $RESERVE" value={market.protocolExchangeRate > 0 ? market.protocolExchangeRate.toFixed(4) : '—'} color={MARK.green} />
-            <Panel label="Claim APY" value={claimApy == null ? '—' : `${claimApy.toFixed(2)}%`} color={MARK.lime} />
-          </div>
+        <div className="space-y-4">
+          <Card
+            eyebrow="Markets"
+            sub="$STRIKE and $RESERVE should stay linked by wrap/unwrap (2.5% each way) and by the ~7.5% wrap-and-redeem floor versus Reserve Price. Spreads persist when volume is thin."
+          >
+            <KpiStrip>
+              <Panel label="$STRIKE" value={fmt(tokenUsd)} />
+              <Panel label="$RESERVE" value={fmt(market.reservePriceUsd)} />
+              <Panel label="STRIKE per $RESERVE" value={market.protocolExchangeRate > 0 ? market.protocolExchangeRate.toFixed(4) : '—'} />
+              <Panel label="Claim APY" value={claimApy == null ? '—' : `${claimApy.toFixed(2)}%`} tone="accent" />
+            </KpiStrip>
+          </Card>
           {rateHist.length > 1 && (
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
-              <h3 className="text-sm font-bold text-white mb-4">STRIKE per $RESERVE (claim rate)</h3>
-              <div className="relative h-52 sm:h-64 md:h-72 w-full">
-                <Line
-                  data={{
-                    labels: rateHist.map((r) => r.date || r.ts),
-                    datasets: [
-                      { label: 'STRIKE / RESERVE', data: rateHist.map((r) => r.exchangeRate), borderColor: MARK.lime, tension: 0.2, borderWidth: 2 },
-                      ...(navHist.length > 1 ? [{ label: 'Vault NAV (USDG)', data: (vault?.history || []).map((r) => r.nav), borderColor: MARK.sky, tension: 0.2, borderWidth: 2, yAxisID: 'y1' }] : []),
-                    ],
-                  }}
-                  options={{
-                    ...chartOpts,
-                    scales: {
-                      ...chartOpts.scales,
-                      y: { ...chartOpts.scales.y, position: 'left', unit: 'STRIKE / RESERVE' },
-                      y1: { ticks: { color: '#94a3b8', callback: compactUsdTick }, grid: { drawOnChartArea: false }, position: 'right', unit: 'USDG' },
-                    },
-                  }}
-                />
-              </div>
-            </div>
+            <ChartPanel title="STRIKE per $RESERVE (claim rate)">
+            <Line
+              data={{
+                labels: rateHist.map((r) => r.date || r.ts),
+                datasets: [
+                  { label: 'STRIKE / RESERVE', data: rateHist.map((r) => r.exchangeRate), borderColor: MARK.lime, tension: 0.2, borderWidth: 2 },
+                  ...(navHist.length > 1 ? [{ label: 'Vault NAV (USDG)', data: (vault?.history || []).map((r) => r.nav), borderColor: MARK.sky, tension: 0.2, borderWidth: 2, yAxisID: 'y1' }] : []),
+                ],
+              }}
+              options={{
+                ...chartOpts,
+                scales: {
+                  ...chartOpts.scales,
+                  y: { ...chartOpts.scales.y, position: 'left', unit: 'STRIKE / RESERVE' },
+                  y1: { ticks: { color: '#8b929b', callback: compactUsdTick }, grid: { drawOnChartArea: false }, position: 'right', unit: 'USDG' },
+                },
+              }}
+            />
+            </ChartPanel>
           )}
-          <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
-            <h3 className="text-sm font-bold text-white mb-4">Wrap ratio & liquid-claim coverage</h3>
-            <div className="relative h-52 sm:h-64 md:h-72 w-full">
-              {histLabels.length && hasWrapSeries ? (
-                <Line
-                  data={{
-                    labels: histLabels,
-                    datasets: [
-                      { label: 'Wrap ratio', data: wrapHist, borderColor: MARK.green, tension: 0.3, borderWidth: 2, yAxisID: 'y' },
-                      { label: 'RESERVE mcap / STRIKE FDV %', data: covHist, borderColor: MARK.sky, tension: 0.3, borderWidth: 2, yAxisID: 'y1' },
-                    ],
-                  }}
-                  options={{
-                    ...chartOpts,
-                    scales: {
-                      ...chartOpts.scales,
-                      y: { ...chartOpts.scales.y, position: 'left', unit: 'Wrap ratio' },
-                      y1: { ticks: { color: '#94a3b8', callback: percentTick }, grid: { drawOnChartArea: false }, position: 'right', unit: '%' },
-                    },
-                  }}
-                />
-              ) : histLabels.length && strikeHist.some((v) => v > 0) ? (
-                <Line
-                  data={{
-                    labels: histLabels,
-                    datasets: [
-                      { label: '$STRIKE', data: strikeHist, borderColor: MARK.green, tension: 0.3, borderWidth: 2 },
-                      ...(reserveHist.some((v) => v > 0) ? [{ label: '$RESERVE', data: reserveHist, borderColor: MARK.lime, tension: 0.3, borderWidth: 2 }] : []),
-                    ],
-                  }}
-                  options={baseChartOptions(histLabels, interval, { yUnit: 'USD', yTick: compactUsdTick })}
-                />
-              ) : (
-                <div className="h-full flex items-center justify-center text-sm text-slate-500">Hourly snapshots will fill wrap ratio and coverage.</div>
-              )}
-            </div>
-          </div>
+          <ChartPanel
+            title="Wrap ratio & liquid-claim coverage"
+            empty={(histLabels.length && hasWrapSeries) || (histLabels.length && strikeHist.some((v) => v > 0)) ? null : 'Hourly snapshots will fill wrap ratio and coverage.'}
+          >
+          {histLabels.length && hasWrapSeries ? (
+            <Line
+              data={{
+                labels: histLabels,
+                datasets: [
+                  { label: 'Wrap ratio', data: wrapHist, borderColor: MARK.green, tension: 0.3, borderWidth: 2, yAxisID: 'y' },
+                  { label: 'RESERVE mcap / STRIKE FDV %', data: covHist, borderColor: MARK.sky, tension: 0.3, borderWidth: 2, yAxisID: 'y1' },
+                ],
+              }}
+              options={{
+                ...chartOpts,
+                scales: {
+                  ...chartOpts.scales,
+                  y: { ...chartOpts.scales.y, position: 'left', unit: 'Wrap ratio' },
+                  y1: { ticks: { color: '#8b929b', callback: percentTick }, grid: { drawOnChartArea: false }, position: 'right', unit: '%' },
+                },
+              }}
+            />
+          ) : histLabels.length && strikeHist.some((v) => v > 0) ? (
+            <Line
+              data={{
+                labels: histLabels,
+                datasets: [
+                  { label: '$STRIKE', data: strikeHist, borderColor: MARK.green, tension: 0.3, borderWidth: 2 },
+                  ...(reserveHist.some((v) => v > 0) ? [{ label: '$RESERVE', data: reserveHist, borderColor: MARK.lime, tension: 0.3, borderWidth: 2 }] : []),
+                ],
+              }}
+              options={baseChartOptions(histLabels, interval, { yUnit: 'USD', yTick: compactUsdTick })}
+            />
+          ) : null}
+          </ChartPanel>
         </div>
       </ShareSection>
 
       <ShareSection id="revenue" className="scroll-mt-32">
-        <div className="space-y-6">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <h2 className="text-xl font-bold text-white">Fees & liquidity</h2>
-          </div>
-          <p className="text-xs text-slate-400">
-            Vault growth is wrap, unwrap, origination, interest, liquidations, redemptions, and arb.
-            ETH fee revenue is what the indexer reports as going into the vault. Pool volume is the arb surface, not wrap notional.
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Panel label={`ETH fees (${revPeriod})`} value={fmt(revCols[0]?.total || 0)} color={MARK.green} />
-            <Panel label="Tracked LP" value={fmt(lockedLp?.totalLpUsd)} color={MARK.sky} />
-            <Panel label="24h wraps / unwraps" value={`${num(market.wraps24h)} / ${num(market.unwraps24h)}`} color={MARK.amber} />
-          </div>
+        <div className="space-y-4">
+          <Card
+            eyebrow="Fees & liquidity"
+            sub="Vault growth is wrap, unwrap, origination, interest, liquidations, redemptions, and arb. ETH fee revenue is what the indexer reports as going into the vault. Pool volume is the arb surface, not wrap notional."
+          >
+            <KpiStrip>
+              <Panel label={`ETH fees (${revPeriod})`} value={fmt(revCols[0]?.total || 0)} tone="accent" />
+              <Panel label="Tracked LP" value={fmt(lockedLp?.totalLpUsd)} />
+              <Panel label="24h wraps / unwraps" value={`${num(market.wraps24h)} / ${num(market.unwraps24h)}`} />
+            </KpiStrip>
+          </Card>
           <ChartStack
             label="In fees"
             views={[
@@ -768,7 +715,7 @@ function VaultView({
                       datasets: [{
                         label: 'Holder revenue',
                         data: revCols[1]?.data || [],
-                        backgroundColor: '#f7931a',
+                        backgroundColor: STREAM_COLORS.holdersRev,
                         borderRadius: 3,
                       }],
                     }}
@@ -778,152 +725,150 @@ function VaultView({
               },
             ]}
           />
-          <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 overflow-x-auto">
-            <h3 className="text-sm font-bold text-white mb-3">Fee schedule</h3>
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-slate-400 border-b border-[#1e2228]">
-                  <th className="pb-2 text-left">Fee</th>
-                  <th className="pb-2">Rate</th>
-                  <th className="pb-2 text-left">Destination</th>
-                </tr>
-              </thead>
-              <tbody>
-                {OAKMONT_FEES.map((row) => (
-                  <tr key={row.fee} className="border-b border-[#1e2228]/40">
-                    <td className="py-2 text-white font-bold">{row.fee}</td>
-                    <td className="py-2 text-[#e879f9] font-bold whitespace-nowrap">{row.rate}</td>
-                    <td className="py-2 text-slate-400">{row.dest}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </ShareSection>
-
-      <ShareSection id="liquidity" title="LP" className="scroll-mt-32">
-        <div className="space-y-6">
-          <h2 className="text-xl font-bold text-white">LP</h2>
-          {lockedLp?.pools?.length > 0 ? (
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4">
-              <h3 className="text-sm font-bold text-white mb-2">Pools · {fmt(lockedLp.totalLpUsd)}</h3>
-              <table className="w-full text-xs">
+          <Card flush eyebrow="Fee schedule">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[420px] text-left">
                 <thead>
-                  <tr className="text-slate-400 border-b border-[#1e2228]">
-                    <th className="pb-2 text-left">Pair</th>
-                    <th className="pb-2">DEX</th>
-                    <th className="pb-2 text-right">Liquidity</th>
-                    <th className="pb-2 text-right">24h vol</th>
+                  <tr className="eyebrow border-b border-line text-faint">
+                    <th className="px-5 py-3 font-normal">Fee</th>
+                    <th className="px-3 py-3 font-normal">Rate</th>
+                    <th className="px-5 py-3 font-normal">Destination</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {lockedLp.pools.map((p, i) => (
-                    <tr key={i} className="border-b border-[#1e2228]/40">
-                      <td className="py-2 text-white font-bold">{p.pairName}</td>
-                      <td className="py-2 text-slate-400">{p.dex}</td>
-                      <td className="py-2 text-right">{fmt(p.liquidityUsd)}</td>
-                      <td className="py-2 text-right">{fmt(p.volume24h)}</td>
+                  {OAKMONT_FEES.map((row) => (
+                    <tr key={row.fee} className="border-b border-line-soft">
+                      <td className="px-5 py-3 text-[13px] text-ink">{row.fee}</td>
+                      <td className="num whitespace-nowrap px-3 py-3 text-[13px] text-ink">{row.rate}</td>
+                      <td className="px-5 py-3 text-[12px] text-muted">{row.dest}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          ) : (
-            <p className="text-sm text-slate-500">No tracked pools for this vault yet.</p>
-          )}
+          </Card>
         </div>
+      </ShareSection>
+
+      <ShareSection id="liquidity" title="LP" className="scroll-mt-32">
+        {lockedLp?.pools?.length > 0 ? (
+          <Card flush eyebrow={`Pools · ${fmt(lockedLp.totalLpUsd)}`}>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[480px] text-left">
+                <thead>
+                  <tr className="eyebrow border-b border-line text-faint">
+                    <th className="px-5 py-3 font-normal">Pair</th>
+                    <th className="px-3 py-3 font-normal">DEX</th>
+                    <th className="px-3 py-3 text-right font-normal">Liquidity</th>
+                    <th className="px-5 py-3 text-right font-normal">24h vol</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lockedLp.pools.map((p, i) => (
+                    <tr key={i} className="border-b border-line-soft">
+                      <td className="px-5 py-3 text-[13px] text-ink">{p.pairName}</td>
+                      <td className="px-3 py-3 font-mono text-[11px] text-muted">{p.dex}</td>
+                      <td className="num px-3 py-3 text-right text-[13px] text-ink">{fmt(p.liquidityUsd)}</td>
+                      <td className="num px-5 py-3 text-right text-[13px] text-ink">{fmt(p.volume24h)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        ) : (
+          <Card eyebrow="Pools">
+            <p className="text-[13px] text-muted">No tracked pools for this vault yet.</p>
+          </Card>
+        )}
       </ShareSection>
 
       <ShareSection id="burn" title="Supply" className="scroll-mt-32">
-        <div className="space-y-6">
-          <h2 className="text-xl font-bold text-white">Supply</h2>
-          <p className="text-xs text-slate-400">
-            $STRIKE has a fixed supply and no mint after deploy. Wrapping does not burn it — tokens sit in the wrapper as backing.
-            $RESERVE supply is flexible. Burns on wrap, unwrap, and the full 5% redemption fee raise each remaining $RESERVE’s claim on trapped $STRIKE, so the exchange rate is structurally biased up.
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Panel label="$STRIKE circulating (fixed cap 100M)" value={num(circulating, 0)} color={MARK.sky} />
-            <Panel label="$STRIKE independently burned / missing" value={`${num(burnTokens)} STRIKE${burnPct != null ? ` · ${burnPct.toFixed(2)}% of supply` : ''}`} color="#fb923c" />
-            <Panel label="$RESERVE outstanding" value={num(market.reserveSupply, 0)} color={MARK.lime} />
+        <Card
+          eyebrow="Supply"
+          sub="$STRIKE has a fixed supply and no mint after deploy. Wrapping does not burn it — tokens sit in the wrapper as backing. $RESERVE supply is flexible. Burns on wrap, unwrap, and the full 5% redemption fee raise each remaining $RESERVE’s claim on trapped $STRIKE, so the exchange rate is structurally biased up."
+        >
+          <KpiStrip>
+            <Panel label="$STRIKE circulating (fixed cap 100M)" value={num(circulating, 0)} />
+            <Stat
+              label="$STRIKE independently burned / missing"
+              value={<span className="text-mark-violet">{`${num(burnTokens)} STRIKE`}</span>}
+              note={burnPct != null ? `${burnPct.toFixed(2)}% of supply` : null}
+              ch={10}
+            />
+            <Panel label="$RESERVE outstanding" value={num(market.reserveSupply, 0)} />
             <Panel label="$RESERVE mcap" value={fmt(market.reserveMcapUsd ?? market.reserveFdvUsd)} />
-          </div>
-        </div>
+          </KpiStrip>
+        </Card>
       </ShareSection>
 
       <ShareSection id="activation" title="Wrap" className="scroll-mt-32">
-        <div className="space-y-6">
-          <h2 className="text-xl font-bold text-white">Wrap</h2>
-          <p className="text-xs text-slate-400">
-            Outstanding $RESERVE is the live wrap proxy. Locked $STRIKE is at least this high (1:1 escrow minus $RESERVE-only burns).
-            $RESERVE in a loan is staked and cannot be sold until repaid or liquidated.
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Panel label="$RESERVE outstanding" value={num(activation.activeCount || strikeLockedEst, 0)} color={MARK.green} />
-            <Panel label="$STRIKE circulating" value={num(activation.totalSupply || circulating, 0)} color={MARK.sky} />
-            <Panel label="Wrap proxy" value={`${(wrapPct * 100).toFixed(1)}%`} color={MARK.violet} />
-          </div>
-        </div>
+        <Card
+          eyebrow="Wrap"
+          sub="Outstanding $RESERVE is the live wrap proxy. Locked $STRIKE is at least this high (1:1 escrow minus $RESERVE-only burns). $RESERVE in a loan is staked and cannot be sold until repaid or liquidated."
+        >
+          <KpiStrip>
+            <Panel label="$RESERVE outstanding" value={num(activation.activeCount || strikeLockedEst, 0)} tone="accent" />
+            <Panel label="$STRIKE circulating" value={num(activation.totalSupply || circulating, 0)} />
+            <Panel label="Wrap proxy" value={`${(wrapPct * 100).toFixed(1)}%`} />
+          </KpiStrip>
+        </Card>
       </ShareSection>
 
       <ShareSection id="ownership" title="Holders" className="scroll-mt-32">
-        <div className="space-y-6">
-          <h2 className="text-xl font-bold text-white">Holders</h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <Panel label="$STRIKE holders" value={strikeHolders ? num(strikeHolders) : '—'} color={MARK.violet} />
-            <Panel label="$RESERVE holders" value={reserveHolders ? num(reserveHolders) : '—'} color={MARK.lime} />
-            <Panel label="$STRIKE market cap" value={fmt(marketCap)} />
-            <Panel label="$STRIKE FDV" value={fmt(fdv)} />
-            <Panel label="$RESERVE mcap" value={fmt(market.reserveMcapUsd ?? market.reserveFdvUsd)} />
-            <Panel label="Max LTV vs $RESERVE" value="75%" />
-            <Panel label="Floor path" value="~7.5%" color={MARK.amber} />
-          </div>
+        <div className="space-y-4">
+          <Card eyebrow="Holders">
+            <KpiStrip>
+              <Panel label="$STRIKE holders" value={strikeHolders ? num(strikeHolders) : '—'} />
+              <Panel label="$RESERVE holders" value={reserveHolders ? num(reserveHolders) : '—'} />
+              <Panel label="$STRIKE market cap" value={fmt(marketCap)} />
+              <Panel label="$STRIKE FDV" value={fmt(fdv)} />
+              <Panel label="$RESERVE mcap" value={fmt(market.reserveMcapUsd ?? market.reserveFdvUsd)} />
+              <Panel label="Max LTV vs $RESERVE" value="75%" />
+              <Panel label="Floor path" value="~7.5%" />
+            </KpiStrip>
+          </Card>
           {rateHist.length > 1 && (
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
-              <h3 className="text-sm font-bold text-white mb-4">Claim rate & vault NAV</h3>
-              <div className="relative h-52 sm:h-64 md:h-72 w-full">
-                <Line
-                  data={{
-                    labels: rateHist.map((r) => r.date || r.ts),
-                    datasets: [
-                      { label: 'STRIKE / RESERVE', data: rateHist.map((r) => r.exchangeRate), borderColor: MARK.lime, tension: 0.2, borderWidth: 2 },
-                      ...(navHist.length > 1 ? [{ label: 'Vault NAV (USDG)', data: (vault?.history || []).map((r) => r.nav), borderColor: MARK.sky, tension: 0.2, borderWidth: 2, yAxisID: 'y1' }] : []),
-                    ],
-                  }}
-                  options={{
-                    ...chartOpts,
-                    scales: {
-                      ...chartOpts.scales,
-                      y: { ...chartOpts.scales.y, position: 'left', unit: 'STRIKE / RESERVE' },
-                      y1: { ticks: { color: '#94a3b8', callback: compactUsdTick }, grid: { drawOnChartArea: false }, position: 'right', unit: 'USDG' },
-                    },
-                  }}
-                />
-              </div>
-            </div>
+            <ChartPanel title="Claim rate & vault NAV">
+              <Line
+                data={{
+                  labels: rateHist.map((r) => r.date || r.ts),
+                  datasets: [
+                    { label: 'STRIKE / RESERVE', data: rateHist.map((r) => r.exchangeRate), borderColor: MARK.lime, tension: 0.2, borderWidth: 2 },
+                    ...(navHist.length > 1 ? [{ label: 'Vault NAV (USDG)', data: (vault?.history || []).map((r) => r.nav), borderColor: MARK.sky, tension: 0.2, borderWidth: 2, yAxisID: 'y1' }] : []),
+                  ],
+                }}
+                options={{
+                  ...chartOpts,
+                  scales: {
+                    ...chartOpts.scales,
+                    y: { ...chartOpts.scales.y, position: 'left', unit: 'STRIKE / RESERVE' },
+                    y1: { ticks: { color: '#8b929b', callback: compactUsdTick }, grid: { drawOnChartArea: false }, position: 'right', unit: 'USDG' },
+                  },
+                }}
+              />
+            </ChartPanel>
           )}
         </div>
       </ShareSection>
 
-      <div data-share-omit className="bg-[#0e1013] rounded-xl p-5 border border-[#1e2228] mt-8">
-        <h3 className="text-base font-bold text-white mb-3">Methodology &amp; Disclaimer</h3>
-        <p className="text-xs text-slate-300 leading-relaxed">
+      <MethodologyCard>
+        <p>
           Mechanics follow the Oakmont docs. Live wrap math is on-chain ERC-4626 ($RESERVE.convertToAssets / totalAssets).
           The public indexer (api.oakmontvault.xyz) is currently undeployed, so basket NAV and ETH-fee history are unavailable until it returns.
           Reserve holder APY is annualized (STRIKE-per-RESERVE − 1) from wrap inception, same formula as the dapp.
           Fee CoC is ETH fee revenue when the indexer publishes it. Wrapped-$STRIKE NAV is escrow value, not a full index mark-to-market.
           Claim APY and fee CoC are not additive.
         </p>
-        <p className="text-xs text-slate-500 mt-3">
+        <p>
           Docs:{' '}
-          <a className="text-slate-300 underline" href={OAKMONT_SITE} target="_blank" rel="noreferrer">{OAKMONT_SITE}</a>
+          <a className="text-ink underline hover:text-accent" href={OAKMONT_SITE} target="_blank" rel="noreferrer">{OAKMONT_SITE}</a>
           {' · '}
-          <a className="text-slate-300 underline" href={OAKMONT_DOCS} target="_blank" rel="noreferrer">docs</a>
+          <a className="text-ink underline hover:text-accent" href={OAKMONT_DOCS} target="_blank" rel="noreferrer">docs</a>
           {' · '}
-          <a className="text-slate-300 underline" href={OAKMONT_DAPP} target="_blank" rel="noreferrer">dapp</a>
+          <a className="text-ink underline hover:text-accent" href={OAKMONT_DAPP} target="_blank" rel="noreferrer">dapp</a>
         </p>
-        <DisclaimerCopy />
-      </div>
+      </MethodologyCard>
     </div>
   );
 }

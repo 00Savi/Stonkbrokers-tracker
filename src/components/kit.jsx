@@ -68,9 +68,9 @@ export function SkeletonCard({ rows = 3 }) {
  * child (a table) sets `flush` rather than zeroing the card's own padding,
  * which would drag the title flush against the border too.
  */
-export const Card = React.forwardRef(function Card({ eyebrow, sub, corner, children, flush = false, className = '' }, ref) {
+export const Card = React.forwardRef(function Card({ id, eyebrow, sub, corner, children, flush = false, className = '' }, ref) {
   return (
-    <section ref={ref} className={`card overflow-hidden ${className}`}>
+    <section id={id} ref={ref} className={`card overflow-hidden ${className}`}>
       {(eyebrow || corner) && (
         <header className="flex items-start justify-between gap-3 px-4 pb-4 pt-4 sm:px-5 sm:pt-5">
           <div>
@@ -435,5 +435,45 @@ export function YieldPeriodToggle({ value, onChange, className = '' }) {
         </button>
       ))}
     </div>
+  );
+}
+
+/**
+ * Tiny SVG spark for board rows — no Chart.js overhead. Values are stretched
+ * to the path; zeros and holes leave a flat baseline rather than a fake spike.
+ */
+export function MiniSpark({ data, color = 'var(--color-mark-green)', className = '', width = 72, height = 22 }) {
+  const vals = (data || []).map((v) => Number(v)).filter((n) => Number.isFinite(n));
+  if (vals.length < 2) {
+    return <span className={`inline-block ${className}`} style={{ width, height }} aria-hidden="true" />;
+  }
+  const min = Math.min(...vals);
+  const max = Math.max(...vals);
+  const span = max - min || 1;
+  const step = (width - 2) / (vals.length - 1);
+  const pts = vals
+    .map((v, i) => {
+      const x = 1 + i * step;
+      const y = height - 2 - ((v - min) / span) * (height - 4);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(' ');
+  return (
+    <svg
+      className={`shrink-0 overflow-visible ${className}`}
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      aria-hidden="true"
+    >
+      <polyline
+        fill="none"
+        stroke={color}
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        points={pts}
+      />
+    </svg>
   );
 }

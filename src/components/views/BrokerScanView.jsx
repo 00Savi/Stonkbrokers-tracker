@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { NfaNote } from '../Disclaimer';
-import { compactNum, compactUsd } from '../kit';
+import { Card, Figure, KpiStrip, SkeletonCard, Stat, Tag, compactNum, compactUsd } from '../kit';
 import { CopyControl } from '../CopyControl';
 import { copyElement } from '../../lib/share';
 import { explorerAddressUrl } from '../../lib/tba';
@@ -14,9 +14,9 @@ function shortAddr(addr) {
 }
 
 function internStatus(row) {
-  if (!row.minted) return { label: 'Not minted', tone: 'text-slate-400 border-[#1e2228]' };
-  if (row.dormant) return { label: 'Minted · dormant in this TBA', tone: 'text-amber-300 border-amber-700/40' };
-  return { label: 'Minted · released', tone: 'text-emerald-300 border-emerald-700/40' };
+  if (!row.minted) return { label: 'Not minted', tone: 'plain' };
+  if (row.dormant) return { label: 'Minted · dormant in this TBA', tone: 'warn' };
+  return { label: 'Minted · released', tone: 'good' };
 }
 
 export default function BrokerScanView({ data }) {
@@ -66,106 +66,127 @@ export default function BrokerScanView({ data }) {
     run(urlId);
   }, [data, urlId]);
 
-  return (
-    <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl">
-      <div className="mb-6">
-        <h2 className="text-lg md:text-xl font-bold text-white">Broker scan</h2>
-        <p className="text-xs text-slate-400 mt-1">
-          Any StonkBroker ID. Shows the token-bound wallet and whether its two interns
-          (V1 Sigma #N and V2 Divergent #N+4444) have been minted or released.
-        </p>
-      </div>
+  const walletUsd = result ? result.wallet.reduce((sum, tok) => sum + (tok.nft ? 0 : Number(tok.usd) || 0), 0) : 0;
+  const mintedCount = result ? result.interns.filter((row) => row.minted).length : 0;
 
-      <form data-share-omit onSubmit={submit} className="flex flex-col sm:flex-row gap-3 mb-6">
-        <label className="sr-only" htmlFor="broker-id">Broker ID</label>
-        <input
-          id="broker-id"
-          type="text"
-          inputMode="numeric"
-          value={draft}
-          onChange={(e) => {
-            setDraft(e.target.value);
-            if (error) setError('');
-          }}
-          placeholder="Broker ID — 1 to 4444"
-          autoComplete="off"
-          className="flex-1 rounded-xl border border-[#1e2228] bg-[#08090b] px-4 py-3 text-[14px] text-white placeholder:text-slate-600 focus:border-blue-500 focus:outline-none"
-        />
-        <button
-          type="submit"
-          disabled={busy}
-          className="rounded-xl bg-blue-500 px-5 py-3 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60 sm:shrink-0"
-        >
-          {busy ? 'Scanning…' : 'Scan broker'}
-        </button>
-      </form>
-      {error ? (
-        <p className="mb-4 font-mono text-[12px] text-rose-400">{error}</p>
-      ) : (
-        <p className="mb-4 font-mono text-[11px] text-slate-600">
-          An intern id 4445–8888 also works — it resolves to the parent broker.
-        </p>
-      )}
+  return (
+    <div className="space-y-6 pt-4">
+      <Card
+        eyebrow="Broker scan"
+        sub="Any StonkBroker ID. Shows the token-bound wallet and whether its two interns (V1 Sigma #N and V2 Divergent #N+4444) have been minted or released."
+      >
+        <form data-share-omit onSubmit={submit} className="flex flex-col gap-3 sm:flex-row">
+          <label className="sr-only" htmlFor="broker-id">Broker ID</label>
+          <input
+            id="broker-id"
+            type="text"
+            inputMode="numeric"
+            value={draft}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              if (error) setError('');
+            }}
+            placeholder="Broker ID — 1 to 4444"
+            autoComplete="off"
+            className="flex-1 rounded-xl border border-line bg-bg px-4 py-3 text-[14px] text-ink placeholder:text-faint focus:border-accent focus:outline-none"
+          />
+          <button
+            type="submit"
+            disabled={busy}
+            className="rounded-xl bg-accent px-5 py-3 text-[13px] font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-60 sm:shrink-0"
+          >
+            {busy ? 'Scanning…' : 'Scan broker'}
+          </button>
+        </form>
+        {error ? (
+          <p className="mt-3 font-mono text-[12px] text-danger">{error}</p>
+        ) : (
+          <p className="mt-3 font-mono text-[11px] text-faint">
+            An intern id 4445–8888 also works — it resolves to the parent broker.
+          </p>
+        )}
+      </Card>
+
+      {busy && !result && <SkeletonCard rows={4} />}
 
       {result && (
-        <div ref={resultRef} className="relative space-y-5">
-          <div className="flex justify-end" data-share-omit>
-            <CopyControl
-              idleLabel="Copy"
-              title="Copy this broker scan for X"
-              className="bg-[#08090b]"
-              onCopy={() => copyElement(resultRef.current, { filename: `savi-broker-${result.brokerId}.png`, maxW: 1080 })}
-            />
-          </div>
-
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-            <div className="h-28 w-28 shrink-0 overflow-hidden rounded-2xl border border-[#1e2228] bg-[#08090b]">
-              {result.imageUrl ? (
-                <img src={result.imageUrl} alt={`Broker #${result.brokerId}`} className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full items-center justify-center font-mono text-xs text-slate-600">#{result.brokerId}</div>
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[10px] uppercase tracking-wider text-slate-400">StonkBroker</p>
-              <p className="text-3xl font-extrabold text-white">#{result.brokerId}</p>
-              <p className={`mt-1 text-sm font-semibold ${result.activation.active ? 'text-emerald-300' : 'text-slate-400'}`}>
-                {result.activation.active
-                  ? `Activated${result.activation.tier ? ` · ${result.activation.tier}` : ''}`
-                  : 'Not activated'}
-              </p>
-              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <AddrRow label="Owner" addr={result.owner} />
-                <AddrRow label="TBA wallet" addr={result.tba} />
+        <div ref={resultRef} className="relative space-y-6">
+          <Card
+            eyebrow="StonkBroker"
+            corner={(
+              <div data-share-omit>
+                <CopyControl
+                  idleLabel="Copy"
+                  title="Copy this broker scan for X"
+                  className="bg-panel"
+                  onCopy={() => copyElement(resultRef.current, { filename: `savi-broker-${result.brokerId}.png`, maxW: 1080 })}
+                />
+              </div>
+            )}
+          >
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+              <div className="h-28 w-28 shrink-0 overflow-hidden rounded-2xl border border-line bg-bg">
+                {result.imageUrl ? (
+                  <img src={result.imageUrl} alt={`Broker #${result.brokerId}`} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full items-center justify-center font-mono text-xs text-faint">#{result.brokerId}</div>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <Figure
+                  value={`#${result.brokerId}`}
+                  tone={result.activation.active ? 'accent' : 'ink'}
+                  after={
+                    result.activation.active
+                      ? `Activated${result.activation.tier ? ` · ${result.activation.tier}` : ''}`
+                      : 'Not activated'
+                  }
+                />
+                <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <AddrRow label="Owner" addr={result.owner} />
+                  <AddrRow label="TBA wallet" addr={result.tba} />
+                </div>
               </div>
             </div>
-          </div>
+            <KpiStrip className="mt-5 border-t border-line pt-4">
+              <Stat
+                label="Status"
+                value={result.activation.active ? 'Activated' : 'Inactive'}
+                tone={result.activation.active ? 'accent' : 'muted'}
+                note={result.activation.tier || null}
+              />
+              <Stat label="Interns minted" value={`${mintedCount} / ${result.interns.length}`} />
+              <Stat label="Wallet value" value={compactUsd(walletUsd)} note="priced tokens" />
+              <Stat label="Assets" value={compactNum(result.wallet.length)} />
+            </KpiStrip>
+          </Card>
 
-          <div>
-            <h3 className="text-sm font-bold text-white mb-3">Interns</h3>
+          <Card eyebrow="Interns" sub="Minted state is ownerOf on the intern collection.">
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               {result.interns.map((row) => {
                 const status = internStatus(row);
                 return (
-                  <div key={row.id} className={`rounded-xl border bg-[#08090b] p-4 ${status.tone}`}>
+                  <div key={row.id} className="rounded-xl border border-line bg-panel-2 p-4">
                     <div className="flex gap-3">
-                      <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-[#1e2228] bg-[#0e1013]">
+                      <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-line bg-bg">
                         {row.imageUrl ? (
                           <img src={row.imageUrl} alt={`${row.label} #${row.id}`} className="h-full w-full object-cover" />
                         ) : (
-                          <div className="flex h-full items-center justify-center font-mono text-[10px] text-slate-600">#{row.id}</div>
+                          <div className="flex h-full items-center justify-center font-mono text-[10px] text-faint">#{row.id}</div>
                         )}
                       </div>
                       <div className="min-w-0">
-                        <p className="text-[10px] uppercase tracking-wider text-slate-400">{row.label}</p>
-                        <p className="text-lg font-extrabold text-white">Intern #{row.id}</p>
-                        <p className={`mt-1 text-xs font-semibold ${status.tone.split(' ')[0]}`}>{status.label}</p>
+                        <p className="eyebrow text-faint">{row.label}</p>
+                        <p className="num mt-1 text-[16px] text-ink">Intern #{row.id}</p>
+                        <div className="mt-1.5">
+                          <Tag tone={status.tone}>{status.label}</Tag>
+                        </div>
                         {row.owner && (
                           <a
                             href={explorerAddressUrl(row.owner)}
                             target="_blank"
                             rel="noreferrer"
-                            className="mt-1 inline-block font-mono text-[11px] text-slate-400 hover:text-white"
+                            className="mt-1.5 inline-block font-mono text-[11px] text-muted hover:text-ink"
                           >
                             {shortAddr(row.owner)}
                           </a>
@@ -176,35 +197,34 @@ export default function BrokerScanView({ data }) {
                 );
               })}
             </div>
-          </div>
+          </Card>
 
-          <div>
-            <h3 className="text-sm font-bold text-white mb-3">Wallet contents</h3>
+          <Card flush eyebrow="Wallet contents" sub="Tracked tokens and collections held by the TBA.">
             {result.wallet.length === 0 ? (
-              <p className="rounded-xl border border-[#1e2228] bg-[#08090b] px-4 py-6 text-sm text-slate-500">
+              <p className="px-4 pb-5 text-[13px] text-muted sm:px-5">
                 Nothing detected in this TBA among tracked tokens and collections.
               </p>
             ) : (
-              <div className="overflow-x-auto rounded-xl border border-[#1e2228]">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-[#08090b] text-[10px] uppercase tracking-wider text-slate-500">
-                    <tr>
-                      <th className="px-4 py-2 font-medium">Asset</th>
-                      <th className="px-4 py-2 font-medium text-right">Amount</th>
-                      <th className="px-4 py-2 font-medium text-right">USD</th>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[420px] text-left">
+                  <thead>
+                    <tr className="eyebrow border-b border-line text-faint">
+                      <th className="px-5 py-3 font-normal">Asset</th>
+                      <th className="px-3 py-3 text-right font-normal">Amount</th>
+                      <th className="px-5 py-3 text-right font-normal">USD</th>
                     </tr>
                   </thead>
                   <tbody>
                     {result.wallet.map((tok) => (
-                      <tr key={tok.contract} className="border-t border-[#1e2228]">
-                        <td className="px-4 py-2.5">
-                          <div className="font-semibold text-white">{tok.symbol}</div>
-                          <div className="text-[11px] text-slate-500">{tok.nft ? 'NFT' : tok.name}</div>
+                      <tr key={tok.contract} className="border-b border-line-soft">
+                        <td className="px-5 py-3">
+                          <div className="text-[13px] text-ink">{tok.symbol}</div>
+                          <div className="font-mono text-[11px] text-faint">{tok.nft ? 'NFT' : tok.name}</div>
                         </td>
-                        <td className="px-4 py-2.5 text-right font-mono text-slate-200">
+                        <td className="num px-3 py-3 text-right text-[13px] text-ink">
                           {tok.nft ? compactNum(tok.amount, 0) : compactNum(tok.amount, tok.amount >= 1 ? 2 : 4)}
                         </td>
-                        <td className="px-4 py-2.5 text-right font-mono text-slate-200">
+                        <td className="num px-5 py-3 text-right text-[13px] text-ink">
                           {tok.nft ? '—' : compactUsd(tok.usd)}
                         </td>
                       </tr>
@@ -213,24 +233,24 @@ export default function BrokerScanView({ data }) {
                 </table>
               </div>
             )}
-          </div>
+          </Card>
         </div>
       )}
 
-      <NfaNote className="mt-8" extra="Intern mint state is ownerOf on the intern collection: unminted, still sitting in the parent TBA (dormant), or released to another wallet." />
+      <NfaNote extra="Intern mint state is ownerOf on the intern collection: unminted, still sitting in the parent TBA (dormant), or released to another wallet." />
     </div>
   );
 }
 
 function AddrRow({ label, addr }) {
   return (
-    <div className="rounded-lg border border-[#1e2228] bg-[#08090b] px-3 py-2">
-      <p className="text-[10px] uppercase tracking-wider text-slate-500">{label}</p>
+    <div className="rounded-lg border border-line bg-panel-2 px-3 py-2">
+      <p className="eyebrow text-faint">{label}</p>
       <a
         href={explorerAddressUrl(addr)}
         target="_blank"
         rel="noreferrer"
-        className="font-mono text-[12px] text-slate-200 hover:text-white"
+        className="num text-[12px] text-ink hover:text-accent"
       >
         {shortAddr(addr)}
       </a>

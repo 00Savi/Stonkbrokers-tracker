@@ -37,6 +37,7 @@ export const TAB_BY_SLUG = {
   night: 'night',
   liquidity: 'liquidity',
   pairs: 'pairs',
+  books: 'books',
   burn: 'burn',
   activation: 'activation',
   ownership: 'ownership',
@@ -76,6 +77,12 @@ export function tabsForProject(meta) {
     const next = tabs.map((t) => (t.slug === 'liquidity' ? { ...t, label: 'Smart LPs' } : t));
     const at = next.findIndex((t) => t.slug === 'liquidity');
     next.splice(at < 0 ? next.length : at, 0, { slug: 'pairs', label: 'Pair Tokens' });
+    return next;
+  }
+  if (meta?.key === 'mancer') {
+    const next = [...tabs];
+    const at = next.findIndex((t) => t.slug === 'revenue');
+    next.splice(at < 0 ? next.length : at + 1, 0, { slug: 'books', label: 'Books' });
     return next;
   }
   if (meta?.key === 'tickeryard') {

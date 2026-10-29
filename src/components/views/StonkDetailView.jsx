@@ -473,8 +473,21 @@ export default function StonkDetailView({ data, activeTab }) {
             <StreamStat
               color={REV_STREAMS[3].color}
               label="Partner share"
-              value={formatCurrency(REV_STREAMS[3].total)}
-              note="Nightshades 13.33% · Mancer 25%"
+              value={formatCurrency(
+                (Number(REV_STREAMS[3].total) || 0)
+                + (project?.booksShare?.estimated
+                  ? (Number(project.booksShare.protocolEstimatedUsd) || 0)
+                  : 0),
+              )}
+              note={(() => {
+                const share = project?.booksShare;
+                const booksBit = share?.estimated
+                  ? `Books close est. ${formatCurrency(share.protocolEstimatedUsd || 0)}`
+                  : (Number(share?.protocolAccruedUsd) > 0
+                    ? `Books close ${formatCurrency(share.protocolAccruedUsd)}`
+                    : 'Books close 50% of 2%');
+                return `Nightshades 13.33% · Mancer 25% · ${booksBit}`;
+              })()}
             />
             <StreamStat
               color={smartLpCol.color}
@@ -940,7 +953,7 @@ export default function StonkDetailView({ data, activeTab }) {
 
       <MethodologyCard>
           <p><strong className="text-ink">Yield &amp; ROI:</strong> Live cash-on-cash is a trailing sample of the T4 Partner oracle wallet, scaled by total network weight / 333, annualized, then divided by (NFT floor USD + activation tokens at DexScreener spot). From 2026-08-20 that oracle is live. Earlier ROI days estimate the same CoC from Clock In v1, v2, and Overtime pot inflows ÷ reconstructed active weight, with cost basis frozen at the first oracle snapshot. Mid-August is a real FOMO / revenue spike (NFT trades printed around 12 ETH); the % uses the later ~4 ETH floor so it tracks that yield spike rather than repricing entry cost day by day. A one-day collapse between two hot UTC sessions is treated as a bucket hole, not a crash. Clock In 3.0 (0xf412…dbc58, 2026-09-21) is the live pot; v2 DirectedClockInBooster is retired.</p>
-          <p><strong className="text-ink">Protocol revenue (StonkBooster mix):</strong> Booster reward is the share of AMM and OpenSea fees routed to seats. It is the T4 oracle sample scaled by total seat weight / 333, and it is inside the headline. Clock In locker fees (v1 retired, v2 retired, v3 live, Overtime retired), launchpad tax, Partner Revenue Share (Nightshades 13.33% civ-pad + Mancer 25% dex), and Smart LP skim are counted at the source. Clock In is Safety Deposit lock/collect fees (90% community / 10% protocol), not a raffle. Nightshades Night vault WETH is The Night inventory and is never counted here. Bonding swap volume is notional and is not revenue.</p>
+          <p><strong className="text-ink">Protocol revenue (StonkBooster mix):</strong> Booster reward is the share of AMM and OpenSea fees routed to seats. It is the T4 oracle sample scaled by total seat weight / 333, and it is inside the headline. Clock In locker fees (v1 retired, v2 retired, v3 live, Overtime retired), launchpad tax, Partner Revenue Share (Nightshades 13.33% civ-pad + Mancer 25% dex + Books 50% of the 2% close fee), and Smart LP skim are counted at the source. Books close fees only enter the Partner share bar once accrued at settlement; open-book estimates are noted separately until then. Clock In is Safety Deposit lock/collect fees (90% community / 10% protocol), not a raffle. Nightshades Night vault WETH is The Night inventory and is never counted here. Bonding swap volume is notional and is not revenue.</p>
           <p><strong className="text-ink">Payback:</strong> Entry cost ÷ annualized trailing yield. Charts reprice cost at the last sync.</p>
           <p><strong className="text-ink">Ownership:</strong> Circulating NFTs are collection size minus AMM vault inventory. Holder breadth is unique NFT wallets (vault and burn addresses excluded) divided by that circulating number. Activated-wallet count is unique current owners of NFTs that still have an open activation — a sale clears it. Chain onboard is unique EOAs whose first cluster buy or mint of this project was one of their first 10 txs. Value in the Anvil is the priced contents of those vault wallets, not the NFT count and not Smart LP TVL. One close is kept per UTC day, the first successful hourly read of that day.</p>
           <p><strong className="text-ink">Burn:</strong> Token-wide $STONKBROKER destroyed (supply deflation + dead + tokens locked in the broker activation manager). The cumulative chart is that token total. Pre-snapshot days reconstruct burns that lower totalSupply, plus dead, scaled to the first trusted supply read. On All, flywheel days above 10M are clipped so later burns stay readable. Intern activations use a different manager and burn into the same token; that intern total is subtracted out of the StonkBrokers tile. The daily chart starts on the first intern activation. Once a snapshot stamps internBurnTokens, that day's intern bar is the change in the stamp and StonkBrokers is the rest of the day's token burn. Earlier days estimate the intern share from activations. A day with broker activations keeps at least the floor-tier burn, so the broker bar cannot print as zero. Past about 40 days the two series stack.</p>

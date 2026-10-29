@@ -445,7 +445,7 @@ function drawBars(ctx, x, y, w, h, bars) {
   values.forEach((v, i) => {
     const bh = ((bottom - top) * v) / max;
     const bx = left + i * (bw + gap);
-    ctx.fillStyle = colors[i] || '#f7931a';
+    ctx.fillStyle = colors[i] || '#f5b700';
     roundRect(ctx, bx, bottom - Math.max(1.5, bh), bw, Math.max(1.5, bh), Math.min(3, bw / 2));
     ctx.fill();
   });
@@ -625,7 +625,7 @@ function drawPortfolioCard({
   const barY = heroY + 104;
   const barW = W - pad * 2 - 48;
   const parts = [
-    { value: Number(seatUsd) || 0, color: '#f7931a' },
+    { value: Number(seatUsd) || 0, color: '#f5b700' },
     { value: Number(tokenUsd) || 0, color: '#00a804' },
   ].filter((p) => p.value > 0);
   if (parts.length) {
@@ -644,7 +644,7 @@ function drawPortfolioCard({
   }
   ctx.font = '600 13px ui-sans-serif, system-ui, sans-serif';
   if (seats.length) {
-    ctx.fillStyle = '#f7931a';
+    ctx.fillStyle = '#f5b700';
     ctx.fillText(`Seats  ${seatsValue || '—'}`, barX, heroY + 120);
   }
   if (tokens.length) {
@@ -655,7 +655,7 @@ function drawPortfolioCard({
   }
 
   const stats = [
-    { label: 'NFTs', value: cash || '—', color: '#f7931a' },
+    { label: 'NFTs', value: cash || '—', color: '#f5b700' },
     { label: 'Tokens', value: units || '—', color: '#34d399' },
     { label: roiLabel || 'NFT P&L', value: roi || '—', color: nftPnlColor || '#00a804' },
     { label: 'Token P&L', value: tokenPnl || '—', color: tokenPnlColor || '#34d399' },
@@ -716,7 +716,7 @@ function drawPortfolioCard({
     });
   };
 
-  if (seats.length) drawBook(pad, 'SEATS', '#f7931a', seatsValue, seats);
+  if (seats.length) drawBook(pad, 'SEATS', '#f5b700', seatsValue, seats);
   if (tokens.length) drawBook(both ? pad + colW + colGap : pad, 'TOKENS', '#34d399', tokensValue, tokens);
   if (!seats.length && !tokens.length) {
     ctx.fillStyle = '#8b929b';

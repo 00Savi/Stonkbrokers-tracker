@@ -7,7 +7,7 @@ import { Line, Bar } from 'react-chartjs-2';
 import { burnSeries, burnRateSeries, burnOfSupplyPct } from '../../lib/burn';
 import { formatLabels } from '../../lib/dates';
 import { windowSnapshots, tierRoiDatasets, seriesHasInk, windowChart } from '../../lib/yieldHistory';
-import { compactUsd, compactNum, YieldPeriodToggle, scaleAnnualYield, yieldSuffix } from '../kit';
+import { Card, Figure, Stat, KpiStrip, Tag, SkeletonCard, YieldPeriodToggle, scaleAnnualYield, yieldSuffix, compactUsd, compactNum } from '../kit';
 import { yieldBasisText } from '../../lib/yieldSample';
 import { seatCsvRows } from '../../lib/csv';
 import { CsvButton } from '../CsvButton';
@@ -22,6 +22,7 @@ import { MethodologyCard } from '../Disclaimer';
 import { UnderwaterCard } from '../UnderwaterCard';
 import {
   EmptyChart,
+  ChartPanel,
   YieldHistorySwitch,
   BurnHistorySwitch,
   ActivityChart,
@@ -32,7 +33,8 @@ import { SliceChart } from '../SliceChart';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
-const ACCENT = '#818cf8';
+const ACCENT = '#00a804';
+const BURN = '#8b5cf6';
 const FACTION_TABS = [{ id: 'all', label: 'All' }, ...NIGHTSHADES_FACTION_META];
 
 export function useNightshadesFaction() {
@@ -52,16 +54,18 @@ export function useNightshadesFaction() {
 export function NightshadesFactionBar() {
   const { faction, setFaction } = useNightshadesFaction();
   return (
-    <div className="flex flex-wrap gap-1 border-b border-line pb-3">
+    <div className="flex flex-wrap gap-1 border-b border-line pb-3" role="tablist" aria-label="Nightshades faction">
       {FACTION_TABS.map((f) => (
         <button
           key={f.id}
           type="button"
+          role="tab"
+          aria-selected={faction === f.id}
           onClick={() => setFaction(f.id)}
-          className={`flex-1 min-w-[4.5rem] px-3 py-2 text-xs font-bold rounded-lg transition ${
+          className={`min-w-[4.5rem] flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
             faction === f.id
-              ? 'bg-[#818cf8] text-[#08090b] shadow-sm'
-              : 'text-slate-400 hover:text-white hover:bg-[#1e2228]'
+              ? 'bg-accent text-black'
+              : 'text-muted hover:bg-panel-2 hover:text-ink'
           }`}
         >
           {f.label}
@@ -74,7 +78,7 @@ export function NightshadesFactionBar() {
 export default function NightshadesDetailView({ data, activeTab }) {
   const { faction, setFaction } = useNightshadesFaction();
   const project = data?.projects?.nightshades;
-  if (!project) return <div className="text-center text-slate-400 p-12">Nightshades Data Loading...</div>;
+  if (!project) return <SkeletonCard rows={4} />;
   if (faction === 'all') return <NightshadesAllView project={project} setFaction={setFaction} />;
   return (
     <NightshadesFactionDetail
@@ -91,17 +95,16 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
   const [tierTimeframe, setTierTimeframe] = useState('allTime');
   const [volumeMultiplier, setVolumeMultiplier] = useState(1);
   const [yieldPeriod, setYieldPeriod] = useState('Y');
+  const [simulatorOpen, setSimulatorOpen] = useState(false);
 
   const slice = project.factions?.[faction];
-  if (!slice) return <div className="text-center text-slate-400 p-12">Nightshades Data Loading...</div>;
+  if (!slice) return <SkeletonCard rows={4} />;
 
   const { config = {}, market = {}, tiers = [], activation = {}, ownership = {}, dailySnapshots = [] } = slice;
   const formatCurrency = compactUsd;
   const formatNumber = compactNum;
   const floorCostUsd = (market.nftFloorEth || 0) * (market.ethPriceUsd || 0);
-  const factionLabel = FACTION_TABS.find((f) => f.id === faction)?.label || faction;
   const tokenLabel = `$${config.ticker || 'TOKEN'}`;
-  const yieldTitle = `Nightshades ${factionLabel}`;
 
   const roiSnaps = windowSnapshots(dailySnapshots, timeframe, interval);
   const histLabels = formatLabels(roiSnaps.map((s) => s.date));
@@ -138,113 +141,135 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
 
   void activeTab;
 
+  const roiRows = tiers.map((t) => {
+    const actCost = t.reqTokens * (market.tokenPriceUsd || 0);
+    const totalCost = floorCostUsd + actCost;
+    const simulatedYield = (t.trackedAnnualYieldUsd || 0) * volumeMultiplier;
+    const roi = totalCost > 0 ? (simulatedYield / totalCost) * 100 : 0;
+    const payback = t.trackedAnnualYieldUsd > 0 ? `${(totalCost / t.trackedAnnualYieldUsd).toFixed(1)}y` : '—';
+    return { t, actCost, totalCost, simulatedYield, roi, payback };
+  });
+  const bestRoiRow = roiRows.reduce((a, b) => ((b.roi || 0) > (a.roi || 0) ? b : a), roiRows[0] || { roi: 0 });
+
   return (
     <div className="space-y-6 relative">
-      <ShareSection id="roi" className="scroll-mt-32">
-        <div className="bg-[#0e1013] border border-[#1e2228] rounded-2xl p-4 md:p-6 shadow-xl">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6">
-            <h3 className="text-lg font-bold text-white flex items-center gap-2">
-              <span>🌙</span> {yieldTitle} Yield ROI Benchmarks
-            </h3>
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-lg px-4 py-2.5 text-sm shadow-inner flex items-center">
-              <span className="text-slate-400 mr-2">Floor Entry Cost:</span>
-              <span className="text-white font-bold tracking-wide">{formatCurrency(floorCostUsd)}</span>
-            </div>
-          </div>
-          <p className="text-xs text-slate-400 mb-4">
-            Est. ROI is cash-on-cash: annualized vault yield ÷ (this floor + activation tokens at spot). {yieldBasisText(slice)} The slider only scales the yield leg.
-          </p>
+      <ShareSection id="roi" className="scroll-mt-32 space-y-4">
+        <Card
+          eyebrow="ROI"
+          sub={`Cash-on-cash: annualized vault yield ÷ (this floor + activation tokens at spot). ${yieldBasisText(slice)} The slider only scales the yield leg.`}
+          corner={<span className="font-mono text-[11px] text-muted">Floor {formatCurrency(floorCostUsd)}</span>}
+        >
+          <KpiStrip>
+            <Stat label="Floor" value={formatCurrency(floorCostUsd)} />
+            <Stat
+              label="Best CoC"
+              value={bestRoiRow?.roi != null ? `${bestRoiRow.roi.toFixed(1)}%` : '—'}
+              tone="accent"
+              note={bestRoiRow?.t?.name}
+            />
+            <Stat label="Best yield" value={formatCurrency(scaleAnnualYield(bestRoiRow?.simulatedYield, yieldPeriod))} note={yieldSuffix(yieldPeriod)} />
+            <Stat label="Payback" value={bestRoiRow?.payback || '—'} note={bestRoiRow?.t?.name} />
+          </KpiStrip>
+        </Card>
 
-          <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-2">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <svg className="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
-                &quot;What-If&quot; Volume Simulator
-              </h3>
-              <span className="text-xs font-bold text-indigo-300 bg-indigo-900/30 px-2 py-1 rounded border border-indigo-800/50">{parseFloat(volumeMultiplier).toFixed(1)}x Protocol Volume</span>
+        <Card>
+          <button
+            type="button"
+            onClick={() => setSimulatorOpen(!simulatorOpen)}
+            className="flex w-full items-center justify-between gap-3 text-left"
+            aria-expanded={simulatorOpen}
+          >
+            <div>
+              <h3 className="eyebrow text-muted">Volume simulator</h3>
+              <p className="mt-1 font-mono text-[11px] text-faint">Scale trailing yield by protocol volume.</p>
             </div>
-            <p className="text-xs text-slate-400 mb-4">
-              Slide to model future yield scenarios based on ecosystem trading volume expansion or contraction.
-            </p>
-            <input type="range" min="0.1" max="10" step="0.1" value={volumeMultiplier} onChange={(e) => setVolumeMultiplier(e.target.value)} className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-400" />
-          </div>
+            <span className="font-mono text-[11px] text-faint">
+              {parseFloat(volumeMultiplier).toFixed(1)}x · {simulatorOpen ? 'Hide' : 'Show'}
+            </span>
+          </button>
+          {simulatorOpen && (
+            <div className="mt-4">
+              <input
+                type="range"
+                min="0.1"
+                max="10"
+                step="0.1"
+                value={volumeMultiplier}
+                onChange={(e) => setVolumeMultiplier(e.target.value)}
+                className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-panel-2 accent-[var(--color-accent)]"
+              />
+            </div>
+          )}
+        </Card>
 
-          <div className="mb-2 flex justify-end">
+        <Card
+          flush
+          eyebrow="Tiers"
+          corner={(
             <CsvButton
               filename={`${config.ticker || faction}-seats.csv`}
               rows={seatCsvRows(slice, { floorUsd: floorCostUsd, volume: volumeMultiplier })}
             />
-          </div>
-          <div className="overflow-x-auto -mx-1 sm:mx-0">
-            <table className="w-full text-left border-collapse">
+          )}
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-left">
               <thead>
-                <tr className="border-b border-[#1e2228] text-slate-500 text-xs uppercase tracking-wider">
-                  <th className="pb-4 font-medium pl-2">Tier</th>
-                  <th className="pb-4 font-medium">Activation Req.</th>
-                  <th className="pb-4 font-medium">Floor</th>
-                  <th className="pb-4 font-medium">Act. cost</th>
-                  <th className="pb-4 font-medium">
+                <tr className="eyebrow border-b border-line text-faint">
+                  <th className="px-5 py-3 font-normal">Tier</th>
+                  <th className="px-3 py-3 font-normal">Activation</th>
+                  <th className="px-3 py-3 font-normal">Floor</th>
+                  <th className="px-3 py-3 font-normal">Act. cost</th>
+                  <th className="px-3 py-3 font-normal">
                     <div className="flex items-center gap-2">
-                      <span>Expected Yield</span>
+                      <span>Yield</span>
                       <YieldPeriodToggle value={yieldPeriod} onChange={setYieldPeriod} />
                     </div>
                   </th>
-                  <th className="pb-4 font-medium text-right pr-4">Est. ROI (CoC)</th>
+                  <th className="px-5 py-3 text-right font-normal">CoC</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#1e2228]/50 text-sm">
-                {tiers.map((t) => {
-                  const actCost = t.reqTokens * (market.tokenPriceUsd || 0);
-                  const totalCost = floorCostUsd + actCost;
-                  const simulatedYield = (t.trackedAnnualYieldUsd || 0) * volumeMultiplier;
-                  const roi = totalCost > 0 ? (simulatedYield / totalCost) * 100 : 0;
+              <tbody>
+                {roiRows.map(({ t, actCost, simulatedYield, roi }) => {
                   const isExpanded = expandedTier === t.tier;
-
+                  const leader = bestRoiRow?.t?.tier === t.tier && roi > 0;
                   return (
                     <React.Fragment key={t.tier}>
-                      <tr onClick={() => setExpandedTier(isExpanded ? null : t.tier)} className="hover:bg-[#1e2228]/20 transition cursor-pointer group">
-                        <td className="py-5 pl-2">
-                          <div className="flex items-center gap-3">
-                            <span className="bg-[#08090b] border border-[#1e2228] text-indigo-300 px-2.5 py-1 rounded text-xs font-bold shadow-inner">{t.tier}</span>
-                            <div>
-                              <div className="font-bold text-white">{t.name}</div>
-                              <div className="text-xs text-slate-500 mt-0.5">Weight: <span className="text-yellow-500 font-semibold">{t.weight}x</span></div>
-                            </div>
+                      <tr
+                        onClick={() => setExpandedTier(isExpanded ? null : t.tier)}
+                        className="cursor-pointer border-b border-line-soft transition-colors hover:bg-panel-2"
+                      >
+                        <td className="px-5 py-3">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-[11px] text-faint">{t.tier}</span>
+                            <span className="text-[13px] text-ink">{t.name}</span>
+                            <span className="font-mono text-[11px] text-faint">{t.weight}x</span>
+                            {leader && <Tag tone="good">best</Tag>}
                           </div>
                         </td>
-                        <td className="py-5"><span className="text-white font-bold">{formatNumber(t.reqTokens)}</span> {tokenLabel}</td>
-                        <td className="py-5">
-                          <div className="font-bold text-white">{floorCostUsd > 0 ? formatCurrency(floorCostUsd) : '—'}</div>
+                        <td className="num px-3 py-3 text-[13px] text-ink">
+                          {formatNumber(t.reqTokens)} <span className="text-muted">{tokenLabel}</span>
                         </td>
-                        <td className="py-5">
-                          <div className="font-bold text-white">{actCost > 0 ? formatCurrency(actCost) : '—'}</div>
-                        </td>
-                        <td className="py-5">
-                          <span className="text-white font-bold text-base">{formatCurrency(scaleAnnualYield(simulatedYield, yieldPeriod))}</span> <span className="text-slate-500">{yieldSuffix(yieldPeriod)}</span>
-                        </td>
-                        <td className="py-5 text-right pr-4">
-                          <div className="flex items-center justify-end gap-3">
-                            <span className="bg-emerald-900/20 text-emerald-400 border border-emerald-800/50 px-2.5 py-1 rounded text-sm font-bold shadow-sm">{roi.toFixed(2)}%</span>
-                            <svg className={`w-4 h-4 text-slate-500 transition-transform duration-200 group-hover:text-white ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-                          </div>
+                        <td className="num px-3 py-3 text-[13px] text-ink">{floorCostUsd > 0 ? formatCurrency(floorCostUsd) : '—'}</td>
+                        <td className="num px-3 py-3 text-[13px] text-ink">{actCost > 0 ? formatCurrency(actCost) : '—'}</td>
+                        <td className="num px-3 py-3 text-[13px] text-ink">{formatCurrency(scaleAnnualYield(simulatedYield, yieldPeriod))}</td>
+                        <td className="px-5 py-3 text-right">
+                          <Tag tone="good">{roi.toFixed(2)}%</Tag>
                         </td>
                       </tr>
                       {isExpanded && (
-                        <tr className="bg-[#08090b]/40 border-b border-[#1e2228]/50">
-                          <td colSpan="6" className="p-4 md:p-6">
-                            <div className="flex justify-between items-center mb-3">
-                              <h4 className="text-sm font-bold text-slate-300">Daily yield ({t.name})</h4>
-                              <span className="text-xs text-slate-500">Based on On-Chain Distributions</span>
-                            </div>
-                            <div className="relative h-32 md:h-40 w-full">
+                        <tr className="border-b border-line-soft bg-panel-2/40">
+                          <td colSpan="6" className="px-5 py-4">
+                            <p className="eyebrow mb-3 text-faint">Daily yield · {t.name}</p>
+                            <div className="relative h-32 w-full md:h-40">
                               {seriesHasInk(t.dailyYields) ? (
-                              <Line
-                                data={{
-                                  labels: t.dailyDates,
-                                  datasets: [{ label: 'Daily Yield (USD)', data: t.dailyYields, borderColor: ACCENT, backgroundColor: 'rgba(129, 140, 248, 0.1)', borderWidth: 2, fill: true, tension: 0.4, pointRadius: 0 }]
-                                }}
-                                options={baseChartOptions(t.dailyDates, 'daily', { yUnit: 'USD', yTick: compactUsdTick })}
-                              />
+                                <Line
+                                  data={{
+                                    labels: t.dailyDates,
+                                    datasets: [{ label: 'Daily Yield (USD)', data: t.dailyYields, borderColor: ACCENT, borderWidth: 1.75, tension: 0.3, pointRadius: 0 }],
+                                  }}
+                                  options={baseChartOptions(t.dailyDates, 'daily', { yUnit: 'USD', yTick: compactUsdTick })}
+                                />
                               ) : (
                                 <EmptyChart>No daily yield recorded for this tier</EmptyChart>
                               )}
@@ -258,176 +283,152 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
               </tbody>
             </table>
           </div>
-        </div>
+        </Card>
       </ShareSection>
 
-      <ShareSection id="yield" className="scroll-mt-32">
-        <div className="bg-[#0e1013] border border-[#1e2228] p-4 md:p-6 rounded-2xl shadow-lg space-y-6">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div>
-              <h2 className="text-xl font-bold text-white flex items-center gap-2">Historical Yield & Payback Horizon</h2>
-              <p className="text-xs text-slate-400 mt-1">Cash-on-cash: annualized vault RewardPaid ÷ (NFT floor + activation tokens at spot). {yieldBasisText(slice)} The slider scales yield only. Cost stays at the live floor and token price.</p>
-            </div>
-          </div>
+      <ShareSection id="yield" className="scroll-mt-32 space-y-4">
+        <Card
+          eyebrow="Yield"
+          sub={`Cash-on-cash: annualized vault RewardPaid ÷ (NFT floor + activation tokens at spot). ${yieldBasisText(slice)} The slider scales yield only. Cost stays at the live floor and token price.`}
+        >
+          <KpiStrip>
+            {roiRows.map(({ t, payback }) => (
+              <Stat key={t.tier} label={`${t.tier} payback`} value={payback} />
+            ))}
+          </KpiStrip>
+        </Card>
 
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            {tiers.map((t) => {
-              const tc = floorCostUsd + (t.reqTokens * (market.tokenPriceUsd || 0));
-              const years = t.trackedAnnualYieldUsd > 0 ? (tc / t.trackedAnnualYieldUsd).toFixed(1) + ' Years' : 'N/A';
-              return (
-                <div key={t.tier} className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 shadow-inner">
-                  <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">{t.tier} Payback Horizon</p>
-                  <p className="text-xl font-extrabold text-indigo-300">{years}</p>
-                </div>
-              );
-            })}
-          </div>
-
-          <YieldHistorySwitch
-            labels={histLabels}
-            datasets={histDatasets}
-            options={baseChartOptions(histLabels, interval, { yUnit: 'CoC %', yTick: percentTick })}
-            snaps={roiSnaps}
-            tiers={tiers}
-          />
-        </div>
+        <YieldHistorySwitch
+          labels={histLabels}
+          datasets={histDatasets}
+          options={baseChartOptions(histLabels, interval, { yUnit: 'CoC %', yTick: percentTick })}
+          snaps={roiSnaps}
+          tiers={tiers}
+        />
       </ShareSection>
 
       <NightshadesNightSection night={project.night} faction={faction} />
 
-      <ShareSection id="burn" className="scroll-mt-32">
-        <div className="space-y-6">
-          <h2 className="text-lg md:text-xl font-bold text-white mb-6">Token Burn & Supply Deflation Tracker</h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
-              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">
-                {`Total $${config.ticker} Burnt`}
-              </p>
-              <p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-orange-400">{formatNumber(realBurntTokens)} {config.ticker}</p>
-              {burnPct != null && (
-                <p className="text-xs text-slate-400 mt-1">{burnPct.toFixed(2)}% of total supply</p>
-              )}
-            </div>
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner">
-              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Equivalent Units Removed</p>
-              <p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-indigo-300">{formatNumber(realBurntUnits, 2)} Units</p>
-            </div>
-          </div>
-
-          <BurnHistorySwitch
-            cumulative={{
-              title: 'Cumulative burn',
-              note: 'Cumulative tokens burnt.',
-              body: burn.data.length > 0 ? (
-                <Line
-                  key={`burn-${timeframe}-${faction}`}
-                  data={{ labels: burn.labels, datasets: [cumulativeBurnDataset(burn.data, '#fb923c')] }}
-                  options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, unit: 'Tokens', ticks: { color: '#94a3b8', callback: compactTick } } } }}
-                />
-              ) : (
-                <EmptyChart>No burn history recorded yet</EmptyChart>
-              ),
-            }}
-            flywheel={{
-              labels: flywheel.labels,
-              burn: flywheel.burn,
-              prices: flywheel.prices,
-              priceColor: ACCENT,
-              burnColor: 'rgba(249, 115, 22, 0.8)',
-              burnLabel: 'Daily Burn Velocity',
-              leftMax: flywheel.burnAxisMax,
-            }}
+      <ShareSection id="burn" className="scroll-mt-32 space-y-4">
+        <Card eyebrow="Burn" sub={`${tokenLabel} destroyed through activation and the dual burn.`}>
+          <Figure
+            value={formatNumber(realBurntTokens)}
+            unit={config.ticker}
+            after={burnPct != null ? `${burnPct.toFixed(2)}% of supply` : null}
           />
-        </div>
+          <KpiStrip className="mt-6">
+            <Stat label="Units removed" value={formatNumber(realBurntUnits, 2)} />
+            <Stat label="Of supply" value={burnPct != null ? `${burnPct.toFixed(2)}%` : '—'} />
+          </KpiStrip>
+        </Card>
+
+        <BurnHistorySwitch
+          cumulative={{
+            title: 'Cumulative burn',
+            note: 'Cumulative tokens burnt.',
+            body: burn.data.length > 0 ? (
+              <Line
+                key={`burn-${timeframe}-${faction}`}
+                data={{ labels: burn.labels, datasets: [cumulativeBurnDataset(burn.data, BURN)] }}
+                options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e2228', borderDash: [4, 4] }, ticks: { color: '#94a3b8' } }, y: { grid: { color: '#1e2228', borderDash: [4, 4] }, unit: 'Tokens', ticks: { color: '#94a3b8', callback: compactTick } } } }}
+              />
+            ) : (
+              <EmptyChart>No burn history recorded yet</EmptyChart>
+            ),
+          }}
+          flywheel={{
+            labels: flywheel.labels,
+            burn: flywheel.burn,
+            prices: flywheel.prices,
+            priceColor: ACCENT,
+            burnColor: BURN,
+            burnLabel: 'Daily Burn Velocity',
+            leftMax: flywheel.burnAxisMax,
+          }}
+        />
       </ShareSection>
 
-      <ShareSection id="activation" className="scroll-mt-32">
-        <div className="space-y-6">
-          <h2 className="text-lg md:text-xl font-bold text-white mb-6">Ecosystem Activation Metrics</h2>
+      <ShareSection id="activation" className="scroll-mt-32 space-y-4">
+        <Card eyebrow="Activation">
+          <KpiStrip>
+            <Stat label="Activated" value={`${(activation.percentActivated || 0).toFixed(2)}%`} tone="accent" />
+            <Stat label="Active units" value={formatNumber(activation.activeCount || 0)} />
+            <Stat label="Active wallets" value={activation.activeHolders == null ? '—' : formatNumber(activation.activeHolders)} />
+            <Stat label="Tiers" value={String(tiers.length)} />
+          </KpiStrip>
+        </Card>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Activated Supply Ratio</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-emerald-400">{(activation.percentActivated || 0).toFixed(2)}%</p></div>
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Total Active Units</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-indigo-300">{formatNumber(activation.activeCount || 0)} Units</p></div>
-          </div>
+        <TierFlowSection
+          tiers={tiers}
+          tierStats={activation.tierStats}
+          timeframe={tierTimeframe}
+          onTimeframe={setTierTimeframe}
+          formatNumber={formatNumber}
+        />
 
-          <TierFlowSection
-            tiers={tiers}
-            tierStats={activation.tierStats}
-            timeframe={tierTimeframe}
-            onTimeframe={setTierTimeframe}
-            formatNumber={formatNumber}
+        <Card eyebrow="Tier mix" sub="Net of deactivations">
+          <SliceChart
+            noun="Active"
+            format={formatNumber}
+            slices={tiers.map((t, idx) => ({
+              label: `${t.tier}: ${t.name}`,
+              value: breakdownArr[idx],
+              color: TIER_COLORS[idx % TIER_COLORS.length],
+            }))}
           />
+        </Card>
 
-          <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-6">
-            <h3 className="text-sm font-bold text-white mb-6">Current Tier Mix (net of deactivations)</h3>
-            <SliceChart
-              noun="Active"
-              format={formatNumber}
-              slices={tiers.map((t, idx) => ({
-                label: `${t.tier}: ${t.name}`,
-                value: breakdownArr[idx],
-                color: TIER_COLORS[idx % TIER_COLORS.length],
-              }))}
+        <ActivationStackPanel snaps={roiSnaps} tiers={tiers} breakdown={activation.breakdown} />
+        <ChartPanel
+          title="Activity"
+          note="The line is currently-active NFTs at end of day (sales deactivate). Bars are new activations and exits, not upgrades."
+        >
+          {hasActHist ? (
+            <ActivityChart
+              labels={actWin.labels}
+              net={actWin.cols[0]}
+              ins={actWin.cols[1]}
+              outs={actWin.cols[2]}
+              interval={interval}
+              lineColor={ACCENT}
+              lineLabel="Active units"
             />
-          </div>
-
-          <ActivationStackPanel snaps={roiSnaps} tiers={tiers} breakdown={activation.breakdown} />
-          <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6">
-             <h3 className="text-sm font-bold text-white mb-1">Active units vs daily flow</h3>
-             <p className="text-xs text-slate-400 mb-4">The line is currently-active NFTs at end of day (sales deactivate). Bars are new activations and exits, not upgrades.</p>
-             <div className="relative h-52 sm:h-64 md:h-80 w-full">
-                {hasActHist ? (
-                <ActivityChart
-                  labels={actWin.labels}
-                  net={actWin.cols[0]}
-                  ins={actWin.cols[1]}
-                  outs={actWin.cols[2]}
-                  interval={interval}
-                  lineColor={ACCENT}
-                  lineLabel="Active units"
-                />
-                ) : (
-                  <EmptyChart>No activation history recorded</EmptyChart>
-                )}
-             </div>
-          </div>
-        </div>
+          ) : (
+            <EmptyChart>No activation history recorded</EmptyChart>
+          )}
+        </ChartPanel>
       </ShareSection>
 
-      <ShareSection id="ownership" className="scroll-mt-32">
-        <div className="space-y-6">
-          <h2 className="text-lg md:text-xl font-bold text-white mb-6">Protocol Ownership & Distribution</h2>
+      <ShareSection id="ownership" className="scroll-mt-32 space-y-4">
+        <Card eyebrow="Ownership">
+          <KpiStrip>
+            <Stat label="Circulating" value={formatNumber(ownership.circulatingNftSupply || 0)} />
+            <Stat label="NFT holders" value={formatNumber(ownership.nftHolders || 0)} />
+            <Stat label="Wallets per 100 NFTs" value={(ownership.ownershipRatio || 0).toFixed(2)} tone="accent" />
+            <Stat label={`${tokenLabel} holders`} value={formatNumber(tokenHolders)} />
+          </KpiStrip>
+          <KpiStrip className="mt-6">
+            <Stat label="Max supply" value={formatNumber(ownership.currentMaxSupply || 0, 2)} />
+            <Stat label="Burnt NFTs" value={formatNumber(realBurntUnits, 2)} />
+            <Stat label="AMM vault" value={formatNumber(ownership.ammVaultNfts || 0)} />
+            <Stat label="Activated wallets" value={activation.activeHolders == null ? '—' : formatNumber(activation.activeHolders)} />
+          </KpiStrip>
+        </Card>
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner"><p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Current Max Supply</p><p className="text-xl md:text-3xl font-extrabold text-white">{formatNumber(ownership.currentMaxSupply || 0, 2)}</p></div>
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner"><p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">Permanently Burnt</p><p className="text-xl md:text-3xl font-extrabold text-orange-400">{formatNumber(realBurntUnits, 2)}</p></div>
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner"><p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">AMM Vault Inventory</p><p className="text-xl md:text-3xl font-extrabold text-slate-300">{formatNumber(ownership.ammVaultNfts || 0)}</p></div>
-            <div className="bg-[#08090b] border border-[#1e2228] rounded-xl p-5 shadow-inner border-b-4 border-b-indigo-500"><p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">True Circulating NFTs</p><p className="text-xl md:text-3xl font-extrabold text-indigo-300">{formatNumber(ownership.circulatingNftSupply || 0)}</p></div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Unique NFT Holders</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-indigo-300">{formatNumber(ownership.nftHolders || 0)} Wallets</p></div>
-            <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm ring-1 ring-indigo-500/20"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Wallets with an activated NFT</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-indigo-200">{activation.activeHolders == null ? '—' : `${formatNumber(activation.activeHolders)} Wallets`}</p></div>
-            <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm ring-1 ring-emerald-500/20"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Wallets per 100 NFTs</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-emerald-400">{(ownership.ownershipRatio || 0).toFixed(2)}%</p></div>
-            <div className="bg-[#0e1013] border border-[#1e2228] rounded-xl p-5 shadow-sm"><p className="text-xs uppercase tracking-wider text-slate-400 mb-1">{`Unique $${config.ticker} Holders`}</p><p className="text-lg sm:text-2xl md:text-3xl font-extrabold leading-tight break-words text-indigo-300">{formatNumber(tokenHolders)} Wallets</p></div>
-          </div>
-
-          <OwnershipHistoryPanels
-            snaps={roiSnaps}
-            live={{ tokenHolders, nftHolders: ownership.nftHolders, ownershipRatio: ownership.ownershipRatio }}
-          />
-          <UnderwaterCard ownership={ownership} />
-        </div>
+        <OwnershipHistoryPanels
+          snaps={roiSnaps}
+          live={{ tokenHolders, nftHolders: ownership.nftHolders, ownershipRatio: ownership.ownershipRatio }}
+        />
+        <UnderwaterCard ownership={ownership} />
       </ShareSection>
 
-      <MethodologyCard accent="text-indigo-400">
-          <p><strong className="text-white">Four Anvil markets, one incubator:</strong> Ghosts, Zombies, Knights, and Watchers each have 3,000 NFTs, one faction token, and a SoftStakingVault. The All tab compares the four on one axis. This page is one market.</p>
-          <p><strong className="text-white">Yield &amp; ROI:</strong> Cash-on-cash is annualized vault RewardPaid ÷ (this floor + activation tokens at spot), split by tier weight. {yieldBasisText(slice)} The volume slider scales yield only. Cost stays at the live floor and token price. Night vault WETH is The Night inventory, not StonkBooster.</p>
-          <p><strong className="text-white">Activation:</strong> Same mechanic as Mancer/Yard. The vault emits no Deactivated event — a sale clears the position. <code>activeCount()</code> is an upper bound; this page replays Activated plus NFT transfers.</p>
-          <p><strong className="text-white">Burn:</strong> Days before hourly snapshots are reconstructed from token burns to dead/zero, scaled to the first trusted supply read.</p>
-          <p><strong className="text-white">Ownership:</strong> Circulating NFTs are collection size minus AMM vault inventory. Wallets per 100 NFTs is unique NFT wallets (vault and burn addresses excluded) divided by that circulating number, times 100.</p>
-          <p><strong className="text-white">The Night</strong> is incubator-wide (one VRF over all four factions). Live strike, history, sunrise fees, and usable v4 LP sit on the Night tab.</p>
+      <MethodologyCard>
+        <p><strong className="text-ink">Four Anvil markets, one incubator:</strong> Ghosts, Zombies, Knights, and Watchers each have 3,000 NFTs, one faction token, and a SoftStakingVault. The All tab compares the four on one axis. This page is one market.</p>
+        <p><strong className="text-ink">Yield &amp; ROI:</strong> Cash-on-cash is annualized vault RewardPaid ÷ (this floor + activation tokens at spot), split by tier weight. {yieldBasisText(slice)} The volume slider scales yield only. Cost stays at the live floor and token price. Night vault WETH is The Night inventory, not StonkBooster.</p>
+        <p><strong className="text-ink">Activation:</strong> Same mechanic as Mancer/Yard. The vault emits no Deactivated event — a sale clears the position. <code>activeCount()</code> is an upper bound; this page replays Activated plus NFT transfers.</p>
+        <p><strong className="text-ink">Burn:</strong> Days before hourly snapshots are reconstructed from token burns to dead/zero, scaled to the first trusted supply read.</p>
+        <p><strong className="text-ink">Ownership:</strong> Circulating NFTs are collection size minus AMM vault inventory. Wallets per 100 NFTs is unique NFT wallets (vault and burn addresses excluded) divided by that circulating number, times 100.</p>
+        <p><strong className="text-ink">The Night</strong> is incubator-wide (one VRF over all four factions). Live strike, history, sunrise fees, and usable v4 LP sit on the Night tab.</p>
       </MethodologyCard>
     </div>
   );

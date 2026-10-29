@@ -143,23 +143,23 @@ export function EventTape({ books }) {
                 href={explorerTxUrl(row.tx)}
                 target="_blank"
                 rel="noreferrer"
-                className="shrink-0 w-36 bg-[#0e1013] border border-[#1e2228] rounded-xl p-2.5 flex flex-col text-left hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/10 transition-all"
+                className="flex w-36 shrink-0 flex-col rounded-xl border border-line bg-panel p-2.5 text-left transition-all hover:border-mark-amber/50"
               >
-                <div className="w-full h-40 bg-[#08090b] rounded-lg overflow-hidden flex items-center justify-center relative">
+                <div className="relative flex h-40 w-full items-center justify-center overflow-hidden rounded-lg bg-bg">
                   {image ? (
                     <img src={image} alt="" className="max-h-full max-w-full object-contain" />
                   ) : (
-                    <span className="text-[10px] text-slate-500">#{row.tokenId}</span>
+                    <span className="text-[10px] text-faint">#{row.tokenId}</span>
                   )}
-                  <span className={`absolute top-1.5 right-1.5 font-black text-[9px] px-1.5 py-0.5 rounded ${BADGE[row.kind]}`}>
+                  <span className={`absolute top-1.5 right-1.5 rounded px-1.5 py-0.5 text-[9px] font-black ${BADGE[row.kind]}`}>
                     {LABEL[row.kind]}
                   </span>
                 </div>
-                <p className="mt-2 text-xs font-bold text-white">#{row.tokenId}</p>
-                <p className="text-[10px] text-slate-500 mt-1 truncate">
+                <p className="mt-2 text-xs font-bold text-ink">#{row.tokenId}</p>
+                <p className="mt-1 truncate text-[10px] text-faint">
                   {[many ? row.label : null, row.wallet || null, row.amount ? `${row.amount} tokens` : null].filter(Boolean).join(' · ') || LABEL[row.kind]}
                 </p>
-                <p className="mt-2 text-[10px] text-slate-400">{age}</p>
+                <p className="mt-2 text-[10px] text-muted">{age}</p>
               </a>
             );
           })}

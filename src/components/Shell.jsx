@@ -18,7 +18,7 @@ export const NAV_GROUPS = [
 
 export const NAV_ITEMS = [
   { to: '/', label: 'Home', group: 'tools', icon: 'home' },
-  { to: '/portfolio', label: 'Portfolio Tracker', group: 'tools', icon: 'chart' },
+  { to: '/portfolio', label: 'Portfolio', group: 'tools', icon: 'chart' },
   { to: '/broker', label: 'Broker Scan', group: 'tools', icon: 'search' },
   { to: '/anvil', label: 'Anvil + Floor', group: 'tools', icon: 'anvil' },
   { to: '/ecosystem', label: 'Ecosystem Overview', group: 'tools', icon: 'system' },

@@ -188,7 +188,7 @@ function projectStory(project, timeframe) {
       {
         label: 'Burn',
         value: burnPct != null ? `${count(burntLive)} · ${burnPct.toFixed(1)}%` : count(burntLive),
-        color: '#fb923c',
+        color: '#8b5cf6',
       },
       {
         label: 'Active',
@@ -197,7 +197,7 @@ function projectStory(project, timeframe) {
           : '—',
         color: '#38bdf8',
       },
-      { label: `Holders · ${period}`, value: money(holderTot), color: '#f7931a' },
+      { label: `Holders · ${period}`, value: money(holderTot), color: '#f5b700' },
     ],
     charts: [
       {
@@ -210,14 +210,14 @@ function projectStory(project, timeframe) {
       {
         title: `Holder revenue · ${period}`,
         headline: money(holderTot),
-        color: '#f7931a',
+        color: '#f5b700',
         values: holderBars.map((v) => Number(v) || 0),
         kind: 'bar',
       },
       {
         title: 'Burn',
         headline: deltaLabel(burn.data) || count(burnt),
-        color: '#fb923c',
+        color: '#8b5cf6',
         values: burn.data || [],
         kind: 'line',
       },

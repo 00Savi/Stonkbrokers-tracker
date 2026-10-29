@@ -11,7 +11,7 @@ import { byDate, formatLabels } from '../lib/dates';
 import { baseChartOptions, barThickness, categoryBarOptions, compactTick, compactUsdTick, STREAM_COLORS } from '../lib/charts';
 import { explorerAddressUrl } from '../lib/tba';
 import { walletName } from '../lib/wallets';
-import { compactNum, compactUsd, Card, KpiStrip, Stat } from './kit';
+import { compactNum, compactUsd, Card, KpiStrip, Stat, SplitBar, SkeletonCard } from './kit';
 import { ActivityChart, ChartPanel } from './HistoryCharts';
 import { PayoutCalendar } from './PayoutCalendar';
 import { useChartView } from '../lib/chartWindow';
@@ -316,15 +316,53 @@ function FeeRates({ project }) {
   );
 }
 
+function ConcentrationBars({ title, leg }) {
+  const top = (leg?.top || []).slice(0, 10);
+  if (!top.length) return null;
+  const labels = top.map((row, i) => {
+    const named = walletName(row.holder);
+    return named?.name || shortAddr(row.holder) || `#${i + 1}`;
+  });
+  const shares = top.map((row) => (Number(row.share) || 0) * 100);
+  return (
+    <ChartPanel
+      title={`${title} top-10 share`}
+      note="Ranked share of the float after burn addresses and catalog contracts. Identity is in the table below — colour alone is not the signal."
+      frameClass="h-64 sm:h-72"
+    >
+      <Bar
+        data={{
+          labels,
+          datasets: [{
+            label: 'Share %',
+            data: shares,
+            backgroundColor: '#8b5cf6',
+            maxBarThickness: 22,
+          }],
+        }}
+        options={categoryBarOptions(labels, { unit: '% of float', tick: (v) => `${compactTick(v)}%` })}
+      />
+    </ChartPanel>
+  );
+}
+
 function HolderLeg({ title, leg, noun }) {
   if (!leg || !(leg.wallets > 0)) return null;
   const labels = (leg.buckets || []).map((b) => b.label);
   return (
     <>
-      <KpiStrip>
-        <Stat label={`${title} wallets`} value={compactNum(leg.wallets)} />
-        <Stat label="Top 10 share" value={pct(leg.top10_share)} note="Of this float" />
-      </KpiStrip>
+      <Card eyebrow={`${title} ownership`} sub="Float after burn addresses and catalog contracts. Top-10 share is concentration of that float.">
+        <KpiStrip>
+          <Stat label={`${title} wallets`} value={compactNum(leg.wallets)} />
+          <Stat label="Top 10 share" value={pct(leg.top10_share)} tone="accent" note="Of this float" />
+          <Stat
+            label="Largest bag"
+            value={leg.top?.[0] ? pct(leg.top[0].share) : '—'}
+            note={leg.top?.[0] ? shortAddr(leg.top[0].holder) : null}
+          />
+        </KpiStrip>
+      </Card>
+      <ConcentrationBars title={title} leg={leg} />
       {labels.length > 0 && (
         <ChartPanel
           title={`${title} wallets by size`}
@@ -381,7 +419,8 @@ function HolderLeg({ title, leg, noun }) {
   );
 }
 
-function HolderStructure({ structure }) {
+function HolderStructure({ structure, pending }) {
+  if (pending && !structure) return <SkeletonCard rows={3} />;
   if (!structure) return null;
   return (
     <>
@@ -535,9 +574,17 @@ function EffectiveActive({ effective }) {
       eyebrow="Earning vs counted"
       sub="activeCount includes NFTs that were sold and stopped earning, because a sale does not emit a clear. Still held means the current owner is the address on the latest activation. Unknown means the NFT fold has no per-token owner — a range mint that never moved, not a sale."
     >
-      <KpiStrip>
+      <SplitBar
+        a={still}
+        b={moved}
+        labelA="Still with activator"
+        labelB="Moved since"
+        valueA={compactNum(still)}
+        valueB={compactNum(moved)}
+      />
+      <KpiStrip className="mt-5">
         <Stat label="Counted active" value={compactNum(effective.counted)} />
-        <Stat label="Still with activator" value={compactNum(still)} />
+        <Stat label="Still with activator" value={compactNum(still)} tone="accent" />
         <Stat label="Moved since" value={compactNum(moved)} />
         <Stat label="Owner unknown" value={compactNum(unknown)} />
       </KpiStrip>
@@ -617,10 +664,12 @@ export function SectionInsights({ sectionId }) {
   if (sectionId === 'liquidity') return <FeeRates project={project} />;
   if (sectionId === 'activation') return <EffectiveActive effective={analysis?.effective} />;
   if (sectionId === 'ownership') {
+    const waiting = ctx.slug && analysis == null;
     return (
       <div className="mt-4 space-y-4">
+        <HolderStructure structure={analysis?.structure} pending={waiting} />
+        <EffectiveActive effective={analysis?.effective} />
         <AmmExchange project={project} />
-        <HolderStructure structure={analysis?.structure} />
         <ActivityPanels activity={analysis?.activity} project={project} />
         <Cohorts cohorts={analysis?.cohorts} />
         {overlapSlugs?.length ? <OverlapPanel slugs={overlapSlugs} /> : null}

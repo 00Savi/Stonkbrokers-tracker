@@ -2,33 +2,35 @@ import React, { useEffect } from 'react';
 import { Chart as ChartJS } from 'chart.js';
 import { formatMoney, readDisplay } from './money';
 
-/** One hue per series when they share a chart. No two greens, no two golds. */
+/** One hue per series when they share a chart. No two greens, no two golds.
+ *  Brand orange (#ff6600 / #f97316) is chrome-only — never a data mark. */
 export const STREAM_COLORS = {
   amm: '#00a804',
-  dex: '#f97316',
+  dex: '#8b5cf6',       // was orange — violet mark
   box: '#38bdf8',
   tax: '#f472b6',
-  smartLp: '#fbbf24',
+  smartLp: '#f5b700',   // mark-amber (not brand orange)
   pairTokens: '#14b8a6',
-  volume: '#8b5cf6',
+  volume: '#818cf8',
   delivered: '#00a804',
   vaulted: '#f5b700',
   fees: '#00a804',
-  // Payout / received — amber-gold, not protocol green and not burn orange.
-  holdersRev: '#f7931a',
+  // Payout / received — mark-amber, not brand/burn orange.
+  holdersRev: '#f5b700',
   booster: '#a3e635',
+  books: '#eab308',
 };
 
 export const TIER_COLORS = ['#00a804', '#8b5cf6', '#38bdf8', '#f5b700', '#f472b6'];
 
 export const PROJECT_COLORS = {
   stonk: '#00a804',
-  interns: '#fbbf24',
+  interns: '#f5b700',
   mancer: '#8b5cf6',
   tickeryard: '#38bdf8',
   cardwall: '#f5b700',
   index: '#14b8a6',
-  printer: '#fb923c',
+  printer: '#f472b6',
   oakmont: '#e879f9',
   coattail: '#f43f5e',
   nightshades: '#818cf8',
@@ -36,7 +38,7 @@ export const PROJECT_COLORS = {
 
 export const PAIR_COLORS = [
   '#00a804', '#8b5cf6', '#38bdf8', '#f5b700', '#f472b6',
-  '#fb923c', '#14b8a6', '#e879f9', '#94a3b8',
+  '#14b8a6', '#e879f9', '#94a3b8', '#a3e635',
 ];
 
 export function isNarrow() {
@@ -652,15 +654,46 @@ function layoutEndLabels(points, top, bottom) {
 
 function endLabelTargets(chart) {
   const datasets = chart.data?.datasets || [];
-  const lines = datasets.filter((ds) => isLineDataset(ds, chart) && !ds.guide && !ds.labelEnd);
-  const auto = lines.length >= 2 && lines.length <= 5;
+  const lines = datasets.filter((ds) => isLineDataset(ds, chart) && !ds.guide && !ds.hideEndLabel);
+  // Multi-series (2–5): auto end labels. Single-series lines: default on so a
+  // glance answers "where are we now?" unless the dataset opts out.
+  const multi = lines.length >= 2 && lines.length <= 5;
+  const single = lines.length === 1;
   return datasets.flatMap((ds, i) => {
+    if (!isLineDataset(ds, chart) || ds.guide || ds.hideEndLabel) return [];
     const forced = !!ds.labelEnd;
-    const picked = auto && isLineDataset(ds, chart) && !ds.guide;
+    const picked = multi || (single && (forced || ds.labelEnd !== false));
     if (!forced && !picked) return [];
-    return [{ ds, i, text: ds.endLabel || ds.label || '' }];
+    const last = lastFinite(ds.data);
+    const text = ds.endLabel
+      || (last != null && !ds.label ? compactTick(last) : null)
+      || (last != null ? `${ds.label || ''} ${compactTick(last)}`.trim() : ds.label)
+      || '';
+    return [{ ds, i, text }];
   }).filter((row) => row.text);
 }
+
+/** Shared index crosshair — one vertical guide under the active tooltip. */
+const chartCrosshairPlugin = {
+  id: 'chartCrosshair',
+  afterDraw(chart) {
+    const tooltip = chart.tooltip;
+    if (!tooltip?.opacity || !tooltip.dataPoints?.length) return;
+    const { ctx, chartArea } = chart;
+    if (!chartArea) return;
+    const x = tooltip.dataPoints[0]?.element?.x;
+    if (!Number.isFinite(x)) return;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x, chartArea.top);
+    ctx.lineTo(x, chartArea.bottom);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(231, 233, 236, 0.18)';
+    ctx.setLineDash([3, 3]);
+    ctx.stroke();
+    ctx.restore();
+  },
+};
 
 // chart.options is a Chart.js resolver proxy. Assigning through it recurses
 // (proxy set writes back into itself) and overflows the stack, which blanks
@@ -765,7 +798,7 @@ const chartReadabilityPlugin = {
   },
 };
 
-ChartJS.register(chartReadabilityPlugin);
+ChartJS.register(chartReadabilityPlugin, chartCrosshairPlugin);
 
 /** Re-apply Chart.js density when the viewport crosses the mobile breakpoint. */
 export function ChartMobileSync() {

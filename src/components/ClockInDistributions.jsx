@@ -150,18 +150,18 @@ export function ClockInDistributions({ book, tiers, activation, ethPriceUsd, for
                       key={row.round}
                       type="button"
                       onClick={() => setRound(on ? null : row.round)}
-                      className={`flex w-36 shrink-0 flex-col rounded-xl border bg-[#0e1013] p-2.5 text-left transition-all ${on ? 'border-emerald-500/60 shadow-lg shadow-emerald-500/10' : 'border-[#1e2228] hover:border-emerald-500/40'}`}
+                      className={`flex w-36 shrink-0 flex-col rounded-xl border bg-panel p-2.5 text-left transition-all ${on ? 'border-accent/60' : 'border-line hover:border-accent/40'}`}
                     >
-                      <div className="relative flex h-24 w-full flex-col items-center justify-center rounded-lg bg-[#08090b]">
-                        <span className="absolute right-1.5 top-1.5 rounded bg-emerald-500/90 px-1.5 py-0.5 text-[9px] font-black text-slate-950">{shortDate(row.date)}</span>
-                        <span className="text-lg font-bold text-emerald-400">{formatCurrency(usd)}</span>
-                        <span className="text-[10px] text-slate-500">{formatEth(row.potEth)}</span>
+                      <div className="relative flex h-24 w-full flex-col items-center justify-center rounded-lg bg-bg">
+                        <span className="absolute right-1.5 top-1.5 rounded bg-accent px-1.5 py-0.5 text-[9px] font-black text-bg">{shortDate(row.date)}</span>
+                        <span className="num text-lg text-accent">{formatCurrency(usd)}</span>
+                        <span className="text-[10px] text-faint">{formatEth(row.potEth)}</span>
                       </div>
-                      <p className="mt-2 min-h-8 text-xs font-bold text-white">{`Round ${row.round}`}</p>
-                      <p className="mt-1 truncate text-[10px] text-slate-500">{`${compactNum(row.recipients || 0)} brokers`}</p>
+                      <p className="mt-2 min-h-8 text-xs font-bold text-ink">{`Round ${row.round}`}</p>
+                      <p className="mt-1 truncate text-[10px] text-faint">{`${compactNum(row.recipients || 0)} brokers`}</p>
                       <div className="mt-2 flex w-full items-start justify-between gap-2 text-[10px]">
-                        <span className="text-slate-400">Largest</span>
-                        <span className="text-right font-bold text-amber-400">{row.top || '—'}</span>
+                        <span className="text-muted">Largest</span>
+                        <span className="text-right font-bold text-mark-amber">{row.top || '—'}</span>
                       </div>
                     </button>
                   );
