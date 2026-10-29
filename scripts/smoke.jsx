@@ -18,7 +18,7 @@ import { renderToString } from 'react-dom/server';
 import { StaticRouter } from 'react-router-dom';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
-import { earnedUsdForNft, earnedUsdForTokenPosition, nftAcquireCostUsd, portfolioValueSeries, walletDailyDrops } from '../src/lib/portfolioHistory.js';
+import { earnedUsdForNft, earnedUsdForTokenPosition, nftAcquireCostUsd, paymentPerNft, portfolioValueSeries, walletDailyDrops } from '../src/lib/portfolioHistory.js';
 import { applyPrices, pricesLanded } from '../src/lib/prices.js';
 import App from '../src/app.jsx';
 import HomeView from '../src/components/views/HomeView';
@@ -310,6 +310,27 @@ VIEWS.push(['Nightshades·all', NightshadesDetailView, { data: snapshot, activeT
   };
   for (const tab of TABS.filter((t) => t !== 'liquidity' && t !== 'revenue').concat(['night'])) {
     VIEWS.push([`Nightshades·${tab}`, NightshadesDetailView, { data: nsSnap, activeTab: tab }]);
+  }
+}
+
+{
+  const homeHtml = renderToString(
+    <StaticRouter location="/">
+      <HomeView data={snapshot} />
+    </StaticRouter>,
+  );
+  const homeOk = homeHtml.includes('StonkBrokers Ecosystem Analytics')
+    && homeHtml.includes('No trackers. No wallet connects. Just data.')
+    && homeHtml.includes('Look up')
+    && homeHtml.includes('Cheapest way in')
+    && homeHtml.includes('Your bags')
+    && homeHtml.includes('Listed seat, trailing yield')
+    && homeHtml.includes('StonkBrokers');
+  if (!homeOk) {
+    failed++;
+    console.error('FAIL  homepage missing the lookup, tools, or seat list');
+  } else {
+    console.log('ok    homepage leads with lookup, tools, and seat yield');
   }
 }
 
@@ -1323,11 +1344,19 @@ for (const [name, View, props] of VIEWS) {
 
   const freeMint = nftAcquireCostUsd({ minted: true, basisKnown: true, basisUsd: 0, entryFloorUsd: 4000 });
   const pricedBuy = nftAcquireCostUsd({ basisKnown: true, basisUsd: 1200, entryFloorUsd: 4000 });
-  if (freeMint !== 0 || pricedBuy !== 1200) {
+  const unpriced = nftAcquireCostUsd({ basisKnown: false, minted: false, entryFloorUsd: 10164 });
+  if (freeMint !== 0 || pricedBuy !== 1200 || unpriced !== null) {
     failed++;
-    console.error(`FAIL  nft acquire cost mint=${freeMint} buy=${pricedBuy}`);
+    console.error(`FAIL  nft acquire cost mint=${freeMint} buy=${pricedBuy} unpriced=${unpriced}`);
   } else {
     console.log('ok    free mint costs nothing against the floor');
+  }
+  const saleUsd = paymentPerNft({ eth: 1.288, ethUsd: 1927.83, nftCount: 1 });
+  if (saleUsd == null || Math.abs(saleUsd - 2483.045) > 0.02) {
+    failed++;
+    console.error(`FAIL  sale payment ${saleUsd}`);
+  } else {
+    console.log('ok    sale payment is eth paid times that minute, not the floor');
   }
 
   const book = portfolioValueSeries([

@@ -37,7 +37,7 @@ import {
   fetchOwnedNftIdsV2,
   enumerateOwnedIds,
   fetchTokenHoldStartTs,
-  fetchTxNftCost,
+  attachSaleCosts,
   formatDate,
   machineAnnualForWeight,
   mapLimited,
@@ -50,7 +50,6 @@ import {
   paybackMonths,
   formatPaybackMonths,
   activationTokenCostUsd,
-  ethUsdAtTs,
   floorUsdOn,
   tokenPriceAtTs,
 } from '../../lib/portfolioHistory';
@@ -168,10 +167,10 @@ function moneyRatio(numer, denom) {
 function seatEconomics(nft) {
   const paid = nftAcquireCostUsd(nft);
   const activation = Number(nft?.activationCostUsd) || 0;
-  const invested = paid + activation;
   const earned = Number(nft?.earnedValue) || 0;
   const floor = Number(nft?.floorValue) || 0;
-  const pnl = floor + earned - invested;
+  const invested = paid == null ? null : paid + activation;
+  const pnl = invested == null ? null : floor + earned - invested;
   return {
     paid,
     activation,
@@ -179,20 +178,21 @@ function seatEconomics(nft) {
     earned,
     floor,
     pnl,
-    cashRoi: moneyRatio(earned, invested),
-    roe: moneyRatio(pnl, invested),
+    cashRoi: invested == null ? null : moneyRatio(earned, invested),
+    roe: invested == null ? null : moneyRatio(pnl, invested),
   };
 }
 
 function seatBookRows(assets) {
   return (assets || []).map((asset) => {
     const parts = (asset.nfts || []).map(seatEconomics);
-    const paid = parts.reduce((sum, part) => sum + part.paid, 0);
+    const missing = parts.some((part) => part.paid == null);
+    const paid = missing ? null : parts.reduce((sum, part) => sum + part.paid, 0);
     const activation = parts.reduce((sum, part) => sum + part.activation, 0);
     const earned = Number(asset.earnedValue) || 0;
     const floor = Number(asset.floorValue) || 0;
-    const invested = paid + activation;
-    const pnl = floor + earned - invested;
+    const invested = paid == null ? null : paid + activation;
+    const pnl = invested == null ? null : floor + earned - invested;
     return {
       key: asset.projectKey,
       name: holdingName(asset),
@@ -203,8 +203,8 @@ function seatBookRows(assets) {
       earned,
       floor,
       pnl,
-      cashRoi: moneyRatio(earned, invested),
-      roe: moneyRatio(pnl, invested),
+      cashRoi: invested == null ? null : moneyRatio(earned, invested),
+      roe: invested == null ? null : moneyRatio(pnl, invested),
     };
   });
 }
@@ -259,6 +259,19 @@ function DetailTable({ columns, rows }) {
   );
 }
 
+function StatStrip({ rows }) {
+  return (
+    <dl className="mb-5 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-6">
+      {rows.map((row) => (
+        <div key={row.label}>
+          <dt className="text-[10px] uppercase tracking-wider text-slate-500">{row.label}</dt>
+          <dd className={`mt-1 text-base font-extrabold ${row.tone || 'text-white'}`}>{row.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 function ValueDetail({ series, formatPnl, formatCurrency }) {
   if (!series?.labels?.length) {
     return <p className="text-xs text-slate-500">Not enough daily closes to compare yet.</p>;
@@ -297,20 +310,20 @@ function SeatDetail({ assets, sort, formatCurrency, formatPnl, formatRoi, pnlTon
   return (
     <div>
       <p className="text-xs text-slate-400 mb-3">
-        Invested is the NFT price plus the activation tokens. ROI is the lifetime cashflow divided by that investment. P&amp;L is today&apos;s floor plus that cashflow, minus the investment. ROE is the P&amp;L divided by the investment.
+        NFT cost is the ETH paid in the transfer that delivered the seat, priced at that minute. A transfer with no payment is left blank. Activation is the tokens this wallet paid after receiving it, priced that day. ROI is that cashflow divided by the investment. P&amp;L is today&apos;s floor plus that cashflow, minus the investment.
       </p>
       <DetailTable
         rows={rows}
         columns={[
           { key: 'name', label: 'Seats', render: (row) => row.name },
           { key: 'count', label: 'Count', align: 'text-right', render: (row) => row.count },
-          { key: 'paid', label: 'NFT', align: 'text-right', render: (row) => cents(formatCurrency, row.paid) },
+          { key: 'paid', label: 'NFT', align: 'text-right', render: (row) => (row.paid == null ? '—' : cents(formatCurrency, row.paid)) },
           { key: 'activation', label: 'Activation', align: 'text-right', render: (row) => cents(formatCurrency, row.activation) },
-          { key: 'invested', label: 'Invested', align: 'text-right', render: (row) => cents(formatCurrency, row.invested) },
+          { key: 'invested', label: 'Invested', align: 'text-right', render: (row) => (row.invested == null ? '—' : cents(formatCurrency, row.invested)) },
           { key: 'earned', label: 'Earned', align: 'text-right', render: (row) => cents(formatCurrency, row.earned) },
           { key: 'cashRoi', label: 'ROI', align: 'text-right', tone: (row) => pnlTone(row.cashRoi), render: (row) => formatRoi(row.cashRoi, 1) },
           { key: 'floor', label: 'Floor', align: 'text-right', render: (row) => formatCurrency(row.floor) },
-          { key: 'pnl', label: 'P&L', align: 'text-right', tone: (row) => pnlTone(row.pnl), render: (row) => formatPnl(row.pnl) },
+          { key: 'pnl', label: 'P&L', align: 'text-right', tone: (row) => pnlTone(row.pnl), render: (row) => (row.pnl == null ? '—' : formatPnl(row.pnl)) },
           { key: 'roe', label: 'ROE', align: 'text-right', tone: (row) => pnlTone(row.roe), render: (row) => formatRoi(row.roe, 1) },
         ]}
       />
@@ -339,12 +352,13 @@ function TokenDetail({ assets, sort, formatCurrency, formatPnl, pnlTone }) {
 
 function returnRows(seatAssets, tokenAssets) {
   const seats = (seatAssets || []).map((asset) => {
-    const nft = (asset.nfts || []).reduce((sum, nft) => sum + nftAcquireCostUsd(nft), 0);
+    const costs = (asset.nfts || []).map((nft) => nftAcquireCostUsd(nft));
     const activation = (asset.nfts || []).reduce((sum, nft) => sum + (Number(nft.activationCostUsd) || 0), 0);
-    const cost = nft + activation;
+    const nft = costs.some((cost) => cost == null) ? null : costs.reduce((sum, cost) => sum + cost, 0);
+    const cost = nft == null ? null : nft + activation;
     const mark = Number(asset.floorValue) || 0;
     const earned = Number(asset.earnedValue) || 0;
-    const gain = mark + earned - cost;
+    const gain = cost == null ? null : mark + earned - cost;
     return {
       key: asset.projectKey,
       name: holdingName(asset),
@@ -545,38 +559,10 @@ function sumNftCosts(nfts) {
     }
     activationCostUsd += act;
     entryFloorUsd += floorThen;
-    entryCostUsd += paid + act;
+    if (paid == null) entryCostUsd = null;
+    else if (entryCostUsd != null) entryCostUsd += paid + act;
   }
   return { basisUsd, activationCostUsd, basisKnown, entryFloorUsd, entryCostUsd };
-}
-
-async function applyPurchaseCosts(nfts, data, fallbackEthUsd) {
-  const pending = (nfts || []).filter((n) => n.lastTransferHash && !n.basisKnown);
-  if (!pending.length) return;
-  const hashes = [...new Set(pending.map((n) => n.lastTransferHash))];
-  const costByKey = {};
-  await mapLimited(hashes, 4, async (hash) => {
-    const cas = [...new Set(pending.filter((n) => n.lastTransferHash === hash).map((n) => n.nftCa))];
-    for (const ca of cas) {
-      costByKey[`${hash}:${ca}`] = await fetchTxNftCost(hash, ca);
-    }
-  });
-  const ownedPerKey = {};
-  for (const nft of pending) {
-    const key = `${nft.lastTransferHash}:${nft.nftCa}`;
-    ownedPerKey[key] = (ownedPerKey[key] || 0) + 1;
-  }
-  for (const nft of pending) {
-    const key = `${nft.lastTransferHash}:${nft.nftCa}`;
-    const cost = costByKey[key] || { eth: 0, nftCount: 0, perNftEth: 0 };
-    const split = cost.nftCount > 0 ? cost.nftCount : (ownedPerKey[key] || 1);
-    const perNftEth = split > 0 ? (cost.eth || 0) / split : 0;
-    const pData = data?.projects?.[nft.projectKey];
-    const ethPx = ethUsdAtTs(pData, nft.lastTransferTs, fallbackEthUsd);
-    nft.purchaseEth = perNftEth;
-    nft.basisUsd = perNftEth * ethPx;
-    nft.basisKnown = true;
-  }
 }
 
 export default function PortfolioView({ data }) {
@@ -601,7 +587,6 @@ export default function PortfolioView({ data }) {
   const [aggregateOpen, setAggregateOpen] = useState(false);
   const [forecastYears, setForecastYears] = useState(1);
   const [historyGrain, setHistoryGrain] = useState('d');
-  const [detail, setDetail] = useState(null);
   const [copyState, setCopyState] = useState('idle');
   const [scanProgress, setScanProgress] = useState('');
   const [thumbs, setThumbs] = useState({});
@@ -949,10 +934,21 @@ export default function PortfolioView({ data }) {
       }
 
       const allNfts = ownedAssets.flatMap((a) => a.nfts || []);
-      if (allNfts.some((n) => n.lastTransferHash)) {
-        setScanProgress('Reading purchase and mint costs…');
-        await applyPurchaseCosts(allNfts, data, ethUsd);
+      if (allNfts.length) {
+        setScanProgress('Reading what each seat was bought for…');
+        await attachSaleCosts(provider, allNfts, data);
+        totalEarnedUsd = 0;
+        totalYieldUsd = 0;
         for (const asset of ownedAssets) {
+          if (asset.tokenPosition) {
+            totalEarnedUsd += Number(asset.earnedValue) || 0;
+            totalYieldUsd += Number(asset.yieldValue) || 0;
+            continue;
+          }
+          asset.earnedValue = (asset.nfts || []).reduce((sum, nft) => sum + (Number(nft.earnedValue) || 0), 0);
+          asset.yieldValue = (asset.nfts || []).reduce((sum, nft) => sum + (Number(nft.yieldValue) || 0), 0);
+          totalEarnedUsd += asset.earnedValue;
+          totalYieldUsd += asset.yieldValue;
           Object.assign(asset, sumNftCosts(asset.nfts));
         }
       }
@@ -989,7 +985,6 @@ export default function PortfolioView({ data }) {
       setEnriched((e) => ({ ...e, [projectKey]: 'done' }));
       return;
     }
-    await applyPurchaseCosts(nfts, data, ethUsd);
     await mapLimited(nfts, 6, async (nft) => {
       nft.imageUrl = await fetchNftImage(nft.nftCa, nft.tokenId);
     });
@@ -1059,14 +1054,24 @@ export default function PortfolioView({ data }) {
   }, [grouped]);
 
   const tokenEarned = tokenAssets.reduce((sum, a) => sum + (Number(a.earnedValue) || 0), 0);
-  const nftPaid = seatAssets.reduce((sum, asset) => (
-    sum + (asset.nfts || []).reduce((inner, nft) => inner + nftAcquireCostUsd(nft), 0)
-  ), 0);
+  const nftPaid = (() => {
+    let sum = 0;
+    let priced = 0;
+    for (const asset of seatAssets) {
+      for (const nft of asset.nfts || []) {
+        const paid = nftAcquireCostUsd(nft);
+        if (paid == null) continue;
+        sum += paid;
+        priced += 1;
+      }
+    }
+    return priced ? sum : null;
+  })();
   const nftActivation = seatAssets.reduce((sum, asset) => (
     sum + (asset.nfts || []).reduce((inner, nft) => inner + (Number(nft.activationCostUsd) || 0), 0)
   ), 0);
   const nftEarned = seatAssets.reduce((sum, asset) => sum + (Number(asset.earnedValue) || 0), 0);
-  const nftPnl = costTotals.nftCount > 0 ? seatFloor + nftEarned - nftPaid - nftActivation : null;
+  const nftPnl = nftPaid == null ? null : seatFloor + nftEarned - nftPaid - nftActivation;
   let tokenCost = 0;
   let tokenMarked = 0;
   let tokenPriced = 0;
@@ -1078,6 +1083,12 @@ export default function PortfolioView({ data }) {
     tokenMarked += Number(asset.floorValue) || 0;
   }
   const tokenPnl = tokenPriced > 0 ? tokenMarked - tokenCost + tokenEarned : null;
+  const tokenRoi = tokenCost > 0.01 && tokenPnl != null ? (tokenPnl / tokenCost) * 100 : null;
+  const nftInvested = nftPaid == null ? null : nftPaid + nftActivation;
+  const nftCashRoi = nftInvested != null && nftInvested > 0.01 ? (nftEarned / nftInvested) * 100 : null;
+  const nftRoe = nftPnl != null && nftInvested > 0.01 ? (nftPnl / nftInvested) * 100 : null;
+  const tokenForecast = tokenAssets.reduce((sum, asset) => sum + (Number(asset.yieldValue) || 0), 0) * forecastYears;
+  const nftForecast = seatAssets.reduce((sum, asset) => sum + (Number(asset.yieldValue) || 0), 0) * forecastYears;
   const bookRows = returnRows(seatAssets, tokenAssets);
   const earnedTotal = bookRows.reduce((sum, row) => sum + row.earned, 0);
   const roiCapital = bookRows.reduce((sum, row) => sum + (row.cost > 0 ? row.cost : 0), 0);
@@ -1123,11 +1134,6 @@ export default function PortfolioView({ data }) {
     () => portfolioValueSeries(results.ownedAssets, data),
     [results.ownedAssets, data],
   );
-  useEffect(() => {
-    if (!detail) return;
-    document.getElementById('portfolio-detail')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }, [detail]);
-
   const copyLabel =
     copyState === 'busy' ? 'Copying…' :
     copyState === 'copied' ? 'Copied — paste into X' :
@@ -1332,159 +1338,30 @@ export default function PortfolioView({ data }) {
             <p className="text-sm text-slate-400">No ecosystem NFTs or project tokens found in the provided wallet(s).</p>
           ) : (
             <>
-          <nav aria-label="In this scan" className="mb-4 flex flex-wrap items-center gap-1.5">
-            <span className="font-mono text-[10px] uppercase tracking-wider text-faint">In this scan</span>
-            {[
-              { id: 'totals', label: 'Totals' },
-              { id: 'portfolio-value', label: 'Value' },
-              { id: 'portfolio-drops', label: 'Drops' },
-              seatAssets.length ? { id: 'portfolio-seats', label: 'Seats' } : null,
-              tokenAssets.length ? { id: 'portfolio-tokens', label: 'Tokens' } : null,
-            ].filter(Boolean).map((row) => (
-              <button
-                key={row.id}
-                type="button"
-                onClick={() => document.getElementById(row.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                className="rounded-md border border-line px-2 py-1 text-[12px] text-muted hover:text-ink"
-              >
-                {row.label}
-              </button>
-            ))}
-          </nav>
-          <div className="mb-4 flex flex-wrap items-center gap-2">
-            <span className="font-mono text-[10px] uppercase tracking-wider text-faint">Forecast window</span>
-            <div className="flex bg-[#08090b] rounded-lg p-1 border border-[#1e2228]">
-              {FORECAST_YEARS.map((y) => (
-                <button
-                  key={y}
-                  type="button"
-                  onClick={() => setForecastYears(y)}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-md transition ${
-                    forecastYears === y ? 'bg-[#1e2228] text-white shadow-sm' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  {y}y
-                </button>
-              ))}
+          <Copyable id="portfolio-value" className="scroll-mt-36 bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-4">
+            <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <h3 className="text-sm font-bold text-white">Portfolio value</h3>
+                <p className="mt-1 max-w-xl text-xs text-slate-500">
+                  Seat floors plus token closes, from the day each position was received. Cash already paid out is not added back.
+                </p>
+              </div>
+              <div className="flex shrink-0 flex-wrap justify-end gap-1.5 pr-10">
+                {[
+                  { label: 'Total value', value: formatCurrency(results.floorUsd) },
+                  { label: 'Token value', value: formatCurrency(tokenSpot) },
+                  { label: 'NFT value', value: formatCurrency(seatFloor) },
+                ].map((view) => (
+                  <div
+                    key={view.label}
+                    className="min-w-[7.5rem] rounded-lg border border-[#1e2228] px-3 py-1.5 text-right"
+                  >
+                    <span className="block text-[10px] uppercase tracking-wider text-slate-400">{view.label}</span>
+                    <span className="block text-sm font-extrabold text-white">{view.value}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-            <span className="text-[11px] text-slate-500">Moves the Forecast card. Earned stays the cash already paid.</span>
-          </div>
-
-          <Copyable id="totals" className="mb-8">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              {
-                id: 'value',
-                label: 'Full value',
-                value: formatCurrency(results.floorUsd),
-                valueClass: 'text-white',
-                note: 'NFTs and tokens together',
-              },
-              {
-                id: 'tokens',
-                label: 'Tokens',
-                value: formatCurrency(tokenSpot),
-                valueClass: 'text-emerald-300',
-                note: `${tokenAssets.length} ${tokenAssets.length === 1 ? 'balance' : 'balances'} · spot`,
-              },
-              {
-                id: 'nfts',
-                label: 'NFTs',
-                value: formatCurrency(seatFloor),
-                valueClass: 'text-amber-300',
-                note: `${results.totalUnits} ${results.totalUnits === 1 ? 'seat' : 'seats'} · floor today`,
-              },
-              {
-                id: 'token-pnl',
-                label: 'Token P&L',
-                value: formatPnl(tokenPnl),
-                valueClass: pnlTone(tokenPnl),
-                note: tokenPnl == null
-                  ? 'No open price on the tape'
-                  : tokenPriced < tokenAssets.length
-                    ? `Open price on ${tokenPriced} of ${tokenAssets.length}`
-                    : 'Spot minus the close when the hold started',
-              },
-              {
-                id: 'nft-pnl',
-                label: 'NFT P&L',
-                value: formatPnl(nftPnl),
-                valueClass: pnlTone(nftPnl),
-                note: nftPnl == null ? 'No seats in this scan' : 'Floor plus cash earned, minus NFT price and activation',
-              },
-              {
-                id: 'earned',
-                label: 'Earned',
-                value: quietCash(earnedTotal),
-                valueClass: 'text-emerald-300',
-                note: 'Cash already paid. Does not follow the window',
-              },
-              {
-                id: 'forecast',
-                label: `${forecastYears}y forecast`,
-                value: quietCash(forecastUsd),
-                valueClass: 'text-emerald-300',
-                note: 'Current yield times the window. Not compounded',
-              },
-              {
-                id: 'roi',
-                label: 'Total ROI',
-                value: formatRoi(totalRoi, 1),
-                valueClass: pnlTone(totalRoi),
-                note: totalRoi == null
-                  ? 'No cost on the priced book'
-                  : 'Mark plus cash earned, over what was paid',
-              },
-            ].map((card) => (
-              <button
-                key={card.id}
-                type="button"
-                onClick={() => setDetail((cur) => (cur === card.id ? null : card.id))}
-                className={`bg-[#08090b] border rounded-xl p-3 sm:p-5 shadow-inner text-left transition hover:border-slate-500 ${
-                  detail === card.id ? 'border-emerald-500/70' : 'border-[#1e2228]'
-                }`}
-              >
-                <p className="text-[10px] md:text-xs uppercase tracking-wider text-slate-400 mb-1">{card.label}</p>
-                <p className={`text-xl md:text-2xl font-extrabold ${card.valueClass}`}>{card.value}</p>
-                <p className="text-[10px] text-slate-500 mt-1">{card.note}</p>
-              </button>
-            ))}
-          </div>
-          {detail && (
-            <div id="portfolio-detail" className="mt-4 rounded-xl border border-[#1e2228] bg-black/40 p-4">
-              {detail === 'value' && (
-                <ValueDetail series={valueSeries} formatCurrency={formatCurrency} formatPnl={formatPnl} />
-              )}
-              {detail === 'tokens' && (
-                <TokenDetail assets={tokenAssets} sort="spot" formatCurrency={formatCurrency} formatPnl={formatPnl} pnlTone={pnlTone} />
-              )}
-              {detail === 'nfts' && (
-                <SeatDetail assets={seatAssets} sort="floor" formatCurrency={formatCurrency} formatPnl={formatPnl} formatRoi={formatRoi} pnlTone={pnlTone} />
-              )}
-              {detail === 'token-pnl' && (
-                <TokenDetail assets={tokenAssets} sort="pnl" formatCurrency={formatCurrency} formatPnl={formatPnl} pnlTone={pnlTone} />
-              )}
-              {detail === 'nft-pnl' && (
-                <SeatDetail assets={seatAssets} sort="pnl" formatCurrency={formatCurrency} formatPnl={formatPnl} formatRoi={formatRoi} pnlTone={pnlTone} />
-              )}
-              {detail === 'earned' && (
-                <EarnedDetail rows={bookRows} formatCurrency={formatCurrency} />
-              )}
-              {detail === 'forecast' && (
-                <ForecastDetail rows={bookRows} years={forecastYears} formatCurrency={formatCurrency} />
-              )}
-              {detail === 'roi' && (
-                <RoiDetail rows={bookRows} formatCurrency={formatCurrency} formatRoi={formatRoi} pnlTone={pnlTone} />
-              )}
-            </div>
-          )}
-          </Copyable>
-
-          <Copyable id="portfolio-value" className="scroll-mt-36 bg-[#08090b] border border-[#1e2228] rounded-xl p-4 md:p-6 mb-8">
-            <h3 className="text-sm font-bold text-white mb-1 pr-8">Portfolio value</h3>
-            <p className="text-xs text-slate-500 mb-3">
-              Seat floors plus token closes, from the day each position was received. Cash already paid out is not added back. A token with no open date is marked only on the latest day.
-            </p>
             <div className="relative h-56 w-full">
               {valueSeries.labels.length > 1 ? (
                 <Line
@@ -1526,12 +1403,72 @@ export default function PortfolioView({ data }) {
                   options={valueChartOptions}
                 />
               ) : (
-                <div className="h-full flex items-center justify-center text-sm text-slate-500 text-center px-4">
+                <div className="flex h-full items-center justify-center px-4 text-center text-sm text-slate-500">
                   Not enough daily closes to draw the book yet
                 </div>
               )}
             </div>
           </Copyable>
+
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <span className="font-mono text-[10px] uppercase tracking-wider text-faint">Forecast window</span>
+            <div className="flex bg-[#08090b] rounded-lg p-1 border border-[#1e2228]">
+              {FORECAST_YEARS.map((y) => (
+                <button
+                  key={y}
+                  type="button"
+                  onClick={() => setForecastYears(y)}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-md transition ${
+                    forecastYears === y ? 'bg-[#1e2228] text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {y}y
+                </button>
+              ))}
+            </div>
+            <span className="text-[11px] text-slate-500">Moves the forecast on the summaries. Earned stays the cash already paid.</span>
+          </div>
+
+          <div className="mb-8 flex flex-col gap-4">
+            <p className="text-[11px] text-slate-500">
+              Together {quietCash(earnedTotal)} cashflow · ROI {formatRoi(totalRoi, 1)}. Cashflow is money already paid. ROI is mark plus that cash, over what was paid.
+            </p>
+            {tokenAssets.length > 0 && (
+              <section className="rounded-xl border border-[#1e2228] bg-[#08090b] p-4 md:p-6">
+                <h3 className="mb-4 text-sm font-bold text-emerald-300">Tokens</h3>
+                <StatStrip
+                  rows={[
+                    { label: 'Value', value: formatCurrency(tokenSpot) },
+                    { label: 'Cost', value: tokenCost > 0 ? quietCash(tokenCost) : '—' },
+                    { label: 'Cashflow', value: quietCash(tokenEarned), tone: 'text-emerald-300' },
+                    { label: 'P&L', value: formatPnl(tokenPnl), tone: pnlTone(tokenPnl) },
+                    { label: `${forecastYears}y forecast`, value: quietCash(tokenForecast), tone: 'text-emerald-300' },
+                    { label: 'ROI', value: formatRoi(tokenRoi, 1), tone: pnlTone(tokenRoi) },
+                  ]}
+                />
+                <TokenDetail assets={tokenAssets} sort="spot" formatCurrency={formatCurrency} formatPnl={formatPnl} pnlTone={pnlTone} />
+              </section>
+            )}
+            {seatAssets.length > 0 && (
+              <section className="rounded-xl border border-[#1e2228] bg-[#08090b] p-4 md:p-6">
+                <h3 className="mb-4 text-sm font-bold text-amber-300">NFTs</h3>
+                <StatStrip
+                  rows={[
+                    { label: 'Value', value: formatCurrency(seatFloor) },
+                    { label: 'NFT cost', value: nftPaid == null ? '—' : quietCash(nftPaid) },
+                    { label: 'Activation', value: quietCash(nftActivation) },
+                    { label: 'Invested', value: nftInvested == null ? '—' : quietCash(nftInvested) },
+                    { label: 'Cashflow', value: quietCash(nftEarned), tone: 'text-emerald-300' },
+                    { label: `${forecastYears}y forecast`, value: quietCash(nftForecast), tone: 'text-emerald-300' },
+                    { label: 'ROI', value: formatRoi(nftCashRoi, 1), tone: pnlTone(nftCashRoi) },
+                    { label: 'P&L', value: formatPnl(nftPnl), tone: pnlTone(nftPnl) },
+                    { label: 'ROE', value: formatRoi(nftRoe, 1), tone: pnlTone(nftRoe) },
+                  ]}
+                />
+                <SeatDetail assets={seatAssets} sort="floor" formatCurrency={formatCurrency} formatPnl={formatPnl} formatRoi={formatRoi} pnlTone={pnlTone} />
+              </section>
+            )}
+          </div>
 
           {(seatAssets.some((g) => g.floorValue > 0) || tokenAssets.some((g) => g.floorValue > 0)) && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
@@ -1667,9 +1604,7 @@ export default function PortfolioView({ data }) {
                 assets: tokenAssets,
               } : null,
             ].filter(Boolean);
-            if (!books.length) {
-              return <p className="text-xs text-slate-400">No ecosystem NFTs or project tokens found in the provided wallet(s).</p>;
-            }
+            if (!books.length) return null;
             return books.map((book, bookIndex) => (
           <section key={book.id} id={book.id} className="scroll-mt-36 mb-8">
           <div className="mb-4 flex items-center justify-between gap-3 border-b border-[#1e2228] pb-2">
@@ -1685,20 +1620,21 @@ export default function PortfolioView({ data }) {
               {book.assets.map((asset) => {
                 const open = !!openProjects[asset.projectKey];
                 const entryCost = assetEntryCostUsd(asset);
+                const seatCosts = asset.tokenPosition ? [] : (asset.nfts || []).map((nft) => nftAcquireCostUsd(nft));
                 const paid = asset.tokenPosition
                   ? 0
-                  : (asset.nfts || []).reduce((sum, nft) => sum + nftAcquireCostUsd(nft), 0);
+                  : (seatCosts.some((cost) => cost == null) ? null : seatCosts.reduce((sum, cost) => sum + cost, 0));
                 const activation = asset.tokenPosition
                   ? 0
                   : (asset.nfts || []).reduce((sum, nft) => sum + (Number(nft.activationCostUsd) || 0), 0);
-                const invested = paid + activation;
+                const invested = paid == null ? null : paid + activation;
                 const seatEarned = Number(asset.earnedValue) || 0;
                 const markPnl = asset.tokenPosition
                   ? (Number(asset.entryValueUsd) > 0
                     ? asset.floorValue - asset.entryValueUsd + seatEarned
                     : null)
-                  : asset.floorValue + seatEarned - invested;
-                const seatRoe = asset.tokenPosition ? null : moneyRatio(markPnl, invested);
+                  : (invested == null ? null : asset.floorValue + seatEarned - invested);
+                const seatRoe = asset.tokenPosition || invested == null ? null : moneyRatio(markPnl, invested);
                 const payback = asset.tokenPosition ? null : paybackMonths(entryCost, asset.yieldValue);
                 const spotOnly = asset.tokenPosition && !(Number(asset.yieldValue) > 0);
                 return (
@@ -1758,7 +1694,7 @@ export default function PortfolioView({ data }) {
                         ) : (
                           <>
                             {`${asset.balance} ${Number(asset.balance) === 1 ? 'seat' : 'seats'}`}
-                            {` · NFT ${quietCash(paid)} · Activation ${quietCash(activation)} · Invested ${quietCash(invested)} · Earned ${quietCash(seatEarned)} · ${formatPnl(markPnl)}`}
+                            {` · NFT ${paid == null ? '—' : quietCash(paid)} · Activation ${quietCash(activation)} · Invested ${invested == null ? '—' : quietCash(invested)} · Earned ${quietCash(seatEarned)} · ${formatPnl(markPnl)}`}
                             {seatRoe != null ? ` · ROE ${formatRoi(seatRoe, 1)}` : ''}
                             {` · ${forecastYears}y ${quietCash((asset.yieldValue || 0) * forecastYears)}`}
                             {payback != null ? ` · Payback ${formatPaybackMonths(payback)}` : ''}
@@ -1843,12 +1779,12 @@ export default function PortfolioView({ data }) {
                                         ? (basisUsd > 0 ? formatCurrency(basisUsd) : nft.minted ? 'Free' : '—')
                                         : nft.minted
                                           ? 'Free'
-                                          : (Number(nft.entryFloorUsd) > 0 ? formatCurrency(nft.entryFloorUsd) : '…')}
+                                          : '—'}
                                     </div>
                                     <div className="text-slate-500">
                                       {formatDate(nft.lastTransferTs)}
                                       {' · '}
-                                      {nft.basisKnown ? (nft.minted ? 'Mint' : 'Buy') : (nft.minted ? 'Mint' : 'Floor that day')}
+                                      {nft.basisKnown ? (nft.minted ? 'Mint' : 'Buy') : (nft.minted ? 'Mint' : 'No sale payment')}
                                     </div>
                                   </td>
                                   <td className="py-2 px-2 text-[11px] text-slate-300 whitespace-nowrap">

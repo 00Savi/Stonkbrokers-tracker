@@ -416,11 +416,24 @@ export function walletDailyDrops(ownedAssets, data) {
   return { labels, data: labels.map((d) => byDate[d]) };
 }
 
-/** ETH paid to receive the seat. A known mint or buy of $0 stays $0. An unpriced buy uses that day's floor. */
+/**
+ * ETH the wallet paid to receive the seat.
+ * A known mint or a priced buy of $0 stays $0.
+ * An unknown transfer is null. The floor that day is not a purchase price.
+ */
 export function nftAcquireCostUsd(nft) {
   if (nft?.basisKnown) return Number(nft.basisUsd) || 0;
   if (nft?.minted) return 0;
-  return Number(nft?.entryFloorUsd) || 0;
+  return null;
+}
+
+/** USD paid for one seat when a transaction's payment is split across the NFTs it moved. */
+export function paymentPerNft({ eth = 0, weth = 0, stableUsd = 0, nftCount = 1, ethUsd = 0 } = {}) {
+  const count = Number(nftCount) > 0 ? Number(nftCount) : 1;
+  const ethPaid = (Number(eth) || 0) + (Number(weth) || 0);
+  const usd = ethPaid * (Number(ethUsd) || 0) + (Number(stableUsd) || 0);
+  if (!(usd > 0)) return null;
+  return usd / count;
 }
 
 /** What this seat cost to open: ETH paid when we know it, otherwise that day's floor, plus activation tokens. */
@@ -755,6 +768,326 @@ function isNftTransfer(t) {
   const type = String(t?.token?.type || t?.token_type || '').toUpperCase();
   if (type.includes('721') || type.includes('1155')) return true;
   return t?.total?.token_id != null || t?.token_id != null;
+}
+
+const WETH = '0x0bd7d308f8e1639fab988df18a8011f41eacad73';
+const USDG = '0x5fc5360d0400a0fd4f2af552add042d716f1d168';
+const TRANSFER_TOPIC = ethers.id('Transfer(address,address,uint256)');
+const ACTIVATED_TOPIC = ethers.id('Activated(uint256,address,uint8,uint256)');
+const LOG_CHUNK = 8_000_000;
+const ACTIVATED_IFACE = new ethers.Interface([
+  'event Activated(uint256 indexed tokenId, address indexed owner, uint8 tier, uint256 feePaid)',
+]);
+const TRANSFER_IFACE = new ethers.Interface([
+  'event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)',
+]);
+
+/** nft address -> activation contract. data.json does not carry these. */
+const ACTIVATION_BY_NFT = {
+  '0x539cdd042c2f3d93ebc5be7dfff0c79f3b4fabf0': '0xacd5ae3c060c1137fe2ee86b0ab2ef697456f664',
+  '0x797a2e030b7e49107c8f07bf0300ea9cae88ca57': '0x47c2194caacfc778c0baa41e10008bb7d720cd59',
+  '0x2756bffc4cccb0cbebeb675a8593ca80c8db8a97': '0xef5f726990442bc3207d72d1f9dcf8677cf02358',
+  '0x890215157dbec26d67605324271b34ba05ee9e58': '0xb3f6f0fad13b0b60873ac2a90281ebe431fdb6ed',
+  '0x1215d567dc4e0f2999dcc262d78d1586ff97154f': '0xf658b4abdafc6c8d652742d563e9d9ab8b454475',
+  '0xfc4b0c4f464dc3037cf013934648a8a726d565a5': '0x668ea9e44e0ceb5b203067873e0b9bcdf2214b37',
+  '0x7cd6e36286f92f55cc8f498e36e10a975a332aac': '0xf8de142e9f6c4b5f276416b4bcad01758acdcace',
+  '0xcc87ff3b3c08fc04c1f60f54989eb7dfab3e0b31': '0x8fef7779c917ca4db5bd4b2691aaab4122531361',
+  '0x63a405ef2d9937675925ac8a99ce1694bcfd2922': '0xe6253d5548844b943ad4ff99680d429fd73d600c',
+  '0x291cbcd1e9f44724ed5acbdc6e1ddd72b28f7911': '0x9507068897b4f60adb12ca9032e0cf03dfac13d4',
+};
+
+function tierIdFromChain(val) {
+  const n = Number(val);
+  if (Number.isInteger(n) && n >= 0 && n <= 4) return `T${n}`;
+  return null;
+}
+
+const ethMinuteCache = new Map();
+
+/** Coinbase ETH-USD close of the minute the sale landed in. */
+export async function ethUsdAtMinute(ts) {
+  const minute = Math.floor(Number(ts) / 60) * 60;
+  if (!minute) return 0;
+  if (ethMinuteCache.has(minute)) return ethMinuteCache.get(minute);
+  const start = new Date(minute * 1000).toISOString();
+  const end = new Date((minute + 60) * 1000).toISOString();
+  try {
+    const res = await fetch(`https://api.exchange.coinbase.com/products/ETH-USD/candles?start=${start}&end=${end}&granularity=60`);
+    const rows = await res.json();
+    const row = Array.isArray(rows) ? (rows.find((r) => r[0] === minute) || rows[0]) : null;
+    const px = row ? Number(row[4]) : 0;
+    if (px > 0) ethMinuteCache.set(minute, px);
+    return px > 0 ? px : 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function getLogsChunked(provider, filter, fromBlock, toBlock, { stop } = {}) {
+  const out = [];
+  let end = toBlock;
+  while (end >= fromBlock) {
+    const start = Math.max(fromBlock, end - LOG_CHUNK + 1);
+    let logs = [];
+    try {
+      logs = await provider.getLogs({ ...filter, fromBlock: start, toBlock: end });
+    } catch {
+      if (end - start > 250_000) {
+        const mid = Math.floor((start + end) / 2);
+        logs = [
+          ...(await getLogsChunked(provider, filter, mid + 1, end)),
+          ...(await getLogsChunked(provider, filter, start, mid)),
+        ];
+      }
+    }
+    out.push(...logs);
+    if (stop?.(out)) break;
+    if (start === fromBlock) break;
+    end = start - 1;
+  }
+  return out;
+}
+
+async function blockTime(provider, blockNumber, cache) {
+  const n = Number(blockNumber);
+  if (cache.has(n)) return cache.get(n);
+  const block = await provider.getBlock(n);
+  const ts = Number(block?.timestamp) || 0;
+  cache.set(n, ts);
+  return ts;
+}
+
+/** Latest inbound transfer of each token id to this wallet. Stops once every id is found. */
+export async function fetchLatestInbounds(provider, nftCa, wallet, tokenIds) {
+  const wanted = new Set((tokenIds || []).map(Number).filter(Number.isFinite));
+  const found = new Map();
+  if (!wanted.size) return found;
+  const tip = await provider.getBlockNumber();
+  const toTopic = ethers.zeroPadValue(wallet, 32);
+  const times = new Map();
+  let end = tip;
+  while (wanted.size && end >= 0) {
+    const start = Math.max(0, end - LOG_CHUNK + 1);
+    let logs = [];
+    try {
+      logs = await provider.getLogs({
+        address: nftCa,
+        topics: [TRANSFER_TOPIC, null, toTopic],
+        fromBlock: start,
+        toBlock: end,
+      });
+    } catch {
+      logs = [];
+    }
+    logs.sort((a, b) => Number(b.blockNumber) - Number(a.blockNumber));
+    for (const log of logs) {
+      let parsed;
+      try { parsed = TRANSFER_IFACE.parseLog(log); } catch { continue; }
+      const id = Number(parsed.args.tokenId);
+      if (!wanted.has(id) || found.has(id)) continue;
+      const ts = await blockTime(provider, log.blockNumber, times);
+      const from = String(parsed.args.from);
+      found.set(id, {
+        hash: log.transactionHash,
+        ts,
+        from,
+        mint: from.toLowerCase() === ZERO,
+        block: Number(log.blockNumber),
+      });
+      wanted.delete(id);
+    }
+    if (!wanted.size || start === 0) break;
+    end = start - 1;
+  }
+  return found;
+}
+
+/** Native ETH, WETH, and USDG the buyer sent, split across the NFTs that moved. */
+export async function readSalePayment(provider, hash) {
+  if (!hash) return null;
+  const tx = await provider.getTransaction(hash);
+  const rec = await provider.getTransactionReceipt(hash);
+  if (!tx || !rec) return null;
+  const buyer = String(tx.from).toLowerCase();
+  let nftCount = 0;
+  let weth = 0n;
+  let stable = 0n;
+  for (const log of rec.logs) {
+    if (log.topics[0] !== TRANSFER_TOPIC) continue;
+    if (log.topics.length === 4) {
+      nftCount += 1;
+      continue;
+    }
+    if (log.topics.length !== 3) continue;
+    const from = `0x${log.topics[1].slice(26)}`.toLowerCase();
+    if (from !== buyer) continue;
+    const addr = log.address.toLowerCase();
+    let amt = 0n;
+    try { amt = BigInt(log.data); } catch { amt = 0n; }
+    if (addr === WETH) weth += amt;
+    if (addr === USDG) stable += amt;
+  }
+  return {
+    eth: Number(ethers.formatEther(tx.value)),
+    weth: Number(ethers.formatEther(weth)),
+    stableUsd: Number(ethers.formatUnits(stable, 6)),
+    nftCount,
+  };
+}
+
+function activationCaFor(nft, pData) {
+  const fromBook = String(pData?.config?.activationCa || '').toLowerCase();
+  if (/^0x[a-f0-9]{40}$/.test(fromBook)) return fromBook;
+  return ACTIVATION_BY_NFT[String(nft?.nftCa || '').toLowerCase()] || '';
+}
+
+async function ownerActivations(provider, activationCa, wallet, fromBlock) {
+  const tip = await provider.getBlockNumber();
+  const ownerTopic = ethers.zeroPadValue(wallet, 32);
+  const logs = await getLogsChunked(provider, {
+    address: activationCa,
+    topics: [ACTIVATED_TOPIC, null, ownerTopic],
+  }, Math.max(0, fromBlock), tip);
+  const times = new Map();
+  const rows = [];
+  for (const log of logs) {
+    let parsed;
+    try { parsed = ACTIVATED_IFACE.parseLog(log); } catch { continue; }
+    const ts = await blockTime(provider, log.blockNumber, times);
+    rows.push({
+      tokenId: Number(parsed.args.tokenId),
+      tierId: tierIdFromChain(parsed.args.tier),
+      tokens: Number(ethers.formatUnits(parsed.args.feePaid, 18)) || 0,
+      ts,
+      block: Number(log.blockNumber),
+    });
+  }
+  return rows;
+}
+
+/**
+ * Replace the indexer's open time and the floor-as-cost guess with the
+ * transfer that actually delivered each seat, and the activation fee this
+ * wallet paid after that.
+ */
+export async function attachSaleCosts(provider, nfts, data) {
+  const list = (nfts || []).filter((n) => n?.nftCa && n?.wallet && n.tokenId != null);
+  const groups = new Map();
+  for (const nft of list) {
+    const key = `${String(nft.nftCa).toLowerCase()}:${String(nft.wallet).toLowerCase()}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(nft);
+  }
+  const payments = new Map();
+  await mapLimited([...groups.values()], 2, async (group) => {
+    const inbound = await fetchLatestInbounds(provider, group[0].nftCa, group[0].wallet, group.map((n) => n.tokenId));
+    for (const nft of group) {
+      const row = inbound.get(Number(nft.tokenId));
+      if (!row) continue;
+      nft.lastTransferHash = row.hash;
+      nft.lastTransferTs = row.ts;
+      nft.minted = row.mint;
+      nft.inboundBlock = row.block;
+      if (row.mint) {
+        nft.basisUsd = 0;
+        nft.basisKnown = true;
+        nft.purchaseEth = 0;
+      }
+    }
+  });
+  const hashes = [...new Set(list.map((n) => n.lastTransferHash).filter(Boolean))];
+  await mapLimited(hashes, 4, async (hash) => {
+    try {
+      payments.set(hash, await readSalePayment(provider, hash));
+    } catch {
+      payments.set(hash, null);
+    }
+  });
+  const minutes = new Set();
+  for (const nft of list) {
+    const pay = payments.get(nft.lastTransferHash);
+    if (nft.lastTransferTs && pay && ((pay.eth || 0) + (pay.weth || 0)) > 0) {
+      minutes.add(Math.floor(nft.lastTransferTs / 60) * 60);
+    }
+  }
+  await mapLimited([...minutes], 4, (minute) => ethUsdAtMinute(minute));
+
+  for (const nft of list) {
+    if (nft.minted && nft.basisKnown) continue;
+    const pay = payments.get(nft.lastTransferHash);
+    if (!pay) continue;
+    const ethUsd = await ethUsdAtMinute(nft.lastTransferTs);
+    const usd = paymentPerNft({ ...pay, ethUsd });
+    if (usd == null) continue;
+    nft.purchaseEth = ((pay.eth || 0) + (pay.weth || 0)) / (pay.nftCount > 0 ? pay.nftCount : 1);
+    nft.basisUsd = usd;
+    nft.basisKnown = true;
+  }
+
+  const actGroups = new Map();
+  for (const nft of list) {
+    if (!(nft.inboundBlock > 0) || nft.machineWeight) continue;
+    const pData = portfolioBook(data, nft.projectKey);
+    const ca = activationCaFor(nft, pData);
+    if (!ca) continue;
+    const key = `${ca}:${String(nft.wallet).toLowerCase()}`;
+    if (!actGroups.has(key)) actGroups.set(key, { ca, wallet: nft.wallet, fromBlock: nft.inboundBlock, nfts: [] });
+    const group = actGroups.get(key);
+    group.fromBlock = Math.min(group.fromBlock, nft.inboundBlock);
+    group.nfts.push(nft);
+  }
+  await mapLimited([...actGroups.values()], 2, async (group) => {
+    let events = null;
+    try {
+      events = await ownerActivations(provider, group.ca, group.wallet, group.fromBlock);
+    } catch {
+      events = null;
+    }
+    if (!events) return;
+    for (const nft of group.nfts) {
+      const mine = events
+        .filter((ev) => ev.tokenId === Number(nft.tokenId) && ev.ts + 120 >= Number(nft.lastTransferTs))
+        .sort((a, b) => a.ts - b.ts);
+      if (!mine.length) {
+        nft.activationCostUsd = 0;
+        nft.actTokens = 0;
+        continue;
+      }
+      const pData = portfolioBook(data, nft.projectKey);
+      const priceBook = priceSource(pData, data);
+      let usd = 0;
+      let tokens = 0;
+      for (const ev of mine) {
+        const px = tokenPriceAtTs(priceBook, ev.ts, { allowLive: false });
+        tokens += ev.tokens;
+        if (px > 0) usd += ev.tokens * px;
+      }
+      const last = mine[mine.length - 1];
+      nft.activationTs = last.ts;
+      nft.actTokens = tokens;
+      nft.activationCostUsd = usd;
+      nft.actTokenPriceUsd = tokens > 0 ? usd / tokens : 0;
+      if (last.tierId) {
+        const tier = (pData?.tiers || []).find((t) => t.tier === last.tierId || t.id === last.tierId);
+        nft.tierId = last.tierId;
+        if (tier?.name) nft.tierName = tier.name;
+        if (nft.isActive && tier && Number(tier.trackedAnnualYieldUsd) > 0) {
+          nft.yieldValue = Number(tier.trackedAnnualYieldUsd) || 0;
+        }
+      }
+      const start = earningStartTs(nft);
+      if (nft.isActive && start) nft.earnedValue = earnedUsdForNft(pData, nft.tierId, start);
+    }
+  });
+
+  for (const nft of list) {
+    if (nft.machineWeight) continue;
+    const pData = portfolioBook(data, nft.projectKey);
+    const start = earningStartTs(nft);
+    if (!nft.isActive || !start || !pData) continue;
+    if (nft.earnedValue == null) nft.earnedValue = earnedUsdForNft(pData, nft.tierId, start);
+    else if (nft.lastTransferTs) nft.earnedValue = earnedUsdForNft(pData, nft.tierId, start);
+  }
 }
 
 /** ETH sent in a tx, split across NFT transfers of this collection when the explorer lists them. */

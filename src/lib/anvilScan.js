@@ -937,7 +937,15 @@ export async function scanAnvilVault(vaultId, data, { onProgress, onPartial, onP
     if (book?.membership_complete && Number(book.count) === vaultBalance) {
       await withDecimals(mc, fungible, signal);
       const built = rowsFromVaultBook(vault, book, fungible, nfts);
-      if (built && built.rows.length === vaultBalance) {
+      // The book stores the local CREATE2 address. For some StonkBrokers that
+      // address is not the registry account, and the real wallet is the one
+      // holding the Wall NFT. A book that disagrees is not a complete read.
+      const sample = built?.rows?.length ? [built.rows[0], built.rows[built.rows.length - 1]] : [];
+      const registryAgrees = sample.length > 0 && (await Promise.all(sample.map(async (row) => {
+        const onchain = await accountOnChain(mc, vault.nftCa, row.tokenId, signal);
+        return onchain && row.tba && onchain.toLowerCase() === row.tba.toLowerCase();
+      }))).every(Boolean);
+      if (built && built.rows.length === vaultBalance && registryAgrees) {
         rows = built.rows;
         readyTokens = built.readyTokens;
         readyCols = built.readyCols;

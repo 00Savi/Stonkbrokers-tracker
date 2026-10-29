@@ -65,7 +65,7 @@ function logoForPath(pathname, data) {
 
 const PIXEL_LOGO = /Stonkbroker|Intern|Mutual/;
 
-function NavIcon({ name }) {
+export function NavIcon({ name }) {
   const pen = {
     fill: 'none',
     stroke: 'currentColor',
