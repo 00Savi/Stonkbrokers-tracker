@@ -561,6 +561,7 @@ const { fetchNight } = require("./lib/night.cjs");
 const priceDays = require("./lib/priceDays.cjs");
 const { foldOnboarding, emptySummary, keepOnboardingHistory } = require("./lib/onboarding.cjs");
 const { fetchGachaRevenue } = require("./lib/gacha.cjs");
+const { fetchCardwallRain } = require("./lib/cardwallRain.cjs");
 const { walkAmmFlow, mergeAmmFlow } = require("./lib/ammFlow.cjs");
 const {
   fetchTraderBooks,
@@ -5003,6 +5004,7 @@ async function run() {
       }, dailySnapshots, todayStamp));
 
       let gacha = null;
+      let rain = prevProjData.rain || null;
       if (projectKey === "cardwall") {
         gacha = prevProjData.gacha || null;
         try {
@@ -5013,6 +5015,14 @@ async function run() {
           );
         } catch (e) {
           console.warn(`[warn] gacha revenue: ${e.message}`);
+        }
+        try {
+          rain = await fetchCardwallRain();
+          console.log(
+            `  rain: ${rain.drops.length} shown, ${rain.stats?.dropCount || "?"} paid out $${rain.stats?.paidOutUsd || 0}`,
+          );
+        } catch (e) {
+          console.warn(`[warn] cardwall rain: ${e.message}`);
         }
       }
 
@@ -5049,7 +5059,7 @@ async function run() {
         ...(ammFlow ? { ammFlow } : {}),
         lockedLp: lockedLpData,
         ledger: ledger,
-        ...(projectKey === "cardwall" ? { gacha } : {}),
+        ...(projectKey === "cardwall" ? { gacha, rain } : {}),
         underConstruction: projectKey === "interns" ? !internContractsReady(conf) : conf.underConstruction,
         dailySnapshots: dailySnapshots,
         config: projectKey === "interns"
@@ -5089,6 +5099,15 @@ async function run() {
             );
           } catch (e2) {
             console.warn(`[warn] gacha revenue: ${e2.message}`);
+          }
+          try {
+            const rain = await fetchCardwallRain();
+            finalJson.projects.cardwall = { ...finalJson.projects.cardwall, rain };
+            console.log(
+              `  rain: ${rain.drops.length} shown, ${rain.stats?.dropCount || "?"} paid out $${rain.stats?.paidOutUsd || 0}`,
+            );
+          } catch (e2) {
+            console.warn(`[warn] cardwall rain: ${e2.message}`);
           }
         }
       }

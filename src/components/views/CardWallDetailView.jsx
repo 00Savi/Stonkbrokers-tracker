@@ -67,7 +67,6 @@ export default function CardWallDetailView({ data, activeTab }) {
   const { range: timeframe, interval } = useChartView();
   const [expandedTier, setExpandedTier] = useState(null);
   const [tierTimeframe, setTierTimeframe] = useState('allTime');
-  const [selectedSlab, setSelectedSlab] = useState(null);
   const [selectedDrop, setSelectedDrop] = useState(null);
   const [liveDrops, setLiveDrops] = useState(null);
   const [machineCatalog, setMachineCatalog] = useState([]);
@@ -75,7 +74,10 @@ export default function CardWallDetailView({ data, activeTab }) {
   const [openMachine, setOpenMachine] = useState(null);
   const [pullSort, setPullSort] = useState('recent');
   const [dropMachine, setDropMachine] = useState('');
+  const [rainFilter, setRainFilter] = useState('all');
+  const [selectedRain, setSelectedRain] = useState(null);
   const dropsRef = useRef(null);
+  const rainRef = useRef(null);
   const dropModalRef = useRef(null);
 
   useEffect(() => {
@@ -123,7 +125,12 @@ export default function CardWallDetailView({ data, activeTab }) {
   const project = data?.projects?.cardwall || data?.projects?.card;
   if (!project) return <SkeletonCard rows={4} />;
 
-  const { config = {}, market = {}, tiers = [], activation = {}, ownership = {}, revenue = {}, dailySnapshots = [], ledger = null } = project;
+  const { config = {}, market = {}, tiers = [], activation = {}, ownership = {}, revenue = {}, dailySnapshots = [], ledger = null, rain = null } = project;
+  const rainDrops = Array.isArray(rain?.drops) ? rain.drops : [];
+  const rainStats = rain?.stats || {};
+  const rainShown = rainFilter === 'all'
+    ? rainDrops
+    : rainDrops.filter((d) => d.kind === rainFilter);
 
   const formatCurrency = compactUsd;
   const formatNumber = compactNum;
@@ -256,10 +263,117 @@ export default function CardWallDetailView({ data, activeTab }) {
         >
           <KpiStrip>
             <Stat label="Staking to holders" value={formatCurrency(revenue.holderStaking30dUsd || 0)} tone="accent" note="30d $WALL, annualized below" />
-            <Stat label="Slab rain to holders" value={formatCurrency(revenue.holderRainUsd || ledger?.deliveredUsd || 0)} note="Landed cost since vault opened" />
+            <Stat label="Slab rain to holders" value={formatCurrency(revenue.holderRainUsd || ledger?.deliveredUsd || 0)} note="VaultLedger landed cost with members" />
             <Stat label="Gacha charged" value={formatCurrency(gacha?.usd || 0)} tone="muted" note="Restocks the vault, not added to rain" />
           </KpiStrip>
         </Card>
+
+        {rainDrops.length ? (
+          <div ref={rainRef} id="cardwall-rain">
+            <Card
+              eyebrow="Slab rain"
+              sub={(
+                <>
+                  Graded slabs and Alley credit landing on activated memberships — the same feed as{' '}
+                  <a href="https://thecardwall.com/rain" target="_blank" rel="noreferrer" className="text-mark-sky hover:underline">thecardwall.com/rain</a>
+                  . Not machine pulls; those live under Revenue.
+                </>
+              )}
+              corner={(
+                <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                  {[
+                    { id: 'all', label: 'All' },
+                    { id: 'slab', label: 'Slabs' },
+                    { id: 'credit', label: 'Credit' },
+                  ].map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setRainFilter(opt.id)}
+                      data-share-omit
+                      className={`rounded-md border px-2 py-1 font-mono text-[10px] uppercase tracking-wide ${
+                        rainFilter === opt.id ? 'border-line bg-panel-2 text-ink' : 'border-line text-faint hover:text-ink'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                  <CopyControl
+                    alwaysLabel
+                    heading
+                    idleLabel="Copy section"
+                    title="Copy the rain feed for X"
+                    className="bg-panel"
+                    onCopy={() => copySectionEl(rainRef.current, 'cardwall-rain')}
+                  />
+                  <Tag tone="plain">
+                    {rainStats.dropCount != null ? `${formatNumber(rainStats.dropCount)} paid` : `${rainShown.length} shown`}
+                    {rainStats.paidOutUsd != null ? ` · ${formatCurrency(rainStats.paidOutUsd)}` : ''}
+                  </Tag>
+                </div>
+              )}
+            >
+              {rainStats.vaultSlabs != null || rainStats.vaultCredits != null ? (
+                <KpiStrip className="mb-4">
+                  <Stat
+                    label="In the vault"
+                    value={`${formatNumber((rainStats.vaultSlabs || 0) + (rainStats.vaultCredits || 0))}`}
+                    note={`${formatNumber(rainStats.vaultSlabs || 0)} slabs · ${formatNumber(rainStats.vaultCredits || 0)} credits`}
+                  />
+                  <Stat
+                    label="In rotation"
+                    value={rainStats.inRotation != null ? formatNumber(rainStats.inRotation) : '—'}
+                    note="Activated memberships in the rain queue"
+                  />
+                  <Stat
+                    label="Rain paid out"
+                    value={formatCurrency(rainStats.paidOutUsd || 0)}
+                    tone="accent"
+                    note={rainStats.dropCount != null ? `${formatNumber(rainStats.dropCount)} drops to members` : 'From the public rain book'}
+                  />
+                </KpiStrip>
+              ) : null}
+              {rainShown.length ? (
+                <div className="flex gap-3 overflow-x-auto pb-2">
+                  {rainShown.map((drop) => (
+                    <button
+                      key={drop.id}
+                      type="button"
+                      onClick={() => setSelectedRain(drop)}
+                      className="flex w-36 shrink-0 cursor-pointer flex-col rounded-xl border border-line bg-panel-2 p-2.5 text-left transition-colors hover:border-muted"
+                    >
+                      <div className="relative flex h-40 w-full items-center justify-center overflow-hidden rounded-lg bg-panel">
+                        {drop.kind === 'credit' ? (
+                          <div className="flex h-full w-full flex-col items-center justify-center gap-1 px-2 text-center">
+                            <span className="font-mono text-[22px] text-ink">$50</span>
+                            <span className="font-mono text-[10px] uppercase tracking-wide text-faint">Alley credit</span>
+                          </div>
+                        ) : drop.image ? (
+                          <img src={drop.image} alt={drop.name} className="max-h-full max-w-full object-contain" />
+                        ) : (
+                          <span className="font-mono text-[10px] text-faint">No photo</span>
+                        )}
+                        {drop.grade ? (
+                          <span className="absolute right-1.5 top-1.5 rounded bg-mark-green px-1.5 py-0.5 font-mono text-[9px] font-medium text-black">{drop.grade}</span>
+                        ) : drop.kind === 'credit' ? (
+                          <span className="absolute right-1.5 top-1.5 rounded bg-mark-sky px-1.5 py-0.5 font-mono text-[9px] font-medium text-black">Credit</span>
+                        ) : null}
+                      </div>
+                      <p className="mt-2 min-h-8 text-[12px] text-ink line-clamp-2">{drop.name}</p>
+                      <p className="mt-1 truncate font-mono text-[10px] text-faint">
+                        {drop.membershipId != null ? `Membership #${drop.membershipId}` : 'Member wall'}
+                        {drop.dateLabel ? ` · ${drop.dateLabel}` : ''}
+                      </p>
+                      <p className="mt-2 font-mono text-[12px] text-ink">{formatCurrency(drop.landedCostUsd || 0)}</p>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="font-mono text-[12px] text-faint">No {rainFilter === 'slab' ? 'slab' : 'credit'} drops in this window.</p>
+              )}
+            </Card>
+          </div>
+        ) : null}
 
         <Card>
           <button
@@ -359,37 +473,6 @@ export default function CardWallDetailView({ data, activeTab }) {
                       {isExpanded && (
                         <tr className="border-b border-line-soft bg-panel-2/40">
                           <td colSpan="6" className="px-5 py-4">
-                            {t.recentDrops && t.recentDrops.length > 0 ? (
-                              <div className="mb-6">
-                                <div className="mb-3 flex items-start justify-between gap-3">
-                                  <div>
-                                    <p className="eyebrow text-faint">Daily slab rain · {t.name}</p>
-                                    <p className="mt-1 text-[12px] text-muted">Delivered to member ERC-6551 token-bound wallets</p>
-                                  </div>
-                                  <Tag tone="plain">{t.recentDrops.length} slabs delivered</Tag>
-                                </div>
-                                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-                                  {t.recentDrops.map((slab) => (
-                                    <div
-                                      key={slab.id}
-                                      onClick={(e) => { e.stopPropagation(); setSelectedSlab(slab); }}
-                                      className="group relative flex cursor-pointer flex-col justify-between rounded-xl border border-line bg-panel p-2.5 transition-colors hover:border-muted"
-                                    >
-                                      <div className="relative flex h-36 w-full items-center justify-center overflow-hidden rounded-lg bg-panel-2 p-1">
-                                        <img src={slab.imageUrl} alt={slab.cardName} className="max-h-full max-w-full object-contain transition-transform duration-200 group-hover:scale-105" />
-                                        <span className="absolute right-1.5 top-1.5 rounded bg-mark-green px-1.5 py-0.5 font-mono text-[9px] font-medium text-black">{slab.grade || 'PSA 10'}</span>
-                                      </div>
-                                      <div className="mt-2 text-left">
-                                        <p className="truncate text-[12px] text-ink">{slab.cardName}</p>
-                                        <div className="mt-1 flex items-center justify-between font-mono text-[10px] text-muted">
-                                          <span>{slab.date}</span><span className="text-ink">{formatCurrency(slab.landedCostUsd)}</span>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            ) : null}
                             <p className="eyebrow mb-3 text-faint">Daily yield · {t.name}</p>
                             <div className="relative h-32 w-full md:h-40">
                               {seriesHasInk(t.dailyYields) ? (
@@ -642,8 +725,8 @@ export default function CardWallDetailView({ data, activeTab }) {
             {drops.length || machineNames.length ? (
               <div ref={dropsRef} id="cardwall-drops">
                 <Card
-                  eyebrow="Latest drops"
-                  sub="Newest slabs the machines revealed. Choose a machine to see only that till, or leave it on all. A reload includes pulls the hourly index has not written yet. Paid is the pull. Value is the posted insured or fair-market price. Click a card for the full pull."
+                  eyebrow="Machine pulls"
+                  sub="Newest slabs The Alley and The Claw revealed to players. Separate from slab rain on ROI — rain is what lands on memberships. Paid is the pull. Value is the posted insured or fair-market price."
                   corner={(
                     <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                       <label className="sr-only" htmlFor="cardwall-drop-machine">Machine</label>
@@ -663,7 +746,7 @@ export default function CardWallDetailView({ data, activeTab }) {
                         alwaysLabel
                         heading
                         idleLabel="Copy section"
-                        title="Copy the latest drops for X"
+                        title="Copy the machine pulls for X"
                         className="bg-panel"
                         onCopy={() => copySectionEl(dropsRef.current, 'cardwall-drops')}
                       />
@@ -714,14 +797,14 @@ export default function CardWallDetailView({ data, activeTab }) {
           eyebrow="Slab vault"
           sub={(
             <>
-              The slab vault, not AMM fees. Each card is a real grade 10 the protocol bought: <strong className="font-normal text-ink">total volume</strong> is landed cost of every slab ever recorded, <strong className="font-normal text-ink">on the wall</strong> is still in custody, and <strong className="font-normal text-ink">with members</strong> has already rained or sold. The chart is that landed cost by the day it was written to VaultLedger: green when it went to a member, amber when it was still sitting in the vault that day.
+              The slab vault, not AMM fees. Each card is a real grade 10 the protocol bought: <strong className="font-normal text-ink">total volume</strong> is landed cost of every slab ever recorded, <strong className="font-normal text-ink">on the wall</strong> is still in custody, and <strong className="font-normal text-ink">with members</strong> has already rained or sold. Rain drops (slabs + Alley credit) are on the ROI tab. The chart is VaultLedger landed cost by day: green delivered, amber still vaulted.
             </>
           )}
         >
           <KpiStrip>
             <Stat label="Total volume (landed cost)" value={formatCurrency(ledger?.volumeUsd || 0)} tone="accent" />
-            <Stat label="On the wall" value={formatCurrency(ledger?.vaultedUsd || 0)} />
-            <Stat label="With members" value={formatCurrency(ledger?.deliveredUsd || 0)} />
+            <Stat label="On the wall" value={formatCurrency(ledger?.vaultedUsd || 0)} note={rainStats.vaultSlabs != null ? `${formatNumber(rainStats.vaultSlabs)} slabs queued for rain` : undefined} />
+            <Stat label="With members" value={formatCurrency(ledger?.deliveredUsd || 0)} note={ledger?.deliveredCount != null ? `${formatNumber(ledger.deliveredCount)} slabs delivered` : undefined} />
           </KpiStrip>
         </Card>
 
@@ -966,28 +1049,42 @@ export default function CardWallDetailView({ data, activeTab }) {
         </div>
       )}
 
-      {selectedSlab && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm" onClick={() => setSelectedSlab(null)}>
+      {selectedRain && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm" onClick={() => setSelectedRain(null)}>
           <div className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
             <Card>
               <div className="space-y-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <Tag tone="plain">Collector Crypt verified</Tag>
-                    <h3 className="mt-2 text-[16px] text-ink">{selectedSlab.cardName}</h3>
+                    <Tag tone="plain">{selectedRain.kind === 'credit' ? 'Alley credit rain' : 'Slab rain'}</Tag>
+                    <h3 className="mt-2 text-[16px] text-ink">{selectedRain.name}</h3>
+                    {selectedRain.membershipId != null ? (
+                      <p className="mt-1 font-mono text-[12px] text-muted">Membership #{selectedRain.membershipId}{selectedRain.dateLabel ? ` · ${selectedRain.dateLabel}` : ''}</p>
+                    ) : null}
                   </div>
-                  <button type="button" onClick={() => setSelectedSlab(null)} className="rounded-lg border border-line bg-panel p-1 text-muted hover:text-ink">✕</button>
+                  <button type="button" onClick={() => setSelectedRain(null)} className="rounded-lg border border-line bg-panel p-1 text-muted hover:text-ink">✕</button>
                 </div>
                 <div className="flex h-64 items-center justify-center rounded-xl border border-line bg-panel-2 p-3">
-                  <img src={selectedSlab.imageUrl} alt={selectedSlab.cardName} className="max-h-full object-contain" />
+                  {selectedRain.kind === 'credit' ? (
+                    <div className="text-center">
+                      <p className="font-mono text-[36px] text-ink">$50</p>
+                      <p className="mt-1 font-mono text-[11px] uppercase tracking-wide text-faint">Spends at The Alley</p>
+                    </div>
+                  ) : selectedRain.image ? (
+                    <img src={selectedRain.image} alt={selectedRain.name} className="max-h-full object-contain" />
+                  ) : (
+                    <span className="font-mono text-[12px] text-faint">No photo</span>
+                  )}
                 </div>
                 <KpiStrip>
-                  <Stat label="Landed cost basis" value={formatCurrency(selectedSlab.landedCostUsd)} tone="accent" />
-                  <Stat label="PSA cert #" value={selectedSlab.certNumber} />
+                  <Stat label="Landed value" value={formatCurrency(selectedRain.landedCostUsd || 0)} tone="accent" />
+                  <Stat label={selectedRain.cert ? 'Cert #' : 'Kind'} value={selectedRain.cert || (selectedRain.kind === 'credit' ? 'Credit' : 'Slab')} />
                 </KpiStrip>
-                <div>
-                  <p className="eyebrow text-faint">Delivered to TBA wallet</p>
-                  <p className="mt-1 truncate font-mono text-[12px] text-mark-sky">{selectedSlab.recipientTba}</p>
+                <div className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-[11px]" data-share-omit>
+                  <a href={selectedRain.href || 'https://thecardwall.com/rain'} target="_blank" rel="noreferrer" className="text-mark-sky hover:underline">Open on The Card Wall</a>
+                  {selectedRain.cert && String(selectedRain.grade || '').toUpperCase().includes('PSA') ? (
+                    <a href={`https://www.psacard.com/cert/${selectedRain.cert}`} target="_blank" rel="noreferrer" className="text-mark-sky hover:underline">PSA cert</a>
+                  ) : null}
                 </div>
               </div>
             </Card>
@@ -996,9 +1093,9 @@ export default function CardWallDetailView({ data, activeTab }) {
       )}
 
       <MethodologyCard>
-          <p><strong className="text-ink">Yield &amp; ROI:</strong> Each row is a wall level, Foundation through Fortress. Cost is the membership floor plus the $WALL to reach that level. Expected yield is two holder streams: RewardPaid staking over the last 30 days, annualized and split by that level&apos;s weight, plus slab-rain landed cost since the vault opened, split by the level&apos;s rain points. Gacha pull receipts restock the vault and are not added on top of slabs already delivered. The early-build bonus and the extra rain points from star rarity are not in this table.</p>
+          <p><strong className="text-ink">Yield &amp; ROI:</strong> Each row is a wall level, Foundation through Fortress. Cost is the membership floor plus the $WALL to reach that level. Expected yield is two holder streams: RewardPaid staking over the last 30 days, annualized and split by that level&apos;s weight, plus slab-rain landed cost since the vault opened, split by the level&apos;s rain points. The Slab rain strip is the public thecardwall.com/rain feed (graded slabs and Alley credit to memberships), snapshotted hourly. Gacha pull receipts restock the vault and are not added on top of slabs already delivered. The early-build bonus and the extra rain points from star rarity are not in this table.</p>
           <p><strong className="text-ink">Payback:</strong> Entry cost ÷ annualized trailing yield, repriced at the last sync.</p>
-          <p><strong className="text-ink">Revenue:</strong> Gacha pull revenue is the USD price charged on The Alley till (0x6686…5676) and The Claw pool (0xC004…6b33, the crane). Alley USD is the quote&apos;s reference cents. Claw USD is the USDG received, plus $WALL at that day&apos;s close and WETH at the ETH price. Credit pulls are excluded from money in. Card value out is the insured price on The Alley and the fair-market value on The Claw, joined from each pull result. Spread is money in minus that posted value. It is not the protocol&apos;s purchase cost. Alley buyback cash is shown separately: those slabs were sold back and stayed with the house. The slab chart under it is VaultLedger landed cost (delivered vs still on the wall), not AMM swap fees. Activations are a live SoftStakingVault scan by rarityOf, not a log replay of Anvil Activated events.</p>
+          <p><strong className="text-ink">Revenue:</strong> Gacha pull revenue is the USD price charged on The Alley till (0x6686…5676) and The Claw pool (0xC004…6b33, the crane). Alley USD is the quote&apos;s reference cents. Claw USD is the USDG received, plus $WALL at that day&apos;s close and WETH at the ETH price. Credit pulls are excluded from money in. Card value out is the insured price on The Alley and the fair-market value on The Claw, joined from each pull result. Spread is money in minus that posted value. It is not the protocol&apos;s purchase cost. Alley buyback cash is shown separately: those slabs were sold back and stayed with the house. Machine pulls are player reveals, not holder rain. The slab chart under it is VaultLedger landed cost (delivered vs still on the wall), not AMM swap fees. Activations are a live SoftStakingVault scan by rarityOf, not a log replay of Anvil Activated events.</p>
           <p><strong className="text-ink">Ownership:</strong> Circulating NFTs are collection size minus AMM vault inventory. Wallets per 100 NFTs is unique NFT wallets (vault and burn addresses excluded) divided by that circulating number, times 100. Activated-wallet count is unique vault stakers, not the NFT contract (the wall holds the memberships). Chain onboard is unique EOAs whose first cluster buy or mint of this project was one of their first 10 txs.</p>
       </MethodologyCard>
 
