@@ -1354,6 +1354,33 @@ async function loadMarketPrices() {
     };
   }
 
+  if (markets.interns) {
+    try {
+      const listings = await fetchInternFloorListings(25);
+      if (listings.length) {
+        markets.interns.floorListings = listings;
+        markets.interns.floorSource = "opensea";
+        const cheap = listings[0];
+        const sym = String(cheap.symbol || "").toUpperCase();
+        if ((sym === "ETH" || sym === "WETH") && cheap.ask > 0) {
+          markets.interns.nftFloorEth = +Number(cheap.ask).toFixed(4);
+        } else if (cheap.usd > 0 && ethPriceUsd > 0) {
+          markets.interns.nftFloorEth = +(cheap.usd / ethPriceUsd).toFixed(4);
+        }
+        console.log(`  intern floor listings ${listings.length} · cheapest ${cheap.ask} ${cheap.symbol}`);
+      }
+    } catch (e) {
+      console.warn(`[warn] intern floor listings: ${e.message}`);
+      const prev = previous.projects?.interns?.market?.floorListings;
+      if (Array.isArray(prev) && prev.length) {
+        markets.interns.floorListings = prev;
+        if (previous.projects?.interns?.market?.floorSource === "opensea") {
+          markets.interns.floorSource = "opensea";
+        }
+      }
+    }
+  }
+
   if (markets.stonk) {
     try {
       // Need >10 asks so Entry can show the OpenSea floor after the cheapest
@@ -2830,11 +2857,11 @@ async function fetchStarFloorsRest(slug) {
   return stars;
 }
 
-/** Cheapest OpenSea asks on StonkBrokers, lowest USD first. The floor checker nets these against the TBA. */
-async function fetchBrokerFloorListings(limit = 10) {
+/** Cheapest OpenSea asks for a collection slug, lowest USD first. */
+async function fetchCollectionFloorListings(slug, limit = 10) {
   const data = await fetchOpenSeaGraphql(`query {
     collectionItems(
-      collectionSlug: "stonkbrokers-434284142",
+      collectionSlug: "${slug}",
       sort: { by: PRICE, direction: ASC },
       limit: ${Number(limit) || 10},
       filter: { isListed: true }
@@ -2856,6 +2883,16 @@ async function fetchBrokerFloorListings(limit = 10) {
       usd: Number.isFinite(usd) ? usd : 0,
     };
   }).filter((row) => row.id > 0 && row.ask > 0);
+}
+
+/** Cheapest OpenSea asks on StonkBrokers, lowest USD first. The floor checker nets these against the TBA. */
+async function fetchBrokerFloorListings(limit = 10) {
+  return fetchCollectionFloorListings("stonkbrokers-434284142", limit);
+}
+
+/** Cheapest OpenSea Intern asks — Intern Finder falls back to these when gg-index listings lag. */
+async function fetchInternFloorListings(limit = 25) {
+  return fetchCollectionFloorListings("interns", limit);
 }
 
 async function fetchCollectionFloorGraphql(slug) {

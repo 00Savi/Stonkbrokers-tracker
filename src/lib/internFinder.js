@@ -130,28 +130,102 @@ export function rankInternRows(rows, sort = 'opportunity') {
   return copy;
 }
 
-export async function loadInternListings(limit = 25) {
-  const count = parseInternFinderLimit(limit);
-  const res = await fetch(`${INDEX}/v1/opensea/listings?slug=${INTERN_SLUG}&limit=${count}`, {
-    cache: 'no-store',
-  });
-  if (!res.ok) throw new Error(`OpenSea intern listings failed (${res.status}).`);
-  const body = await res.json();
-  const listings = (Array.isArray(body?.listings) ? body.listings : [])
+function normalizeListingRows(rows, limit) {
+  return (Array.isArray(rows) ? rows : [])
     .map((row) => ({
       id: Number(row?.id),
       ask: Number(row?.ask) || 0,
       symbol: String(row?.symbol || ''),
       usd: Number(row?.usd) || 0,
     }))
-    .filter((row) => row.id > 0 && row.usd > 0)
-    .slice(0, count);
-  if (!listings.length) throw new Error(body?.error || 'No OpenSea intern listings.');
-  return {
-    listings,
-    fetchedAt: body?.fetchedAt || '',
-    address: body?.address || '',
-  };
+    .filter((row) => row.id > 0 && (row.usd > 0 || row.ask > 0))
+    .sort((a, b) => (a.usd || a.ask) - (b.usd || b.ask) || a.id - b.id)
+    .slice(0, limit);
+}
+
+/** Dev Vite proxies OpenSea GraphQL; production cannot call gql.opensea.io directly. */
+async function fetchInternListingsViaProxy(limit) {
+  const res = await fetch('/opensea-gql', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', accept: 'application/json' },
+    body: JSON.stringify({
+      query: `query {
+        collectionItems(
+          collectionSlug: "${INTERN_SLUG}",
+          sort: { by: PRICE, direction: ASC },
+          limit: ${limit},
+          filter: { isListed: true }
+        ) {
+          items {
+            tokenId
+            bestListing { pricePerItem { usd token { unit symbol } } }
+          }
+        }
+      }`,
+    }),
+  });
+  if (!res.ok) throw new Error(`OpenSea proxy ${res.status}`);
+  const body = await res.json();
+  if (body.errors?.length && !body.data) {
+    throw new Error(body.errors[0].message || 'OpenSea proxy failed');
+  }
+  const items = body?.data?.collectionItems?.items || [];
+  return items.map((it) => {
+    const token = it?.bestListing?.pricePerItem?.token || {};
+    const usd = Number(it?.bestListing?.pricePerItem?.usd);
+    return {
+      id: Number(it.tokenId),
+      ask: Number(token.unit) || 0,
+      symbol: String(token.symbol || ''),
+      usd: Number.isFinite(usd) ? usd : 0,
+    };
+  });
+}
+
+/**
+ * Cheapest OpenSea intern asks.
+ * Prefers live gg-index, then the Vite GraphQL proxy (local), then the
+ * hourly `market.floorListings` snapshot baked into data.json.
+ */
+export async function loadInternListings(limit = 25, { baked = [] } = {}) {
+  const count = parseInternFinderLimit(limit);
+  const errors = [];
+
+  try {
+    const res = await fetch(`${INDEX}/v1/opensea/listings?slug=${INTERN_SLUG}&limit=${count}`, {
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new Error(`index ${res.status}`);
+    const body = await res.json();
+    const listings = normalizeListingRows(body?.listings, count);
+    if (listings.length) {
+      return {
+        listings,
+        fetchedAt: body?.fetchedAt || '',
+        address: body?.address || '',
+        source: 'index',
+      };
+    }
+    if (body?.error) errors.push(String(body.error));
+  } catch (err) {
+    errors.push(err?.message || 'index failed');
+  }
+
+  try {
+    const listings = normalizeListingRows(await fetchInternListingsViaProxy(count), count);
+    if (listings.length) {
+      return { listings, fetchedAt: '', address: '', source: 'proxy' };
+    }
+  } catch (err) {
+    errors.push(err?.message || 'proxy failed');
+  }
+
+  const bakedRows = normalizeListingRows(baked, count);
+  if (bakedRows.length) {
+    return { listings: bakedRows, fetchedAt: '', address: '', source: 'snapshot' };
+  }
+
+  throw new Error(errors[0] ? `OpenSea intern listings failed (${errors[0]}).` : 'No OpenSea intern listings.');
 }
 
 async function readChain(provider, calls) {
@@ -469,6 +543,8 @@ function deskRowFromVault(row, data, vault, quote, engineLive) {
 
 /**
  * Full Intern Finder pass: OpenSea asks + Intern Exchange desk inventory.
+ * OpenSea failures are soft when desks (or a baked snapshot) can still fill
+ * the board — production may lag a gg-index listings deploy.
  */
 export async function findInterns(data, {
   limit = 25,
@@ -480,13 +556,26 @@ export async function findInterns(data, {
 } = {}) {
   const note = (msg) => { if (onProgress) onProgress(msg); };
   let os = { rows: [], titleEngineLive: false };
-  let book = { fetchedAt: '', listings: [] };
+  let book = { fetchedAt: '', listings: [], source: '' };
+  let warning = '';
 
   if (includeOpenSea) {
     note('Loading OpenSea intern asks…');
-    book = await loadInternListings(limit);
-    note(`Pricing ${book.listings.length} OpenSea asks…`);
-    os = await enrichInternListings(book.listings, data, { onPartial });
+    try {
+      book = await loadInternListings(limit, {
+        baked: data?.projects?.interns?.market?.floorListings || [],
+      });
+      if (book.source === 'snapshot') {
+        warning = 'OpenSea live index unavailable — using the last hourly snapshot.';
+      }
+      note(`Pricing ${book.listings.length} OpenSea asks…`);
+      os = await enrichInternListings(book.listings, data, { onPartial });
+    } catch (err) {
+      if (signal?.aborted || err?.name === 'AbortError') throw err;
+      warning = err?.message || 'OpenSea intern listings failed.';
+      note(warning);
+      if (!includeDesk) throw err;
+    }
   }
 
   let deskRows = [];
@@ -515,23 +604,25 @@ export async function findInterns(data, {
       } catch (err) {
         if (signal?.aborted || err?.name === 'AbortError') throw err;
         note(err?.message || 'Desk scan skipped.');
+        if (!os.rows.length) throw err;
+        warning = warning
+          ? `${warning} Desk scan also failed.`
+          : (err?.message || 'Desk scan failed.');
       }
     }
   }
 
-  const byKey = new Map();
-  for (const row of [...os.rows, ...deskRows]) {
-    const key = `${row.market}:${row.id}`;
-    const prev = byKey.get(key);
-    if (!prev || row.opportunity > prev.opportunity) byKey.set(key, row);
-  }
-  // Prefer showing both markets for the same id as separate rows.
   const rows = rankInternRows([...os.rows, ...deskRows], 'opportunity');
+  if (!rows.length) {
+    throw new Error(warning || 'No intern listings found on OpenSea or desks.');
+  }
   return {
     rows,
     openSeaCount: os.rows.length,
     deskCount: deskRows.length,
     fetchedAt: book.fetchedAt,
     titleEngineLive: os.titleEngineLive,
+    source: book.source || (deskRows.length ? 'desk' : ''),
+    warning,
   };
 }

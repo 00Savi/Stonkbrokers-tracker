@@ -200,6 +200,9 @@ export default function InternFinderView({ data }) {
         </form>
         {progress ? <p className="mt-3 font-mono text-[12px] text-faint">{progress}</p> : null}
         {error ? <p className="mt-3 font-mono text-[12px] text-danger">{error}</p> : null}
+        {!error && result?.warning ? (
+          <p className="mt-3 font-mono text-[12px] text-warn">{result.warning}</p>
+        ) : null}
       </Card>
 
       {busy && !result ? <SkeletonCard rows={6} /> : null}
