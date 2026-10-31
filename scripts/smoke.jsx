@@ -158,6 +158,8 @@ const ROUTES = [
   '/floor?n=5',
   '/anvil',
   '/anvil?project=cardwall',
+  '/intern-finder',
+  '/intern-finder?sort=netCost&n=10',
   '/tokens',
   '/stocks',
   '/stonkbrokers/roi',

@@ -8,6 +8,7 @@ import EcosystemView from './components/views/EcosystemView';
 import PortfolioView from './components/views/PortfolioView';
 import BrokerScanView from './components/views/BrokerScanView';
 import AnvilScanView from './components/views/AnvilScanView';
+import InternFinderView from './components/views/InternFinderView';
 import StonkDetailView from './components/views/StonkDetailView';
 import InternDetailView from './components/views/InternDetailView';
 import MancerDetailView from './components/views/MancerDetailView';
@@ -201,6 +202,14 @@ export default function App() {
             element={
               <Section title="Anvil + Floor">
                 {data ? <AnvilScanView data={shown} /> : <SkeletonCard rows={5} />}
+              </Section>
+            }
+          />
+          <Route
+            path="/intern-finder"
+            element={
+              <Section title="Intern Finder">
+                {data ? <InternFinderView data={shown} /> : <SkeletonCard rows={5} />}
               </Section>
             }
           />

@@ -75,6 +75,15 @@ function toolCards(data) {
       signal: circulating > 0 ? `${compactNum(circulating)} circulating` : 'ID 1–4444',
     },
     {
+      to: '/intern-finder',
+      icon: 'search',
+      eyebrow: 'Intern Finder',
+      title: 'Intern market',
+      text: 'OpenSea and desks, TBA value, parent tier, and share.',
+      tone: 'text-mark-sky',
+      signal: 'Lowest cost · highest opportunity',
+    },
+    {
       to: '/ecosystem',
       icon: 'system',
       eyebrow: 'Ecosystem',

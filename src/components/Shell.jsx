@@ -21,6 +21,7 @@ export const NAV_ITEMS = [
   { to: '/portfolio', label: 'Portfolio', group: 'tools', icon: 'chart' },
   { to: '/broker', label: 'Broker Scan', group: 'tools', icon: 'search' },
   { to: '/anvil', label: 'Anvil + Floor', group: 'tools', icon: 'anvil' },
+  { to: '/intern-finder', label: 'Intern Finder', group: 'tools', icon: 'search' },
   { to: '/ecosystem', label: 'Ecosystem Overview', group: 'tools', icon: 'system' },
   { to: '/index/roi', label: 'Index', group: 'yield-tokens', logo: 'Index.png' },
   { to: '/oakmont/roi', label: 'Oakmont Vault', group: 'yield-tokens', logo: 'Oakmont.png' },
@@ -48,6 +49,7 @@ function titleForPath(pathname) {
   if (first === 'portfolio') return 'Portfolio';
   if (first === 'broker') return 'Broker Scan';
   if (first === 'floor' || first === 'anvil') return 'Anvil + Floor';
+  if (first === 'intern-finder') return 'Intern Finder';
   if (first === 'rankings') return 'Rankings';
   if (first === 'tokens' || first === 'stocks') return 'Markets & Swap';
   const project = PROJECTS.find((p) => p.slug === first);
