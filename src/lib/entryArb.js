@@ -19,19 +19,26 @@ export const DEFAULT_BUY_FEE_BPS = 1000;
 /** Depth checkpoints: how the OS floor moves after N cheapest sells. */
 export const DEPTH_CLEARS = [0, 3, 5, 10];
 
-/** StonkBrokers buy markup baked into older "implied × 1.10" quotes. */
-function buyMult(project, key) {
-  const ticker = String(project?.config?.ticker || '').toUpperCase();
-  if (key === 'stonk' || ticker === 'STONK') return 1.1;
-  return 1;
-}
-
-export function buyFeeBps(project, key = null) {
+/**
+ * Anvil random-buy markup. Fetcher derives floors as unit × spot × 1.10 for
+ * every Anvil vault; Stonk is confirmed at ~10%. Override via config.buyFeeBps.
+ */
+export function buyFeeBps(project, _key = null) {
   const n = Number(project?.config?.buyFeeBps);
   if (Number.isFinite(n) && n >= 0) return n;
-  const mult = buyMult(project, key);
-  if (mult > 1) return Math.round((mult - 1) * 10000);
   return DEFAULT_BUY_FEE_BPS;
+}
+
+function buyMult(project, key) {
+  return 1 + buyFeeBps(project, key) / 10000;
+}
+
+/** True when a stored floor matches the Anvil ask within 0.5% — i.e. derived, not OpenSea. */
+export function isDerivedFloorUsd(floorUsd, anvilUsd, tol = 0.005) {
+  const fl = Number(floorUsd);
+  const anvil = Number(anvilUsd);
+  if (!(fl > 0) || !(anvil > 0)) return false;
+  return Math.abs(fl - anvil) / anvil < tol;
 }
 
 export function anvilUnit(project) {
@@ -186,8 +193,8 @@ function snapFloorUsd(snap, fallbackEthUsd) {
 }
 
 /**
- * Daily series: floor USD, gross implied, sell-net USD, floor-in-tokens,
- * unit, sell-net tokens, edges, token spot.
+ * Daily series: OpenSea floor USD (null when the snap only stored the Anvil
+ * formula), Anvil ask (unit × spot × buy fee), sell-net, edges, token spot.
  */
 export function entryHistoryRaw(project, key = null) {
   const unit = anvilUnit(project);
@@ -211,21 +218,41 @@ export function entryHistoryRaw(project, key = null) {
     const d = dateKey(snap?.date);
     if (!d) continue;
     const px = Number(snap?.tokenPriceUsd);
-    const fl = snapFloorUsd(snap, ethFallback);
+    const flRaw = snapFloorUsd(snap, ethFallback);
     const imp = unit > 0 && Number.isFinite(px) && px > 0 ? unit * px * mult : null;
     const net = unit > 0 && Number.isFinite(px) && px > 0 ? netUnit * px : null;
-    const flTok = fl != null && fl > 0 && Number.isFinite(px) && px > 0 ? fl / px : null;
+    // Snapshots historically wrote Anvil-derived floors as nftFloorEth. Those
+    // stack on the Anvil line — drop them so OpenSea only plots when it
+    // actually diverges from unit × spot × buy fee.
+    const snapSrc = String(snap?.floorSource || '');
+    const keepFloor = flRaw != null && flRaw > 0 && (
+      snapSrc === 'opensea' || snapSrc === 'listing' || !isDerivedFloorUsd(flRaw, imp)
+    );
+    const fl = keepFloor ? flRaw : null;
+    const flTok = fl != null && Number.isFinite(px) && px > 0 ? fl / px : null;
 
     dates.push(d);
-    floor.push(fl != null && fl > 0 ? fl : null);
+    floor.push(fl);
     implied.push(imp);
     sellNet.push(net);
     floorTokens.push(flTok);
     unitLine.push(unit > 0 ? unit : null);
     sellNetTokensLine.push(netUnit > 0 ? netUnit : null);
     token.push(Number.isFinite(px) && px > 0 ? px : null);
-    edge.push(entryEdgePct(fl, imp));
-    sellEdge.push(entryEdgePct(fl, net));
+    edge.push(fl != null ? entryEdgePct(fl, imp) : null);
+    sellEdge.push(fl != null ? entryEdgePct(fl, net) : null);
+  }
+
+  // Live OpenSea ask book — patch today's point so the chart shows the gap
+  // even when today's daily snap still carries a derived floor.
+  const liveOs = normalizeListings(project?.market?.floorListings, ethFallback)[0]?.usd || null;
+  if (liveOs > 0 && dates.length) {
+    const last = dates.length - 1;
+    floor[last] = liveOs;
+    const px = token[last];
+    floorTokens[last] = px > 0 ? liveOs / px : null;
+    edge[last] = entryEdgePct(liveOs, implied[last]);
+    sellEdge[last] = entryEdgePct(liveOs, sellNet[last]);
   }
 
   return {

@@ -10,6 +10,7 @@ import {
   anvilUnit,
   DEPTH_CLEARS,
   entryEdgePct,
+  entryHistorySeries,
   floorInTokens,
   floorNftUsd,
   impliedNftUsd,
@@ -1136,10 +1137,18 @@ export default function EcosystemView({ data, pending = false }) {
           </Card>
         )}
 
+        <EntryOsVsAnvilChart
+          project={stonkProject}
+          projectKey="stonk"
+          timeframe={timeframe}
+          interval={interval}
+          color={projectColors.stonk}
+        />
+
         <Card
           flush
           eyebrow="Other Anvil vaults"
-          sub="Collection-level OpenSea vs token-implied where we have a floor. Stonk depth above uses the live ask book."
+          sub="Collection-level OpenSea vs Anvil token floor where we have a marketplace print. Derived (Anvil-formula) floors are labeled — those gaps are not real OpenSea arb."
         >
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-left">
@@ -1237,7 +1246,7 @@ export default function EcosystemView({ data, pending = false }) {
         <p><strong className="text-white">Burn:</strong> Ranked as percent of each project’s own token supply cap permanently removed. NFT-equivalent % uses burnt units ÷ collection supply when unitValue exists.</p>
         <p><strong className="text-white">Activation:</strong> Percent of that collection currently earning. Cashflow and vault seats are excluded. Sparks are net active on each project’s own scale.</p>
         <p><strong className="text-white">Ownership:</strong> Wallets per 100 NFTs is unique wallets divided by circulating supply, times 100. Top 10 is the share those wallets hold. Still holding is written when the activity rebuild records who entered and who left. Onboard share is each project’s cut of first-touch wallets. Burn velocity is the trailing 30-day burn as % of own supply. NFTs in the AMM are a count. The Anvil scan is where a vault’s contents are priced.</p>
-        <p><strong className="text-white">Entry:</strong> Anvil floor is unitValue × token spot × buy fee (Stonk 666,666 × spot × ~10%). OpenSea floor is the cheapest live ask. Gap is OpenSea − Anvil. The depth book asks what the OpenSea floor becomes after the cheapest 3 / 5 / 10 listings sell — that new ask minus Anvil is how wide the premium grows. Stonk uses the live ask ladder (or the hourly snapshot). Other vaults show collection-level floors when OpenSea is wired; derived floors are labeled.</p>
+        <p><strong className="text-white">Entry:</strong> Anvil floor is unitValue × token spot × buy fee (Stonk 666,666 × spot × ~10%). OpenSea floor is the cheapest live ask — never the Anvil formula rewritten as a floor. Gap is OpenSea − Anvil. The depth book asks what the OpenSea floor becomes after the cheapest 3 / 5 / 10 listings sell. The OpenSea vs Anvil chart plots real marketplace prints only; days that only stored the derived formula omit the OpenSea line. Other vaults still show collection-level floors when OpenSea is wired; derived floors are labeled.</p>
         <p><strong className="text-white">Chain onboard:</strong> Unique EOAs that sent a transaction with nonce 0–9 which received or minted a StonkBrokers, Mancer, Card Wall, TickerYard, or Interns NFT, or bought that project’s token off its AMM. Airdrops and peer transfers do not count.</p>
       </MethodologyCard>
     </div>
@@ -1282,6 +1291,88 @@ function edgeTone(pct) {
   if (pct > 0) return 'text-warn';
   if (pct < 0) return 'text-accent';
   return 'text-muted';
+}
+
+function EntryOsVsAnvilChart({ project, projectKey, timeframe, interval, color }) {
+  const hist = entryHistorySeries(project, { key: projectKey, timeframe, interval });
+  const labels = formatLabels(hist.dates);
+  const hasAnvil = (hist.implied || []).some((v) => v != null);
+  const osCount = (hist.floor || []).filter((v) => v != null).length;
+  const hasOs = osCount > 0;
+  if (!hasAnvil) return null;
+  const tokenColor = '#8b929b';
+  const osPoint = osCount < 8 ? 3 : 0;
+  const name = PROJECTS.find((p) => p.key === projectKey)?.name || projectKey;
+  return (
+    <ChartPanel
+      title={`${name} · OpenSea vs Anvil`}
+      note={hasOs
+        ? 'OpenSea floor USD against the Anvil token floor (unit × spot × buy fee). Token price on the right axis. Days with only a derived floor omit the OpenSea line.'
+        : 'Anvil token floor (unit × spot × buy fee) and token spot. OpenSea history starts once marketplace asks are snapshotted — earlier days only stored the Anvil formula.'}
+      footer={(
+        <p className="text-[12px] leading-relaxed text-muted">
+          {hasOs
+            ? 'When OpenSea sits below Anvil, the marketplace is cheaper than buying from the vault. The ask ladder above is the live book.'
+            : 'Live OpenSea asks are on the ladder above. This chart fills in OpenSea as daily snaps record real listings.'}
+        </p>
+      )}
+    >
+      <Line
+        data={{
+          labels,
+          datasets: [
+            {
+              label: 'OpenSea floor',
+              data: hist.floor,
+              borderColor: color || '#00a804',
+              backgroundColor: `${color || '#00a804'}18`,
+              borderWidth: 2,
+              tension: 0.3,
+              pointRadius: osPoint,
+              spanGaps: true,
+              yAxisID: 'y',
+            },
+            {
+              label: 'Anvil floor',
+              data: hist.implied,
+              borderColor: '#e8eaed',
+              backgroundColor: 'transparent',
+              borderWidth: 2,
+              borderDash: [4, 3],
+              tension: 0.3,
+              pointRadius: 0,
+              spanGaps: true,
+              yAxisID: 'y',
+            },
+            {
+              label: 'Token',
+              data: hist.token,
+              borderColor: tokenColor,
+              backgroundColor: 'transparent',
+              borderWidth: 1.5,
+              tension: 0.3,
+              pointRadius: 0,
+              spanGaps: true,
+              yAxisID: 'y1',
+            },
+          ],
+        }}
+        options={dualAxisOptions({
+          labels,
+          interval,
+          leftTick: compactUsdTick,
+          rightTick: compactUsdTick,
+          rightColor: tokenColor,
+          leftKind: 'level',
+          rightKind: 'level',
+          leftValues: [...(hist.floor || []), ...(hist.implied || [])],
+          rightValues: hist.token,
+          leftUnit: 'USD',
+          rightUnit: 'token',
+        })}
+      />
+    </ChartPanel>
+  );
 }
 
 function StonkAskLadderChart({ book }) {

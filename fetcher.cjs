@@ -1363,12 +1363,31 @@ async function loadMarketPrices() {
         markets.stonk.floorListings = listings;
         markets.stonk.floorSource = "opensea";
         const cheap = listings[0];
-        console.log(`  stonk floor listings ${listings.length} · cheapest ${cheap.ask} ${cheap.symbol}`);
+        // Override the Anvil-derived nftFloorEth written above — that formula
+        // is unit × spot × 1.10 and stacks on the implied line. OpenSea ask
+        // is the marketplace floor the Entry chart compares against Anvil.
+        const sym = String(cheap.symbol || "").toUpperCase();
+        if ((sym === "ETH" || sym === "WETH") && cheap.ask > 0) {
+          markets.stonk.nftFloorEth = +Number(cheap.ask).toFixed(4);
+        } else if (cheap.usd > 0 && ethPriceUsd > 0) {
+          markets.stonk.nftFloorEth = +(cheap.usd / ethPriceUsd).toFixed(4);
+        }
+        console.log(`  stonk floor listings ${listings.length} · cheapest ${cheap.ask} ${cheap.symbol} · floorEth ${markets.stonk.nftFloorEth}`);
       }
     } catch (e) {
       console.warn(`[warn] stonk floor listings: ${e.message}`);
       const prev = previous.projects?.stonk?.market?.floorListings;
-      if (Array.isArray(prev) && prev.length) markets.stonk.floorListings = prev;
+      if (Array.isArray(prev) && prev.length) {
+        markets.stonk.floorListings = prev;
+        if (previous.projects?.stonk?.market?.floorSource === "opensea") {
+          markets.stonk.floorSource = "opensea";
+        }
+        const cheap = prev[0];
+        const sym = String(cheap?.symbol || "").toUpperCase();
+        if ((sym === "ETH" || sym === "WETH") && cheap.ask > 0) {
+          markets.stonk.nftFloorEth = +Number(cheap.ask).toFixed(4);
+        }
+      }
     }
   }
 
@@ -4801,12 +4820,14 @@ async function run() {
             const px = priceUsd > 0 && priceUsd !== 0.03 ? priceUsd : markets[projectKey].tokenPriceUsd;
             const floorEth = markets[projectKey].nftFloorEth || 0;
             const ethUsd = markets[projectKey].ethPriceUsd || 0;
+            const floorSource = markets[projectKey].floorSource || null;
             return {
             date,
             timestamp,
             tokenPriceUsd: px,
             nftFloorEth: floorEth,
             nftFloorUsd: floorEth * ethUsd,
+            ...(floorSource ? { floorSource } : {}),
             ...(projectKey === "cardwall" && listedStars.length ? { starFloorEth: starFloors.map((v) => (Number(v) > 0 ? Number(v) : null)) } : {}),
             totalBurn: (activationStats.dualBurn || {}).totalBurnTokens || 0,
             tokenHolders: conf.yieldMode === "intern_clockin" ? null : (ownershipStats.stonkHolders || ownershipStats.tokenHolders || 0),

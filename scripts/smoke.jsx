@@ -1071,18 +1071,17 @@ for (const [name, View, props] of VIEWS) {
     </StaticRouter>
   );
   if (
-    !ecoEntryHtml.includes('Live gap')
-    || !ecoEntryHtml.includes('Floor vs implied')
-    || !ecoEntryHtml.includes('Implied')
-    || !/buying the NFT to access token value/i.test(ecoEntryHtml)
+    !ecoEntryHtml.includes('OpenSea vs Anvil')
+    || !ecoEntryHtml.includes('Ask ladder')
+    || !ecoEntryHtml.includes('Anvil floor')
   ) {
     failed++;
-    console.error('FAIL  ecosystem entry tab missing floor/implied board');
-  } else if (!ecoEntryHtml.includes('not guaranteed profit')) {
+    console.error('FAIL  ecosystem entry tab missing OpenSea vs Anvil board');
+  } else if (!ecoEntryHtml.includes('cheapest live ask')) {
     failed++;
     console.error('FAIL  ecosystem entry methodology missing');
   } else {
-    console.log('ok    ecosystem entry tab charts floor vs implied');
+    console.log('ok    ecosystem entry tab OpenSea vs Anvil');
   }
 }
 
