@@ -1356,9 +1356,12 @@ async function loadMarketPrices() {
 
   if (markets.stonk) {
     try {
-      const listings = await fetchBrokerFloorListings(10);
+      // Need >10 asks so Entry can show the OpenSea floor after the cheapest
+      // 3 / 5 / 10 listings clear against the Anvil token floor.
+      const listings = await fetchBrokerFloorListings(25);
       if (listings.length) {
         markets.stonk.floorListings = listings;
+        markets.stonk.floorSource = "opensea";
         const cheap = listings[0];
         console.log(`  stonk floor listings ${listings.length} · cheapest ${cheap.ask} ${cheap.symbol}`);
       }

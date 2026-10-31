@@ -1278,23 +1278,56 @@ export default function PortfolioView({ data }) {
             </Card>
           ) : (
             <>
-          <Card
-            eyebrow="Portfolio value"
-            sub="Seat floors plus token closes, from the day each position was received. Cash already paid out is not added back."
-          >
-            <Figure value={formatCurrency(results.floorUsd)} />
-            <KpiStrip className="mt-5">
-              <Stat label="Total" value={formatCurrency(results.floorUsd)} />
-              <Stat label="NFTs" value={formatCurrency(seatFloor)} />
-              <Stat label="Tokens" value={formatCurrency(tokenSpot)} />
-            </KpiStrip>
-          </Card>
-          <ChartPanel
-            id="portfolio-value"
-            title="Mark over time"
-            note="Total, NFT floors, and token closes from the day each position was received."
-            empty={valueSeries.labels.length <= 1 ? 'Not enough history yet' : null}
-          >
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-stretch">
+            <Card
+              className="lg:col-span-4"
+              eyebrow="Portfolio"
+              sub="Mark is seat floors plus token closes. Cashflow is money already paid — not added back into the mark."
+              corner={(
+                <div data-share-omit className="inline-flex rounded-md border border-line bg-panel p-0.5">
+                  {FORECAST_YEARS.map((y) => (
+                    <button
+                      key={y}
+                      type="button"
+                      onClick={() => setForecastYears(y)}
+                      title={`${y}-year forecast`}
+                      className={`min-w-[2rem] rounded px-2 py-0.5 font-mono text-[10px] ${
+                        forecastYears === y ? 'bg-panel-2 text-ink' : 'text-muted hover:text-ink'
+                      }`}
+                    >
+                      {y}y
+                    </button>
+                  ))}
+                </div>
+              )}
+            >
+              <Figure value={formatCurrency(results.floorUsd)} />
+              <KpiStrip className="mt-5">
+                <Stat label="Cashflow" value={quietCash(earnedTotal)} tone="accent" />
+                <Stat label="ROI" value={formatRoi(totalRoi, 1)} />
+                <Stat label={`${forecastYears}y forecast`} value={quietCash(forecastUsd)} />
+              </KpiStrip>
+              <KpiStrip className="mt-5">
+                <Stat label="NFTs" value={formatCurrency(seatFloor)} />
+                <Stat label="Tokens" value={formatCurrency(tokenSpot)} />
+                <Stat
+                  label="Invested"
+                  value={nftInvested == null && !(tokenCost > 0) ? '—' : quietCash((nftInvested || 0) + (tokenCost || 0))}
+                />
+              </KpiStrip>
+              <p className="mt-4 font-mono text-[11px] text-faint">
+                Cashflow is money already paid. ROI is mark plus that cash, over what was paid. Forecast multiplies the trailing run-rate.
+              </p>
+            </Card>
+
+            <ChartPanel
+              id="portfolio-value"
+              className="lg:col-span-8 lg:flex lg:h-full lg:flex-col"
+              title="Mark over time"
+              note="Total, NFT floors, and token closes from the day each position was received."
+              empty={valueSeries.labels.length <= 1 ? 'Not enough history yet' : null}
+              frameClass="h-72 sm:h-[28rem] lg:min-h-0 lg:flex-1"
+            >
               {valueSeries.labels.length > 1 ? (
                 <Line
                   data={{
@@ -1335,32 +1368,8 @@ export default function PortfolioView({ data }) {
                   options={baseChartOptions(formatLabels(valueSeries.labels), 'daily', { yUnit: 'USD', yTick: compactUsdTick })}
                 />
               ) : null}
-          </ChartPanel>
-
-          <Card
-            eyebrow="Forecast"
-            sub="Moves the forecast on the summaries. Earned stays the cash already paid."
-            corner={(
-              <div className="inline-flex rounded-md border border-line bg-panel p-0.5">
-                {FORECAST_YEARS.map((y) => (
-                  <button
-                    key={y}
-                    type="button"
-                    onClick={() => setForecastYears(y)}
-                    className={`min-w-[2rem] rounded px-2 py-0.5 font-mono text-[10px] ${
-                      forecastYears === y ? 'bg-panel-2 text-ink' : 'text-muted hover:text-ink'
-                    }`}
-                  >
-                    {y}y
-                  </button>
-                ))}
-              </div>
-            )}
-          >
-            <p className="font-mono text-[11px] text-faint">
-              Together {quietCash(earnedTotal)} cashflow · ROI {formatRoi(totalRoi, 1)}. Cashflow is money already paid. ROI is mark plus that cash, over what was paid.
-            </p>
-          </Card>
+            </ChartPanel>
+          </div>
 
           <div className="flex flex-col gap-4">
             {tokenAssets.length > 0 && (

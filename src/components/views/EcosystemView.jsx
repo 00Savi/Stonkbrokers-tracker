@@ -6,14 +6,26 @@ import { ANVIL_VAULTS, quoteAnvilSnipe } from '../../lib/anvilScan';
 import { ROBINHOOD_RPC } from '../../lib/bonusTokenomics';
 import { listedSeat, mixUsd, nightshadesSnipeUsd, protocolFeeSeries, revenueRows, snipeSeatUsd } from '../../lib/seats';
 import {
-  entryEdgePct, entryHistorySeries, floorNftUsd, impliedNftUsd,
+  anvilAskUsd,
+  anvilUnit,
+  DEPTH_CLEARS,
+  entryEdgePct,
+  floorInTokens,
+  floorNftUsd,
+  impliedNftUsd,
+  listingDepthBook,
+  sellArbEdgePct,
+  sellFeeBps,
+  sellNetTokens,
+  sellNetUsd,
 } from '../../lib/entryArb';
+import { loadFloorBook } from '../../lib/floorCheck';
 import { NIGHTSHADES_FACTIONS, NIGHTSHADES_FACTION_META } from '../../lib/nightshades';
 import { loadFlows, loadRetentions, loadStructures, loadVaultCensus } from '../../lib/ggindex';
 import {
-  Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler
+  Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler
 } from 'chart.js';
-import { Line } from 'react-chartjs-2';
+import { Line, Bar } from 'react-chartjs-2';
 import {
   compactUsd, compactNum, ViewControls, Card, Stat, Tag, KpiStrip, MiniSpark,
 } from '../kit';
@@ -30,7 +42,7 @@ import { CopyControl, shareSlug, ShareSection } from '../CopyControl';
 import { OverlapPanel } from '../SectionInsights';
 import { copyElement } from '../../lib/share';
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler);
 
 const ECO_TABS = [
   { id: 'seats', label: 'Seats' },
@@ -300,6 +312,8 @@ export default function EcosystemView({ data, pending = false }) {
   const [retentions, setRetentions] = useState(null);
   const [flows, setFlows] = useState(null);
   const [vaults, setVaults] = useState(null);
+  const [stonkListings, setStonkListings] = useState(null);
+  const [stonkListingsLive, setStonkListingsLive] = useState(false);
   const revMixRef = useRef(null);
   const onboardCardRef = useRef(null);
 
@@ -334,6 +348,19 @@ export default function EcosystemView({ data, pending = false }) {
   const order = board.map((m) => m.key);
   const activationOrder = activationBoard.map((m) => m.key);
   const orderKey = order.join(',');
+
+  useEffect(() => {
+    if (!data?.projects?.stonk) return undefined;
+    let live = true;
+    loadFloorBook(data, 25)
+      .then((book) => {
+        if (!live || !book?.listings?.length) return;
+        setStonkListings(book.listings);
+        setStonkListingsLive(!!book.live);
+      })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [data]);
 
   useEffect(() => {
     if (!order.length) return undefined;
@@ -680,35 +707,49 @@ export default function EcosystemView({ data, pending = false }) {
       const seat = listedSeat(meta, p);
       const floorNft = floorNftUsd(p);
       const implied = impliedNftUsd(p, meta.key);
+      const net = sellNetUsd(p);
+      const unit = anvilUnit(p);
+      const fee = sellFeeBps(p);
+      const tokenUsd = Number(p?.market?.tokenPriceUsd) || 0;
+      const floorTok = floorInTokens(floorNft, tokenUsd);
       const quoteUsd = Number(quotes[meta.key]?.usd) || 0;
       const snipe = seat.act != null && quoteUsd > 0 ? snipeSeatUsd(quoteUsd, seat.act) : 0;
       const floorEdge = entryEdgePct(floorNft, implied);
+      const sellEdge = sellArbEdgePct(floorNft, p);
       const snipeEdge = quoteUsd > 0 ? entryEdgePct(quoteUsd, implied) : null;
       return {
         meta,
         p,
         floorSeat: seat.listed,
+        floorNft,
+        floorTok,
+        unit,
+        feeBps: fee,
+        netTokens: sellNetTokens(unit, fee),
         snipe,
         implied,
+        net,
         floorEdge,
+        sellEdge,
         snipeEdge,
         quoting: anvilKeys.has(meta.key) && !Object.keys(quotes).length,
       };
     })
-    .filter((r) => r.implied > 0 || r.floorSeat > 0)
-    .sort((a, b) => (Number(b.floorEdge) || -999) - (Number(a.floorEdge) || -999));
+    .filter((r) => r.implied > 0 || r.floorSeat > 0 || r.unit > 0)
+    .sort((a, b) => (Number(b.sellEdge) || Number(b.floorEdge) || -999) - (Number(a.sellEdge) || Number(a.floorEdge) || -999));
 
-  const entryHistoryKeys = board
-    .map((m) => m.key)
-    .filter((k) => {
-      const p = data.projects[k];
-      if (!(Number(p?.config?.unitValue) > 0)) return false;
-      const hist = entryHistorySeries(p, { key: k, timeframe, interval });
-      return (hist.floor || []).some((v) => v != null && v > 0)
-        && (hist.implied || []).some((v) => v != null && v > 0);
-    });
-  // Stonk first — deepest unitValue + snapshot history.
-  entryHistoryKeys.sort((a, b) => (a === 'stonk' ? -1 : b === 'stonk' ? 1 : 0));
+  const stonkProject = data.projects?.stonk;
+  const stonkAnvilAsk = anvilAskUsd(stonkProject, 'stonk');
+  const stonkBook = listingDepthBook(
+    stonkListings?.length
+      ? stonkListings
+      : (stonkProject?.market?.floorListings || []),
+    stonkAnvilAsk,
+    {
+      ethUsd: Number(stonkProject?.market?.ethPriceUsd) || 0,
+      clears: DEPTH_CLEARS,
+    },
+  );
 
   const hrefFor = (tab) => (ds) => projectPath(ds.key, tab);
   const flowPairs = (flows?.pairs || []).slice(0, 8);
@@ -998,84 +1039,154 @@ export default function EcosystemView({ data, pending = false }) {
 
       <ShareSection id="entry" className="scroll-mt-32 space-y-4">
         <Card
+          eyebrow="OpenSea vs Anvil"
+          sub={`Anvil floor is the token cost to buy one NFT from the vault (666,666 $STONK × spot × ~10% fee). OpenSea is the live ask book. Gap is OpenSea − Anvil. ${stonkListingsLive ? 'Asks are live from OpenSea.' : 'Asks are from the last snapshot until a live OpenSea read lands.'}`}
+        >
+          <KpiStrip>
+            <Stat
+              label="OpenSea floor"
+              value={stonkBook.openSeaFloorUsd != null ? compactUsd(stonkBook.openSeaFloorUsd) : '—'}
+              note={stonkBook.ladder[0] ? `#${stonkBook.ladder[0].id}` : undefined}
+            />
+            <Stat
+              label="Anvil floor"
+              value={stonkBook.anvilUsd != null ? compactUsd(stonkBook.anvilUsd) : '—'}
+              note="unit × token × buy fee"
+            />
+            <Stat
+              label="Gap now"
+              value={stonkBook.depth[0]?.gapUsd != null ? compactUsd(stonkBook.depth[0].gapUsd) : '—'}
+              tone={stonkBook.depth[0]?.gapUsd > 0 ? 'danger' : stonkBook.depth[0]?.gapUsd < 0 ? 'accent' : 'ink'}
+              note={stonkBook.depth[0]?.gapPct != null ? pct1(stonkBook.depth[0].gapPct) : undefined}
+            />
+            <Stat
+              label="After 10 sell"
+              value={stonkBook.depth.find((d) => d.cleared === 10)?.gapUsd != null
+                ? compactUsd(stonkBook.depth.find((d) => d.cleared === 10).gapUsd)
+                : '—'}
+              note={(() => {
+                const d = stonkBook.depth.find((row) => row.cleared === 10);
+                return d?.gapPct != null ? pct1(d.gapPct) : `${stonkBook.count} asks`;
+              })()}
+            />
+          </KpiStrip>
+        </Card>
+
+        {stonkBook.ladder.length ? (
+          <>
+            <ChartPanel
+              tall
+              title="Ask ladder"
+              note="Cheapest OpenSea listings ascending. The amber line is the Anvil token floor — same for every seat."
+              footer={(
+                <p className="text-[12px] leading-relaxed text-muted">
+                  Bars above the line are OpenSea premiums. Bars below would be cheaper than buying from the vault.
+                </p>
+              )}
+            >
+              <StonkAskLadderChart book={stonkBook} />
+            </ChartPanel>
+
+            <ChartPanel
+              title="Gap after the cheapest sell"
+              note="If the lowest asks clear, the next listing becomes the OpenSea floor. Gap = that new floor − Anvil token cost."
+            >
+              <StonkDepthGapChart book={stonkBook} />
+            </ChartPanel>
+
+            <Card flush eyebrow="Depth book" sub="New OpenSea floor after N cheapest listings sell, versus the fixed Anvil token floor.">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[640px] text-left">
+                  <thead>
+                    <tr className="eyebrow border-b border-line text-faint">
+                      <th className="px-5 py-3 font-normal">Clears</th>
+                      <th className="px-3 py-3 font-normal">New OS floor</th>
+                      <th className="px-3 py-3 font-normal">Anvil floor</th>
+                      <th className="px-3 py-3 font-normal">Gap $</th>
+                      <th className="px-5 py-3 text-right font-normal">Gap %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stonkBook.depth.map((row) => (
+                      <tr key={row.cleared} className="border-b border-line-soft">
+                        <td className="px-5 py-3 text-[13px] text-ink">{row.label}</td>
+                        <td className="num px-3 py-3 text-[13px] text-ink">
+                          {row.floorUsd != null ? compactUsd(row.floorUsd) : '—'}
+                          {row.floor ? <span className="ml-2 font-mono text-[10px] text-faint">#{row.floor.id}</span> : null}
+                        </td>
+                        <td className="num px-3 py-3 text-[13px] text-ink">
+                          {row.anvilUsd != null ? compactUsd(row.anvilUsd) : '—'}
+                        </td>
+                        <td className={`num px-3 py-3 text-[13px] ${edgeTone(row.gapPct)}`}>
+                          {row.gapUsd == null ? '—' : compactUsd(row.gapUsd)}
+                        </td>
+                        <td className={`num px-5 py-3 text-right text-[13px] ${edgeTone(row.gapPct)}`}>
+                          {row.gapPct == null ? '—' : pct1(row.gapPct)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </>
+        ) : (
+          <Card eyebrow="Ask ladder">
+            <p className="text-[13px] text-muted">No OpenSea listings loaded yet for StonkBrokers.</p>
+          </Card>
+        )}
+
+        <Card
           flush
-          eyebrow="Live gap"
-          sub="Anvil vaults only. Floor seat is OpenSea (or star) plus T0 tokens. Snipe replaces the listing with the AMM specific-buy. Implied is unit × token (Stonk × 1.10). Edge % compares the NFT legs — OpenSea floor or AMM quote — to implied."
+          eyebrow="Other Anvil vaults"
+          sub="Collection-level OpenSea vs token-implied where we have a floor. Stonk depth above uses the live ask book."
         >
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-left">
+            <table className="w-full min-w-[720px] text-left">
               <thead>
                 <tr className="eyebrow border-b border-line text-faint">
                   <th className="px-5 py-3 font-normal">Project</th>
-                  <th className="px-3 py-3 font-normal">Floor seat</th>
-                  <th className="px-3 py-3 font-normal">Snipe seat</th>
-                  <th className="px-3 py-3 font-normal">Implied</th>
-                  <th className="px-3 py-3 font-normal">Floor vs implied</th>
-                  <th className="px-5 py-3 text-right font-normal">Snipe vs implied</th>
+                  <th className="px-3 py-3 font-normal">OS floor</th>
+                  <th className="px-3 py-3 font-normal">Anvil floor</th>
+                  <th className="px-3 py-3 font-normal">Gap</th>
+                  <th className="px-5 py-3 text-right font-normal">Source</th>
                 </tr>
               </thead>
               <tbody>
-                {entryGapRows.map((row) => (
-                  <tr key={row.meta.key} className="border-b border-line-soft">
-                    <td className="px-5 py-3">
-                      <Link to={`/anvil?project=${row.meta.key}`} className="flex items-center gap-3">
-                        <img
-                          src={logoSrc(row.meta, row.p)}
-                          alt=""
-                          className="h-8 w-8 rounded-md border border-line object-cover bg-panel"
-                        />
-                        <span className="text-[13px] text-ink">{row.meta.name}</span>
-                      </Link>
-                    </td>
-                    <td className="num px-3 py-3 text-[13px] text-ink">
-                      {row.floorSeat > 0 ? compactUsd(row.floorSeat) : '—'}
-                    </td>
-                    <td className="num px-3 py-3 text-[13px] text-ink">
-                      {row.snipe > 0 ? compactUsd(row.snipe) : (row.quoting ? '…' : '—')}
-                    </td>
-                    <td className="num px-3 py-3 text-[13px] text-ink">
-                      {row.implied > 0 ? compactUsd(row.implied) : '—'}
-                    </td>
-                    <td className={`num px-3 py-3 text-[13px] ${edgeTone(row.floorEdge)}`}>
-                      {row.floorEdge == null ? '—' : pct1(row.floorEdge)}
-                    </td>
-                    <td className={`num px-5 py-3 text-right text-[13px] ${edgeTone(row.snipeEdge)}`}>
-                      {row.snipeEdge == null ? '—' : pct1(row.snipeEdge)}
-                    </td>
-                  </tr>
-                ))}
-                {!entryGapRows.length ? (
-                  <tr>
-                    <td colSpan={6} className="px-5 py-6 text-[13px] text-muted">No Anvil vaults with a readable floor or implied yet.</td>
-                  </tr>
-                ) : null}
+                {entryGapRows.filter((r) => r.meta.key !== 'stonk').map((row) => {
+                  const anvil = row.implied;
+                  const gap = row.floorNft > 0 && anvil > 0 ? row.floorNft - anvil : null;
+                  const gapPct = gap != null && anvil > 0 ? (gap / anvil) * 100 : null;
+                  const src = row.p?.market?.floorSource === 'opensea' ? 'OpenSea' : 'derived';
+                  return (
+                    <tr key={row.meta.key} className="border-b border-line-soft">
+                      <td className="px-5 py-3">
+                        <Link to={`/anvil?project=${row.meta.key}`} className="flex items-center gap-3">
+                          <img
+                            src={logoSrc(row.meta, row.p)}
+                            alt=""
+                            className="h-8 w-8 rounded-md border border-line object-cover bg-panel"
+                          />
+                          <span className="text-[13px] text-ink">{row.meta.name}</span>
+                        </Link>
+                      </td>
+                      <td className="num px-3 py-3 text-[13px] text-ink">
+                        {row.floorNft > 0 ? compactUsd(row.floorNft) : '—'}
+                      </td>
+                      <td className="num px-3 py-3 text-[13px] text-ink">
+                        {anvil > 0 ? compactUsd(anvil) : '—'}
+                      </td>
+                      <td className={`num px-3 py-3 text-[13px] ${edgeTone(gapPct)}`}>
+                        {gap == null ? '—' : `${compactUsd(gap)} · ${pct1(gapPct)}`}
+                      </td>
+                      <td className="px-5 py-3 text-right font-mono text-[11px] text-faint">{src}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </Card>
-        {entryHistoryKeys.map((key) => {
-          const p = data.projects[key];
-          return (
-            <div key={key} className="space-y-4">
-              <EntryFloorImpliedChart
-                project={p}
-                projectKey={key}
-                timeframe={timeframe}
-                interval={interval}
-                color={projectColors[key]}
-              />
-              {key === 'stonk' || entryHistoryKeys.length === 1 ? (
-                <EntryEdgeChart
-                  project={p}
-                  projectKey={key}
-                  timeframe={timeframe}
-                  interval={interval}
-                  color={projectColors[key]}
-                />
-              ) : null}
-            </div>
-          );
-        })}
       </ShareSection>
 
       <ShareSection id="history" className="scroll-mt-32 space-y-4">
@@ -1126,7 +1237,7 @@ export default function EcosystemView({ data, pending = false }) {
         <p><strong className="text-white">Burn:</strong> Ranked as percent of each project’s own token supply cap permanently removed. NFT-equivalent % uses burnt units ÷ collection supply when unitValue exists.</p>
         <p><strong className="text-white">Activation:</strong> Percent of that collection currently earning. Cashflow and vault seats are excluded. Sparks are net active on each project’s own scale.</p>
         <p><strong className="text-white">Ownership:</strong> Wallets per 100 NFTs is unique wallets divided by circulating supply, times 100. Top 10 is the share those wallets hold. Still holding is written when the activity rebuild records who entered and who left. Onboard share is each project’s cut of first-touch wallets. Burn velocity is the trailing 30-day burn as % of own supply. NFTs in the AMM are a count. The Anvil scan is where a vault’s contents are priced.</p>
-        <p><strong className="text-white">Entry:</strong> Floor seat = OpenSea (or star) + T0 tokens. Snipe = AMM specific-buy + the same T0. Implied = unitValue × token (Stonk × 1.10). Edge % is (implied − floor) ÷ implied on the NFT legs — not guaranteed profit after fees, TBA contents, and exit liquidity.</p>
+        <p><strong className="text-white">Entry:</strong> Anvil floor is unitValue × token spot × buy fee (Stonk 666,666 × spot × ~10%). OpenSea floor is the cheapest live ask. Gap is OpenSea − Anvil. The depth book asks what the OpenSea floor becomes after the cheapest 3 / 5 / 10 listings sell — that new ask minus Anvil is how wide the premium grows. Stonk uses the live ask ladder (or the hourly snapshot). Other vaults show collection-level floors when OpenSea is wired; derived floors are labeled.</p>
         <p><strong className="text-white">Chain onboard:</strong> Unique EOAs that sent a transaction with nonce 0–9 which received or minted a StonkBrokers, Mancer, Card Wall, TickerYard, or Interns NFT, or bought that project’s token off its AMM. Airdrops and peer transfers do not count.</p>
       </MethodologyCard>
     </div>
@@ -1168,124 +1279,128 @@ function burnCap(p) {
 
 function edgeTone(pct) {
   if (pct == null || !Number.isFinite(pct)) return 'text-faint';
-  if (pct > 0) return 'text-accent';
-  if (pct < 0) return 'text-danger';
+  if (pct > 0) return 'text-warn';
+  if (pct < 0) return 'text-accent';
   return 'text-muted';
 }
 
-function EntryFloorImpliedChart({ project, projectKey, timeframe, interval, color }) {
-  const hist = entryHistorySeries(project, { key: projectKey, timeframe, interval });
-  const labels = formatLabels(hist.dates);
-  const has = (hist.floor || []).some((v) => v != null) && (hist.implied || []).some((v) => v != null);
-  if (!has) return null;
-  const tokenColor = '#8b929b';
+function StonkAskLadderChart({ book }) {
+  const ladder = (book?.ladder || []).slice(0, 20);
+  if (!ladder.length) return null;
+  const anvil = Number(book.anvilUsd) || 0;
+  const labels = ladder.map((row) => `#${row.id}`);
+  const asks = ladder.map((row) => row.usd);
+  const anvilLine = ladder.map(() => anvil);
   return (
-    <ChartPanel
-      title={`${PROJECTS.find((p) => p.key === projectKey)?.name || projectKey} · floor vs implied`}
-      note="OpenSea floor USD against token-implied NFT value (unit × spot; Stonk × 1.10). Token price on the right axis."
-      footer={(
-        <p className="text-[12px] leading-relaxed text-muted">
-          When implied runs above floor, buying the NFT to access token value is incentivized.
-        </p>
-      )}
-    >
-      <Line
-        data={{
-          labels,
-          datasets: [
-            {
-              label: 'OpenSea floor',
-              data: hist.floor,
-              borderColor: color || '#00a804',
-              backgroundColor: `${color || '#00a804'}18`,
-              borderWidth: 2,
-              tension: 0.3,
-              pointRadius: 0,
-              spanGaps: true,
-              yAxisID: 'y',
+    <Bar
+      data={{
+        labels,
+        datasets: [
+          {
+            type: 'line',
+            label: 'Anvil floor',
+            data: anvilLine,
+            borderColor: '#f5b700',
+            backgroundColor: 'transparent',
+            borderWidth: 2,
+            borderDash: [6, 4],
+            pointRadius: 0,
+            order: 0,
+          },
+          {
+            type: 'bar',
+            label: 'OpenSea ask',
+            data: asks,
+            backgroundColor: ladder.map((row) => (
+              anvil > 0 && row.usd < anvil ? 'rgba(0,168,4,0.55)' : 'rgba(231,233,236,0.35)'
+            )),
+            borderRadius: 2,
+            maxBarThickness: 28,
+            order: 1,
+          },
+        ],
+      }}
+      options={{
+        ...baseChartOptions(labels, 'daily', { yUnit: 'USD', yTick: compactUsdTick }),
+        plugins: {
+          ...baseChartOptions(labels, 'daily').plugins,
+          legend: { display: true, labels: { color: '#8b929b', boxWidth: 10 } },
+        },
+        scales: {
+          ...baseChartOptions(labels, 'daily', { yUnit: 'USD', yTick: compactUsdTick }).scales,
+          x: {
+            ...baseChartOptions(labels, 'daily').scales.x,
+            ticks: {
+              ...baseChartOptions(labels, 'daily').scales.x.ticks,
+              maxRotation: 0,
+              autoSkip: true,
+              maxTicksLimit: 10,
             },
-            {
-              label: 'Implied NFT',
-              data: hist.implied,
-              borderColor: '#e8eaed',
-              backgroundColor: 'transparent',
-              borderWidth: 2,
-              borderDash: [4, 3],
-              tension: 0.3,
-              pointRadius: 0,
-              spanGaps: true,
-              yAxisID: 'y',
-            },
-            {
-              label: 'Token',
-              data: hist.token,
-              borderColor: tokenColor,
-              backgroundColor: 'transparent',
-              borderWidth: 1.5,
-              tension: 0.3,
-              pointRadius: 0,
-              spanGaps: true,
-              yAxisID: 'y1',
-            },
-          ],
-        }}
-        options={dualAxisOptions({
-          labels,
-          interval,
-          leftTick: compactUsdTick,
-          rightTick: compactUsdTick,
-          rightColor: tokenColor,
-          leftKind: 'level',
-          rightKind: 'level',
-          leftValues: [...(hist.floor || []), ...(hist.implied || [])],
-          rightValues: hist.token,
-          leftUnit: 'USD',
-          rightUnit: 'token',
-        })}
-      />
-    </ChartPanel>
+          },
+          y: {
+            ...baseChartOptions(labels, 'daily', { yUnit: 'USD', yTick: compactUsdTick }).scales.y,
+            ...levelAxis(
+              { ...baseChartOptions(labels, 'daily', { yUnit: 'USD', yTick: compactUsdTick }).scales.y.ticks },
+              [...asks, anvil],
+            ),
+          },
+        },
+      }}
+    />
   );
 }
 
-function EntryEdgeChart({ project, projectKey, timeframe, interval, color }) {
-  const hist = entryHistorySeries(project, { key: projectKey, timeframe, interval });
-  const labels = formatLabels(hist.dates);
-  const has = (hist.edge || []).some((v) => v != null && Number.isFinite(v));
-  if (!has) return null;
+function StonkDepthGapChart({ book }) {
+  const rows = (book?.depth || []).filter((row) => row.floorUsd != null);
+  if (!rows.length) return null;
+  const labels = rows.map((row) => row.label);
+  const gaps = rows.map((row) => row.gapUsd);
+  const floors = rows.map((row) => row.floorUsd);
+  const anvil = rows.map((row) => row.anvilUsd);
   return (
-    <ChartPanel
-      title="Arb room"
-      note="(implied − floor) ÷ implied. Positive = floor cheap vs token value."
-    >
-      <Line
-        data={{
-          labels,
-          datasets: [{
-            label: 'Edge %',
-            data: hist.edge,
-            borderColor: color || '#00a804',
-            backgroundColor: `${color || '#00a804'}22`,
-            borderWidth: 2,
-            tension: 0.3,
-            pointRadius: 0,
-            spanGaps: true,
-            fill: true,
-          }],
-        }}
-        options={{
-          ...baseChartOptions(labels, interval),
-          scales: {
-            ...baseChartOptions(labels, interval).scales,
-            y: {
-              ...baseChartOptions(labels, interval).scales.y,
-              ...levelAxis(
-                { ...baseChartOptions(labels, interval).scales.y.ticks, callback: (v) => `${compactTick(v)}%` },
-                hist.edge,
-              ),
-            },
+    <Bar
+      data={{
+        labels,
+        datasets: [
+          {
+            label: 'OpenSea floor',
+            data: floors,
+            backgroundColor: 'rgba(231,233,236,0.35)',
+            borderRadius: 2,
+            maxBarThickness: 36,
           },
-        }}
-      />
-    </ChartPanel>
+          {
+            label: 'Anvil floor',
+            data: anvil,
+            backgroundColor: 'rgba(245,183,0,0.45)',
+            borderRadius: 2,
+            maxBarThickness: 36,
+          },
+          {
+            type: 'line',
+            label: 'Gap $',
+            data: gaps,
+            borderColor: '#00a804',
+            backgroundColor: 'transparent',
+            borderWidth: 2,
+            pointRadius: 3,
+            yAxisID: 'y1',
+          },
+        ],
+      }}
+      options={dualAxisOptions({
+        labels,
+        interval: 'daily',
+        leftTick: compactUsdTick,
+        rightTick: compactUsdTick,
+        rightColor: '#00a804',
+        leftKind: 'level',
+        rightKind: 'level',
+        leftValues: [...floors, ...anvil],
+        rightValues: gaps,
+        leftUnit: 'USD',
+        rightUnit: 'gap',
+      })}
+    />
   );
 }
