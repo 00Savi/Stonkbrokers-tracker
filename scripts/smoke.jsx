@@ -164,6 +164,7 @@ const ROUTES = [
   '/stonkbrokers/yield',
   '/stonkbrokers/revenue',
   '/stonkbrokers/liquidity',
+  '/stonkbrokers/entry',
   '/stonkbrokers/burn',
   '/stonkbrokers/activation',
   '/stonkbrokers/ownership',
@@ -1072,16 +1073,16 @@ for (const [name, View, props] of VIEWS) {
   );
   if (
     !ecoEntryHtml.includes('OpenSea vs Anvil')
-    || !ecoEntryHtml.includes('Ask ladder')
-    || !ecoEntryHtml.includes('Anvil floor')
+    || !ecoEntryHtml.includes('Buying power')
+    || !ecoEntryHtml.includes('Open Entry')
   ) {
     failed++;
-    console.error('FAIL  ecosystem entry tab missing OpenSea vs Anvil board');
-  } else if (!ecoEntryHtml.includes('cheapest live ask')) {
+    console.error('FAIL  ecosystem entry tab missing OpenSea vs Anvil summary');
+  } else if (!ecoEntryHtml.includes('buying power')) {
     failed++;
     console.error('FAIL  ecosystem entry methodology missing');
   } else {
-    console.log('ok    ecosystem entry tab OpenSea vs Anvil');
+    console.log('ok    ecosystem entry tab OpenSea vs Anvil summary');
   }
 }
 

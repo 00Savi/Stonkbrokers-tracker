@@ -38,6 +38,7 @@ export const TAB_BY_SLUG = {
   liquidity: 'liquidity',
   pairs: 'pairs',
   books: 'books',
+  entry: 'entry',
   burn: 'burn',
   activation: 'activation',
   ownership: 'ownership',
@@ -77,6 +78,8 @@ export function tabsForProject(meta) {
     const next = tabs.map((t) => (t.slug === 'liquidity' ? { ...t, label: 'Smart LPs' } : t));
     const at = next.findIndex((t) => t.slug === 'liquidity');
     next.splice(at < 0 ? next.length : at, 0, { slug: 'pairs', label: 'Pair Tokens' });
+    const burnAt = next.findIndex((t) => t.slug === 'burn');
+    next.splice(burnAt < 0 ? next.length : burnAt, 0, { slug: 'entry', label: 'Entry' });
     return next;
   }
   if (meta?.key === 'mancer') {

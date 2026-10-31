@@ -97,9 +97,36 @@ export function normalizeListings(listings, ethUsd = 0) {
 }
 
 /**
+ * Buying power on the OpenSea discount side of Anvil.
+ * Asks below the Anvil buy cost are inventory that can pull capital onto
+ * OpenSea instead of minting from the vault. `capitalUsd` is what it costs
+ * to clear that discount book; `arbUsd` is Σ(Anvil − ask) saved vs Anvil.
+ */
+export function discountBuyPower(rows, anvilAsk) {
+  const anvil = Number(anvilAsk) || 0;
+  if (!(anvil > 0)) {
+    return { count: 0, capitalUsd: 0, arbUsd: 0 };
+  }
+  let count = 0;
+  let capitalUsd = 0;
+  let arbUsd = 0;
+  for (const row of rows || []) {
+    const usd = Number(row?.usd) || 0;
+    if (!(usd > 0) || usd >= anvil) continue;
+    count += 1;
+    capitalUsd += usd;
+    arbUsd += anvil - usd;
+  }
+  return { count, capitalUsd, arbUsd };
+}
+
+/**
  * OpenSea vs Anvil ladder.
  * After `cleared` cheapest listings sell, the new floor is listings[cleared].
  * Gap = newFloor − anvilAsk (positive = OpenSea premium to Anvil).
+ *
+ * Buying power: capital that clears asks still below Anvil, and the $ edge
+ * those seats carry versus buying the same NFTs from the vault.
  */
 export function listingDepthBook(listings, anvilAsk, {
   ethUsd = 0,
@@ -114,9 +141,16 @@ export function listingDepthBook(listings, anvilAsk, {
     gapPct: anvil > 0 ? ((row.usd - anvil) / anvil) * 100 : null,
   }));
 
+  const bookPower = discountBuyPower(rows, anvil);
+
   const depth = (clears || DEPTH_CLEARS).map((cleared) => {
     const next = rows[cleared] || null;
     const gapUsd = next && anvil > 0 ? next.usd - anvil : null;
+    const taken = cleared > 0 ? rows.slice(0, cleared) : [];
+    const remaining = rows.slice(cleared);
+    const clearedCost = taken.reduce((s, row) => s + (Number(row.usd) || 0), 0);
+    const captured = discountBuyPower(taken, anvil);
+    const remainingPower = discountBuyPower(remaining, anvil);
     return {
       cleared,
       label: cleared === 0 ? 'Now' : `After ${cleared}`,
@@ -125,6 +159,12 @@ export function listingDepthBook(listings, anvilAsk, {
       gapUsd,
       gapPct: gapUsd != null && anvil > 0 ? (gapUsd / anvil) * 100 : null,
       anvilUsd: anvil > 0 ? anvil : null,
+      clearCostUsd: cleared > 0 ? clearedCost : null,
+      capturedCapitalUsd: cleared > 0 ? captured.capitalUsd : null,
+      capturedArbUsd: cleared > 0 ? captured.arbUsd : null,
+      buyPowerUsd: remainingPower.capitalUsd,
+      arbUsd: remainingPower.arbUsd,
+      discountCount: remainingPower.count,
     };
   });
 
@@ -134,6 +174,7 @@ export function listingDepthBook(listings, anvilAsk, {
     anvilUsd: anvil > 0 ? anvil : null,
     openSeaFloorUsd: rows[0]?.usd || null,
     count: rows.length,
+    buyPower: bookPower,
   };
 }
 
