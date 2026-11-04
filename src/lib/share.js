@@ -120,23 +120,40 @@ function downloadPng(blob, filename = 'savi-dashboard.png') {
   URL.revokeObjectURL(a.href);
 }
 
-async function writeClipboardPng(blob) {
+async function writeClipboardPng(blob, text) {
   if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') return false;
-  try {
-    await navigator.clipboard.write([
-      new ClipboardItem({ 'image/png': blob }),
-    ]);
-    return true;
-  } catch {
+  const plain = text ? { 'text/plain': new Blob([text], { type: 'text/plain' }) } : null;
+  const attempts = plain
+    ? [{ 'image/png': blob, ...plain }, { 'image/png': blob }]
+    : [{ 'image/png': blob }, { 'image/png': Promise.resolve(blob) }];
+  for (const types of attempts) {
     try {
-      await navigator.clipboard.write([
-        new ClipboardItem({ 'image/png': Promise.resolve(blob) }),
-      ]);
+      await navigator.clipboard.write([new ClipboardItem(types)]);
       return true;
     } catch {
-      return false;
+      /* try the next shape */
     }
   }
+  return false;
+}
+
+/** One line of the labelled figures on a stat card, for paste next to the image. */
+export function cardBlurb(root) {
+  if (!root?.querySelectorAll) return '';
+  const title = root.querySelector('h3, h2, .eyebrow')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+  const bits = [];
+  const hero = root.querySelector('.hero')?.textContent?.replace(/\s+/g, ' ').trim();
+  if (hero) bits.push(hero);
+  for (const num of root.querySelectorAll('.num')) {
+    const block = num.parentElement;
+    const label = [...(block?.children || [])].find((el) => el.classList?.contains('eyebrow'))?.textContent?.replace(/\s+/g, ' ').trim() || '';
+    const value = num.textContent?.replace(/\s+/g, ' ').trim() || '';
+    if (!value) continue;
+    bits.push(label ? `${label} ${value}` : value);
+  }
+  const body = bits.join(' · ');
+  if (title && body && !body.startsWith(title)) return `${title}: ${body}`;
+  return body || title;
 }
 
 function chartCopyMeta(canvas, root) {
@@ -1136,7 +1153,7 @@ function snapshotOptions(root, { scale, wide, tall }) {
 }
 
 /** Full-page PNG of an element. Strips wallet addresses from the clone. */
-export async function copyElement(root, { filename = 'savi-dashboard.png', maxW = 0 } = {}) {
+export async function copyElement(root, { filename = 'savi-dashboard.png', maxW = 0, text = '' } = {}) {
   if (typeof window === 'undefined' || !root) return false;
   const restoreArt = await inlineDropArt(root);
   try {
@@ -1153,8 +1170,13 @@ export async function copyElement(root, { filename = 'savi-dashboard.png', maxW 
     }
     if (!shot?.width || !shot?.height) throw new Error('Empty snapshot');
     const blob = await pngBlobFromCanvas(drawWatermarked(shot, { maxW }));
-    const copied = await writeClipboardPng(blob);
-    if (!copied) downloadPng(blob, filename);
+    const copied = await writeClipboardPng(blob, text);
+    if (!copied) {
+      downloadPng(blob, filename);
+      if (text && navigator.clipboard?.writeText) {
+        try { await navigator.clipboard.writeText(text); } catch { /* the PNG is the fallback */ }
+      }
+    }
     return copied;
   } finally {
     restoreArt();

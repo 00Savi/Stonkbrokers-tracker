@@ -11,8 +11,8 @@ import { yieldBasisText } from '../../lib/yieldSample';
 import { seatCsvRows } from '../../lib/csv';
 import { CsvButton } from '../CsvButton';
 import { CopyControl, ShareSection, copySectionEl } from '../CopyControl';
-import { TierFlowSection, netTierCount } from '../TierFlowCards';
-import { baseChartOptions, compactTick, compactUsdTick, cumulativeBurnDataset, TIER_COLORS, percentTick } from '../../lib/charts';
+import { TierFlowSection } from '../TierFlowCards';
+import { baseChartOptions, compactTick, compactUsdTick, cumulativeBurnDataset, percentTick } from '../../lib/charts';
 import { useChartView } from '../../lib/chartWindow';
 import { holderSeries } from '../../lib/snapshots';
 import { MethodologyCard } from '../Disclaimer';
@@ -22,12 +22,10 @@ import {
   ChartPanel,
   YieldHistorySwitch,
   BurnHistorySwitch,
-  ChartStack,
   ActivityChart,
   ActivationStackPanel,
   OwnershipHistoryPanels,
 } from '../HistoryCharts';
-import { SliceChart } from '../SliceChart';
 import { applyLiveMachines, dropsForMachine, freshAlleyDrops, loadLiveDrops, loadMachineCatalog, mergeMachineCatalog } from '../../lib/cardwallDrops';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
@@ -231,12 +229,6 @@ export default function CardWallDetailView({ data, activeTab }) {
   const actCum = hasActHist && actHistory.cumulative?.length ? actHistory.cumulative : [];
   const actDAct = hasActHist && actHistory.dailyActivations?.length ? actHistory.dailyActivations : [];
   const actDDeact = hasActHist && actHistory.dailyDeactivations?.length ? actHistory.dailyDeactivations : [];
-
-  let breakdownArr = tiers.map((t) => {
-    if (activation.breakdown && activation.breakdown[t.tier] != null) return activation.breakdown[t.tier];
-    const s = activation.tierStats?.[t.tier]?.allTime || {};
-    return netTierCount(s);
-  });
 
   const holdersFull = holderSeries(ownership, dailySnapshots);
   const holdersWin = windowChart(holdersFull.labels, [holdersFull.data], timeframe, interval, ['last']);
@@ -501,15 +493,6 @@ export default function CardWallDetailView({ data, activeTab }) {
 
       {/* TAB 2: HISTORICAL YIELD */}
       <ShareSection id="yield" className="scroll-mt-32 space-y-4">
-        <Card eyebrow="Yield" sub="Payback uses the live annualized rain rate. The ROI chart follows the sticky range control.">
-          <KpiStrip>
-            {tiers.map((t, i) => {
-              const tc = tierFloorUsd(t, i) + (t.reqTokens * market.tokenPriceUsd);
-              const years = t.trackedAnnualYieldUsd > 0 ? `${(tc / t.trackedAnnualYieldUsd).toFixed(1)}y` : '—';
-              return <Stat key={t.tier} label={`${t.tier} payback`} value={years} />;
-            })}
-          </KpiStrip>
-        </Card>
         <YieldHistorySwitch
           labels={histLabels}
           datasets={histDatasets}
@@ -725,8 +708,8 @@ export default function CardWallDetailView({ data, activeTab }) {
             {drops.length || machineNames.length ? (
               <div ref={dropsRef} id="cardwall-drops">
                 <Card
-                  eyebrow="Machine pulls"
-                  sub="Newest slabs The Alley and The Claw revealed to players. Separate from slab rain on ROI — rain is what lands on memberships. Paid is the pull. Value is the posted insured or fair-market price."
+                  eyebrow="Latest drops"
+                  sub="Newest slabs The Alley and The Claw revealed to players. Click a card for the full pull. Separate from slab rain on ROI — rain is what lands on memberships. Paid is the pull. Value is the posted insured or fair-market price."
                   corner={(
                     <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                       <label className="sr-only" htmlFor="cardwall-drop-machine">Machine</label>
@@ -808,53 +791,21 @@ export default function CardWallDetailView({ data, activeTab }) {
           </KpiStrip>
         </Card>
 
-        <ChartStack
-          label="In slabs"
-          views={[
-            {
-              id: 'slab-landed',
-              jump: 'Landed cost',
-              title: 'Slab landed cost by day',
-              note: 'From the first vault record through today. Quiet days are $0 so the range control still reaches now.',
-              body: (
-                <Bar
-                  data={{
-                    labels: revDates,
-                    datasets: [
-                      { label: 'Delivered to members', data: revData1, backgroundColor: '#00a804', borderRadius: 2 },
-                      { label: 'Still on the wall', data: revData2, backgroundColor: '#f5b700', borderRadius: 2 },
-                    ],
-                  }}
-                  options={stackedUsdOptions(revDates, true)}
-                />
-              ),
-            },
-            {
-              id: 'slab-holders',
-              jump: 'With members',
-              title: 'Delivered to members',
-              note: 'Landed cost delivered to members that day. This is holder revenue for the wall.',
-              body: (
-                <Bar
-                  data={{
-                    labels: revDates,
-                    datasets: [{ label: 'Delivered to members', data: revData1, backgroundColor: '#00a804', borderRadius: 2 }],
-                  }}
-                  options={{ ...stackedUsdOptions(revDates, false), plugins: { ...baseChartOptions(revDates, interval).plugins, legend: { display: false } } }}
-                />
-              ),
-            },
-          ]}
-        />
-      </ShareSection>
-
-      <ShareSection id="liquidity" className="scroll-mt-32 space-y-4">
-        <Card eyebrow="Liquidity" sub="The wall itself is the inventory: slabs still in custody versus already rained to members.">
-          <KpiStrip>
-            <Stat label="On the wall" value={formatCurrency(ledger?.vaultedUsd || 0)} />
-            <Stat label="With members" value={formatCurrency(ledger?.deliveredUsd || 0)} />
-          </KpiStrip>
-        </Card>
+        <ChartPanel
+          title="Slab landed cost by day"
+          note="Delivered to members against what is still on the wall. Quiet days are $0 so the range control still reaches now."
+        >
+          <Bar
+            data={{
+              labels: revDates,
+              datasets: [
+                { label: 'Delivered to members', data: revData1, backgroundColor: '#00a804', borderRadius: 2, stack: 'slabs' },
+                { label: 'Still on the wall', data: revData2, backgroundColor: '#f5b700', borderRadius: 2, stack: 'slabs' },
+              ],
+            }}
+            options={stackedUsdOptions(revDates, true)}
+          />
+        </ChartPanel>
       </ShareSection>
 
       {/* TAB 4: BURN TRACKER */}
@@ -917,18 +868,6 @@ export default function CardWallDetailView({ data, activeTab }) {
           formatNumber={formatNumber}
           note="Act is an activation or an upgrade into this wall level. Deact is a void or a sale. Up is a move to a higher level, not an exit."
         />
-
-        <Card eyebrow="Tier mix" sub="Who is staked, by wall level. Net of deactivations.">
-          <SliceChart
-            noun="Active"
-            format={formatNumber}
-            slices={tiers.map((t, idx) => ({
-              label: `${t.tier}: ${t.name}`,
-              value: breakdownArr[idx],
-              color: TIER_COLORS[idx % TIER_COLORS.length],
-            }))}
-          />
-        </Card>
 
         <ActivationStackPanel snaps={roiSnaps} tiers={tiers} breakdown={activation.breakdown} />
         <ChartPanel title="Activity">

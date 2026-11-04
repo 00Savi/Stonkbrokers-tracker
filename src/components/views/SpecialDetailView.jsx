@@ -15,9 +15,9 @@ import {
   OAKMONT_ACTIONS, OAKMONT_BASKET, OAKMONT_DOCS, OAKMONT_DAPP, OAKMONT_SITE, OAKMONT_FEES,
   fetchGeckoTokenHolders,
 } from '../../lib/oakmont';
-import { baseChartOptions, compactTick, compactUsdTick, cumulativeBurnDataset, percentTick, STREAM_COLORS } from '../../lib/charts';
+import { baseChartOptions, compactTick, compactUsdTick, cumulativeBurnDataset, percentTick } from '../../lib/charts';
 import { useChartView } from '../../lib/chartWindow';
-import { YieldHistorySwitch, ChartStack, ChartPanel, BurnHistorySwitch, EmptyChart } from '../HistoryCharts';
+import { YieldHistorySwitch, ChartPanel, BurnHistorySwitch, EmptyChart } from '../HistoryCharts';
 import { MethodologyCard } from '../Disclaimer';
 import { tokenValuation } from '../../lib/valuation';
 
@@ -192,7 +192,7 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
       </ShareSection>
 
       <ShareSection id="yield" className="scroll-mt-32">
-        <Card eyebrow="Historical yield & payback">
+        <Card eyebrow="Historical yield">
           <YieldHistorySwitch
             labels={histLabels}
             datasets={histRoi.length
@@ -223,54 +223,28 @@ export default function SpecialDetailView({ data, projectKey, activeTab }) {
               <Stat label="Annualized" value={fmt(annual)} />
             </KpiStrip>
           </Card>
-          <ChartStack
-            label="In revenue"
-            views={[
-              {
-                id: 'special-rev-kept',
-                jump: 'Protocol kept',
-                title: 'Protocol kept',
-                note: 'Protocol-kept fees beside what reached holders.',
-                body: revDates.length ? (
-                  <Bar
-                    data={{
-                      labels: revDates,
-                      datasets: (revCols || []).map((c) => ({
-                        label: c.label,
-                        data: c.data,
-                        backgroundColor: c.color,
-                      })),
-                    }}
-                    options={{ ...chartOpts, scales: { ...chartOpts.scales, x: { ...chartOpts.scales.x, stacked: false }, y: { ...chartOpts.scales.y, stacked: false, unit: 'USD', ticks: { ...chartOpts.scales.y.ticks, callback: compactUsdTick } } } }}
-                  />
-                ) : (
-                  <EmptyChart>
-                    {kind === 'machines' ? `24h stock-pot estimate ${fmt(cashflow.revenue24h)}. Daily series starts after Llama or on-chain drops are wired.` : kind === 'brokers' ? 'Purchase series from coattail.cash/api/stats (CDN, up to 1h).' : 'No daily series yet.'}
-                  </EmptyChart>
-                ),
-              },
-              {
-                id: 'special-rev-seats',
-                jump: 'Paid to seats',
-                title: 'Paid to seats',
-                note: 'Revenue that reached token / NFT holders.',
-                body: (
-                  <Bar
-                    data={{
-                      labels: revDates,
-                      datasets: [{
-                        label: 'Holder revenue',
-                        data: revCols[1]?.data || [],
-                        backgroundColor: STREAM_COLORS.holdersRev,
-                        borderRadius: 3,
-                      }],
-                    }}
-                    options={{ ...chartOpts, scales: { ...chartOpts.scales, x: { ...chartOpts.scales.x, stacked: false }, y: { ...chartOpts.scales.y, stacked: false, unit: 'USD', ticks: { ...chartOpts.scales.y.ticks, callback: compactUsdTick } } } }}
-                  />
-                ),
-              },
-            ]}
-          />
+          <ChartPanel
+            title="Protocol kept"
+            note="Protocol-kept fees beside what reached holders."
+          >
+            {revDates.length ? (
+              <Bar
+                data={{
+                  labels: revDates,
+                  datasets: (revCols || []).map((c) => ({
+                    label: c.label,
+                    data: c.data,
+                    backgroundColor: c.color,
+                  })),
+                }}
+                options={{ ...chartOpts, scales: { ...chartOpts.scales, x: { ...chartOpts.scales.x, stacked: false }, y: { ...chartOpts.scales.y, stacked: false, unit: 'USD', ticks: { ...chartOpts.scales.y.ticks, callback: compactUsdTick } } } }}
+              />
+            ) : (
+              <EmptyChart>
+                {kind === 'machines' ? `24h stock-pot estimate ${fmt(cashflow.revenue24h)}. Daily series starts after Llama or on-chain drops are wired.` : kind === 'brokers' ? 'Purchase series from coattail.cash/api/stats (CDN, up to 1h).' : 'No daily series yet.'}
+              </EmptyChart>
+            )}
+          </ChartPanel>
         </div>
       </ShareSection>
 
@@ -679,52 +653,26 @@ function VaultView({
               <Panel label="24h wraps / unwraps" value={`${num(market.wraps24h)} / ${num(market.unwraps24h)}`} />
             </KpiStrip>
           </Card>
-          <ChartStack
-            label="In fees"
-            views={[
-              {
-                id: 'oak-rev-kept',
-                jump: 'Vault fees',
-                title: 'ETH protocol rev into the vault',
-                note: 'Oakmont’s indexer publishes monthly totals, not daily. Aug and Sep are the full series they expose.',
-                body: revDates.length ? (
-                  <Bar
-                    data={{
-                      labels: revDates,
-                      datasets: (revCols || []).slice(0, 1).map((c) => ({
-                        label: c.label,
-                        data: c.data,
-                        backgroundColor: c.color,
-                      })),
-                    }}
-                    options={{ ...chartOpts, scales: { ...chartOpts.scales, y: { ...chartOpts.scales.y, unit: 'USD', ticks: { ...chartOpts.scales.y.ticks, callback: compactUsdTick } } } }}
-                  />
-                ) : (
-                  <EmptyChart>No monthly fee series yet</EmptyChart>
-                ),
-              },
-              {
-                id: 'oak-rev-seats',
-                jump: 'Paid to seats',
-                title: 'Paid to seats',
-                note: 'Holder / wrap-side cash-flow from the same Oakmont series. Monthly buckets, not daily.',
-                body: (
-                  <Bar
-                    data={{
-                      labels: revDates,
-                      datasets: [{
-                        label: 'Holder revenue',
-                        data: revCols[1]?.data || [],
-                        backgroundColor: STREAM_COLORS.holdersRev,
-                        borderRadius: 3,
-                      }],
-                    }}
-                    options={{ ...chartOpts, scales: { ...chartOpts.scales, y: { ...chartOpts.scales.y, unit: 'USD', ticks: { ...chartOpts.scales.y.ticks, callback: compactUsdTick } } } }}
-                  />
-                ),
-              },
-            ]}
-          />
+          <ChartPanel
+            title="Vault fees and seats"
+            note="ETH protocol revenue into the vault beside holder cash. Oakmont’s indexer publishes monthly totals, not daily."
+          >
+            {revDates.length ? (
+              <Bar
+                data={{
+                  labels: revDates,
+                  datasets: (revCols || []).map((c) => ({
+                    label: c.label,
+                    data: c.data,
+                    backgroundColor: c.color,
+                  })),
+                }}
+                options={{ ...chartOpts, scales: { ...chartOpts.scales, x: { ...chartOpts.scales.x, stacked: false }, y: { ...chartOpts.scales.y, stacked: false, unit: 'USD', ticks: { ...chartOpts.scales.y.ticks, callback: compactUsdTick } } } }}
+              />
+            ) : (
+              <EmptyChart>No monthly fee series yet</EmptyChart>
+            )}
+          </ChartPanel>
           <Card flush eyebrow="Fee schedule">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[420px] text-left">

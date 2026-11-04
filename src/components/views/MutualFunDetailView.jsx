@@ -13,6 +13,7 @@ import { TierFlowSection } from '../TierFlowCards';
 import { baseChartOptions, compactTick, cumulativeBurnDataset, TIER_COLORS } from '../../lib/charts';
 import { useChartView } from '../../lib/chartWindow';
 import { MethodologyCard } from '../Disclaimer';
+import { UnderwaterCard } from '../UnderwaterCard';
 import { explorerAddressUrl } from '../../lib/tba';
 import {
   EmptyChart,
@@ -23,8 +24,6 @@ import {
   ActivationStackPanel,
   OwnershipHistoryPanels,
 } from '../HistoryCharts';
-import { SliceChart } from '../SliceChart';
-
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
 const ACCENT = '#00a804';
@@ -118,9 +117,6 @@ export default function MutualFunDetailView({ data }) {
     ['last', 'sum', 'sum'],
   );
 
-  const breakdownArr = tiers.map((t) => (
-    activation.breakdown && activation.breakdown[t.tier] != null ? activation.breakdown[t.tier] : 0
-  ));
   const tierStats = activation.tierStats || tierStatsFromBreakdown(activation.breakdown, actHistory);
 
   const minted = Number(seats.minted) || Number(activation.totalSupply) || 0;
@@ -266,14 +262,6 @@ export default function MutualFunDetailView({ data }) {
       </ShareSection>
 
       <ShareSection id="yield" className="scroll-mt-32 space-y-4">
-        <Card eyebrow="Yield" sub="Payback stays blank until a fund posts a dividend.">
-          <KpiStrip>
-            {roiRows.map(({ t, payback }) => (
-              <Stat key={t.tier} label={`${t.tier} payback`} value={payback} />
-            ))}
-          </KpiStrip>
-        </Card>
-
         <Card eyebrow="Funds" sub="The five books are the fund desk's last ETH mark.">
           <KpiStrip>
             {funds.map((fund) => (
@@ -438,18 +426,6 @@ export default function MutualFunDetailView({ data }) {
           note="Act is an enrollment into that class, including a merge into it. Deact is an enrollment ending, or a seat retired by a merge. Up is the class a seat left when it became a corner office."
         />
 
-        <Card eyebrow="Tier mix" sub="Net of deactivations">
-          <SliceChart
-            noun="Active"
-            format={formatNumber}
-            slices={tiers.map((t, idx) => ({
-              label: `${t.tier}: ${t.name}`,
-              value: breakdownArr[idx],
-              color: TIER_COLORS[idx % TIER_COLORS.length],
-            }))}
-          />
-        </Card>
-
         <Card flush eyebrow="Enrolled by fund">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[480px] text-left">
@@ -521,7 +497,9 @@ export default function MutualFunDetailView({ data }) {
         <OwnershipHistoryPanels
           snaps={dailySnapshots}
           live={{ tokenHolders: ownership.tokenHolders, nftHolders: ownership.nftHolders, ownershipRatio: ownership.ownershipRatio }}
+          onboard={data?.onboarding?.byProject?.mutualfun ? { data, projectKey: 'mutualfun', timeframe, interval, name: 'The Mutual Fun' } : null}
         />
+        <UnderwaterCard ownership={ownership} />
       </ShareSection>
 
       <MethodologyCard>

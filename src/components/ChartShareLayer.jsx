@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
-import { CopyChartButton, CopyTableButton } from './CopyControl';
+import { CopyCardButton, CopyChartButton, CopyTableButton } from './CopyControl';
 
 function hasHeadingCopy(el) {
   return !!(el && el.querySelector('[data-heading-copy]'));
@@ -53,6 +53,12 @@ function collectChartHosts() {
   for (const table of tables) {
     take(table, 'table');
   }
+  const cards = [...document.querySelectorAll('main .card, #project-share .card, #ecosystem-share .card')];
+  for (const card of cards) {
+    if (seen.has(card) || card.querySelector('canvas, table')) continue;
+    if (!card.querySelector('.num, .hero')) continue;
+    take(card, 'card');
+  }
   return hosts;
 }
 
@@ -86,8 +92,6 @@ export default function ChartShareLayer() {
     };
   }, [location.pathname, location.search]);
 
-  if (location.pathname === '/portfolio' || location.pathname === '/broker' || location.pathname === '/anvil') return null;
-
   return (
     <>
       {hosts.map(({ el, tight, kind }, i) => (
@@ -95,7 +99,9 @@ export default function ChartShareLayer() {
           {createPortal(
             kind === 'table'
               ? <CopyTableButton host={el} tight={tight} />
-              : <CopyChartButton host={el} tight={tight} />,
+              : kind === 'card'
+                ? <CopyCardButton host={el} tight={tight} />
+                : <CopyChartButton host={el} tight={tight} />,
             el
           )}
         </React.Fragment>

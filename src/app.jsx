@@ -23,7 +23,7 @@ import NightshadesDetailView, { NightshadesFactionBar } from './components/views
 import { useDashboard } from './lib/useDashboard';
 import { AnalysisProvider } from './components/SectionInsights';
 import { NIGHTSHADES_FACTIONS } from './lib/nightshades';
-import { PROJECT_BY_SLUG, TAB_BY_SLUG, DEFAULT_TAB, BONUS_LIVE, PROJECTS, isProjectLive, tabsForProject } from './lib/routes';
+import { PROJECT_BY_SLUG, TAB_BY_SLUG, DEFAULT_TAB, BONUS_LIVE, PROJECTS, isProjectLive, tabsForProject, moodsPreAnvil } from './lib/routes';
 import { useProjectScrollSpy } from './lib/projectScroll';
 import { SkeletonCard } from './components/kit';
 import { applyYieldSample, useYieldSampleId, YieldSampleUrlSync } from './lib/yieldSample';
@@ -64,8 +64,9 @@ function ProjectPage({ data }) {
   const key = PROJECT_BY_SLUG[project];
   const activeTab = TAB_BY_SLUG[tab];
   const meta = PROJECTS.find((p) => p.slug === project);
+  const book = data?.projects?.[key];
   const ready = !!(data && key && activeTab && isProjectLive(meta));
-  useProjectScrollSpy(ready ? project : null, ready ? tab : null, meta, ready);
+  useProjectScrollSpy(ready ? project : null, ready ? tab : null, meta, ready, book);
 
   const q = searchParams.toString();
   const withQuery = (path) => (q ? `${path}?${q}` : path);
@@ -73,11 +74,15 @@ function ProjectPage({ data }) {
   if (!key) return <Navigate to="/" replace />;
   if (!isProjectLive(meta)) return <Navigate to={key === 'bonus' && BONUS_LIVE ? '/bonus' : '/'} replace />;
   if (!activeTab) return <Navigate to={withQuery(`/${project}/${DEFAULT_TAB}`)} replace />;
-  const allowedTabs = tabsForProject(meta);
+  const allowedTabs = tabsForProject(meta, book);
   if (!allowedTabs.some((t) => t.slug === tab)) {
     const fallback = key === 'nightshades' && tab === 'revenue'
       ? 'night'
-      : (allowedTabs[0]?.slug || DEFAULT_TAB);
+      : key === 'cardwall' && tab === 'liquidity'
+        ? 'revenue'
+        : key === 'moods' && moodsPreAnvil(book)
+          ? 'roi'
+          : (allowedTabs[0]?.slug || DEFAULT_TAB);
     return <Navigate to={withQuery(`/${project}/${fallback}`)} replace />;
   }
 

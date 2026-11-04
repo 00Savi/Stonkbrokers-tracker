@@ -11,8 +11,8 @@ import { yieldBasisText } from '../../lib/yieldSample';
 import { seatCsvRows } from '../../lib/csv';
 import { CsvButton } from '../CsvButton';
 import { ShareSection } from '../CopyControl';
-import { TierFlowSection, netTierCount } from '../TierFlowCards';
-import { baseChartOptions, compactTick, compactUsdTick, cumulativeBurnDataset, STREAM_COLORS, TIER_COLORS, percentTick } from '../../lib/charts';
+import { TierFlowSection } from '../TierFlowCards';
+import { baseChartOptions, compactTick, compactUsdTick, cumulativeBurnDataset, STREAM_COLORS, percentTick } from '../../lib/charts';
 import { useChartView } from '../../lib/chartWindow';
 import { holderSeries } from '../../lib/snapshots';
 import { MethodologyCard } from '../Disclaimer';
@@ -35,8 +35,6 @@ import {
   OwnershipHistoryPanels,
   BlackHoleChartPanels,
 } from '../HistoryCharts';
-import { SliceChart } from '../SliceChart';
-
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
 function StreamStat({ color, label, value, note }) {
@@ -159,12 +157,6 @@ export default function MancerDetailView({ data, activeTab }) {
   const actCum = hasActHist && actHistory.cumulative?.length ? actHistory.cumulative : [];
   const actDAct = hasActHist && actHistory.dailyActivations?.length ? actHistory.dailyActivations : [];
   const actDDeact = hasActHist && actHistory.dailyDeactivations?.length ? actHistory.dailyDeactivations : [];
-
-  let breakdownArr = tiers.map((t) => {
-    if (activation.breakdown && activation.breakdown[t.tier] != null) return activation.breakdown[t.tier];
-    const s = activation.tierStats?.[t.tier]?.allTime || {};
-    return netTierCount(s);
-  }); 
 
   const holdersFull = holderSeries(ownership, dailySnapshots);
   const holdersWin = windowChart(holdersFull.labels, [holdersFull.data], timeframe, interval, ['last']);
@@ -330,14 +322,6 @@ export default function MancerDetailView({ data, activeTab }) {
 
       {/* ==================== TAB 2: HISTORICAL YIELD ==================== */}
       <ShareSection id="yield" className="scroll-mt-32 space-y-4">
-        <Card eyebrow="Yield" sub="Daily CoC from the hourly ledger. Range follows the Weekly / Monthly / All control.">
-          <KpiStrip>
-            {roiRows.map(({ t, payback }) => (
-              <Stat key={t.tier} label={`${t.tier} payback`} value={payback} />
-            ))}
-          </KpiStrip>
-        </Card>
-
         <YieldHistorySwitch
           labels={histLabels}
           datasets={histDatasets}
@@ -612,18 +596,6 @@ export default function MancerDetailView({ data, activeTab }) {
           onTimeframe={setTierTimeframe}
           formatNumber={formatNumber}
         />
-
-        <Card eyebrow="Tier mix" sub="Net of deactivations">
-          <SliceChart
-            noun="Active"
-            format={formatNumber}
-            slices={tiers.map((t, idx) => ({
-              label: `${t.tier}: ${t.name}`,
-              value: breakdownArr[idx],
-              color: TIER_COLORS[idx % TIER_COLORS.length],
-            }))}
-          />
-        </Card>
 
         <ActivationStackPanel snaps={roiSnaps} tiers={tiers} breakdown={activation.breakdown} />
         <ChartPanel

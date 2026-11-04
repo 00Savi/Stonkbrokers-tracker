@@ -6,7 +6,7 @@ import { seriesHasInk, bucketKey } from '../../lib/yieldHistory';
 import { Card, Stat, KpiStrip, Tag, YieldPeriodToggle, scaleAnnualYield, yieldSuffix, yieldPeriodLabel, compactUsd, compactNum } from '../kit';
 import { yieldBasisText } from '../../lib/yieldSample';
 import { ShareSection } from '../CopyControl';
-import { axisTitle, baseChartOptions, compactTick, compactUsdTick, percentTick } from '../../lib/charts';
+import { axisTitle, baseChartOptions, compactTick, compactUsdTick, dualAxisOptions, percentTick } from '../../lib/charts';
 import { useChartView } from '../../lib/chartWindow';
 import {
     NIGHTSHADES_FACTION_META,
@@ -21,9 +21,9 @@ import {
     factionNightRecord,
     nightLpPoints,
 } from '../../lib/nightshades';
-import { ChartPanel, ChartSwitch, ChartStack, EmptyChart } from '../HistoryCharts';
+import { ChartPanel, ChartSwitch, EmptyChart, OnboardLinePanel } from '../HistoryCharts';
+import { UnderwaterCard } from '../UnderwaterCard';
 import { MethodologyCard } from '../Disclaimer';
-import { SliceChart } from '../SliceChart';
 import { explorerTxUrl, explorerAddressUrl } from '../../lib/tba';
 
 function formatPrice(val) {
@@ -294,50 +294,32 @@ function NightLiquidity({ night, timeframe, interval, faction }) {
   }
 
   return (
-    <ChartStack
-      label="In pools"
-      views={[
+    <Together
+      title="Pool liquidity"
+      note="Each Anvil pair on its own line. The dashed line is all four pools added together. After a night, total WETH should dip on the struck side and then stick."
+      labels={labels}
+      datasets={[
+        ...NIGHTSHADES_FACTION_META.map((f) => ({
+          label: `${f.label} pool`,
+          data: sliced.map((r) => Number(r.pools?.[f.id]?.weth) || 0),
+          borderColor: FACTION_COLORS[f.id],
+          borderWidth: 2,
+          tension: 0.3,
+          pointRadius: dots,
+          spanGaps: true,
+        })),
         {
-          id: 'ns-pools',
-          jump: 'By faction',
-          title: 'Pool liquidity by faction',
-          note: 'Each Anvil pair on its own line. Not stacked — Ghosts is not added into Knights here.',
-          body: togetherBody({
-            labels,
-            datasets: NIGHTSHADES_FACTION_META.map((f) => ({
-              label: `${f.label} pool`,
-              data: sliced.map((r) => Number(r.pools?.[f.id]?.weth) || 0),
-              borderColor: FACTION_COLORS[f.id],
-              borderWidth: 2,
-              tension: 0.3,
-              pointRadius: dots,
-              spanGaps: true,
-            })),
-            options: ethAxis,
-          }),
-        },
-        {
-          id: 'ns-total',
-          jump: 'Combined',
-          title: 'Total Nightshades pool liquidity',
-          note: 'All four faction pools added together. This is system health: after a night, total WETH should dip on the struck side and then stick.',
-          body: togetherBody({
-            labels,
-            datasets: [{
-              label: 'All four pools',
-              data: sliced.map((r) => Number(r.totalWeth) || 0),
-              borderColor: '#00a804',
-              backgroundColor: '#00a80415',
-              borderWidth: 3,
-              tension: 0.3,
-              pointRadius: dots,
-              spanGaps: true,
-              fill: true,
-            }],
-            options: ethAxis,
-          }),
+          label: 'All four pools',
+          data: sliced.map((r) => Number(r.totalWeth) || 0),
+          borderColor: '#e7e9ec',
+          borderDash: [5, 4],
+          borderWidth: 2,
+          tension: 0.3,
+          pointRadius: 0,
+          spanGaps: true,
         },
       ]}
+      options={ethAxis}
     />
   );
 }
@@ -434,7 +416,7 @@ function t0RoiMap(slice) {
   return map;
 }
 
-export default function NightshadesAllView({ project, setFaction }) {
+export default function NightshadesAllView({ data, project, setFaction }) {
   const { range: timeframe, interval } = useChartView();
   const [expanded, setExpanded] = useState(null);
   const [yieldPeriod, setYieldPeriod] = useState('Y');
@@ -541,6 +523,56 @@ export default function NightshadesAllView({ project, setFaction }) {
     })),
     { timeframe, interval },
   );
+
+  const holderRaw = [...new Set([...(nftOverlay.rawLabels || []), ...(tokOverlay.rawLabels || [])])].filter(Boolean).sort();
+  const holderTake = (overlay, suffix, dash) => {
+    const index = new Map((overlay.rawLabels || []).map((d, i) => [d, i]));
+    return (overlay.datasets || []).map((ds) => ({
+      ...ds,
+      label: `${ds.label} ${suffix}`,
+      borderDash: dash,
+      fill: false,
+      data: holderRaw.map((d) => {
+        const i = index.get(d);
+        if (i == null) return null;
+        const v = Number(ds.data[i]);
+        return Number.isFinite(v) ? v : null;
+      }),
+    }));
+  };
+  const holderNft = holderTake(nftOverlay, 'NFTs');
+  const holderToken = holderTake(tokOverlay, 'tokens', [4, 4]);
+  const holderPeak = (sets) => {
+    let peak = 0;
+    for (const ds of sets) {
+      for (const v of ds.data || []) {
+        if (Number.isFinite(v) && v > peak) peak = v;
+      }
+    }
+    return peak;
+  };
+  const nftPeak = holderPeak(holderNft);
+  const tokenPeak = holderPeak(holderToken);
+  const holderShared = !(nftPeak > 0) || !(tokenPeak > 0) || Math.max(nftPeak, tokenPeak) / Math.min(nftPeak, tokenPeak) <= 3;
+  const holderLabels = formatLabels(holderRaw);
+  const holderOptions = holderShared
+    ? countChartOptions('Wallets')
+    : dualAxisOptions({
+      leftTick: compactTick,
+      rightTick: compactTick,
+      rightColor: '#94a3b8',
+      labels: holderLabels,
+      leftKind: 'level',
+      rightKind: 'level',
+      leftValues: holderNft.flatMap((d) => d.data),
+      rightValues: holderToken.flatMap((d) => d.data),
+      leftUnit: 'NFT wallets',
+      rightUnit: 'Token wallets',
+    });
+  const holderSets = [
+    ...holderNft,
+    ...holderToken.map((ds) => ({ ...ds, yAxisID: holderShared ? 'y' : 'y1' })),
+  ];
 
   const roiRows = slices.map((f) => {
     const p = f.slice;
@@ -786,17 +818,6 @@ export default function NightshadesAllView({ project, setFaction }) {
             })}
           </div>
         </Card>
-        <Card eyebrow="Active share" sub="Share of Nightshades active units">
-          <SliceChart
-            noun="Active"
-            format={formatNumber}
-            slices={slices.map((f) => ({
-              label: f.label,
-              value: f.slice.activation?.activeCount || 0,
-              color: f.color,
-            }))}
-          />
-        </Card>
         <Together
           title="Net active units"
           note="From each vault’s activation history. Missing days stay blank."
@@ -829,33 +850,25 @@ export default function NightshadesAllView({ project, setFaction }) {
             })}
           </div>
         </Card>
-        <ChartStack
-          label="In holders"
-          views={[
-            {
-              id: 'ns-nft',
-              jump: 'NFT holders',
-              title: 'NFT holders',
-              note: 'Snapshot nftHolders when present; otherwise the live count as the latest point.',
-              body: togetherBody({
-                labels: nftOverlay.labels,
-                datasets: nftOverlay.datasets,
-                options: countChartOptions('Wallets'),
-              }),
-            },
-            {
-              id: 'ns-token',
-              jump: 'Token holders',
-              title: 'Token holders',
-              note: 'hourly historicalGrowth when it exists; else snapshot tokenHolders.',
-              body: togetherBody({
-                labels: tokOverlay.labels,
-                datasets: tokOverlay.datasets,
-                options: countChartOptions('Wallets'),
-              }),
-            },
-          ]}
+        <Together
+          title="Who holds"
+          note="Solid lines are NFT wallets. Dashed lines are token wallets, same color per faction. One axis when the two counts stay within 3×."
+          labels={holderLabels}
+          datasets={holderSets}
+          options={holderOptions}
         />
+        {slices.map((f) => (
+          <UnderwaterCard key={f.id} name={f.label} ownership={f.slice.ownership} />
+        ))}
+        {data?.onboarding?.byProject?.nightshades ? (
+          <OnboardLinePanel
+            data={data}
+            projectKey="nightshades"
+            timeframe={timeframe}
+            interval={interval}
+            name="Nightshades"
+          />
+        ) : null}
       </ShareSection>
 
       <MethodologyCard>

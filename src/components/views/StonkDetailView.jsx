@@ -14,11 +14,10 @@ import { seatCsvRows } from '../../lib/csv';
 import { CsvButton } from '../CsvButton';
 import { ShareSection } from '../CopyControl';
 import { EntryArbBoard } from '../EntryArbBoard';
-import { TierFlowSection, netTierCount } from '../TierFlowCards';
-import { baseChartOptions, compactTick, compactUsdTick, cumulativeBurnDataset, STREAM_COLORS, TIER_COLORS, barThickness, percentTick } from '../../lib/charts';
+import { TierFlowSection } from '../TierFlowCards';
+import { baseChartOptions, compactTick, compactUsdTick, cumulativeBurnDataset, STREAM_COLORS, barThickness, percentTick } from '../../lib/charts';
 import { useChartView } from '../../lib/chartWindow';
 import { explorerAddressUrl } from '../../lib/tba';
-import { SliceChart } from '../SliceChart';
 import { MethodologyCard } from '../Disclaimer';
 import { ClockInDistributions } from '../ClockInDistributions';
 import { UnderwaterCard } from '../UnderwaterCard';
@@ -261,12 +260,6 @@ export default function StonkDetailView({ data, activeTab }) {
   const actDAct = hasActHist && actHistory.dailyActivations?.length ? actHistory.dailyActivations : [];
   const actDDeact = hasActHist && actHistory.dailyDeactivations?.length ? actHistory.dailyDeactivations : [];
 
-  let breakdownArr = tiers.map((t) => {
-    if (activation.breakdown && activation.breakdown[t.tier] != null) return activation.breakdown[t.tier];
-    const s = activation.tierStats?.[t.tier]?.allTime || {};
-    return netTierCount(s);
-  }); 
-
   const stonkHolders = Number(ownership.stonkHolders) || Number(ownership.tokenHolders) || Number(ownership.erc20Holders) || 0;
 
   const actWin = windowChart(actLabels, [actCum, actDAct, actDDeact], timeframe, interval, ['last', 'sum', 'sum']);
@@ -428,14 +421,6 @@ export default function StonkDetailView({ data, activeTab }) {
 
       {/* ==================== TAB 2: HISTORICAL YIELD ==================== */}
       <ShareSection id="yield" className="scroll-mt-32 space-y-4">
-        <Card eyebrow="Yield" sub="Daily CoC from Aug 20 is the T4 oracle sample. Earlier days reconstruct Clock In pots.">
-          <KpiStrip>
-            {roiRows.map(({ t, payback }) => (
-              <Stat key={t.tier} label={`${t.tier} payback`} value={payback} />
-            ))}
-          </KpiStrip>
-        </Card>
-
         <YieldHistorySwitch
           labels={histLabels}
           datasets={histDatasets}
@@ -852,18 +837,6 @@ export default function StonkDetailView({ data, activeTab }) {
             onTimeframe={setTierTimeframe}
             formatNumber={formatNumber}
           />
-
-        <Card eyebrow="Tier mix" sub="Net of deactivations">
-            <SliceChart
-              noun="Active"
-              format={formatNumber}
-              slices={tiers.map((t, idx) => ({
-                label: `${t.tier}: ${t.name}`,
-                value: breakdownArr[idx],
-                color: TIER_COLORS[idx % TIER_COLORS.length],
-              }))}
-            />
-        </Card>
 
           <ActivationStackPanel snaps={roiSnaps} tiers={tiers} breakdown={activation.breakdown} />
         <ChartPanel title="Activity">

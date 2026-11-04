@@ -416,7 +416,7 @@ VIEWS.push(['Nightshades·all', NightshadesDetailView, { data: snapshot, activeT
       <HomeView data={snapshot} />
     </StaticRouter>,
   );
-  const homeOk = homeHtml.includes('StonkBrokers Ecosystem Analytics')
+  const homeOk = homeHtml.includes('Ecosystem Analytics')
     && homeHtml.includes('No trackers. No wallet connects. Just data.')
     && homeHtml.includes('Look up')
     && homeHtml.includes('Follow @savicrypto')
@@ -942,7 +942,7 @@ for (const [name, View, props] of VIEWS) {
   } else {
     console.log('ok    anvil value series inserts by date and replaces the same day');
   }
-  if (!ammHtml.includes('Value in the Anvil') || !ammHtml.includes('No daily close yet')) {
+  if (!ammHtml.includes('Value in the Anvil') || !(ammHtml.includes('No daily close yet') || ammHtml.includes('Earlier days are not reconstructed'))) {
     failed++;
     console.error('FAIL  stonk ownership missing the empty anvil value chart');
   } else {

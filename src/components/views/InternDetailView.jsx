@@ -11,8 +11,8 @@ import { yieldBasisText } from '../../lib/yieldSample';
 import { seatCsvRows } from '../../lib/csv';
 import { CsvButton } from '../CsvButton';
 import { ShareSection } from '../CopyControl';
-import { TierFlowSection, netTierCount } from '../TierFlowCards';
-import { baseChartOptions, compactTick, compactUsdTick, STREAM_COLORS, TIER_COLORS, percentTick } from '../../lib/charts';
+import { TierFlowSection } from '../TierFlowCards';
+import { baseChartOptions, compactTick, compactUsdTick, STREAM_COLORS, percentTick } from '../../lib/charts';
 import { useChartView } from '../../lib/chartWindow';
 import { holderSeries } from '../../lib/snapshots';
 import { MethodologyCard } from '../Disclaimer';
@@ -28,7 +28,6 @@ import {
   ActivationStackPanel,
   OwnershipHistoryPanels,
 } from '../HistoryCharts';
-import { SliceChart } from '../SliceChart';
 import {
   INTERNS_DOCS,
   INTERNS_MAX_SUPPLY,
@@ -114,12 +113,6 @@ export default function InternDetailView({ data, activeTab }) {
   const actCum = hasActHist && actHistory.cumulative?.length ? actHistory.cumulative : [];
   const actDAct = hasActHist && actHistory.dailyActivations?.length ? actHistory.dailyActivations : [];
   const actDDeact = hasActHist && actHistory.dailyDeactivations?.length ? actHistory.dailyDeactivations : [];
-  const breakdownArr = tiers.map((t) => {
-    if (activation.breakdown && activation.breakdown[t.tier] != null) return activation.breakdown[t.tier];
-    const s = activation.tierStats?.[t.tier]?.allTime || {};
-    return netTierCount(s);
-  });
-
   const holdersFull = holderSeries(ownership, dailySnapshots);
   const holdersWin = windowChart(holdersFull.labels, [holdersFull.data], timeframe, interval, ['last']);
   const ownLabels = holdersWin.labels;
@@ -324,15 +317,9 @@ export default function InternDetailView({ data, activeTab }) {
       </ShareSection>
 
       <ShareSection id="yield" className="scroll-mt-32 space-y-4">
-        <Card eyebrow="Yield" sub="Intern Clock In 3.0 payouts. Base pay from the parent broker is a separate slice and is not this chart.">
-          <KpiStrip>
-            {tiers.map((t) => {
-              const tc = floorCostUsd + (t.reqTokens || 0) * stonkPx;
-              const years = t.trackedAnnualYieldUsd > 0 ? `${(tc / t.trackedAnnualYieldUsd).toFixed(1)}y` : '—';
-              return <Stat key={t.tier} label={`${t.tier} payback`} value={years} />;
-            })}
-          </KpiStrip>
-        </Card>
+        <p className="max-w-3xl text-[13px] leading-relaxed text-muted">
+          Intern Clock In 3.0 payouts. Base pay from the parent broker is a separate slice and is not this chart.
+        </p>
         <YieldHistorySwitch
           labels={histLabels}
           datasets={histDatasets}
@@ -412,24 +399,6 @@ export default function InternDetailView({ data, activeTab }) {
           formatNumber={formatNumber}
           pending={awaitingContracts}
         />
-
-        <Card eyebrow="Tier mix" sub="Current active interns by tier">
-          {breakdownArr.some((n) => n > 0) ? (
-            <SliceChart
-              noun="Active"
-              format={formatNumber}
-              slices={tiers.map((t, idx) => ({
-                label: `${t.tier}: ${t.name}`,
-                value: breakdownArr[idx],
-                color: TIER_COLORS[idx % TIER_COLORS.length],
-              }))}
-            />
-          ) : (
-            <div className="h-24">
-              <EmptyChart>No intern activations recorded</EmptyChart>
-            </div>
-          )}
-        </Card>
 
         <ActivationStackPanel snaps={roiSnaps} tiers={tiers} breakdown={activation.breakdown} />
         <ChartPanel

@@ -108,6 +108,64 @@ function projectRows(data) {
   });
 }
 
+function ProjectList({ title, note, rows, data, lead = false, className = '' }) {
+  if (!rows.length) return null;
+  return (
+    <div className={className}>
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="eyebrow text-mark-sky">{title}</h2>
+        <p className="text-[12px] text-faint">{note}</p>
+      </div>
+      <ul className="mt-3 grid grid-cols-1 gap-2">
+        {rows.map(({ meta, fees, spark, under }, index) => {
+          const logo = meta.logo || data?.projects?.[meta.key]?.config?.logo || FALLBACK_LOGO[meta.key];
+          const highlight = lead && index === 0 && fees > 0;
+          const mark = PROJECT_COLORS[meta.key] || 'var(--color-mark-green)';
+          return (
+            <li key={meta.key}>
+              <Link
+                to={projectPath(meta.key)}
+                className={`flex items-center gap-3 rounded-xl border bg-panel px-3 py-3 transition-colors hover:border-[#2c323a] hover:bg-panel-2 ${
+                  highlight ? 'home-project-lead border-[color:var(--color-brand)]/35' : 'border-line'
+                }`}
+              >
+                {logo ? (
+                  <img
+                    src={logo.startsWith('http') ? logo : `/${logo}`}
+                    alt=""
+                    className="h-10 w-10 shrink-0 rounded-lg border border-line object-cover"
+                    style={String(logo).endsWith('.png') && String(logo).includes('Mutual') ? { imageRendering: 'pixelated' } : undefined}
+                  />
+                ) : (
+                  <span className="h-10 w-10 shrink-0 rounded-lg border border-line bg-panel-2" />
+                )}
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1.5">
+                    <span className="truncate text-[14px] font-medium text-ink">{meta.name}</span>
+                    {meta.beta && <BetaTag />}
+                  </span>
+                  <span className="mt-0.5 block font-mono text-[11px] text-faint">{meta.ticker}</span>
+                </span>
+                {!under && spark?.length > 1 ? (
+                  <MiniSpark data={spark} color={mark} className="hidden sm:block" />
+                ) : null}
+                <span className="shrink-0 text-right">
+                  <span className="num block text-[16px] leading-none text-ink">
+                    {under || !(fees > 0) ? '—' : compactUsd(fees)}
+                  </span>
+                  <span className="mt-1 block text-[10px] uppercase tracking-wider text-faint">
+                    {under ? 'Soon' : '30d cash'}
+                  </span>
+                </span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 export default function HomeView({ data }) {
   const navigate = useNavigate();
   const [lookup, setLookup] = useState('');
@@ -251,56 +309,20 @@ export default function HomeView({ data }) {
         </section>
 
         <section className="min-w-0" aria-label="Projects">
-          <div className="flex items-baseline justify-between gap-3">
-            <h2 className="eyebrow text-mark-sky">Projects</h2>
-            <p className="text-[12px] text-faint">Trailing 30d protocol cash</p>
-          </div>
-          <ul className="mt-3 grid grid-cols-1 gap-2">
-            {rows.map(({ meta, fees, spark, under }, index) => {
-              const logo = meta.logo || data?.projects?.[meta.key]?.config?.logo || FALLBACK_LOGO[meta.key];
-              const lead = !under && index === 0 && fees > 0;
-              const mark = PROJECT_COLORS[meta.key] || 'var(--color-mark-green)';
-              return (
-                <li key={meta.key}>
-                  <Link
-                    to={projectPath(meta.key)}
-                    className={`flex items-center gap-3 rounded-xl border bg-panel px-3 py-3 transition-colors hover:border-[#2c323a] hover:bg-panel-2 ${
-                      lead ? 'home-project-lead border-[color:var(--color-brand)]/35' : 'border-line'
-                    }`}
-                  >
-                    {logo ? (
-                      <img
-                        src={logo.startsWith('http') ? logo : `/${logo}`}
-                        alt=""
-                        className="h-10 w-10 shrink-0 rounded-lg border border-line object-cover"
-                        style={String(logo).endsWith('.png') && String(logo).includes('Mutual') ? { imageRendering: 'pixelated' } : undefined}
-                      />
-                    ) : (
-                      <span className="h-10 w-10 shrink-0 rounded-lg border border-line bg-panel-2" />
-                    )}
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-center gap-1.5">
-                        <span className="truncate text-[14px] font-medium text-ink">{meta.name}</span>
-                        {meta.beta && <BetaTag />}
-                      </span>
-                      <span className="mt-0.5 block font-mono text-[11px] text-faint">{meta.ticker}</span>
-                    </span>
-                    {!under && spark?.length > 1 ? (
-                      <MiniSpark data={spark} color={mark} className="hidden sm:block" />
-                    ) : null}
-                    <span className="shrink-0 text-right">
-                      <span className="num block text-[16px] leading-none text-ink">
-                        {under || !(fees > 0) ? '—' : compactUsd(fees)}
-                      </span>
-                      <span className="mt-1 block text-[10px] uppercase tracking-wider text-faint">
-                        {under ? 'Soon' : '30d cash'}
-                      </span>
-                    </span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+          <ProjectList
+            title="Earning"
+            note="Trailing 30d protocol cash"
+            rows={rows.filter((row) => !row.under && row.fees > 0)}
+            data={data}
+            lead
+          />
+          <ProjectList
+            title="Not live yet"
+            note="No cash in the ledger"
+            rows={rows.filter((row) => row.under || !(row.fees > 0))}
+            data={data}
+            className="mt-8"
+          />
         </section>
       </div>
 
@@ -312,7 +334,7 @@ export default function HomeView({ data }) {
           <span className="min-w-0">
             <span className="eyebrow text-[color:var(--color-brand)]">Clock In</span>
             <span className="mt-2 block text-[22px] font-semibold tracking-tight text-ink sm:text-[26px]">
-              Dive deeper into the ecosystem
+              Go deeper into the ecosystem
             </span>
             <span className="mt-1.5 block text-[13px] leading-relaxed text-muted sm:text-[14px]">
               {leader

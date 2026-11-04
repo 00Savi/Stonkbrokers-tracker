@@ -12,8 +12,8 @@ import { yieldBasisText } from '../../lib/yieldSample';
 import { seatCsvRows } from '../../lib/csv';
 import { CsvButton } from '../CsvButton';
 import { ShareSection } from '../CopyControl';
-import { TierFlowSection, netTierCount } from '../TierFlowCards';
-import { baseChartOptions, compactTick, compactUsdTick, cumulativeBurnDataset, TIER_COLORS, percentTick } from '../../lib/charts';
+import { TierFlowSection } from '../TierFlowCards';
+import { baseChartOptions, compactTick, compactUsdTick, cumulativeBurnDataset, percentTick } from '../../lib/charts';
 import { useChartView } from '../../lib/chartWindow';
 import { holderSeries } from '../../lib/snapshots';
 import { NIGHTSHADES_FACTION_META } from '../../lib/nightshades';
@@ -29,8 +29,6 @@ import {
   ActivationStackPanel,
   OwnershipHistoryPanels,
 } from '../HistoryCharts';
-import { SliceChart } from '../SliceChart';
-
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
 const ACCENT = '#00a804';
@@ -79,9 +77,10 @@ export default function NightshadesDetailView({ data, activeTab }) {
   const { faction, setFaction } = useNightshadesFaction();
   const project = data?.projects?.nightshades;
   if (!project) return <SkeletonCard rows={4} />;
-  if (faction === 'all') return <NightshadesAllView project={project} setFaction={setFaction} />;
+  if (faction === 'all') return <NightshadesAllView data={data} project={project} setFaction={setFaction} />;
   return (
     <NightshadesFactionDetail
+      data={data}
       activeTab={activeTab}
       faction={faction}
       project={project}
@@ -89,7 +88,7 @@ export default function NightshadesDetailView({ data, activeTab }) {
   );
 }
 
-function NightshadesFactionDetail({ activeTab, faction, project }) {
+function NightshadesFactionDetail({ data, activeTab, faction, project }) {
   const { range: timeframe, interval } = useChartView();
   const [expandedTier, setExpandedTier] = useState(null);
   const [tierTimeframe, setTierTimeframe] = useState('allTime');
@@ -125,12 +124,6 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
   const actCum = hasActHist && actHistory.cumulative?.length ? actHistory.cumulative : [];
   const actDAct = hasActHist && actHistory.dailyActivations?.length ? actHistory.dailyActivations : [];
   const actDDeact = hasActHist && actHistory.dailyDeactivations?.length ? actHistory.dailyDeactivations : [];
-
-  const breakdownArr = tiers.map((t) => {
-    if (activation.breakdown && activation.breakdown[t.tier] != null) return activation.breakdown[t.tier];
-    const s = activation.tierStats?.[t.tier]?.allTime || {};
-    return netTierCount(s);
-  });
 
   const holdersFull = holderSeries(ownership, dailySnapshots);
   const holdersWin = windowChart(holdersFull.labels, [holdersFull.data], timeframe, interval, ['last']);
@@ -287,17 +280,9 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
       </ShareSection>
 
       <ShareSection id="yield" className="scroll-mt-32 space-y-4">
-        <Card
-          eyebrow="Yield"
-          sub={`Cash-on-cash: annualized vault RewardPaid ÷ (NFT floor + activation tokens at spot). ${yieldBasisText(slice)} The slider scales yield only. Cost stays at the live floor and token price.`}
-        >
-          <KpiStrip>
-            {roiRows.map(({ t, payback }) => (
-              <Stat key={t.tier} label={`${t.tier} payback`} value={payback} />
-            ))}
-          </KpiStrip>
-        </Card>
-
+        <p className="max-w-3xl text-[13px] leading-relaxed text-muted">
+          {`Cash-on-cash: annualized vault RewardPaid ÷ (NFT floor + activation tokens at spot). ${yieldBasisText(slice)} The slider scales yield only. Cost stays at the live floor and token price.`}
+        </p>
         <YieldHistorySwitch
           labels={histLabels}
           datasets={histDatasets}
@@ -366,18 +351,6 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
           formatNumber={formatNumber}
         />
 
-        <Card eyebrow="Tier mix" sub="Net of deactivations">
-          <SliceChart
-            noun="Active"
-            format={formatNumber}
-            slices={tiers.map((t, idx) => ({
-              label: `${t.tier}: ${t.name}`,
-              value: breakdownArr[idx],
-              color: TIER_COLORS[idx % TIER_COLORS.length],
-            }))}
-          />
-        </Card>
-
         <ActivationStackPanel snaps={roiSnaps} tiers={tiers} breakdown={activation.breakdown} />
         <ChartPanel
           title="Activity"
@@ -418,6 +391,9 @@ function NightshadesFactionDetail({ activeTab, faction, project }) {
         <OwnershipHistoryPanels
           snaps={roiSnaps}
           live={{ tokenHolders, nftHolders: ownership.nftHolders, ownershipRatio: ownership.ownershipRatio }}
+          onboard={data?.onboarding?.byProject?.[faction] || data?.onboarding?.byProject?.nightshades
+            ? { data, projectKey: data?.onboarding?.byProject?.[faction] ? faction : 'nightshades', timeframe, interval, name: config.name || 'Nightshades' }
+            : null}
         />
         <UnderwaterCard ownership={ownership} />
       </ShareSection>

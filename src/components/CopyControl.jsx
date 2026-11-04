@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { copyChart, copyElement } from '../lib/share';
+import { cardBlurb, copyChart, copyElement } from '../lib/share';
 import { SectionInsights } from './SectionInsights';
 
 export function copySectionEl(el, id) {
@@ -167,6 +167,18 @@ export function CopyChartButton({ host, tight }) {
       idleLabel="Copy"
       title="Copy this chart for X"
       onCopy={() => copyChart(host)}
+    />
+  );
+}
+
+export function CopyCardButton({ host, tight }) {
+  return (
+    <CopyControl
+      overlay
+      tight={tight}
+      idleLabel="Copy"
+      title="Copy this card for X"
+      onCopy={() => copyElement(host, { filename: 'savi-card.png', maxW: 1080, text: cardBlurb(host) })}
     />
   );
 }

@@ -71,10 +71,10 @@ export function useSectionScrollSpy({ sectionIds, activeId, onActiveId, ready })
 }
 
 /** Scroll the URL tab into view, and keep the URL in sync as the page is scrolled. */
-export function useProjectScrollSpy(project, tab, meta, ready) {
+export function useProjectScrollSpy(project, tab, meta, ready, book) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const tabs = tabsForProject(meta).map((t) => t.slug);
+  const tabs = tabsForProject(meta, book).map((t) => t.slug);
   const onActiveId = useCallback((slug) => {
     if (!project) return;
     const search = searchParams.toString();

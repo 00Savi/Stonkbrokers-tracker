@@ -24,7 +24,6 @@ export const NAV_ITEMS = [
   { to: '/intern-finder', label: 'Intern Finder', group: 'tools', icon: 'search' },
   { to: '/ecosystem', label: 'Ecosystem Overview', group: 'tools', icon: 'system' },
   { to: '/index/roi', label: 'Index', group: 'yield-tokens', logo: 'Index.png' },
-  { to: '/oakmont/roi', label: 'Oakmont Vault', group: 'yield-tokens', logo: 'Oakmont.png' },
   { to: '/bonus', label: '$Bonus', group: 'yield-tokens', logo: 'Bonus.png' },
   { to: '/stonkbrokers/roi', label: 'StonkBrokers', group: 'yield-nfts', logo: 'Stonkbroker.png' },
   { to: '/interns/roi', label: 'Interns', group: 'yield-nfts', logo: 'Intern.svg' },
@@ -36,6 +35,7 @@ export const NAV_ITEMS = [
   { to: '/rhmachines/roi', label: 'RH Machines', group: 'yield-nfts', logo: 'Printer.png' },
   { to: '/coattail/roi', label: 'Coattail Brokers', group: 'yield-nfts', logo: 'Coattail.svg' },
   { to: '/nightshades/roi', label: 'Nightshades', group: 'yield-nfts', logo: 'Knight.png' },
+  { to: '/oakmont/roi', label: 'Oakmont Vault', group: 'yield-nfts', logo: 'Oakmont.png' },
   { to: '/tokens', label: 'Markets & Swap', group: 'chain', icon: 'swap' },
 ].filter((item) => {
   const slug = item.to.split('/').filter(Boolean)[0];
@@ -205,11 +205,9 @@ export function TopNav({ live, sources, data, pending }) {
   const logo = logoForPath(pathname, data);
   const title = titleForPath(pathname);
   const first = pathname.split('/').filter(Boolean)[0];
-  const isHome = !first;
   const project = PROJECTS.find((p) => p.slug === first);
-  const marketKey = project?.key || 'stonk';
-  const market = data?.projects?.[marketKey]?.market || {};
-  const ticker = project?.ticker || 'STONK';
+  const market = project ? (data?.projects?.[project.key]?.market || {}) : {};
+  const ticker = project?.ticker || '';
   const ethUsd = data?.projects?.stonk?.market?.ethPriceUsd;
   const { ccy } = readDisplay();
   const status = liveStatus(live, sources);
@@ -340,7 +338,7 @@ export function TopNav({ live, sources, data, pending }) {
                 </Value>
               </div>
             </div>
-            {!isHome && (
+            {project && ticker && (
             <div className="text-right">
               <div className="text-[9px] uppercase tracking-wider text-faint">${ticker}</div>
               <div className="text-[12px] text-ink">
@@ -411,7 +409,7 @@ export function TabBar({ data }) {
   const { range: timeframe, setRange, interval, setInterval } = useChartView();
   const sampleId = useYieldSampleId();
   const meta = PROJECTS.find((p) => p.slug === project);
-  const tabs = tabsForProject(meta);
+  const tabs = tabsForProject(meta, data?.projects?.[meta?.key]);
   const keep = searchParams.toString();
   const ledger = data?.lastUpdated
     ? new Date(data.lastUpdated).toLocaleString('en-US', {

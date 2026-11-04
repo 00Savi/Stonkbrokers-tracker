@@ -68,7 +68,7 @@ function weekNote(weeks) {
 /** Hidden until position folds have reached the backfill and a wallet was scored.
  *  `tokenLeg` is the token bag. Interns are the NFT only; that bag is scored
  *  on StonkBrokers. */
-export function UnderwaterCard({ ownership, tokenLeg = true }) {
+export function UnderwaterCard({ ownership, tokenLeg = true, name = '' }) {
   const row = ownership?.underwater;
   if (!row?.caughtUp || !(row.wallets > 0)) return null;
   const series = historyPoints(ownership, row);
@@ -133,7 +133,7 @@ export function UnderwaterCard({ ownership, tokenLeg = true }) {
     {
       id: 'uw-share',
       jump: 'Share underwater',
-      title: 'Holders underwater',
+      title: name ? `${name} holders underwater` : 'Holders underwater',
       note: `${splitNote} Cost today on the seat table is the live floor. ${entryNote} The lines are that share of today's holders, saved each hour.${tokenLeg ? '' : ' Token bags stay on StonkBrokers.'}`,
       body: lineSets.length ? (
         <Line data={{ labels, datasets: lineSets }} options={percentOptions(labels)} />

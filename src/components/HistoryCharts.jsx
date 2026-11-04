@@ -467,12 +467,58 @@ export function ProtocolFeeVolumePanels({ labels, cols, kind, holder, note, titl
   const keptTitle = title || (feesArePayout ? 'Vault and routing' : 'Protocol kept');
   const keptNote = note
     || (feesArePayout
-      ? 'Soft-staking vault RewardPaid and DEX collector fees by day. Same cash as Paid to seats below, split by stream. The tooltip total is the stack.'
+      ? 'Soft-staking vault RewardPaid and DEX collector fees by day, split by stream. The tooltip total is the stack.'
       : 'What the protocol charged or kept that day. The tooltip total is the stack.');
   const pots = (cols || []).filter((c) => c.role === 'float' && seriesHasInk(c.data));
   const mix = mixPercentCols(fees).filter((c) => seriesHasInk(c.data));
   const totals = dailyTotals(fees);
   const withTotal = totalNeedsLine(fees);
+  const potTotals = dailyTotals(pots);
+  const holderData = holder?.data || [];
+  const holderAligned = holderInk && !feesArePayout && holderData.length === (labels || []).length
+    ? holderData
+    : null;
+  const feePeak = seriesPeak(totals);
+  const holderPeak = seriesPeak(holderAligned);
+  const potPeak = seriesPeak(potTotals);
+  const near = (a, b) => !(a > 0) || !(b > 0) || Math.max(a, b) / Math.min(a, b) <= 3;
+  let holderAxis = holderAligned && !near(holderPeak, feePeak) ? 'y1' : 'y';
+  let potAxis = pots.length && !near(potPeak, feePeak) ? 'y1' : 'y';
+  if (holderAxis === 'y1' && potAxis === 'y1' && !near(holderPeak, potPeak)) {
+    const holderDist = feePeak > 0 ? Math.abs(Math.log((holderPeak || 1) / feePeak)) : 0;
+    const potDist = feePeak > 0 ? Math.abs(Math.log((potPeak || 1) / feePeak)) : 0;
+    if (holderDist <= potDist) holderAxis = 'y';
+    else potAxis = 'y';
+  }
+  const rightValues = [
+    holderAxis === 'y1' ? holderAligned : null,
+    potAxis === 'y1' ? potTotals : null,
+  ].filter(Boolean);
+  const dollarOptions = rightValues.length
+    ? dualAxisOptions({
+      leftTick: compactUsdTick,
+      rightTick: compactUsdTick,
+      rightColor: holderAxis === 'y1' ? STREAM_COLORS.holdersRev : '#94a3b8',
+      labels,
+      interval,
+      leftKind: 'flow',
+      rightKind: 'flow',
+      leftValues: totals,
+      rightValues,
+      leftUnit: 'USD',
+      rightUnit: 'USD',
+    })
+    : usdStackOptions(labels, interval);
+  if (dollarOptions.scales?.x) dollarOptions.scales.x.stacked = true;
+  if (dollarOptions.scales?.y) {
+    dollarOptions.scales.y.stacked = true;
+    dollarOptions.scales.y.beginAtZero = true;
+  }
+  const lineNote = [
+    holderAligned ? 'Paid to seats is the solid line.' : null,
+    pots.length ? 'Still in the pot is the dashed line.' : null,
+  ].filter(Boolean).join(' ');
+  const keptNoteWithLines = [keptNote, lineNote].filter(Boolean).join(' ');
   const dollarSets = [
     ...barDatasets(fees, { stacked: true }),
     ...(withTotal ? [{
@@ -485,22 +531,63 @@ export function ProtocolFeeVolumePanels({ labels, cols, kind, holder, note, titl
       tension: 0,
       order: 0,
       totalLine: true,
+      yAxisID: 'y',
+    }] : []),
+    ...(holderAligned ? [{
+      type: 'line',
+      label: 'Paid to seats',
+      data: holderAligned,
+      borderColor: STREAM_COLORS.holdersRev,
+      borderWidth: 1.75,
+      pointRadius: 0,
+      tension: 0,
+      spanGaps: true,
+      order: 0,
+      yAxisID: holderAxis,
+    }] : []),
+    ...(pots.length ? [{
+      type: 'line',
+      label: 'Still in the pot',
+      data: potTotals,
+      borderColor: '#94a3b8',
+      borderDash: [4, 4],
+      borderWidth: 1.75,
+      pointRadius: 0,
+      tension: 0,
+      spanGaps: true,
+      order: 0,
+      yAxisID: potAxis,
     }] : []),
   ];
+  if (!fees.length) {
+    if (holderView) {
+      return (
+        <ChartPanel id="revenue-seats" title="Paid to seats" note={holderView.note}>
+          {holderView.body}
+        </ChartPanel>
+      );
+    }
+    if (pots.length) {
+      return (
+        <ChartPanel
+          id="revenue-pot"
+          title="Still in the pot"
+          note="ETH or tokens still sitting in the oracle or clock-in. This is not a fee the protocol kept, and it is not cash already paid to a seat."
+        >
+          <Bar data={{ labels, datasets: barDatasets(pots, { stacked: true }) }} options={usdStackOptions(labels, interval)} />
+        </ChartPanel>
+      );
+    }
+    return null;
+  }
   const views = [
     {
       id: 'dollars',
       label: 'Dollars',
       title: keptTitle,
-      note: keptNote,
-      body: fees.length ? (
-        <Bar data={{ labels, datasets: dollarSets }} options={usdStackOptions(labels, interval)} />
-      ) : (
-        <EmptyChart>
-          {holderView
-            ? 'This cash was paid to seats. It is in Paid to seats, below, not kept as a protocol fee.'
-            : 'No revenue days in this window'}
-        </EmptyChart>
+      note: keptNoteWithLines,
+      body: (
+        <Bar data={{ labels, datasets: dollarSets }} options={dollarOptions} />
       ),
     },
   ];
@@ -509,7 +596,7 @@ export function ProtocolFeeVolumePanels({ labels, cols, kind, holder, note, titl
       id: 'mix',
       label: 'Mix',
       title: 'Revenue mix',
-      note: 'Share of that day\'s stack. Days with no rev are blank.',
+      note: 'Share of that day\'s stack. Days with no rev are blank. Paid to seats stays on the dollar chart.',
       body: (
         <Bar
           data={{ labels, datasets: barDatasets(mix, { stacked: true }) }}
@@ -518,31 +605,7 @@ export function ProtocolFeeVolumePanels({ labels, cols, kind, holder, note, titl
       ),
     });
   }
-  const jumps = [
-    { id: 'revenue-kept', label: keptTitle },
-    holderView ? { id: 'revenue-seats', label: 'Paid to seats' } : null,
-    pots.length ? { id: 'revenue-pot', label: 'Still in the pot' } : null,
-  ];
-  return (
-    <div className="space-y-4">
-      <SectionJumps label="In revenue" links={jumps} />
-      <ChartSwitch anchor="revenue-kept" initial="dollars" views={views} />
-      {holderView ? (
-        <ChartPanel id="revenue-seats" title="Paid to seats" note={holderView.note}>
-          {holderView.body}
-        </ChartPanel>
-      ) : null}
-      {pots.length ? (
-        <ChartPanel
-          id="revenue-pot"
-          title="Still in the pot"
-          note="ETH or tokens still sitting in the oracle or clock-in. This is not a fee the protocol kept, and it is not cash already paid to a seat."
-        >
-          <Bar data={{ labels, datasets: barDatasets(pots, { stacked: true }) }} options={usdStackOptions(labels, interval)} />
-        </ChartPanel>
-      ) : null}
-    </div>
-  );
+  return <ChartSwitch anchor="revenue-kept" initial="dollars" views={views} />;
 }
 
 const MODE_FILL = {
@@ -805,22 +868,59 @@ export function ActivationStackPanel({ snaps, tiers, breakdown }) {
   const has = seriesHasInk(sets.flatMap((d) => d.data));
   const labels = formatLabels(snaps.map((s) => s.date));
   const thick = barThickness(labels.length);
+  const totals = labels.map((_, i) => {
+    let sum = 0;
+    let any = false;
+    for (const set of sets) {
+      const v = Number(set.data?.[i]);
+      if (!Number.isFinite(v)) continue;
+      any = true;
+      sum += v;
+    }
+    return any ? sum : null;
+  });
+  const lastTotal = [...totals].reverse().find((v) => v != null);
   const base = baseChartOptions(labels, 'daily', { yUnit: 'Units' });
   const stacked = {
     ...base,
+    plugins: {
+      ...base.plugins,
+      legend: {
+        ...(base.plugins?.legend || {}),
+        labels: {
+          ...(base.plugins?.legend?.labels || {}),
+          filter: (item) => item.text !== 'Active',
+        },
+      },
+    },
     scales: {
       ...base.scales,
       x: { ...base.scales.x, stacked: true },
       y: { ...base.scales.y, stacked: true, beginAtZero: true, unit: 'Units' },
     },
   };
+  const datasets = [
+    ...sets.map((d) => ({ ...d, maxBarThickness: thick })),
+    {
+      type: 'line',
+      label: 'Active',
+      data: totals,
+      borderColor: '#e7e9ec',
+      borderWidth: 0,
+      pointRadius: 0,
+      pointHitRadius: 0,
+      tension: 0,
+      spanGaps: true,
+      labelEnd: true,
+      endLabel: lastTotal == null ? '' : compactTick(lastTotal),
+      totalLine: true,
+      yAxisID: 'y',
+    },
+  ];
   return (
-    <ChartPanel title="Active units by tier" note="Stacked from daily snapshots. Older days stay empty until a run records the breakdown.">
+    <ChartPanel title="Active units by tier" note="Stacked from daily snapshots. The number beside the last bar is active units now. Older days stay empty until a run records the breakdown.">
       {has ? (
-        <Bar
-          data={{ labels, datasets: sets.map((d) => ({ ...d, maxBarThickness: thick })) }}
-          options={stacked}
-        />
+        <Bar data={{ labels, datasets }} options={stacked} />
       ) : (
         <EmptyChart>Tier mix history starts after the next snapshot write</EmptyChart>
       )}

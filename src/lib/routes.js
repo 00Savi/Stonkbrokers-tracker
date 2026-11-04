@@ -73,14 +73,23 @@ export const VAULT_TABS = [
   { slug: 'ownership', label: 'Holders' },
 ];
 
-export function tabsForProject(meta) {
+/** True while Moods has no token and the page is the claim card only. */
+export function moodsPreAnvil(project) {
+  if (!project) return false;
+  return !!(project.underConstruction || !project.config?.tokenCa);
+}
+
+export function tabsForProject(meta, project) {
   const tabs = meta?.kind === 'vault' ? VAULT_TABS : TABS;
+  if (meta?.key === 'moods' && moodsPreAnvil(project)) {
+    return [{ slug: 'roi', label: 'Claim' }];
+  }
   if (meta?.key === 'stonk') {
     const next = tabs.map((t) => (t.slug === 'liquidity' ? { ...t, label: 'Smart LPs' } : t));
     const at = next.findIndex((t) => t.slug === 'liquidity');
     next.splice(at < 0 ? next.length : at, 0, { slug: 'pairs', label: 'Pair Tokens' });
-    const burnAt = next.findIndex((t) => t.slug === 'burn');
-    next.splice(burnAt < 0 ? next.length : burnAt, 0, { slug: 'entry', label: 'Entry' });
+    const ownAt = next.findIndex((t) => t.slug === 'ownership');
+    next.splice(ownAt < 0 ? next.length : ownAt, 0, { slug: 'entry', label: 'Entry' });
     return next;
   }
   if (meta?.key === 'mancer') {
@@ -99,6 +108,9 @@ export function tabsForProject(meta) {
     return tabs
       .filter((t) => t.slug !== 'liquidity')
       .map((t) => (t.slug === 'revenue' ? { slug: 'night', label: 'Night' } : t));
+  }
+  if (meta?.key === 'cardwall') {
+    return tabs.filter((t) => t.slug !== 'liquidity');
   }
   return tabs;
 }
