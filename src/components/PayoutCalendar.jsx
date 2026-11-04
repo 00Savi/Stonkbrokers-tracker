@@ -82,6 +82,10 @@ export function PayoutCalendar({ project }) {
   ].filter(Boolean);
   const cashBits = [
     `Avg daily ${compactUsd(summary.avg)}`,
+    summary.n ? `${summary.n} ${summary.n === 1 ? 'day' : 'days'}` : null,
+    summary.incomplete && summary.through ? `through ${shortDate(summary.through)}` : null,
+  ].filter(Boolean);
+  const holdBits = [
     summary.paidShare > 0 ? `Paid out ${compactUsd(summary.paidShare)}` : null,
     summary.floatShare > 0 ? `Still in the pot ${compactUsd(summary.floatShare)}` : null,
   ].filter(Boolean);
@@ -192,11 +196,12 @@ export function PayoutCalendar({ project }) {
           <p className="text-[13px] text-ink">{titleBits.join(' · ')}</p>
           <p className="mt-1 font-mono text-[15px] text-ink">{compactUsd(summary.total)}</p>
           <p className="mt-1 text-[12px] text-muted">
-            {cashBits.join(' · ') || 'No holder cash this month'}
-            {summary.incomplete && summary.through
-              ? ` · through ${shortDate(summary.through)}`
-              : ''}
+            Total earned
+            {cashBits.length ? ` · ${cashBits.join(' · ')}` : ''}
           </p>
+          {holdBits.length ? (
+            <p className="mt-1 text-[12px] text-muted">{holdBits.join(' · ')}</p>
+          ) : null}
           {summary.sources.length ? (
             <ul className="mt-3 space-y-1">
               {summary.sources.map((source) => (

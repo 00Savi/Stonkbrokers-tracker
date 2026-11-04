@@ -1764,7 +1764,7 @@ for (const [name, View, props] of VIEWS) {
     || oct.incomplete
     || oct.sources.map((row) => `${row.key}:${row.usd}`).join(',') !== 'box:3,tax:3'
     || !html.includes('Payout calendar')
-    || !html.includes('Still in the pot')
+    || !html.includes('Total earned')
     || !html.includes('Avg daily')
     || !html.includes('October 2026')
     || !html.includes('Clock-In')
