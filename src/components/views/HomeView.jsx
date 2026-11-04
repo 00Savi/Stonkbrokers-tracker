@@ -231,9 +231,9 @@ export default function HomeView({ data }) {
         <div className="flex items-baseline justify-between gap-3">
           <h2 className="eyebrow text-muted">Tools</h2>
         </div>
-        <ul className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <ul className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
           {tools.map((tool) => (
-            <li key={tool.to}>
+            <li key={tool.to} className="min-w-0 lg:col-span-2">
               <Link
                 to={tool.to}
                 className="card group relative flex h-full flex-col p-4 transition-colors hover:bg-panel-2 sm:p-5"

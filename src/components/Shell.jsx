@@ -245,23 +245,23 @@ export function TopNav({ live, sources, data, pending }) {
 
   return (
     <div ref={headerRef} className="sticky top-0 z-30 bg-[#08090b] px-2 pt-2 sm:px-4 sm:pt-4">
-      <nav className="mx-auto flex max-w-[1500px] items-center gap-2 rounded-2xl border border-line bg-panel/95 px-2 py-2 backdrop-blur-xl sm:gap-3 sm:rounded-full sm:px-4 sm:py-2.5">
+      <nav className="mx-auto flex max-w-[1500px] items-center gap-2 overflow-hidden rounded-2xl border border-line bg-panel/95 px-2 py-2 backdrop-blur-xl sm:gap-3 sm:rounded-full sm:px-4 sm:py-2.5">
         <div className="relative min-w-0 flex-1" ref={menuRef}>
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
-            className="flex max-w-full items-center gap-3 rounded-full py-0.5 pr-2 text-left hover:bg-panel-2"
+            className="flex max-w-full items-center gap-2 rounded-full py-0.5 pr-1.5 text-left hover:bg-panel-2 sm:gap-3 sm:pr-2"
             aria-haspopup="listbox"
             aria-expanded={open}
           >
             <img
               src={logo.startsWith('http') ? logo : `/${logo}`}
               alt=""
-              className="h-9 w-9 shrink-0 rounded-xl border border-line object-cover sm:h-10 sm:w-10"
+              className="h-8 w-8 shrink-0 rounded-xl border border-line object-cover sm:h-10 sm:w-10"
               style={String(logo).endsWith('Mutual.png') ? { imageRendering: 'pixelated' } : undefined}
             />
-            <span className="flex min-w-0 items-center gap-2">
-              <span className="truncate text-[14px] font-semibold tracking-tight text-ink sm:text-[17px]">
+            <span className="flex min-w-0 items-center gap-1.5 sm:gap-2">
+              <span className="truncate text-[13px] font-semibold tracking-tight text-ink sm:text-[17px]">
                 {title}
               </span>
               {project?.beta && <BetaTag />}
@@ -330,8 +330,8 @@ export function TopNav({ live, sources, data, pending }) {
           )}
         </div>
 
-        <div className="ml-auto flex min-w-0 shrink-0 items-center gap-2 sm:gap-3">
-          <div className="hidden items-center gap-3 font-mono text-[11px] sm:flex lg:gap-4">
+        <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1.5 sm:gap-3">
+          <div className="hidden items-center gap-3 font-mono text-[11px] md:flex lg:gap-4">
             <div className="text-right">
               <div className="text-[9px] uppercase tracking-wider text-faint">ETH</div>
               <div className="text-[12px] text-ink">
@@ -363,12 +363,14 @@ export function TopNav({ live, sources, data, pending }) {
               </div>
             )}
           </div>
-          <CurrencyBar compact />
-          {project || first === 'ecosystem' ? null : (
-            <YieldSampleBar compact value={sampleId} onChange={setYieldSampleId} />
-          )}
+          <div className="hidden items-center gap-2 sm:flex">
+            <CurrencyBar compact />
+            {project || first === 'ecosystem' ? null : (
+              <YieldSampleBar compact value={sampleId} onChange={setYieldSampleId} />
+            )}
+          </div>
           <span
-            className="hidden items-center gap-1.5 rounded-full border border-line px-2.5 py-1 font-mono text-[10px] text-faint md:flex"
+            className="hidden items-center gap-1.5 rounded-full border border-line px-2.5 py-1 font-mono text-[10px] text-faint lg:flex"
             title={status.title}
           >
             <span
@@ -383,7 +385,7 @@ export function TopNav({ live, sources, data, pending }) {
             target="_blank"
             rel="noreferrer"
             title="Trade Safe Launch with Savi's Clock In Card"
-            className="hidden whitespace-nowrap rounded-full border border-line px-3 py-1.5 text-[12px] font-medium text-ink transition-colors hover:bg-panel-2 lg:inline-flex"
+            className="hidden whitespace-nowrap rounded-full border border-line px-3 py-1.5 text-[12px] font-medium text-ink transition-colors hover:bg-panel-2 xl:inline-flex"
           >
             Clock In Card ↗
           </a>
@@ -391,7 +393,7 @@ export function TopNav({ live, sources, data, pending }) {
             href={LAUNCHER_REF}
             target="_blank"
             rel="noreferrer"
-            className="whitespace-nowrap rounded-full bg-brand px-2.5 py-1.5 text-[11px] font-medium text-black transition-opacity hover:opacity-90 sm:px-3.5 sm:text-[12px]"
+            className="shrink-0 whitespace-nowrap rounded-full bg-brand px-2.5 py-1.5 text-[11px] font-medium text-black transition-opacity hover:opacity-90 sm:px-3.5 sm:text-[12px]"
           >
             <span className="sm:hidden">Launch</span>
             <span className="hidden sm:inline">Launchpad ↗</span>
