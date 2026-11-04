@@ -45,7 +45,6 @@ function toolCards(data) {
     const p = data?.projects?.[meta.key];
     return p && !p.underConstruction;
   }).length;
-  const fees30 = LIVE_PROJECTS.reduce((sum, meta) => sum + projectFees30d(data?.projects?.[meta.key]), 0);
 
   return [
     {
@@ -83,15 +82,6 @@ function toolCards(data) {
       text: 'OpenSea and desks, TBA value, parent tier, and share.',
       tone: 'text-mark-sky',
       signal: 'Lowest cost · highest opportunity',
-    },
-    {
-      to: '/ecosystem',
-      icon: 'system',
-      eyebrow: 'Ecosystem',
-      title: 'The board',
-      text: 'Which projects are earning, burning, and activating.',
-      tone: 'text-mark-violet',
-      signal: fees30 > 0 ? `${compactUsd(fees30)} fees 30d` : 'Open the board',
     },
   ];
 }
@@ -163,9 +153,12 @@ export default function HomeView({ data }) {
         <span className="home-hero-rail home-hero-rail-left hidden min-w-8 flex-1 sm:block" aria-hidden="true" />
         <header className="home-hero-copy min-w-0 max-w-3xl flex-none text-center sm:px-1">
           <p className="eyebrow text-muted">Savi&apos;s public dashboard</p>
-          <h1 className="mt-4 text-[40px] font-semibold leading-[1.05] tracking-tight text-ink sm:text-[52px] md:text-[60px]">
-            StonkBrokers Ecosystem Analytics
-            <span className="mt-3 block text-[22px] font-medium leading-snug text-muted sm:text-[28px] md:text-[32px]">
+          <h1 className="mt-3 text-[34px] font-semibold leading-[1.05] tracking-tight text-ink sm:mt-4 sm:text-[52px] md:text-[60px]">
+            <span className="block">StonkBrokers</span>
+            <span className="mt-1 block text-[22px] font-semibold leading-snug text-ink sm:mt-2 sm:text-[32px] md:text-[36px]">
+              Ecosystem Analytics
+            </span>
+            <span className="mt-3 block text-[15px] font-medium leading-snug text-muted sm:text-[22px] md:text-[28px]">
               No trackers. No wallet connects. Just data.
             </span>
           </h1>
@@ -227,139 +220,111 @@ export default function HomeView({ data }) {
         </p>
       )}
 
-      <section className="mt-14" aria-label="Tools">
-        <div className="flex items-baseline justify-between gap-3">
-          <h2 className="eyebrow text-muted">Tools</h2>
-        </div>
-        <ul className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
-          {tools.map((tool) => (
-            <li key={tool.to} className="min-w-0 lg:col-span-2">
-              <Link
-                to={tool.to}
-                className="card group relative flex h-full flex-col p-4 transition-colors hover:bg-panel-2 sm:p-5"
-              >
-                <span className={`absolute right-4 top-4 block h-5 w-5 sm:right-5 sm:top-5 ${tool.tone}`}>
-                  <NavIcon name={tool.icon} />
-                </span>
-                <p className={`eyebrow pr-8 ${tool.tone}`}>{tool.eyebrow}</p>
-                <h3 className="mt-2 text-[18px] font-semibold tracking-tight text-ink">{tool.title}</h3>
-                <p className="mt-2 flex-1 text-[13px] leading-relaxed text-muted">{tool.text}</p>
-                <span className="mt-4 flex items-end justify-between gap-3">
-                  <span className="home-tool-signal font-mono text-[11px] text-faint">{tool.signal}</span>
-                  <span className="text-[13px] font-medium text-ink">
-                    Open <span className="text-muted transition-colors group-hover:text-ink">→</span>
-                  </span>
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section className="mt-10" aria-label="Projects">
-        <div className="flex items-baseline justify-between gap-3">
-          <h2 className="eyebrow text-mark-sky">Projects</h2>
-          <p className="text-[12px] text-faint">Trailing 30d protocol cash</p>
-        </div>
-        <ul className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {rows.map(({ meta, fees, spark, under }, index) => {
-            const logo = meta.logo || data?.projects?.[meta.key]?.config?.logo || FALLBACK_LOGO[meta.key];
-            const lead = !under && index === 0 && fees > 0;
-            const mark = PROJECT_COLORS[meta.key] || 'var(--color-mark-green)';
-            return (
-              <li key={meta.key}>
+      <div className="mt-14 grid grid-cols-1 gap-10 lg:grid-cols-2 lg:gap-8 xl:gap-10">
+        <section className="min-w-0" aria-label="Tools">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="eyebrow text-muted">Tools</h2>
+          </div>
+          <ul className="mt-3 grid grid-cols-1 gap-3">
+            {tools.map((tool) => (
+              <li key={tool.to} className="min-w-0">
                 <Link
-                  to={projectPath(meta.key)}
-                  className={`flex items-center gap-3 rounded-xl border bg-panel px-3 py-3 transition-colors hover:border-[#2c323a] hover:bg-panel-2 ${
-                    lead ? 'home-project-lead border-[color:var(--color-brand)]/35' : 'border-line'
-                  }`}
+                  to={tool.to}
+                  className="card group relative flex h-full flex-col p-4 transition-colors hover:bg-panel-2 sm:p-5"
                 >
-                  {logo ? (
-                    <img
-                      src={logo.startsWith('http') ? logo : `/${logo}`}
-                      alt=""
-                      className="h-10 w-10 shrink-0 rounded-lg border border-line object-cover"
-                      style={String(logo).endsWith('.png') && String(logo).includes('Mutual') ? { imageRendering: 'pixelated' } : undefined}
-                    />
-                  ) : (
-                    <span className="h-10 w-10 shrink-0 rounded-lg border border-line bg-panel-2" />
-                  )}
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-1.5">
-                      <span className="truncate text-[14px] font-medium text-ink">{meta.name}</span>
-                      {meta.beta && <BetaTag />}
-                    </span>
-                    <span className="mt-0.5 block font-mono text-[11px] text-faint">{meta.ticker}</span>
+                  <span className={`absolute right-4 top-4 block h-5 w-5 sm:right-5 sm:top-5 ${tool.tone}`}>
+                    <NavIcon name={tool.icon} />
                   </span>
-                  {!under && spark?.length > 1 ? (
-                    <MiniSpark data={spark} color={mark} className="hidden sm:block" />
-                  ) : null}
-                  <span className="shrink-0 text-right">
-                    <span className="num block text-[16px] leading-none text-ink">
-                      {under || !(fees > 0) ? '—' : compactUsd(fees)}
-                    </span>
-                    <span className="mt-1 block text-[10px] uppercase tracking-wider text-faint">
-                      {under ? 'Soon' : '30d cash'}
+                  <p className={`eyebrow pr-8 ${tool.tone}`}>{tool.eyebrow}</p>
+                  <h3 className="mt-2 text-[18px] font-semibold tracking-tight text-ink">{tool.title}</h3>
+                  <p className="mt-2 flex-1 text-[13px] leading-relaxed text-muted">{tool.text}</p>
+                  <span className="mt-4 flex items-end justify-between gap-3">
+                    <span className="home-tool-signal font-mono text-[11px] text-faint">{tool.signal}</span>
+                    <span className="text-[13px] font-medium text-ink">
+                      Open <span className="text-muted transition-colors group-hover:text-ink">→</span>
                     </span>
                   </span>
                 </Link>
               </li>
-            );
-          })}
-        </ul>
-      </section>
+            ))}
+          </ul>
+        </section>
 
-      <section className="mt-10" aria-label="Go deeper">
-        <div className="flex items-baseline justify-between gap-3">
-          <h2 className="eyebrow text-muted">Go deeper</h2>
-          {leader ? (
-            <p className="text-[12px] text-faint">
-              {leader.meta.name} leads at {compactUsd(leader.fees)}
-            </p>
-          ) : null}
-        </div>
-        <ul className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-          <li>
-            <Link
-              to="/portfolio"
-              className="flex h-full flex-col rounded-xl border border-line bg-panel px-4 py-4 transition-colors hover:border-[#2c323a] hover:bg-panel-2"
-            >
-              <span className="eyebrow text-accent">Portfolio</span>
-              <span className="mt-2 text-[15px] font-semibold text-ink">Paste a wallet</span>
-              <span className="mt-1.5 text-[13px] leading-relaxed text-muted">
-                Historic ROI and forward cash-flow across every live book.
-              </span>
-            </Link>
-          </li>
-          <li>
-            <Link
-              to="/anvil?project=stonk"
-              className="flex h-full flex-col rounded-xl border border-line bg-panel px-4 py-4 transition-colors hover:border-[#2c323a] hover:bg-panel-2"
-            >
-              <span className="eyebrow text-mark-amber">Anvil + Floor</span>
-              <span className="mt-2 text-[15px] font-semibold text-ink">Cheapest way in</span>
-              <span className="mt-1.5 text-[13px] leading-relaxed text-muted">
-                Rank listings and snipes net of the wallet you receive.
-              </span>
-            </Link>
-          </li>
-          <li>
-            <Link
-              to={leader ? projectPath(leader.meta.key) : '/ecosystem'}
-              className="flex h-full flex-col rounded-xl border border-line bg-panel px-4 py-4 transition-colors hover:border-[#2c323a] hover:bg-panel-2"
-            >
-              <span className="eyebrow text-mark-violet">{leader ? leader.meta.name : 'Ecosystem'}</span>
-              <span className="mt-2 text-[15px] font-semibold text-ink">
-                {leader ? 'Open the leader' : 'Open the board'}
-              </span>
-              <span className="mt-1.5 text-[13px] leading-relaxed text-muted">
-                {leader
-                  ? `Trailing 30d cash ${compactUsd(leader.fees)}. Charts, seats, and methodology.`
-                  : 'Compare fees, seats, and holder breadth across the chain.'}
-              </span>
-            </Link>
-          </li>
-        </ul>
+        <section className="min-w-0" aria-label="Projects">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="eyebrow text-mark-sky">Projects</h2>
+            <p className="text-[12px] text-faint">Trailing 30d protocol cash</p>
+          </div>
+          <ul className="mt-3 grid grid-cols-1 gap-2">
+            {rows.map(({ meta, fees, spark, under }, index) => {
+              const logo = meta.logo || data?.projects?.[meta.key]?.config?.logo || FALLBACK_LOGO[meta.key];
+              const lead = !under && index === 0 && fees > 0;
+              const mark = PROJECT_COLORS[meta.key] || 'var(--color-mark-green)';
+              return (
+                <li key={meta.key}>
+                  <Link
+                    to={projectPath(meta.key)}
+                    className={`flex items-center gap-3 rounded-xl border bg-panel px-3 py-3 transition-colors hover:border-[#2c323a] hover:bg-panel-2 ${
+                      lead ? 'home-project-lead border-[color:var(--color-brand)]/35' : 'border-line'
+                    }`}
+                  >
+                    {logo ? (
+                      <img
+                        src={logo.startsWith('http') ? logo : `/${logo}`}
+                        alt=""
+                        className="h-10 w-10 shrink-0 rounded-lg border border-line object-cover"
+                        style={String(logo).endsWith('.png') && String(logo).includes('Mutual') ? { imageRendering: 'pixelated' } : undefined}
+                      />
+                    ) : (
+                      <span className="h-10 w-10 shrink-0 rounded-lg border border-line bg-panel-2" />
+                    )}
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-1.5">
+                        <span className="truncate text-[14px] font-medium text-ink">{meta.name}</span>
+                        {meta.beta && <BetaTag />}
+                      </span>
+                      <span className="mt-0.5 block font-mono text-[11px] text-faint">{meta.ticker}</span>
+                    </span>
+                    {!under && spark?.length > 1 ? (
+                      <MiniSpark data={spark} color={mark} className="hidden sm:block" />
+                    ) : null}
+                    <span className="shrink-0 text-right">
+                      <span className="num block text-[16px] leading-none text-ink">
+                        {under || !(fees > 0) ? '—' : compactUsd(fees)}
+                      </span>
+                      <span className="mt-1 block text-[10px] uppercase tracking-wider text-faint">
+                        {under ? 'Soon' : '30d cash'}
+                      </span>
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      </div>
+
+      <section className="mt-12" aria-label="Clock In">
+        <Link
+          to="/ecosystem"
+          className="group flex flex-col items-start gap-3 rounded-2xl border border-[color:var(--color-brand)]/35 bg-panel px-5 py-6 transition-colors hover:border-[color:var(--color-brand)]/60 hover:bg-panel-2 sm:flex-row sm:items-center sm:justify-between sm:px-7 sm:py-7"
+        >
+          <span className="min-w-0">
+            <span className="eyebrow text-[color:var(--color-brand)]">Clock In</span>
+            <span className="mt-2 block text-[22px] font-semibold tracking-tight text-ink sm:text-[26px]">
+              Dive deeper into the ecosystem
+            </span>
+            <span className="mt-1.5 block text-[13px] leading-relaxed text-muted sm:text-[14px]">
+              {leader
+                ? `${leader.meta.name} leads at ${compactUsd(leader.fees)} · fees, seats, and activation across the board`
+                : 'Fees, seats, and activation across every live book'}
+            </span>
+          </span>
+          <span className="inline-flex shrink-0 items-center gap-2 rounded-full bg-brand px-4 py-2 text-[13px] font-semibold text-black transition-opacity group-hover:opacity-90">
+            Open the board
+            <span aria-hidden="true">→</span>
+          </span>
+        </Link>
       </section>
 
       <NfaBanner className="mt-10" />
