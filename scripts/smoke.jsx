@@ -328,7 +328,7 @@ VIEWS.push(['Nightshades·all', NightshadesDetailView, { data: snapshot, activeT
     || !html.includes('Funds')
     || funds.length !== 5
     || !html.includes('401,000')
-    || !html.includes('beta')
+    || !html.includes('Dividends posted by day')
   ) {
     failed++;
     console.error('FAIL  mutual fun project page', funds.map((f) => f.name).join(','));

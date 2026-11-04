@@ -122,7 +122,7 @@ export const PROJECTS = [
   { slug: 'tickeryard', key: 'tickeryard', name: 'TickerYard', ticker: 'YARD' },
   { slug: 'cardwall', key: 'cardwall', name: 'The Card Wall', ticker: 'WALL', beta: true },
   { slug: 'moods', key: 'moods', name: 'Moods', ticker: 'STOKED', logo: 'Moods.png', beta: true },
-  { slug: 'mutualfun', key: 'mutualfun', name: 'The Mutual Fun', ticker: 'TMF', kind: 'mutual', logo: 'Mutual.png', beta: true, maxSupply: 4001 },
+  { slug: 'mutualfun', key: 'mutualfun', name: 'The Mutual Fun', ticker: 'TMF', kind: 'mutual', logo: 'Mutual.png', maxSupply: 4001 },
   { slug: 'index', key: 'index', name: 'The Index', ticker: 'INDEX', kind: 'cashflow', logo: 'Index.png', beta: true, live: false, maxSupply: 1_000_000_000 },
   { slug: 'rhmachines', key: 'printer', name: 'RH Machines', ticker: 'PRINTER', kind: 'machines', logo: 'Printer.png', beta: true, live: false, maxSupply: 200_000_000 },
   { slug: 'coattail', key: 'coattail', name: 'Coattail Brokers', ticker: 'COAT', kind: 'brokers', logo: 'Coattail.svg', beta: true, unitValue: 36750, live: false, maxSupply: 1_000_000_000 },

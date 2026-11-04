@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { yieldBook } from './books';
 import { dateKey } from './dates';
 import { typicalNightshadesSeat } from './nightshades';
+import { mutualDividendSeries } from './seats';
 
 /**
  * The run rate is trailing cash × 365 / days.
@@ -420,11 +421,67 @@ function applyAnvil(project, id, days) {
   });
 }
 
+function mapFromSeries(series) {
+  const map = new Map();
+  (series?.labels || []).forEach((day, i) => {
+    if (day) map.set(day, Number(series.data?.[i]) || 0);
+  });
+  return map;
+}
+
+function annualAsOf(map, day, days) {
+  const prefix = new Map();
+  for (const [key, value] of map) {
+    if (key <= day) prefix.set(key, value);
+  }
+  return trailingCovered(prefix, days).annual;
+}
+
+/** Dividends split by class weight. A corner office's extra weight stays inside its class. */
+function applyMutual(project, id, days) {
+  const pool = mapFromSeries(mutualDividendSeries(project));
+  const have = spanDays(pool);
+  const tw = networkWeight(project) || Number(project?.activation?.weight) || 0;
+  if (!(tw > 0) || !hasInk(pool)) return untouched(project, id, days, have);
+  let partial = null;
+  const tiers = (project.tiers || []).map((tier) => {
+    const weight = Number(tier.weight) || 0;
+    const seat = new Map();
+    for (const [day, usd] of pool) seat.set(day, (usd * weight) / tw);
+    const covered = trailingCovered(seat, days);
+    if (covered.short) partial = 'short';
+    const dates = [...seat.keys()].sort();
+    return markTier(project, {
+      ...tier,
+      dailyDates: dates,
+      dailyYields: dates.map((day) => seat.get(day)),
+    }, covered.annual || 0);
+  });
+  const snaps = (project.dailySnapshots || []).map((snap) => {
+    const day = snap?.date;
+    if (!day) return snap;
+    return {
+      ...snap,
+      tiers: tiers.map((tier) => ({
+        tier: tier.tier,
+        yieldUsd: annualAsOf(new Map((tier.dailyDates || []).map((d, i) => [d, tier.dailyYields[i]])), day, days),
+      })),
+    };
+  });
+  return {
+    ...project,
+    tiers,
+    dailySnapshots: snaps,
+    yieldSample: sampleMeta(id, days, { applied: true, have, partial }),
+  };
+}
+
 function applyOne(project, id, days, key) {
   if (!project) return project;
   const tagged = project.bookSlug === key ? project : { ...project, bookSlug: key };
   const kind = tagged.config?.kind;
-  if (kind === 'machines' || kind === 'vault' || kind === 'mutual') return untouched(tagged, id, days, 0);
+  if (kind === 'machines' || kind === 'vault') return untouched(tagged, id, days, 0);
+  if (kind === 'mutual') return applyMutual(tagged, id, days);
   if (key === 'cardwall') return applyCardwall(tagged, id, days);
   if (kind === 'cashflow') {
     return applyPool(tagged, id, days, {

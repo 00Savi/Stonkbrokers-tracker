@@ -100,7 +100,7 @@ function projectRows(data) {
       under: !project || project.underConstruction,
     };
   }).sort((a, b) => {
-    // Blank / soon books (Mutual Fun, Oakmont, …) sit under the earners.
+    // Books with no trailing cash sit under the earners.
     const aBlank = a.under || !(a.fees > 0);
     const bBlank = b.under || !(b.fees > 0);
     if (aBlank !== bBlank) return aBlank ? 1 : -1;

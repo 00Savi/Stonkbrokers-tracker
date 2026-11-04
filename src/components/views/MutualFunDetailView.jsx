@@ -2,15 +2,16 @@ import React, { useState } from 'react';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, ArcElement, Filler,
 } from 'chart.js';
-import { Line } from 'react-chartjs-2';
+import { Bar, Line } from 'react-chartjs-2';
 import { burnSeries, burnRateSeries } from '../../lib/burn';
-import { windowChart } from '../../lib/yieldHistory';
-import { BetaTag, Card, Figure, Stat, KpiStrip, Tag, SkeletonCard, YieldPeriodToggle, scaleAnnualYield, yieldSuffix, compactUsd, compactNum } from '../kit';
+import { seriesHasInk, windowChart } from '../../lib/yieldHistory';
+import { Card, Figure, Stat, KpiStrip, Tag, SkeletonCard, YieldPeriodToggle, scaleAnnualYield, yieldSuffix, compactUsd, compactNum } from '../kit';
 import { seatCsvRows } from '../../lib/csv';
 import { CsvButton } from '../CsvButton';
 import { ShareSection } from '../CopyControl';
 import { TierFlowSection } from '../TierFlowCards';
-import { baseChartOptions, compactTick, cumulativeBurnDataset, TIER_COLORS } from '../../lib/charts';
+import { baseChartOptions, compactTick, compactUsdTick, cumulativeBurnDataset, TIER_COLORS } from '../../lib/charts';
+import { mutualDividendSeries } from '../../lib/seats';
 import { useChartView } from '../../lib/chartWindow';
 import { MethodologyCard } from '../Disclaimer';
 import { UnderwaterCard } from '../UnderwaterCard';
@@ -86,16 +87,7 @@ export default function MutualFunDetailView({ data }) {
   const specificUsd = tokenPx > 0 ? rate * 1.16 * tokenPx : 0;
   const handInUsd = tokenPx > 0 ? rate * 0.92 * tokenPx : 0;
 
-  const roiSnaps = [];
-  const histLabels = [];
-  const histDatasets = tiers.map((t, i) => ({
-    label: `${t.tier} ROI`,
-    data: [],
-    borderColor: TIER_COLORS[i % TIER_COLORS.length],
-    tension: 0.3,
-    borderWidth: 2,
-    pointRadius: 2,
-  }));
+  const dividends = mutualDividendSeries(project);
 
   const realBurntTokens = Math.max(Number(revenue.burnedTokens) || 0, Number(ownership.permanentlyBurntTokens) || 0);
   const burnPct = realBurntTokens > 0 ? (realBurntTokens / TMF_SUPPLY) * 100 : null;
@@ -141,8 +133,7 @@ export default function MutualFunDetailView({ data }) {
       <ShareSection id="roi" className="scroll-mt-32 space-y-4">
         <Card
           eyebrow="The Mutual Fun"
-          sub="A Seat earns only while it is enrolled. Cost is the OpenSea floor plus the Front-End Load. Nothing is annualized until a dividend has a history."
-          corner={<BetaTag />}
+          sub="A Seat earns only while it is enrolled. Cost is the OpenSea floor plus the Front-End Load. Dividends already posted are split by class weight and annualized."
         >
           <KpiStrip>
             <Stat label="Floor" value={floorCostUsd > 0 ? formatCurrency(floorCostUsd) : '—'} />
@@ -247,7 +238,24 @@ export default function MutualFunDetailView({ data }) {
                           <td colSpan="6" className="px-5 py-4">
                             <p className="eyebrow mb-3 text-faint">Daily yield · {t.name}</p>
                             <div className="relative h-32 w-full md:h-40">
-                              <EmptyChart>No daily yield recorded for this tier</EmptyChart>
+                              {seriesHasInk(t.dailyYields) ? (
+                                <Line
+                                  data={{
+                                    labels: t.dailyDates,
+                                    datasets: [{
+                                      label: 'Daily dividend (USD)',
+                                      data: t.dailyYields,
+                                      borderColor: TIER_COLORS[roiRows.findIndex((row) => row.t.tier === t.tier) % TIER_COLORS.length] || ACCENT,
+                                      borderWidth: 1.75,
+                                      tension: 0.3,
+                                      pointRadius: 0,
+                                    }],
+                                  }}
+                                  options={baseChartOptions(t.dailyDates, 'daily', { yUnit: 'USD', yTick: compactUsdTick })}
+                                />
+                              ) : (
+                                <EmptyChart>No daily dividend recorded for this class</EmptyChart>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -276,10 +284,7 @@ export default function MutualFunDetailView({ data }) {
         </Card>
 
         <YieldHistorySwitch
-          labels={histLabels}
-          datasets={histDatasets}
-          options={baseChartOptions(histLabels, interval, { yUnit: 'CoC %' })}
-          snaps={roiSnaps}
+          snaps={dailySnapshots}
           tiers={tiers}
           empty="No dividend history yet, so cash-on-cash stays blank"
         />
@@ -314,6 +319,21 @@ export default function MutualFunDetailView({ data }) {
             />
           </KpiStrip>
         </Card>
+
+        {dividends ? (
+          <ChartPanel
+            title="Dividends posted by day"
+            note="What the Dividend Office posted, priced at the last $TMF spot. Each class takes its weight share of that day."
+          >
+            <Bar
+              data={{
+                labels: dividends.labels,
+                datasets: [{ label: 'Dividends', data: dividends.data, backgroundColor: ACCENT, borderRadius: 2 }],
+              }}
+              options={baseChartOptions(dividends.labels, interval, { yUnit: 'USD', yTick: compactUsdTick })}
+            />
+          </ChartPanel>
+        ) : null}
 
         {(revenue.dividends || []).length ? (
           <Card flush eyebrow="Dividends posted">
@@ -503,7 +523,7 @@ export default function MutualFunDetailView({ data }) {
       </ShareSection>
 
       <MethodologyCard>
-        <p><strong className="text-ink">Yield &amp; ROI:</strong> Cost is the OpenSea floor plus the Front-End Load at the $TMF spot. Cash-on-cash stays at zero until a fund posts a dividend. Payback is N/A for the same reason. The five fund cards are the desk's last ETH mark, not a yield.</p>
+        <p><strong className="text-ink">Yield &amp; ROI:</strong> Cost is the OpenSea floor plus the Front-End Load at the $TMF spot. A posted dividend is split across enrolled Seats by class weight, then annualized over the selected run rate. The five fund cards are the desk&apos;s last ETH mark, not a yield.</p>
         <p><strong className="text-ink">Activation:</strong> Enrolled Seats are the live set. A transfer ends enrollment and the next holder pays the load again. A corner office is a merge into the next class. Act, Up, and Deact on the tier cards are those events, split by the day they were logged.</p>
         <p><strong className="text-ink">Burn:</strong> Half of every Front-End Load is $TMF sent to the Chairman&apos;s Estate. The percent is that burn over the prospectus supply of 1,604,401,000. Equivalent units are Seats retired by a merger. The collection cannot mint a replacement. The burn line is that cumulative load, not unminted supply.</p>
         <p><strong className="text-ink">Liquidity:</strong> The Open Market posts 401,000 $TMF a Seat. Random is +8%, specific is +16%, and a hand-in is −8%. No ETH is charged. Holder counts come from the wallet index once its fold covers this collection. Circulating seats are minted seats minus mergers minus seats sitting in the Open Market.</p>

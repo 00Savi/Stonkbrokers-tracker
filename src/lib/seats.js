@@ -127,6 +127,23 @@ function feeUsd(project, timeframe) {
   return colsUsd(chartCols(project, 'kept'), timeframe);
 }
 
+/** Daily dividends posted to enrolled Seats, in USD at the last spot. */
+export function mutualDividendSeries(project) {
+  if (project?.config?.kind !== 'mutual') return null;
+  const posted = project.revenue?.postedByDay;
+  const labels = posted?.labels || [];
+  if (!labels.length) return null;
+  const px = Number(project.market?.tokenPriceUsd) || 0;
+  const eth = Number(project.market?.ethPriceUsd) || 0;
+  const data = labels.map((_, i) => (posted.tokens || []).reduce((sum, tok) => {
+    const amount = Number(tok.amounts?.[i]) || 0;
+    const price = String(tok.symbol || '').toUpperCase() === 'WETH' ? eth : px;
+    return sum + amount * price;
+  }, 0));
+  if (!data.some((v) => v > 0)) return null;
+  return { labels, data, rawLabels: labels };
+}
+
 function seriesUsd(values, timeframe) {
   const n = windowLen(timeframe, (values || []).length);
   return sumTail(values, n);
@@ -180,6 +197,11 @@ export function revenueRows(project, timeframe = '30d') {
   if (paid > 0 && !rows.some((r) => r.source === 'holders')) {
     rows.push({ usd: paid, inMix: false, source: 'paid', note: 'Paid to holders' });
   }
+  const mutual = mutualDividendSeries(project);
+  if (mutual) {
+    const usd = seriesUsd(mutual.data, timeframe);
+    if (usd > 0) rows.push({ usd, inMix: false, source: 'paid', note: 'Dividends posted' });
+  }
   if (pot > 0) rows.push({ usd: pot, inMix: false, source: 'float', note: 'Cash in the pot' });
   if (!rows.some((r) => r.inMix)) {
     const snaps = project?.dailySnapshots || [];
@@ -213,6 +235,8 @@ function sumColsDaily(cols, labels) {
 
 /** Daily board series: kept fees + float/paid streams + Card Wall spread. */
 export function protocolFeeSeries(project) {
+  const mutual = mutualDividendSeries(project);
+  if (mutual) return mutual;
   const chart = protocolRevenueChart(project, { skipLedger: true });
   if (chart.kind !== 'protocol' && chart.kind !== 'cashflow') {
     return gachaSpreadSeriesOnAxis(project) || { labels: [], data: [] };
