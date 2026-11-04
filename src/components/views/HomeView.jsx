@@ -28,6 +28,7 @@ const FALLBACK_LOGO = {
   mancer: 'logo.png',
   tickeryard: 'Yardkeepers.png',
   cardwall: 'wall.png',
+  moods: 'Moods.png',
   nightshades: 'Knight.png',
 };
 

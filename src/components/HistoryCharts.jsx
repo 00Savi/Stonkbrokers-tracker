@@ -952,6 +952,7 @@ const ONBOARD_PROJECTS = [
   { key: 'stonk', label: 'StonkBrokers' },
   { key: 'mancer', label: 'Mancer' },
   { key: 'cardwall', label: 'The Card Wall' },
+  { key: 'moods', label: 'Moods' },
   { key: 'tickeryard', label: 'TickerYard' },
   { key: 'interns', label: 'Interns' },
 ];

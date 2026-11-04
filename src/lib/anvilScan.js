@@ -71,6 +71,9 @@ export const ANVIL_VAULTS = [
     maxSupply: 4444,
     firstId: 1,
   },
+  // Moods (Good Vibes Club): add after Nov 6 when $STOKED + Anvil AMM +
+  // SoftStakingVault publish. nftCa claim is 0xa6eBbDfc…0133d / supply 3333 /
+  // unitValue 333333. Do not invent tokenCa/ammCa before live.anvil flips.
   faction('ghosts', 'Ghosts', 'GHOSTS',
     '0x7cd6e36286f92f55cc8f498e36e10a975a332aac',
     '0xd6b619a75667cfcc827a3b9b75d807d98b5456d2',

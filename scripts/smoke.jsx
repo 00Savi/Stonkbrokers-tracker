@@ -32,6 +32,7 @@ import InternDetailView from '../src/components/views/InternDetailView';
 import MancerDetailView from '../src/components/views/MancerDetailView';
 import YardDetailView from '../src/components/views/YardDetailView';
 import CardWallDetailView from '../src/components/views/CardWallDetailView';
+import MoodsDetailView from '../src/components/views/MoodsDetailView';
 import MutualFunDetailView from '../src/components/views/MutualFunDetailView';
 import BonusDetailView from '../src/components/views/BonusDetailView';
 import SpecialDetailView from '../src/components/views/SpecialDetailView';
@@ -189,6 +190,13 @@ const ROUTES = [
   '/tickeryard/activation',
   '/tickeryard/ownership',
   '/cardwall/burn',
+  '/moods/roi',
+  '/moods/yield',
+  '/moods/revenue',
+  '/moods/liquidity',
+  '/moods/burn',
+  '/moods/activation',
+  '/moods/ownership',
   '/mutualfun/roi',
   '/mutualfun/activation',
   '/index/roi',
@@ -274,6 +282,7 @@ for (const [label, View] of [
   ['Mancer', MancerDetailView],
   ['Yard', YardDetailView],
   ['CardWall', CardWallDetailView],
+  ['Moods', MoodsDetailView],
   ['MutualFun', MutualFunDetailView],
 ]) {
   for (const tab of TABS) {
@@ -282,6 +291,26 @@ for (const [label, View] of [
 }
 VIEWS.push(['Mancer·books', MancerDetailView, { data: snapshot, activeTab: 'books' }]);
 VIEWS.push(['Nightshades·all', NightshadesDetailView, { data: snapshot, activeTab: 'roi' }]);
+
+{
+  const html = renderToString(
+    <StaticRouter location="/moods/roi">
+      <MoodsDetailView data={snapshot} activeTab="roi" />
+    </StaticRouter>,
+  );
+  if (
+    !html.includes('Moods')
+    || !html.includes('StonkBrokers')
+    || !html.includes('pre-Anvil')
+    || !html.includes('Cryo Chamber')
+    || !snapshot.projects?.moods?.underConstruction
+  ) {
+    failed++;
+    console.error('FAIL  moods pre-Anvil page missing claim / allocation copy');
+  } else {
+    console.log('ok    moods shows pre-Anvil claim schedule and StonkBrokers allocation');
+  }
+}
 
 {
   const html = renderToString(
@@ -714,6 +743,7 @@ for (const [name, View, props] of VIEWS) {
   }
   const tokens = navTokenScanTargets(snapshot);
   const tokenKeys = tokens.map((t) => t.pKey);
+  // moods stays off until $STOKED tokenCa lands (Nov 6 Anvil) — empty CA is skipped by navTokenScanTargets.
   const wantTokens = ['stonk', 'mancer', 'tickeryard', 'cardwall', 'mutualfun', 'oakmont', ...factions];
   const missingTokens = wantTokens.filter((k) => !tokenKeys.includes(k));
   const cas = tokens.map((t) => t.ca.toLowerCase());

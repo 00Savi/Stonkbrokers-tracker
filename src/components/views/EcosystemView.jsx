@@ -64,6 +64,7 @@ const FALLBACK_LOGO = {
   mancer: 'logo.png',
   tickeryard: 'Yardkeepers.png',
   cardwall: 'wall.png',
+  moods: 'Moods.png',
   index: 'Index.png',
   oakmont: 'Oakmont.png',
   nightshades: 'Knight.png',
@@ -656,6 +657,7 @@ export default function EcosystemView({ data, pending = false }) {
     { key: 'stonk', name: 'StonkBrokers' },
     { key: 'mancer', name: 'Mancer' },
     { key: 'cardwall', name: 'The Card Wall' },
+    { key: 'moods', name: 'Moods' },
     { key: 'tickeryard', name: 'TickerYard' },
     { key: 'interns', name: 'Interns' },
   ].map((row) => ({

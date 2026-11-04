@@ -19,6 +19,8 @@ const NAMED = {
   '0x2554cad3d851381ec1a16b7bf7b4737ed46b40fe': { name: 'Mancer AMM' },
   '0xfe0b24a3b4052ad78f10fa75a27118c3e54a00e6': { name: 'Yard AMM' },
   '0xdd59536f394c4b589e695f5921723b89ea479379': { name: 'Wall AMM' },
+  '0xa6ebbdfcfeafdc7a5a778d6fe514f45bd0a0133d': { name: 'Moods NFT' },
+  '0xae2ddc0ae9c498c82c01e34d48a7e84165322f26': { name: 'Cryo Chamber' },
 };
 
 export function walletName(addr) {

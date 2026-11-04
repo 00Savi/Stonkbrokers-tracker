@@ -29,6 +29,7 @@ export const PROJECT_COLORS = {
   mancer: '#8b5cf6',
   tickeryard: '#38bdf8',
   cardwall: '#f5b700',
+  moods: '#59BFFF',
   index: '#14b8a6',
   printer: '#f472b6',
   oakmont: '#e879f9',

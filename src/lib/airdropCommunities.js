@@ -50,6 +50,16 @@ export const AIRDROP_COMMUNITIES = [
     tokenCa: '0xb03058b8a39f3967df08d833682c1c99b29821b1',
   },
   {
+    id: 'moods',
+    key: 'moods',
+    name: 'Moods',
+    ticker: 'STOKED',
+    mintedSupply: 3333,
+    firstTokenId: 1,
+    nftCa: '0xa6eBbDfcFEaFDC7a5a778D6FE514F45BD0a0133d',
+    tokenCa: '',
+  },
+  {
     id: 'rhmachines',
     key: 'printer',
     name: 'RH Machines',

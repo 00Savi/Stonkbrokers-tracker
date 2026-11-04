@@ -31,6 +31,7 @@ export const NAV_ITEMS = [
   { to: '/mancer/roi', label: 'Mancer', group: 'yield-nfts', logo: 'logo.png' },
   { to: '/tickeryard/roi', label: 'TickerYard', group: 'yield-nfts', logo: 'Yardkeepers.png' },
   { to: '/cardwall/roi', label: 'The Card Wall', group: 'yield-nfts', logo: 'wall.png' },
+  { to: '/moods/roi', label: 'Moods', group: 'yield-nfts', logo: 'Moods.png' },
   { to: '/mutualfun/roi', label: 'The Mutual Fun', group: 'yield-nfts', logo: 'Mutual.png' },
   { to: '/rhmachines/roi', label: 'RH Machines', group: 'yield-nfts', logo: 'Printer.png' },
   { to: '/coattail/roi', label: 'Coattail Brokers', group: 'yield-nfts', logo: 'Coattail.svg' },

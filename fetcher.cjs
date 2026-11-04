@@ -912,6 +912,38 @@ const PROJECTS = {
       { id: "T4", name: "Retirement", reqTokens: 1002500, weight: 333 },
     ],
   },
+  // Moods by Good Vibes Club. Claim NFT live on Robinhood; $STOKED + Anvil
+  // AMM + SoftStakingVault land Nov 6 2026. Keep underConstruction until
+  // tokenCa / ammCa / activationCa are filled — partners have no Interns stub
+  // unless we early-return buildMoodsStub below.
+  moods: {
+    genesisBlock: 105539904,
+    nftCa: "0xa6eBbDfcFEaFDC7a5a778D6FE514F45BD0a0133d".toLowerCase(),
+    tokenCa: "",
+    activationCa: "",
+    ammCa: "",
+    maxSupply: 3333,
+    unitValue: 333333,
+    ticker: "STOKED",
+    logo: "Moods.png",
+    yieldMode: "protocol_vault",
+    deactivateOnTransfer: true,
+    openseaSlug: "market-moods-387299773",
+    site: "https://cryochamber.superrare.com/#moods-intro",
+    underConstruction: true,
+    teamWallets: 0,
+    streams: {},
+    // Provenance only (Ethereum) — not scanned as project CAs.
+    gvcCa: "0xB8Ea78fcaCEf50d41375E44E6814ebbA36Bb33c4".toLowerCase(),
+    cryoChamberCa: "0xAE2ddC0Ae9C498C82c01E34D48a7e84165322f26".toLowerCase(),
+    tiers: [
+      { id: "T0", name: "Drift", reqTokens: 33333, weight: 100 },
+      { id: "T1", name: "Chill", reqTokens: 83333, weight: 125 },
+      { id: "T2", name: "Stoked", reqTokens: 166666, weight: 160 },
+      { id: "T3", name: "Frozen", reqTokens: 333333, weight: 200 },
+      { id: "T4", name: "Stone", reqTokens: 833333, weight: 333 },
+    ],
+  },
   // Interns by StonkBrokers. Collection + activation live 2026-09-19.
   // Intern Clock In 3.0 (2026-09-22) is the intern yield pot. InternExchange
   // is the intern AMM ("desks"); names / lending stay empty.
@@ -1489,6 +1521,66 @@ async function attachInternOwnership(conf, ownership) {
     console.warn(`[warn] interns dormantCount: ${e.message}`);
   }
   return ownership;
+}
+
+function moodsContractsReady(conf) {
+  return !!(conf?.nftCa && conf?.tokenCa && conf?.ammCa && conf?.activationCa);
+}
+
+function buildMoodsStub(conf, markets, prev = {}) {
+  const eth = Number(markets.moods?.ethPriceUsd) || Number(markets.stonk?.ethPriceUsd) || ethPriceUsd;
+  const tiers = (conf.tiers || []).map((t) => ({
+    tier: t.id,
+    name: t.name,
+    reqTokens: t.reqTokens,
+    multiplier: `${((t.weight || 100) / 100).toFixed(2)}x`,
+    weight: t.weight,
+    floorEth: 0,
+    trackedAnnualYieldUsd: 0,
+    dailyDates: [],
+    dailyYields: [],
+  }));
+  return {
+    market: {
+      ethPriceUsd: eth,
+      tokenPriceUsd: Number(markets.moods?.tokenPriceUsd) || 0,
+      nftFloorEth: Number(prev.market?.nftFloorEth) || 0,
+    },
+    activation: prev.activation || {
+      activeCount: 0,
+      percentActivated: 0,
+      breakdown: {},
+      dualBurn: { totalBurnTokens: 0, equivalentBrokersBurnt: 0 },
+      history: { labels: [], cumulative: [], dailyActivations: [], dailyDeactivations: [] },
+    },
+    ownership: prev.ownership || {
+      currentMaxSupply: conf.maxSupply,
+      ammVaultNfts: 0,
+      circulatingNftSupply: 0,
+      nftHolders: 0,
+      stonkHolders: 0,
+      ownershipRatio: 0,
+    },
+    tiers,
+    revenue: prev.revenue || {},
+    lockedLp: prev.lockedLp || null,
+    dailySnapshots: prev.dailySnapshots || [],
+    underConstruction: true,
+    config: {
+      ticker: conf.ticker,
+      unitValue: conf.unitValue || 0,
+      logo: conf.logo,
+      nftCa: conf.nftCa || "",
+      tokenCa: conf.tokenCa || "",
+      activationCa: conf.activationCa || "",
+      ammCa: conf.ammCa || "",
+      site: conf.site,
+      maxSupply: conf.maxSupply,
+      openseaSlug: conf.openseaSlug || "",
+      gvcCa: conf.gvcCa || "",
+      cryoChamberCa: conf.cryoChamberCa || "",
+    },
+  };
 }
 
 function buildInternStub(conf, markets, prev = {}) {
@@ -4623,6 +4715,13 @@ async function run() {
         continue;
       }
 
+      if (projectKey === "moods" && !moodsContractsReady(conf)) {
+        finalJson.projects.moods = buildMoodsStub(conf, markets, prevProjData);
+        console.log("  moods Anvil CAs empty; claim stub (fill tokenCa + ammCa + activationCa for Nov 6)");
+        projectsOk++;
+        continue;
+      }
+
       if (conf.kind === "mutual") {
         try {
           const spot = markets[projectKey] || {};
@@ -5121,7 +5220,11 @@ async function run() {
         lockedLp: lockedLpData,
         ledger: ledger,
         ...(projectKey === "cardwall" ? { gacha, rain } : {}),
-        underConstruction: projectKey === "interns" ? !internContractsReady(conf) : conf.underConstruction,
+        underConstruction: projectKey === "interns"
+          ? !internContractsReady(conf)
+          : projectKey === "moods"
+            ? !moodsContractsReady(conf)
+            : conf.underConstruction,
         dailySnapshots: dailySnapshots,
         config: projectKey === "interns"
           ? {
@@ -5139,6 +5242,21 @@ async function run() {
               maxSupply: conf.maxSupply,
               parentKey: "stonk",
             }
+          : projectKey === "moods"
+            ? {
+                ticker: conf.ticker,
+                unitValue: conf.unitValue,
+                logo: conf.logo,
+                nftCa: conf.nftCa,
+                tokenCa: conf.tokenCa || "",
+                activationCa: conf.activationCa || "",
+                ammCa: conf.ammCa || "",
+                site: conf.site,
+                maxSupply: conf.maxSupply,
+                openseaSlug: conf.openseaSlug || "",
+                gvcCa: conf.gvcCa || "",
+                cryoChamberCa: conf.cryoChamberCa || "",
+              }
           : { ticker: conf.ticker, unitValue: conf.unitValue, logo: conf.logo, nftCa: conf.nftCa, tokenCa: conf.tokenCa }
       };
       if (projectKey === "stonk") stonkFetched = true;
