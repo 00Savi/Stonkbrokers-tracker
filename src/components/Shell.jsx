@@ -243,8 +243,9 @@ export function TopNav({ live, sources, data, pending }) {
 
   return (
     <div ref={headerRef} className="sticky top-0 z-30 bg-[#08090b] px-2 pt-2 sm:px-4 sm:pt-4">
-      <nav className="mx-auto flex max-w-[1500px] items-center gap-2 overflow-hidden rounded-2xl border border-line bg-panel/95 px-2 py-2 backdrop-blur-xl sm:gap-3 sm:rounded-full sm:px-4 sm:py-2.5">
-        <div className="relative min-w-0 flex-1" ref={menuRef}>
+      <div ref={menuRef} className="relative mx-auto max-w-[1500px]">
+      <nav className="flex items-center gap-2 overflow-hidden rounded-2xl border border-line bg-panel/95 px-2 py-2 backdrop-blur-xl sm:gap-3 sm:rounded-full sm:px-4 sm:py-2.5">
+        <div className="min-w-0 flex-1">
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
@@ -285,47 +286,6 @@ export function TopNav({ live, sources, data, pending }) {
               @savicrypto
             </a>
           </p>
-
-          {open && (
-            <div
-              role="listbox"
-              className="absolute left-0 top-[calc(100%+8px)] z-50 max-h-[min(70vh,32rem)] w-72 overflow-y-auto rounded-xl border border-line bg-panel py-1 shadow-none"
-            >
-              {NAV_GROUPS.map((group, gi) => {
-                const items = NAV_ITEMS.filter((item) => item.group === group.id);
-                if (items.length === 0) return null;
-                return (
-                  <React.Fragment key={group.id}>
-                    {gi > 0 && <div className="my-1 border-t border-line" />}
-                    <div className="px-4 pb-0.5 pt-2 text-[11px] font-bold tracking-tight text-ink">
-                      {group.label}
-                    </div>
-                    {items.map((item) => {
-                      const active = itemIsActive(pathname, item.to);
-                      const slug = item.to.split('/')[1];
-                      const beta = PROJECTS.find((p) => p.slug === slug)?.beta;
-                      return (
-                        <button
-                          key={item.to}
-                          type="button"
-                          role="option"
-                          aria-selected={active}
-                          onClick={() => navigate(item.to)}
-                          className={`flex w-full items-center gap-3 px-4 py-2 text-left text-[13px] font-medium transition-colors hover:bg-panel-2 ${
-                            active ? 'text-ink' : 'text-muted'
-                          }`}
-                        >
-                          <NavMark item={item} />
-                          <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                          {beta && <BetaTag />}
-                        </button>
-                      );
-                    })}
-                  </React.Fragment>
-                );
-              })}
-            </div>
-          )}
         </div>
 
         <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1.5 sm:gap-3">
@@ -398,6 +358,47 @@ export function TopNav({ live, sources, data, pending }) {
           </a>
         </div>
       </nav>
+      {open && (
+        <div
+          role="listbox"
+          className="absolute left-0 top-[calc(100%+8px)] z-50 max-h-[min(70vh,32rem)] w-72 overflow-y-auto rounded-xl border border-line bg-panel py-1 shadow-none"
+        >
+          {NAV_GROUPS.map((group, gi) => {
+            const items = NAV_ITEMS.filter((item) => item.group === group.id);
+            if (items.length === 0) return null;
+            return (
+              <React.Fragment key={group.id}>
+                {gi > 0 && <div className="my-1 border-t border-line" />}
+                <div className="px-4 pb-0.5 pt-2 text-[11px] font-bold tracking-tight text-ink">
+                  {group.label}
+                </div>
+                {items.map((item) => {
+                  const active = itemIsActive(pathname, item.to);
+                  const slug = item.to.split('/')[1];
+                  const beta = PROJECTS.find((p) => p.slug === slug)?.beta;
+                  return (
+                    <button
+                      key={item.to}
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      onClick={() => navigate(item.to)}
+                      className={`flex w-full items-center gap-3 px-4 py-2 text-left text-[13px] font-medium transition-colors hover:bg-panel-2 ${
+                        active ? 'text-ink' : 'text-muted'
+                      }`}
+                    >
+                      <NavMark item={item} />
+                      <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                      {beta && <BetaTag />}
+                    </button>
+                  );
+                })}
+              </React.Fragment>
+            );
+          })}
+        </div>
+      )}
+      </div>
     </div>
   );
 }
