@@ -1,9 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { compactUsd } from './kit';
 import { ChartPanel } from './HistoryCharts';
 import {
+  daysInMonth,
   heaviestWeekday,
   monthCells,
+  monthSummary,
   monthsIn,
   payoutDays,
   weekdayRollup,
@@ -18,6 +20,17 @@ function monthTitle(year, month) {
   return new Date(Date.UTC(year, month - 1, 1)).toLocaleString('en-US', {
     month: 'long',
     year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
+function shortDate(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-').map(Number);
+  if (!y || !m || !d) return iso;
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
     timeZone: 'UTC',
   });
 }
@@ -41,13 +54,45 @@ export function PayoutCalendar({ project }) {
   const byDate = useMemo(() => new Map(days.map((day) => [day.date, day])), [days]);
   const cells = activeMonth ? monthCells(activeMonth.year, activeMonth.month, byDate) : [];
   const monthMax = cells.reduce((max, cell) => Math.max(max, cell?.row?.seat || 0), 0);
-  const rollup = useMemo(() => weekdayRollup(days), [days]);
+  const monthDays = useMemo(
+    () => (activeMonth ? daysInMonth(days, activeMonth.year, activeMonth.month) : []),
+    [days, activeMonth],
+  );
+  const summary = useMemo(
+    () => (activeMonth ? monthSummary(days, activeMonth.year, activeMonth.month) : null),
+    [days, activeMonth],
+  );
+  const rollup = useMemo(() => weekdayRollup(monthDays), [monthDays]);
   const heavy = heaviestWeekday(rollup);
   const mondayFirst = [1, 2, 3, 4, 5, 6, 0].map((dow) => rollup[dow]);
-  const open = byDate.get(picked) || [...days].reverse().find((day) => day.seat > 0) || null;
+  const selected = picked ? byDate.get(picked) : null;
   const monthIndex = activeMonth ? months.findIndex((row) => row.key === activeMonth.key) : -1;
 
-  if (!tier || !days.some((day) => day.seat > 0) || !activeMonth) return null;
+  useEffect(() => {
+    setPicked(null);
+  }, [tier?.tier, activeMonth?.key]);
+
+  if (!tier || !days.some((day) => day.seat > 0) || !activeMonth || !summary) return null;
+
+  const monthLabel = monthTitle(activeMonth.year, activeMonth.month);
+  const titleBits = [
+    monthLabel,
+    summary.incomplete ? 'MTD' : null,
+    tierChipLabel(tier),
+  ].filter(Boolean);
+  const cashBits = [
+    `Avg daily ${compactUsd(summary.avg)}`,
+    summary.paidShare > 0 ? `Paid out ${compactUsd(summary.paidShare)}` : null,
+    summary.floatShare > 0 ? `Still in the pot ${compactUsd(summary.floatShare)}` : null,
+  ].filter(Boolean);
+  const selectedBits = selected
+    ? [
+        shortDate(selected.date),
+        compactUsd(selected.seat),
+        selected.paidShare > 0 ? `Paid out ${compactUsd(selected.paidShare)}` : null,
+        selected.floatShare > 0 ? `Still in the pot ${compactUsd(selected.floatShare)}` : null,
+      ].filter(Boolean)
+    : [];
 
   const toolbar = (
     <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -83,7 +128,7 @@ export function PayoutCalendar({ project }) {
         >
           ‹
         </button>
-        <span className="min-w-[8.5rem] text-center font-mono text-[12px] text-ink">{monthTitle(activeMonth.year, activeMonth.month)}</span>
+        <span className="min-w-[8.5rem] text-center font-mono text-[12px] text-ink">{monthLabel}</span>
         <button
           type="button"
           aria-label="Next month"
@@ -102,13 +147,13 @@ export function PayoutCalendar({ project }) {
       fit
       className="mt-4"
       title={`Payout calendar · ${tierChipLabel(tier)}`}
-      note="Each day is the cash this tier’s weight took from the holder book, in UTC. Paid out and still in the pot are the two ways that cash is held. The lines under a day are the protocol streams printed that day."
+      note="Each day is the cash this tier’s weight took from the holder book, in UTC. The panel under the grid sums the month on screen — full months in full, the current month as a running total. Paid out and still in the pot are the two ways that cash is held. Source lines are protocol streams printed in that month."
       toolbar={toolbar}
     >
       <div>
         {heavy ? (
           <p className="mb-3 text-[12px] leading-relaxed text-muted">
-            {heavy.long} has been the heavy UTC weekday, {compactUsd(heavy.avg)} a day across {heavy.n} {heavy.n === 1 ? 'day' : 'days'}, {heavy.active} of them with cash. The figure under each weekday is that average.
+            {heavy.long} has been the heavy UTC weekday in {monthLabel}, {compactUsd(heavy.avg)} a day across {heavy.n} {heavy.n === 1 ? 'day' : 'days'}, {heavy.active} of them with cash. The figure under each weekday is that average.
           </p>
         ) : null}
         <div className="grid grid-cols-7 gap-1" role="grid" aria-label="Payout calendar">
@@ -121,18 +166,18 @@ export function PayoutCalendar({ project }) {
           {cells.map((cell, i) => {
             if (!cell) return <div key={`blank-${i}`} />;
             const row = cell.row;
-            const selected = open?.date === cell.date;
+            const isSelected = selected?.date === cell.date;
             return (
               <button
                 key={cell.date}
                 type="button"
                 role="gridcell"
                 disabled={!row}
-                aria-pressed={selected}
-                onClick={() => row && setPicked(cell.date)}
+                aria-pressed={isSelected}
+                onClick={() => row && setPicked((prev) => (prev === cell.date ? null : cell.date))}
                 title={row ? `${cell.date} ${compactUsd(row.seat)}` : cell.date}
                 className={`flex min-h-[3.25rem] flex-col items-start rounded-md border px-1.5 py-1 text-left ${
-                  selected ? 'border-ink' : 'border-line'
+                  isSelected ? 'border-ink' : 'border-line'
                 } ${row ? 'hover:border-ink' : 'opacity-40'}`}
                 style={{ background: row ? tone(row.seat, monthMax) : 'transparent' }}
               >
@@ -142,35 +187,32 @@ export function PayoutCalendar({ project }) {
             );
           })}
         </div>
-        {open ? (
-          <div className="mt-4 rounded-lg border border-line bg-panel-2 px-3 py-3">
-            <p className="text-[13px] text-ink">{open.date} · {tierChipLabel(tier)}</p>
-            <p className="mt-1 font-mono text-[15px] text-ink">{compactUsd(open.seat)}</p>
-            <p className="mt-1 text-[12px] text-muted">
-              {[
-                open.paidShare > 0 ? `Paid out ${compactUsd(open.paidShare)}` : null,
-                open.floatShare > 0 ? `Still in the pot ${compactUsd(open.floatShare)}` : null,
-              ].filter(Boolean).join(' · ') || 'No holder cash this day'}
-            </p>
-            {open.pot > 0 ? (
-              <p className="mt-2 text-[12px] leading-relaxed text-muted">
-                Holder book that day {compactUsd(open.pot)}
-                {open.potLines.length > 1
-                  ? ` (${open.potLines.map((line) => `${line.label} ${compactUsd(line.usd)}`).join(', ')})`
-                  : ''}. This seat’s weight is the cash above.
-              </p>
-            ) : null}
-            {open.sources.length ? (
-              <ul className="mt-3 space-y-1">
-                {open.sources.map((source) => (
-                  <li key={source.key} className="flex items-baseline justify-between gap-3 text-[12px]">
-                    <span className="text-muted">{source.label}</span>
-                    <span className="font-mono text-ink">{compactUsd(source.usd)}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
+
+        <div className="mt-4 rounded-lg border border-line bg-panel-2 px-3 py-3">
+          <p className="text-[13px] text-ink">{titleBits.join(' · ')}</p>
+          <p className="mt-1 font-mono text-[15px] text-ink">{compactUsd(summary.total)}</p>
+          <p className="mt-1 text-[12px] text-muted">
+            {cashBits.join(' · ') || 'No holder cash this month'}
+            {summary.incomplete && summary.through
+              ? ` · through ${shortDate(summary.through)}`
+              : ''}
+          </p>
+          {summary.sources.length ? (
+            <ul className="mt-3 space-y-1">
+              {summary.sources.map((source) => (
+                <li key={source.key} className="flex items-baseline justify-between gap-3 text-[12px]">
+                  <span className="text-muted">{source.label}</span>
+                  <span className="font-mono text-ink">{compactUsd(source.usd)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+
+        {selected ? (
+          <p className="mt-2 px-1 font-mono text-[12px] text-muted">
+            Selected {selectedBits.join(' · ')}
+          </p>
         ) : null}
       </div>
     </ChartPanel>

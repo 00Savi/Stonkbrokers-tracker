@@ -160,3 +160,56 @@ export function monthCells(year, month, byDate) {
   while (cells.length % 7) cells.push(null);
   return cells;
 }
+
+export function daysInMonth(days, year, month) {
+  const prefix = `${year}-${String(month).padStart(2, '0')}`;
+  return (days || []).filter((day) => String(day.date || '').startsWith(prefix));
+}
+
+/** Seat cash + protocol streams for one calendar month of `days`. */
+export function monthSummary(days, year, month) {
+  const rows = daysInMonth(days, year, month);
+  const sourceMap = new Map();
+  let total = 0;
+  let paidShare = 0;
+  let floatShare = 0;
+  let lastDate = null;
+  for (const day of rows) {
+    total += Number(day.seat) || 0;
+    paidShare += Number(day.paidShare) || 0;
+    floatShare += Number(day.floatShare) || 0;
+    if (!lastDate || day.date > lastDate) lastDate = day.date;
+    for (const source of day.sources || []) {
+      const usd = Number(source.usd) || 0;
+      if (!(usd > 0)) continue;
+      const prev = sourceMap.get(source.key) || { key: source.key, label: source.label, usd: 0 };
+      prev.usd += usd;
+      if (source.label) prev.label = source.label;
+      sourceMap.set(source.key, prev);
+    }
+  }
+  const n = rows.length;
+  const calendarDays = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  // Past months are complete even when the series is sparse. Only the current
+  // UTC month is a running total (MTD).
+  const now = new Date();
+  const incomplete = year === now.getUTCFullYear() && month === now.getUTCMonth() + 1;
+  const sources = PROTOCOL
+    .map((spec) => sourceMap.get(spec.key))
+    .filter((row) => row && row.usd > 0);
+  return {
+    year,
+    month,
+    key: `${year}-${String(month).padStart(2, '0')}`,
+    days: rows,
+    n,
+    calendarDays,
+    incomplete,
+    through: lastDate,
+    total,
+    avg: n ? total / n : 0,
+    paidShare,
+    floatShare,
+    sources,
+  };
+}

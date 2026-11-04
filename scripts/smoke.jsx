@@ -72,7 +72,7 @@ import { seatCsvRows } from '../src/lib/csv';
 import { sumVersusHold } from '../src/lib/lpHold';
 import { agoLabel, buildTape, eventAgeSeconds, tapeBooks, tokenAmount } from '../src/lib/eventTape';
 import { EventTape } from '../src/components/EventTape';
-import { heaviestWeekday, monthCells, payoutDays, weekdayRollup } from '../src/lib/payoutCalendar';
+import { heaviestWeekday, monthCells, monthSummary, payoutDays, weekdayRollup } from '../src/lib/payoutCalendar';
 import { PayoutCalendar } from '../src/components/PayoutCalendar';
 
 const snapshot = JSON.parse(fs.readFileSync('public/data.json', 'utf8'));
@@ -1742,6 +1742,7 @@ for (const [name, View, props] of VIEWS) {
   const byDate = new Map(days.map((day) => [day.date, day]));
   const cells = monthCells(2026, 10, byDate);
   const heavy = heaviestWeekday(weekdayRollup(days));
+  const oct = monthSummary(days, 2026, 10);
   const oct18 = byDate.get('2026-10-18');
   const oct20 = byDate.get('2026-10-20');
   const html = renderToString(
@@ -1757,13 +1758,20 @@ for (const [name, View, props] of VIEWS) {
     || oct20?.sources.map((row) => row.key).join(',') !== 'box,tax'
     || heavy?.long !== 'Sunday'
     || cells[3]?.day !== 1
+    || oct.total !== 15
+    || oct.avg !== 5
+    || oct.floatShare !== 15
+    || oct.incomplete
+    || oct.sources.map((row) => `${row.key}:${row.usd}`).join(',') !== 'box:3,tax:3'
     || !html.includes('Payout calendar')
     || !html.includes('Still in the pot')
+    || !html.includes('Avg daily')
+    || !html.includes('October 2026')
     || !html.includes('Clock-In')
     || !html.includes('Snipe tax')
   ) {
     failed++;
-    console.error('FAIL  payout calendar', oct18, oct20, heavy, cells[3]);
+    console.error('FAIL  payout calendar', oct18, oct20, heavy, cells[3], oct);
   } else {
     console.log('ok    payout calendar splits pot cash from protocol streams');
   }
