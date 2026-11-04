@@ -74,6 +74,8 @@ import { agoLabel, buildTape, eventAgeSeconds, tapeBooks, tokenAmount } from '..
 import { EventTape } from '../src/components/EventTape';
 import { heaviestWeekday, monthCells, monthSummary, payoutDays, weekdayRollup } from '../src/lib/payoutCalendar';
 import { PayoutCalendar } from '../src/components/PayoutCalendar';
+import { anvilAskUsd, tokenRiseToAsk, tokenTriggerBook } from '../src/lib/entryArb';
+import { EntryArbBoard } from '../src/components/EntryArbBoard';
 
 const snapshot = JSON.parse(fs.readFileSync('public/data.json', 'utf8'));
 
@@ -1942,6 +1944,44 @@ for (const [name, View, props] of VIEWS) {
     console.error('FAIL  stonk partner share missing Books close stream');
   } else {
     console.log('ok    stonk partner share includes Books close fees');
+  }
+}
+
+{
+  const project = {
+    config: { unitValue: 666666, buyFeeBps: 1000 },
+    market: {
+      tokenPriceUsd: 0.0075,
+      ethPriceUsd: 3000,
+      floorListings: [
+        { id: 1, ask: 2, usd: 6000, symbol: 'ETH' },
+        { id: 2, ask: 2.1, usd: 6300, symbol: 'ETH' },
+        { id: 3, ask: 2.2, usd: 6600, symbol: 'ETH' },
+        { id: 11, ask: 2.5, usd: 7500, symbol: 'ETH' },
+      ],
+    },
+  };
+  const anvil = anvilAskUsd(project, 'stonk');
+  const rise = tokenRiseToAsk(6000, project, 'stonk');
+  const book = tokenTriggerBook(project.market.floorListings, project, 'stonk');
+  const html = renderToString(
+    <StaticRouter location="/stonkbrokers/entry">
+      <EntryArbBoard data={{ projects: { stonk: project } }} projectKey="stonk" showHistory={false} />
+    </StaticRouter>,
+  );
+  if (
+    !(anvil > 5490 && anvil < 5510)
+    || !(rise.risePct > 9 && rise.risePct < 9.2)
+    || book.depth[0]?.risePct == null
+    || !(book.ladder.find((row) => row.risePct === 50)?.anvilUsd > 8200)
+    || !html.includes('Token rise → OpenSea')
+    || !html.includes('Token climb to meet each OpenSea floor')
+    || !html.includes('If the token runs')
+  ) {
+    failed++;
+    console.error('FAIL  token rise vs OpenSea', anvil, rise, book.depth[0], book.ladder);
+  } else {
+    console.log('ok    token rise shows Anvil climb needed to trigger OpenSea');
   }
 }
 

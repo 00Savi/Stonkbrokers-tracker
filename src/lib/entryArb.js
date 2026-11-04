@@ -178,6 +178,101 @@ export function listingDepthBook(listings, anvilAsk, {
   };
 }
 
+/**
+ * Token spot that makes Anvil ask equal `nftUsd`
+ * (Anvil = unit × spot × buyMult).
+ */
+export function tokenSpotForAnvilAt(nftUsd, project, key = null) {
+  const unit = anvilUnit(project);
+  const mult = buyMult(project, key);
+  const usd = Number(nftUsd) || 0;
+  if (!(unit > 0) || !(mult > 0) || !(usd > 0)) return null;
+  return usd / (unit * mult);
+}
+
+/**
+ * How far the token must move for Anvil to meet an OpenSea ask.
+ * Positive risePct = token must climb before that ask sits at/below Anvil
+ * (OpenSea becomes the cheaper entry vs the vault).
+ */
+export function tokenRiseToAsk(askUsd, project, key = null) {
+  const spot = Number(project?.market?.tokenPriceUsd) || 0;
+  const trigger = tokenSpotForAnvilAt(askUsd, project, key);
+  if (!(spot > 0) || trigger == null) {
+    return { spot, trigger: null, riseUsd: null, risePct: null };
+  }
+  return {
+    spot,
+    trigger,
+    riseUsd: trigger - spot,
+    risePct: ((trigger / spot) - 1) * 100,
+  };
+}
+
+/**
+ * Depth-style book: for each clear checkpoint, the token spot / % rise that
+ * lifts Anvil to the new OpenSea floor. Also samples a token-up ladder so
+ * charts can show Anvil walking through the ask book.
+ */
+export function tokenTriggerBook(listings, project, key = null, {
+  ethUsd = 0,
+  clears = DEPTH_CLEARS,
+  rises = [0, 5, 10, 25, 50, 100],
+} = {}) {
+  const spot = Number(project?.market?.tokenPriceUsd) || 0;
+  const unit = anvilUnit(project);
+  const mult = buyMult(project, key);
+  const anvilNow = anvilAskUsd(project, key);
+  const rows = normalizeListings(listings, ethUsd);
+  const osFloor = rows[0]?.usd || null;
+
+  const depth = (clears || DEPTH_CLEARS).map((cleared) => {
+    const next = rows[cleared] || null;
+    const floorUsd = next ? next.usd : null;
+    const rise = floorUsd != null ? tokenRiseToAsk(floorUsd, project, key) : null;
+    return {
+      cleared,
+      label: cleared === 0 ? 'Now' : `After ${cleared}`,
+      floor: next,
+      floorUsd,
+      anvilUsd: anvilNow > 0 ? anvilNow : null,
+      tokenSpot: rise?.spot ?? (spot > 0 ? spot : null),
+      tokenTrigger: rise?.trigger ?? null,
+      riseUsd: rise?.riseUsd ?? null,
+      risePct: rise?.risePct ?? null,
+      alreadyDiscount: floorUsd != null && anvilNow > 0 && floorUsd < anvilNow,
+    };
+  });
+
+  const ladder = (rises || []).map((pct) => {
+    const token = spot > 0 ? spot * (1 + pct / 100) : null;
+    const anvil = token != null && unit > 0 ? unit * token * mult : null;
+    const power = discountBuyPower(rows, anvil);
+    return {
+      risePct: pct,
+      tokenUsd: token,
+      anvilUsd: anvil,
+      buyPowerUsd: power.capitalUsd,
+      arbUsd: power.arbUsd,
+      discountCount: power.count,
+    };
+  });
+
+  const floorTrigger = osFloor != null ? tokenRiseToAsk(osFloor, project, key) : null;
+
+  return {
+    spot: spot > 0 ? spot : null,
+    unit,
+    buyMult: mult,
+    anvilUsd: anvilNow > 0 ? anvilNow : null,
+    openSeaFloorUsd: osFloor,
+    floorTrigger,
+    depth,
+    ladder,
+    count: rows.length,
+  };
+}
+
 /** Net Anvil sell proceeds in USD. */
 export function sellNetUsd(project, feeBps = null) {
   const unit = anvilUnit(project);

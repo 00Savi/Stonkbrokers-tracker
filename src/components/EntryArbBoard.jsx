@@ -13,6 +13,7 @@ import {
   DEPTH_CLEARS,
   entryHistorySeries,
   listingDepthBook,
+  tokenTriggerBook,
 } from '../lib/entryArb';
 import { loadFloorBook } from '../lib/floorCheck';
 import { projectPath, PROJECTS } from '../lib/routes';
@@ -75,8 +76,17 @@ export function EntryArbBoard({
   );
   const power = book.buyPower || { count: 0, capitalUsd: 0, arbUsd: 0 };
   const after10 = book.depth.find((d) => d.cleared === 10);
+  const liveListings = listings?.length ? listings : (project.market?.floorListings || []);
+  const triggers = tokenTriggerBook(liveListings, project, projectKey, {
+    ethUsd: Number(project.market?.ethPriceUsd) || 0,
+    clears: DEPTH_CLEARS,
+  });
+  const floorRise = triggers.floorTrigger;
   const name = PROJECTS.find((p) => p.key === projectKey)?.name || projectKey;
   const color = PROJECT_COLORS[projectKey] || '#00a804';
+  const unitNote = triggers.unit > 0
+    ? `${Number(triggers.unit).toLocaleString('en-US')} tokens × spot × buy fee`
+    : 'unit × token × buy fee';
 
   return (
     <div className="space-y-4">
@@ -93,7 +103,7 @@ export function EntryArbBoard({
           <Stat
             label="Anvil floor"
             value={book.anvilUsd != null ? compactUsd(book.anvilUsd) : '—'}
-            note="unit × token × buy fee"
+            note={unitNote}
           />
           <Stat
             label="Gap now"
@@ -108,6 +118,47 @@ export function EntryArbBoard({
           />
         </KpiStrip>
       </Card>
+
+      {triggers.openSeaFloorUsd != null && triggers.spot != null ? (
+        <Card
+          eyebrow="Token rise → OpenSea"
+          sub="Anvil is convertible at a fixed token count, so a higher spot lifts the vault floor. When Anvil clears an OpenSea ask, that seat becomes cheaper on the marketplace — the move that pulls buying onto OpenSea."
+        >
+          <KpiStrip>
+            <Stat
+              label="Token spot"
+              value={compactUsd(triggers.spot)}
+              note={triggers.unit > 0 ? `${Number(triggers.unit).toLocaleString('en-US')} / NFT` : undefined}
+            />
+            <Stat
+              label="Token to match OS floor"
+              value={floorRise?.trigger != null ? compactUsd(floorRise.trigger) : '—'}
+              note="Anvil = OpenSea floor"
+            />
+            <Stat
+              label="Rise to trigger OS floor"
+              value={floorRise?.risePct != null
+                ? (floorRise.risePct <= 0 ? 'Already below' : pct1(floorRise.risePct))
+                : '—'}
+              tone={floorRise?.risePct != null && floorRise.risePct <= 0 ? 'accent' : floorRise?.risePct > 0 ? 'warn' : 'ink'}
+              note={floorRise?.riseUsd != null && floorRise.riseUsd > 0
+                ? `+${compactUsd(floorRise.riseUsd)} / token`
+                : floorRise?.risePct <= 0
+                  ? 'Floor ask already under Anvil'
+                  : undefined}
+            />
+            <Stat
+              label="Rise to after-10 floor"
+              value={(() => {
+                const row = triggers.depth.find((d) => d.cleared === 10);
+                if (row?.risePct == null) return '—';
+                return row.risePct <= 0 ? 'Already below' : pct1(row.risePct);
+              })()}
+              note="Token climb for Anvil to meet that ask"
+            />
+          </KpiStrip>
+        </Card>
+      ) : null}
 
       <Card
         eyebrow="Buying power"
@@ -205,6 +256,60 @@ export function EntryArbBoard({
                       </td>
                       <td className={`num px-5 py-3 text-right text-[13px] ${row.arbUsd > 0 ? 'text-accent' : 'text-faint'}`}>
                         {row.arbUsd > 0 ? compactUsd(row.arbUsd) : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
+          <ChartPanel
+            title="Token climb to meet each OpenSea floor"
+            note="Anvil = unit × token × buy fee. For each depth, how much the token must rise so Anvil equals that new OpenSea floor — the level where that ask flips into the discount book."
+          >
+            <TokenRiseChart triggers={triggers} />
+          </ChartPanel>
+
+          <ChartPanel
+            title="If the token runs"
+            note="Anvil floor and OpenSea buying power as spot climbs. Horizontal guide is today’s OpenSea floor — once Anvil crosses it, the marketplace is the cheaper entry."
+          >
+            <TokenRunChart triggers={triggers} />
+          </ChartPanel>
+
+          <Card
+            flush
+            eyebrow="Token vs depth"
+            sub="Token spot that lifts Anvil to each cleared OpenSea floor. Positive rise = climb still needed; already below means that ask is already cheaper than the vault."
+          >
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[720px] text-left">
+                <thead>
+                  <tr className="eyebrow border-b border-line text-faint">
+                    <th className="px-5 py-3 font-normal">Clears</th>
+                    <th className="px-3 py-3 font-normal">OS floor</th>
+                    <th className="px-3 py-3 font-normal">Token to match</th>
+                    <th className="px-3 py-3 font-normal">Rise %</th>
+                    <th className="px-5 py-3 text-right font-normal">Rise $</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {triggers.depth.filter((row) => row.floorUsd != null).map((row) => (
+                    <tr key={`tok-${row.cleared}`} className="border-b border-line-soft">
+                      <td className="px-5 py-3 text-[13px] text-ink">{row.label}</td>
+                      <td className="num px-3 py-3 text-[13px] text-ink">
+                        {compactUsd(row.floorUsd)}
+                        {row.floor ? <span className="ml-2 font-mono text-[10px] text-faint">#{row.floor.id}</span> : null}
+                      </td>
+                      <td className="num px-3 py-3 text-[13px] text-ink">
+                        {row.tokenTrigger != null ? compactUsd(row.tokenTrigger) : '—'}
+                      </td>
+                      <td className={`num px-3 py-3 text-[13px] ${row.risePct != null && row.risePct <= 0 ? 'text-accent' : edgeTone(row.risePct)}`}>
+                        {row.risePct == null ? '—' : row.risePct <= 0 ? 'Already below' : pct1(row.risePct)}
+                      </td>
+                      <td className={`num px-5 py-3 text-right text-[13px] ${row.riseUsd > 0 ? 'text-ink' : 'text-faint'}`}>
+                        {row.riseUsd != null && row.riseUsd > 0 ? `+${compactUsd(row.riseUsd)}` : '—'}
                       </td>
                     </tr>
                   ))}
@@ -550,6 +655,124 @@ function BuyPowerChart({ book }) {
         rightValues: clearCost.filter((v) => v != null),
         leftUnit: 'USD',
         rightUnit: 'clear',
+      })}
+    />
+  );
+}
+
+function TokenRiseChart({ triggers }) {
+  const rows = (triggers?.depth || []).filter((row) => row.floorUsd != null && row.risePct != null);
+  if (!rows.length) return null;
+  const labels = rows.map((row) => row.label);
+  const rise = rows.map((row) => (row.risePct > 0 ? row.risePct : 0));
+  const floors = rows.map((row) => row.floorUsd);
+  const anvil = rows.map((row) => row.anvilUsd);
+  return (
+    <Bar
+      data={{
+        labels,
+        datasets: [
+          {
+            label: 'OpenSea floor',
+            data: floors,
+            backgroundColor: 'rgba(231,233,236,0.35)',
+            borderRadius: 2,
+            maxBarThickness: 36,
+          },
+          {
+            label: 'Anvil now',
+            data: anvil,
+            backgroundColor: 'rgba(245,183,0,0.45)',
+            borderRadius: 2,
+            maxBarThickness: 36,
+          },
+          {
+            type: 'line',
+            label: 'Token rise %',
+            data: rise,
+            borderColor: '#38bdf8',
+            backgroundColor: 'transparent',
+            borderWidth: 2,
+            pointRadius: 3,
+            yAxisID: 'y1',
+          },
+        ],
+      }}
+      options={dualAxisOptions({
+        labels,
+        interval: 'daily',
+        leftTick: compactUsdTick,
+        rightTick: (v) => `${Number(v).toFixed(0)}%`,
+        rightColor: '#38bdf8',
+        leftKind: 'level',
+        rightKind: 'level',
+        leftValues: [...floors, ...anvil],
+        rightValues: rise,
+        leftUnit: 'USD',
+        rightUnit: 'rise',
+      })}
+    />
+  );
+}
+
+function TokenRunChart({ triggers }) {
+  const rows = triggers?.ladder || [];
+  if (!rows.length || !(triggers?.spot > 0)) return null;
+  const labels = rows.map((row) => (row.risePct === 0 ? 'Now' : `+${row.risePct}%`));
+  const anvil = rows.map((row) => row.anvilUsd);
+  const buyPower = rows.map((row) => row.buyPowerUsd || 0);
+  const osFloor = triggers.openSeaFloorUsd;
+  const osLine = osFloor != null ? rows.map(() => osFloor) : null;
+  return (
+    <Bar
+      data={{
+        labels,
+        datasets: [
+          ...(osLine ? [{
+            type: 'line',
+            label: 'OpenSea floor',
+            data: osLine,
+            borderColor: '#8b929b',
+            backgroundColor: 'transparent',
+            borderWidth: 2,
+            borderDash: [6, 4],
+            pointRadius: 0,
+            order: 0,
+          }] : []),
+          {
+            type: 'line',
+            label: 'Anvil floor',
+            data: anvil,
+            borderColor: '#f5b700',
+            backgroundColor: 'transparent',
+            borderWidth: 2,
+            pointRadius: 3,
+            order: 1,
+          },
+          {
+            type: 'bar',
+            label: 'Buying power',
+            data: buyPower,
+            backgroundColor: 'rgba(0,168,4,0.4)',
+            borderRadius: 2,
+            maxBarThickness: 36,
+            yAxisID: 'y1',
+            order: 2,
+          },
+        ],
+      }}
+      options={dualAxisOptions({
+        labels,
+        interval: 'daily',
+        leftTick: compactUsdTick,
+        rightTick: compactUsdTick,
+        rightColor: '#00a804',
+        leftKind: 'level',
+        rightKind: 'level',
+        leftValues: [...anvil, ...(osLine || [])],
+        rightValues: buyPower,
+        leftUnit: 'USD',
+        rightUnit: 'power',
       })}
     />
   );
