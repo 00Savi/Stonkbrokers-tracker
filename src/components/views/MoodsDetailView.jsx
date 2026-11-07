@@ -302,7 +302,9 @@ export default function MoodsDetailView({ data, activeTab }) {
   const holdersWin = windowChart(holdersFull.labels, [holdersFull.data], timeframe, interval, ['last']);
   const ownLabels = holdersWin.labels;
   const ownData = holdersWin.cols[0] || [];
-  const moodsHolders = Number(ownership.moodsHolders) || Number(ownership.tokenHolders) || Number(ownership.stonkHolders) || Number(ownership.erc20Holders) || 0;
+  const moodsHolderRaw = [ownership.moodsHolders, ownership.tokenHolders, ownership.stonkHolders, ownership.erc20Holders]
+    .find((v) => v != null && v !== '');
+  const moodsHolders = moodsHolderRaw == null ? null : Number(moodsHolderRaw);
 
   const actWin = windowChart(actLabels, [actCum, actDAct, actDDeact], timeframe, interval, ['last', 'sum', 'sum']);
 
@@ -475,7 +477,7 @@ export default function MoodsDetailView({ data, activeTab }) {
       <ShareSection id="revenue" title="Distributions" className="scroll-mt-32 space-y-4">
         <Card
           eyebrow={`Vault distributions · ${revPeriod}`}
-          sub="SoftStakingVault RewardPaid is $STOKED paid to activated Moods once the Anvil vault is live."
+          sub="SoftStakingVault RewardPaid is $STOKED paid to activated Moods."
         >
           <KpiStrip>
             <StreamStat
@@ -652,9 +654,9 @@ export default function MoodsDetailView({ data, activeTab }) {
         <Card eyebrow="Ownership">
           <KpiStrip>
             <Stat label="Circulating" value={formatNumber(ownership.circulatingNftSupply || 0)} />
-            <Stat label="NFT holders" value={formatNumber(ownership.nftHolders || 0)} />
-            <Stat label="Wallets per 100 NFTs" value={`${(ownership.ownershipRatio || 0).toFixed(2)}`} tone="accent" />
-            <Stat label="Token holders" value={formatNumber(moodsHolders)} />
+            <Stat label="NFT holders" value={ownership.nftHolders == null ? '—' : formatNumber(ownership.nftHolders)} />
+            <Stat label="Wallets per 100 NFTs" value={ownership.ownershipRatio == null ? '—' : `${Number(ownership.ownershipRatio).toFixed(2)}`} tone="accent" />
+            <Stat label="Token holders" value={moodsHolders == null ? '—' : formatNumber(moodsHolders)} />
             <Stat
               label="Chain onboard"
               value={formatNumber(Number(onboardMoods.wallets) || 0)}

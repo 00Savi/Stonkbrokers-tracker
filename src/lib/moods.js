@@ -1,7 +1,7 @@
 /** Moods by Good Vibes Club — mint / Anvil constants from cryochamber.superrare.com. */
 
 export const MOODS_SITE = 'https://cryochamber.superrare.com/#moods-intro';
-export const MOODS_OPENSEA = 'https://opensea.io/collection/market-moods-387299773';
+export const MOODS_OPENSEA = 'https://opensea.io/collection/moooods';
 export const MOODS_NFT_CA = '0xa6eBbDfcFEaFDC7a5a778D6FE514F45BD0a0133d';
 export const MOODS_SUPPLY = 3333;
 export const MOODS_UNIT_VALUE = 333333;

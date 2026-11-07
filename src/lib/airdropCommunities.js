@@ -57,7 +57,7 @@ export const AIRDROP_COMMUNITIES = [
     mintedSupply: 3333,
     firstTokenId: 1,
     nftCa: '0xa6eBbDfcFEaFDC7a5a778D6FE514F45BD0a0133d',
-    tokenCa: '',
+    tokenCa: '0xB76b35647CAbf3b6AAf90FEC374c58038478D12f',
   },
   {
     id: 'rhmachines',

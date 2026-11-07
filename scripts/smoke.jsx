@@ -301,16 +301,17 @@ VIEWS.push(['Nightshades·all', NightshadesDetailView, { data: snapshot, activeT
     </StaticRouter>,
   );
   if (
-    !html.includes('Moods')
-    || !html.includes('StonkBrokers')
-    || !html.includes('pre-Anvil')
-    || !html.includes('Cryo Chamber')
-    || !snapshot.projects?.moods?.underConstruction
+    !html.includes('Drift')
+    || !html.includes('Stone')
+    || html.includes('pre-Anvil')
+    || html.includes('CA pending')
+    || snapshot.projects?.moods?.underConstruction
+    || !snapshot.projects?.moods?.config?.tokenCa
   ) {
     failed++;
-    console.error('FAIL  moods pre-Anvil page missing claim / allocation copy');
+    console.error('FAIL  moods live vault page missing tiers or still on the claim stub');
   } else {
-    console.log('ok    moods shows pre-Anvil claim schedule and StonkBrokers allocation');
+    console.log('ok    moods is a live Anvil vault');
   }
 }
 
@@ -745,8 +746,7 @@ for (const [name, View, props] of VIEWS) {
   }
   const tokens = navTokenScanTargets(snapshot);
   const tokenKeys = tokens.map((t) => t.pKey);
-  // moods stays off until $STOKED tokenCa lands (Nov 6 Anvil) — empty CA is skipped by navTokenScanTargets.
-  const wantTokens = ['stonk', 'mancer', 'tickeryard', 'cardwall', 'mutualfun', 'oakmont', ...factions];
+  const wantTokens = ['stonk', 'mancer', 'tickeryard', 'cardwall', 'mutualfun', 'moods', 'oakmont', ...factions];
   const missingTokens = wantTokens.filter((k) => !tokenKeys.includes(k));
   const cas = tokens.map((t) => t.ca.toLowerCase());
   const stonkCa = snapshot.projects.stonk.config.tokenCa.toLowerCase();

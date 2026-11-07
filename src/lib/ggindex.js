@@ -235,7 +235,7 @@ async function optional(path) {
 }
 
 const EARNER_SLUGS = [
-  'stonk', 'mancer', 'tickeryard', 'cardwall', 'interns',
+  'stonk', 'mancer', 'tickeryard', 'cardwall', 'interns', 'moods',
   'ghosts', 'zombies', 'knights', 'watchers',
 ];
 

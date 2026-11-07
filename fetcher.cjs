@@ -912,27 +912,29 @@ const PROJECTS = {
       { id: "T4", name: "Retirement", reqTokens: 1002500, weight: 333 },
     ],
   },
-  // Moods by Good Vibes Club. Claim NFT live on Robinhood; $STOKED + Anvil
-  // AMM + SoftStakingVault land Nov 6 2026. Keep underConstruction until
-  // tokenCa / ammCa / activationCa are filled — partners have no Interns stub
-  // unless we early-return buildMoodsStub below.
+  // Moods by Good Vibes Club. Anvil opened 2026-11-06. The market
+  // contract is the AMM (token + collection, 5% random / 15% specific).
+  // stakingVault() on that market is the SoftStakingVault.
   moods: {
     genesisBlock: 105539904,
     nftCa: "0xa6eBbDfcFEaFDC7a5a778D6FE514F45BD0a0133d".toLowerCase(),
-    tokenCa: "",
-    activationCa: "",
-    ammCa: "",
+    tokenCa: "0xb76b35647cabf3b6aaf90fec374c58038478d12f".toLowerCase(),
+    activationCa: "0xf9b7cea364dfcdc13d8c1a9d59dd9a26a6dc8d0f".toLowerCase(),
+    ammCa: "0x43f5378f0e5202b207f43baa5792c0e766b05d5f".toLowerCase(),
     maxSupply: 3333,
     unitValue: 333333,
     ticker: "STOKED",
     logo: "Moods.png",
     yieldMode: "protocol_vault",
     deactivateOnTransfer: true,
-    openseaSlug: "market-moods-387299773",
+    oracleSource: "0xf9b7cea364dfcdc13d8c1a9d59dd9a26a6dc8d0f".toLowerCase(),
+    openseaSlug: "moooods",
     site: "https://cryochamber.superrare.com/#moods-intro",
-    underConstruction: true,
+    underConstruction: false,
     teamWallets: 0,
-    streams: {},
+    streams: {
+      vault: "0xf9b7cea364dfcdc13d8c1a9d59dd9a26a6dc8d0f".toLowerCase(),
+    },
     // Provenance only (Ethereum) — not scanned as project CAs.
     gvcCa: "0xB8Ea78fcaCEf50d41375E44E6814ebbA36Bb33c4".toLowerCase(),
     cryoChamberCa: "0xAE2ddC0Ae9C498C82c01E34D48a7e84165322f26".toLowerCase(),
@@ -1413,6 +1415,23 @@ async function loadMarketPrices() {
     }
   }
 
+  if (markets.moods && PROJECTS.moods?.openseaSlug) {
+    let moodFloor = 0;
+    for (let attempt = 0; attempt < 3 && !(moodFloor > 0); attempt++) {
+      try {
+        moodFloor = await fetchCollectionFloorGraphql(PROJECTS.moods.openseaSlug);
+      } catch (e) {
+        console.warn(`[warn] moods floor: ${e.message}`);
+        if (attempt < 2) await sleep(800 * (attempt + 1));
+      }
+    }
+    if (moodFloor > 0) {
+      markets.moods.nftFloorEth = +moodFloor.toFixed(4);
+      markets.moods.floorSource = "opensea";
+      console.log(`  moods floor ${markets.moods.nftFloorEth} ETH`);
+    }
+  }
+
   if (markets.stonk) {
     try {
       // Need >10 asks so Entry can show the OpenSea floor after the cheapest
@@ -1866,16 +1885,23 @@ async function getOwnershipStats(conf, equivBurnt, previousData) {
     // Intern NFT is not in gg-index until seeds + backfill land. Throwing
     // here used to abort the whole intern rebuild and republish the empty stub.
     const prevHolders = Number(previousData?.ownership?.nftHolders);
-    if (conf.yieldMode === "intern_clockin" && INDEX_NOT_READY.test(String(e.message))) {
-      console.warn(`[warn] intern NFT holders via gg-index: ${e.message}`);
+    const msg = String(e.message);
+    if (conf.yieldMode === "intern_clockin" && INDEX_NOT_READY.test(msg)) {
+      console.warn(`[warn] intern NFT holders via gg-index: ${msg}`);
       rawNftHolders = prevHolders || 0;
       nftHoldersCarried = true;
     } else if (prevHolders > 0) {
       // A holder-fold blip used to abort the whole project. The carried
       // snapshot then kept every series, including Card Wall pulls, on the
       // last good day.
-      console.warn(`[warn] ${conf.ticker} NFT holders: ${e.message}; keeping ${prevHolders}`);
+      console.warn(`[warn] ${conf.ticker} NFT holders: ${msg}; keeping ${prevHolders}`);
       rawNftHolders = prevHolders;
+      nftHoldersCarried = true;
+    } else if (INDEX_NOT_READY.test(msg)) {
+      // First launch, before the index has backfilled this contract. Aborting
+      // here republishes the empty stub and hides the vault that is already live.
+      console.warn(`[warn] ${conf.ticker} NFT holders: ${msg}; fold not ready`);
+      rawNftHolders = null;
       nftHoldersCarried = true;
     } else {
       throw e;
@@ -1893,17 +1919,26 @@ async function getOwnershipStats(conf, equivBurnt, previousData) {
     rawStonkHolders = await fetchTokenHoldersSafe(conf.tokenCa);
   } catch (e) {
     const prevHolders = Number(previousData?.ownership?.stonkHolders || previousData?.ownership?.tokenHolders);
-    if (!(prevHolders > 0)) throw e;
-    console.warn(`[warn] ${conf.ticker} holders: ${e.message}; keeping ${prevHolders}`);
-    rawStonkHolders = prevHolders;
+    const msg = String(e.message);
+    if (prevHolders > 0) {
+      console.warn(`[warn] ${conf.ticker} holders: ${msg}; keeping ${prevHolders}`);
+      rawStonkHolders = prevHolders;
+    } else if (INDEX_NOT_READY.test(msg)) {
+      console.warn(`[warn] ${conf.ticker} holders: ${msg}; fold not ready`);
+      rawStonkHolders = null;
+    } else {
+      throw e;
+    }
   }
-  const trueUniqueStonkHolders = rawStonkHolders > (conf.teamWallets || 0) ? rawStonkHolders - (conf.teamWallets || 0) : 0;
+  const trueUniqueStonkHolders = rawStonkHolders == null
+    ? null
+    : (rawStonkHolders > (conf.teamWallets || 0) ? rawStonkHolders - (conf.teamWallets || 0) : 0);
 
   const circulatingNftSupply = Math.max(0, (conf.maxSupply || 0) - ammVaultNfts);
   const currentMaxSupply = conf.maxSupply;
-  const ownershipRatio = circulatingNftSupply > 0
+  const ownershipRatio = circulatingNftSupply > 0 && trueUniqueNftHolders != null
     ? parseFloat(Math.min(100, (trueUniqueNftHolders / circulatingNftSupply) * 100).toFixed(2))
-    : 0;
+    : (trueUniqueNftHolders == null ? null : 0);
 
   let histLabels = previousData?.ownership?.historicalGrowth?.labels || [];
   let histData = previousData?.ownership?.historicalGrowth?.data || [];
@@ -1925,12 +1960,14 @@ async function getOwnershipStats(conf, equivBurnt, previousData) {
 
   const dateStr = dates.utcIso();
   const seriesHolders = conf.yieldMode === "intern_clockin" ? trueUniqueNftHolders : trueUniqueStonkHolders;
-  if (histLabels.length && dates.dateKey(histLabels[histLabels.length - 1]) === dateStr) {
-    histLabels[histLabels.length - 1] = dateStr;
+  if (seriesHolders != null) {
+    if (histLabels.length && dates.dateKey(histLabels[histLabels.length - 1]) === dateStr) {
+      histLabels[histLabels.length - 1] = dateStr;
       histData[histData.length - 1] = seriesHolders;
-  } else {
+    } else {
       histLabels.push(dateStr);
       histData.push(seriesHolders);
+    }
   }
 
   const ownership = {
@@ -3536,6 +3573,37 @@ async function fetchVaultTokenOutflows(conf, marketData, sevenDaysAgo, oneDay, s
   }
 }
 
+// RewardPaid(uint256 indexed tokenId, address indexed owner, address indexed token, uint256 amount)
+const REWARD_PAID_TOPIC = "0x56a43be815d86b39dc4d398124c956790410b5e9cf70d477de0299f25fc18313";
+
+async function creditRewardPaidLogs(conf, marketData, fromSec, creditSample) {
+  const price = Number(marketData?.tokenPriceUsd) || 0;
+  if (!(price > 0) || !conf.activationCa || !conf.tokenCa) return 0;
+  const want = conf.tokenCa.toLowerCase();
+  const fromBlock = blockTime.blockAt(fromSec);
+  const toBlock = await rpc.blockNumber();
+  const logs = await rpc.getLogs({
+    address: conf.activationCa,
+    fromBlock,
+    toBlock,
+    topics: [REWARD_PAID_TOPIC],
+  });
+  let n = 0;
+  for (const log of logs) {
+    const reward = ("0x" + String(log.topics?.[3] || "").slice(-40)).toLowerCase();
+    if (reward !== want) continue;
+    const amount = decodeUint(log.data, 0);
+    if (amount == null || amount <= 0n) continue;
+    const ts = blockTime.at(parseInt(log.blockNumber, 16));
+    if (!(ts >= fromSec)) continue;
+    const usd = (Number(amount) / 1e18) * price;
+    if (!(usd > 0)) continue;
+    creditSample(usd, ts, { amm: true });
+    n++;
+  }
+  return n;
+}
+
 async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, marketData) {
   const oneDay = 86400;
   const nDays = YIELD_LOOKBACK_DAYS;
@@ -3901,8 +3969,21 @@ async function getGlobalYield(projectKey, conf, sevenDaysAgo, activationStats, m
           // out of this function and the project catch republished the
           // previous snapshot, so Card Wall pulls stopped on the last day
           // the yield walk succeeded.
-          console.warn(`[warn] ${projectKey}: RewardPaid skipped (${e.message || e})`);
-          if (projectKey !== "cardwall") truncatedWalks.push(`reward paid: ${e.message || e}`);
+          const msg = String(e.message || e);
+          // The index has not catalogued this vault yet. RewardPaid on the
+          // staking contract is the same event the index would sum.
+          if (/no project|404/i.test(msg) && conf.activationCa && conf.tokenCa) {
+            try {
+              const n = await creditRewardPaidLogs(conf, marketData, sevenDaysAgo, creditSample);
+              console.warn(`[warn] ${projectKey}: RewardPaid from vault logs (${n}); index has no project yet`);
+            } catch (e2) {
+              console.warn(`[warn] ${projectKey}: RewardPaid skipped (${msg})`);
+              if (projectKey !== "cardwall") truncatedWalks.push(`reward paid: ${msg}`);
+            }
+          } else {
+            console.warn(`[warn] ${projectKey}: RewardPaid skipped (${msg})`);
+            if (projectKey !== "cardwall") truncatedWalks.push(`reward paid: ${msg}`);
+          }
         }
       } else {
         await fetchVaultTokenOutflows(conf, marketData, sevenDaysAgo, oneDay, {
@@ -4966,10 +5047,12 @@ async function run() {
             ...(floorSource ? { floorSource } : {}),
             ...(projectKey === "cardwall" && listedStars.length ? { starFloorEth: starFloors.map((v) => (Number(v) > 0 ? Number(v) : null)) } : {}),
             totalBurn: (activationStats.dualBurn || {}).totalBurnTokens || 0,
-            tokenHolders: conf.yieldMode === "intern_clockin" ? null : (ownershipStats.stonkHolders || ownershipStats.tokenHolders || 0),
-            nftHolders: ownershipStats.nftHolders || 0,
+            tokenHolders: conf.yieldMode === "intern_clockin" || (ownershipStats.stonkHolders == null && ownershipStats.tokenHolders == null)
+              ? null
+              : (ownershipStats.stonkHolders || ownershipStats.tokenHolders || 0),
+            nftHolders: ownershipStats.nftHolders == null ? null : ownershipStats.nftHolders,
             ammVaultNfts: ownershipStats.ammVaultNfts || 0,
-            ownershipRatio: ownershipStats.ownershipRatio || 0,
+            ownershipRatio: ownershipStats.ownershipRatio == null ? null : ownershipStats.ownershipRatio,
             activeCount: activationStats.activeCount || 0,
             percentActivated: activationStats.percentActivated || 0,
             tierActive: { ...(activationStats.breakdown || {}) },
@@ -5040,8 +5123,10 @@ async function run() {
             timestamp: Date.now(),
             totalBurn: liveBurnTok || lastSnap?.totalBurn || 0,
             tokenPriceUsd: markets[projectKey].tokenPriceUsd || lastSnap?.tokenPriceUsd || 0,
-            tokenHolders: conf.yieldMode === "intern_clockin" ? null : (ownershipStats.stonkHolders || ownershipStats.tokenHolders || lastSnap?.tokenHolders || 0),
-            nftHolders: ownershipStats.nftHolders || lastSnap?.nftHolders || 0,
+            tokenHolders: conf.yieldMode === "intern_clockin" || (ownershipStats.stonkHolders == null && ownershipStats.tokenHolders == null)
+              ? (lastSnap?.tokenHolders ?? null)
+              : (ownershipStats.stonkHolders || ownershipStats.tokenHolders || lastSnap?.tokenHolders || 0),
+            nftHolders: ownershipStats.nftHolders == null ? (lastSnap?.nftHolders ?? null) : ownershipStats.nftHolders,
             activeCount: activationStats.activeCount || lastSnap?.activeCount || 0,
             percentActivated: activationStats.percentActivated || lastSnap?.percentActivated || 0,
             tierActive: { ...(activationStats.breakdown || lastSnap?.tierActive || {}) },
@@ -5150,10 +5235,12 @@ async function run() {
         nftFloorEth: markets[projectKey].nftFloorEth || 0,
         nftFloorUsd: (markets[projectKey].nftFloorEth || 0) * (markets[projectKey].ethPriceUsd || 0),
         ...(projectKey === "cardwall" && liveStars.length ? { starFloorEth: (markets[projectKey].starFloorEth || []).map((v) => (Number(v) > 0 ? Number(v) : null)) } : {}),
-        tokenHolders: ownershipStats.stonkHolders || ownershipStats.tokenHolders || 0,
-        nftHolders: ownershipStats.nftHolders || 0,
+        tokenHolders: ownershipStats.stonkHolders == null && ownershipStats.tokenHolders == null
+          ? null
+          : (ownershipStats.stonkHolders || ownershipStats.tokenHolders || 0),
+        nftHolders: ownershipStats.nftHolders == null ? null : ownershipStats.nftHolders,
         ammVaultNfts: ownershipStats.ammVaultNfts || 0,
-        ownershipRatio: ownershipStats.ownershipRatio || 0,
+        ownershipRatio: ownershipStats.ownershipRatio == null ? null : ownershipStats.ownershipRatio,
         activeCount: activationStats.activeCount || 0,
         percentActivated: activationStats.percentActivated || 0,
         tierActive: { ...(activationStats.breakdown || {}) },
